@@ -15,7 +15,9 @@ else:
     allowed = [
         "https://crm.dzyga-catering.com.ua",
         "http://157.180.36.97",
-        "http://157.180.36.97:8000"
+        "http://157.180.36.97:8000",
+        "http://157.180.36.97:8080",
+        "https://157.180.36.97:8443"
     ]
 
 app.add_middleware(
