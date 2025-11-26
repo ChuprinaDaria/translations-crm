@@ -190,18 +190,17 @@ def register(user_in: schema.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User already exists")
     user = crud_user.create_user(db, user_in.email, user_in.role, user_in.password)
 
-    otpauth_url = pyotp.totp.TOTP(user.totp_secret).provisioning_uri(name=user.email, issuer_name="CafeApp")
     return {"id": user.id, 
             "email": user.email, 
             "is_active": user.is_active, 
             "is_admin": user.is_admin, 
             "created_at": user.created_at, 
-            "otpauth_url": otpauth_url,
+            "otpauth_url": None,
             "role": user.role
             }
 
 @router.post("/auth/login")
-def login(payload: schema.TOTPVerify, db: Session = Depends(get_db)):
+def login(payload: schema.LoginRequest, db: Session = Depends(get_db)):
     user = crud_user.get_user_by_email(db, payload.email)
     if not user or not user.hashed_password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -209,10 +208,6 @@ def login(payload: schema.TOTPVerify, db: Session = Depends(get_db)):
     # Verify password
     if not crud_user.verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    # Verify TOTP code
-    if not crud_user.verify_totp(db, payload.email, payload.code):
-        raise HTTPException(status_code=401, detail="Invalid TOTP code")
     
     crud_user.update_last_login(db, user)
     to_encode = {"sub": str(user.id), "email": user.email, "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}

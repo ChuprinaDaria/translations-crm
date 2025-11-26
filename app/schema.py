@@ -81,10 +81,9 @@ class UserOut(UserBase):
     class Config:
         from_attributes = True
 
-class TOTPVerify(BaseModel):
+class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    code: str
 
 class KPBase(BaseModel):
     title: str
