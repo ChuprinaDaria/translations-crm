@@ -9,7 +9,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cafe_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Використовуємо інший порт, щоб не конфліктувати з існуючим PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -25,7 +25,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cafe_db}
+      # Якщо використовуєте контейнер PostgreSQL - використовуйте postgres:5432
+      # Якщо використовуєте існуючий PostgreSQL на сервері - використовуйте host.docker.internal:5432 або IP сервера
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cafe_db}}
       - JWT_SECRET=${JWT_SECRET}
       - APP_ENV=${APP_ENV:-dev}
     volumes:
