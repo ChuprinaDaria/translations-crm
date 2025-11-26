@@ -1,12 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Alert, AlertDescription } from "../ui/alert";
-import { AlertCircle, CheckCircle2, Loader2, CheckCircle, Smartphone } from "lucide-react";
-import { authApi, type RegisterResponse } from "../../lib/api";
-import QRCode from "qrcode";
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { authApi } from "../../lib/api";
 
 interface RegisterFormProps {
   onSwitchToLogin: () => void;
@@ -18,17 +17,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registrationData, setRegistrationData] = useState<RegisterResponse | null>(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
-
-  // Generate QR code when registration is successful
-  useEffect(() => {
-    if (registrationData?.otpauth_url) {
-      QRCode.toDataURL(registrationData.otpauth_url)
-        .then(url => setQrCodeUrl(url))
-        .catch(err => console.error("QR code generation error:", err));
-    }
-  }, [registrationData]);
+  const [success, setSuccess] = useState(false);
 
   const validateForm = (): boolean => {
     if (!email || !password) {
@@ -54,7 +43,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -65,8 +54,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     setLoading(true);
 
     try {
-      const response = await authApi.register({ email, password });
-      setRegistrationData(response);
+      await authApi.register({ email, password });
+      setSuccess(true);
+      // After 2 seconds, switch to login
+      setTimeout(() => {
+        onSwitchToLogin();
+      }, 2000);
     } catch (err: any) {
       if (err.status === 422) {
         setError("Невірні дані. Перевірте правильність введення");
@@ -102,81 +95,6 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
   const passwordStrength = getPasswordStrength();
 
-  // Show QR code screen after successful registration
-  if (registrationData) {
-    return (
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <CardTitle className="text-center">Реєстрація успішна!</CardTitle>
-          <CardDescription className="text-center">
-            Налаштуйте двофакторну аутентифікацію
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Alert>
-            <Smartphone className="h-4 w-4" />
-            <AlertDescription>
-              Встановіть Google Authenticator або Authy на ваш смартфон
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-4">
-                Скануйте цей QR код у вашому додатку для аутентифікації:
-              </p>
-              {qrCodeUrl ? (
-                <div className="flex justify-center">
-                  <div className="p-4 bg-white border-2 border-gray-200 rounded-lg">
-                    <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex justify-center">
-                  <Loader2 className="w-12 h-12 animate-spin text-gray-400" />
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-              <p className="text-xs text-gray-600">
-                <strong>Інструкція:</strong>
-              </p>
-              <ol className="text-xs text-gray-600 space-y-1 list-decimal list-inside">
-                <li>Відкрийте Google Authenticator або Authy</li>
-                <li>Натисніть "Додати акаунт" або "+"</li>
-                <li>Виберіть "Сканувати QR код"</li>
-                <li>Наведіть камеру на QR код вище</li>
-                <li>Збережіть 6-значний код для входу</li>
-              </ol>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm text-gray-700">
-                <strong>Email:</strong> {registrationData.email}
-              </p>
-              <p className="text-xs text-gray-500">
-                Використовуйте цей email та код з authenticator для входу
-              </p>
-            </div>
-          </div>
-
-          <Button
-            onClick={onSwitchToLogin}
-            className="w-full bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-          >
-            Продовжити до логіну
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Show registration form
   return (
     <Card className="w-full max-w-md">
@@ -188,6 +106,14 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {success && (
+            <Alert className="bg-green-50 border-green-200">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                Реєстрація успішна! Перенаправлення на сторінку входу...
+              </AlertDescription>
+            </Alert>
+          )}
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />

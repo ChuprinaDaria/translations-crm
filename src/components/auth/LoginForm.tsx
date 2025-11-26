@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -15,18 +15,12 @@ interface LoginFormProps {
 export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (!code || code.length !== 6) {
-      setError("Введіть 6-значний код з Google Authenticator");
-      return;
-    }
 
     setLoading(true);
 
@@ -34,8 +28,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
       // Response is a plain string token, not an object
       const token = await authApi.login({ 
         email, 
-        password,
-        code 
+        password
       });
       
       tokenManager.setToken(token);
@@ -44,7 +37,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
       if (err.status === 422) {
         setError("Невірний email або пароль");
       } else if (err.status === 401) {
-        setError("Невірний код автентифікації або облікові дані");
+        setError("Невірний email або пароль");
       } else {
         setError(err.data?.detail || "Помилка при вході. Спробуйте пізніше");
       }
@@ -95,24 +88,6 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
               disabled={loading}
               minLength={6}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="code">Код з Google Authenticator</Label>
-            <Input
-              id="code"
-              type="text"
-              placeholder="000000"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              required
-              disabled={loading}
-              maxLength={6}
-              className="text-center text-xl tracking-wider"
-            />
-            <p className="text-xs text-gray-500">
-              Введіть 6-значний код з вашого додатку для аутентифікації
-            </p>
           </div>
 
           <Button

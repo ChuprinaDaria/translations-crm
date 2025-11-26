@@ -1,16 +1,13 @@
 // API Configuration and Helper Functions
 
-// Use proxy in development mode to avoid CORS issues
-// In production, use direct API URL
-const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.DEV)
-  ? '/api'  // Development: use proxy
-  : 'https://mdev.alwaysdata.net';  // Production: direct requests
+// Use relative path /api for proxy (configured on web server)
+// Web server should proxy /api/* to http://157.180.36.97:8000/*
+const API_BASE_URL = '/api';
 
 // Types
 export interface LoginRequest {
   email: string;
   password: string;
-  code: string;
 }
 
 export interface RegisterRequest {
@@ -24,7 +21,7 @@ export interface RegisterResponse {
   is_active: boolean;
   is_admin: boolean;
   created_at: string;
-  otpauth_url: string;
+  otpauth_url?: string | null;
 }
 
 export interface LoginResponse {
@@ -114,9 +111,9 @@ async function apiFetch<T>(
   
   console.log(`[API] ${options.method || 'GET'} ${endpoint}`);
   
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   };
 
   if (token) {
