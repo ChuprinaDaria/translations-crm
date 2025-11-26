@@ -83,3 +83,10 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - `JWT_SECRET` - Секретний ключ для JWT токенів
 - `APP_ENV` - Середовище (dev/prod)
 
+## Deployment
+
+Backend розгортається на сервері: **157.180.36.97**
+
+API доступне за адресою: `http://157.180.36.97:8000`
+Swagger документація: `http://157.180.36.97:8000/docs`
+

@@ -11,7 +11,12 @@ ENV = os.getenv('APP_ENV', 'dev')
 if ENV == "dev":
     allowed = ["*"]
 else:
-    allowed = ["https://crm.dzyga-catering.com.ua"]
+    # Production CORS - allow frontend from dzyga-catering.com.ua
+    allowed = [
+        "https://crm.dzyga-catering.com.ua",
+        "http://157.180.36.97",
+        "http://157.180.36.97:8000"
+    ]
 
 app.add_middleware(
     CORSMiddleware,

@@ -47,6 +47,12 @@ Without Docker:
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-API will be available at `http://localhost:8000`
-Documentation at `http://localhost:8000/docs`
+## Deployment
+
+Backend розгортається на сервері: **157.180.36.97**
+
+API буде доступне за адресою: `http://157.180.36.97:8000`
+Documentation: `http://157.180.36.97:8000/docs`
+
+Для production встановіть `APP_ENV=prod` в `.env` файлі.
 
