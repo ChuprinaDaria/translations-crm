@@ -1,47 +1,24 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: cafe_postgres
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-cafe_db}
-    ports:
-      - "5433:5432"  # Використовуємо інший порт, щоб не конфліктувати з існуючим PostgreSQL
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build: .
     container_name: cafe_backend
     ports:
       - "8000:8000"
     environment:
-      # Якщо використовуєте контейнер PostgreSQL - використовуйте postgres:5432
-      # Якщо використовуєте існуючий PostgreSQL на сервері - використовуйте host.docker.internal:5432 або IP сервера
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cafe_db}}
+      # Використовуємо існуючий PostgreSQL на сервері
+      # Для підключення з контейнера до PostgreSQL на хості використовуємо host.docker.internal або network_mode: host
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - APP_ENV=${APP_ENV:-dev}
     volumes:
       - ./uploads:/app/uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
+    network_mode: host  # Використовуємо мережу хоста для доступу до локального PostgreSQL
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-volumes:
-  postgres_data:
 
