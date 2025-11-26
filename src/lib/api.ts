@@ -1,7 +1,6 @@
 // API Configuration and Helper Functions
 
-// Use relative path /api for proxy (configured on web server)
-// Web server should proxy /api/* to http://157.180.36.97:8000/*
+// Use relative path /api - will be proxied by nginx in Docker
 const API_BASE_URL = '/api';
 
 // Types
