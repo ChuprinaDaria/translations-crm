@@ -4,9 +4,16 @@
 
 1. Create `.env` file with the following variables:
 ```
-DATABASE_URL=postgresql://postgres@localhost:5432/cafe_local
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password_here
+POSTGRES_DB=cafe_db
 JWT_SECRET=PUT_JWT_HERE
 APP_ENV=dev
+```
+
+**Note:** `DATABASE_URL` буде автоматично створений з цих змінних. Якщо ви хочете використовувати зовнішню БД, додайте:
+```
+DATABASE_URL=postgresql://user:password@host:port/database
 ```
 
 2. Build and run with Docker Compose:
