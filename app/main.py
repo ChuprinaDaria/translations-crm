@@ -26,4 +26,4 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(items_router)
+app.include_router(items_router, prefix="/api")
