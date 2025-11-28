@@ -1,5 +1,5 @@
 import os
-
+import db
 from fastapi import FastAPI
 from routes import router as items_router
 from fastapi.middleware.cors import CORSMiddleware
