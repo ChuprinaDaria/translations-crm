@@ -184,6 +184,12 @@ def delete_kp_item(db: Session, kp_item_id: int):
 
 # Template CRUD
 def create_template(db: Session, template_in: schemas.TemplateCreate):
+    """
+    Створює запис шаблону КП.
+    
+    html_content вже має бути записаний у файл до виклику цієї функції
+    (це робиться в routes), тут ми лише зберігаємо метадані.
+    """
     # Якщо встановлюється як default, знімаємо default з інших шаблонів
     if template_in.is_default:
         db.query(models.Template).update({models.Template.is_default: False})
@@ -210,11 +216,16 @@ def get_default_template(db: Session):
     return db.query(models.Template).filter(models.Template.is_default == True).first()
 
 def update_template(db: Session, template_id: int, template_data: schemas.TemplateUpdate):
+    """
+    Оновлює запис шаблону КП.
+    html_content тут ігнорується — вміст файлу вже оновлений у routes.
+    """
     db_template = get_template(db, template_id)
     if not db_template:
         return None
 
-    update_data = template_data.dict(exclude_unset=True)
+    # Витягуємо дані без html_content (воно не є колонкою в моделі)
+    update_data = template_data.dict(exclude_unset=True, exclude={"html_content"})
     
     # Якщо встановлюється як default, знімаємо default з інших шаблонів
     if update_data.get('is_default') == True:

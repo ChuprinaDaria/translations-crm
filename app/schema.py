@@ -124,28 +124,54 @@ class KP(KPBase):
     class Config:
         from_attributes = True
 
+############################################################
 # Template schemas
+############################################################
+
 class TemplateBase(BaseModel):
+    """
+    Базова схема шаблону КП, що зберігається в БД.
+    """
     name: str
     filename: str
     description: Optional[str] = None
     preview_image_url: Optional[str] = None
     is_default: Optional[bool] = False
 
+
 class TemplateCreate(TemplateBase):
-    pass
+    """
+    Схема для створення шаблону.
+    
+    html_content тут не зберігається напряму в БД, а використовується
+    для створення / оновлення HTML‑файлу в app/uploads/{filename}.
+    """
+    html_content: Optional[str] = None
+
 
 class TemplateUpdate(BaseModel):
+    """
+    Схема для оновлення шаблону.
+    """
     name: Optional[str] = None
     filename: Optional[str] = None
     description: Optional[str] = None
     preview_image_url: Optional[str] = None
     is_default: Optional[bool] = None
+    html_content: Optional[str] = None
+
 
 class Template(TemplateBase):
+    """
+    Схема для повернення шаблону з API.
+    
+    html_content використовується лише для відображення / редагування
+    HTML клієнтом (наприклад, у формі "Шаблони КП").
+    """
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    html_content: Optional[str] = None
     
     class Config:
         from_attributes = True

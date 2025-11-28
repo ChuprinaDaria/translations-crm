@@ -64,12 +64,20 @@ app.include_router(items_router)
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-# Створюємо директорії для фото та прев'ю якщо не існують
+"""
+Ініціалізація директорій для статичних файлів
+"""
+# Фото страв
 photos_dir = Path("app/uploads/photos")
 photos_dir.mkdir(parents=True, exist_ok=True)
 
+# Прев'ю шаблонів КП
 template_previews_dir = Path("app/uploads/template-previews")
 template_previews_dir.mkdir(parents=True, exist_ok=True)
+
+# Лого компанії / бренду
+branding_dir = Path("app/uploads/branding")
+branding_dir.mkdir(parents=True, exist_ok=True)
 
 # Монтуємо статичні файли
 app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")

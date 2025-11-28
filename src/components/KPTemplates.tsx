@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, FileText, Edit, Trash2, Copy, Eye } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Plus, FileText, Edit, Trash2, Eye } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -15,150 +15,136 @@ import {
 } from "./ui/dialog";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
-
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  createdAt: string;
-  usageCount: number;
-  content: {
-    header: string;
-    footer: string;
-    showPhotos: boolean;
-    showPrices: boolean;
-  };
-}
+import { templatesApi, type Template as ApiTemplate } from "../lib/api";
 
 export function KPTemplates() {
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: "1",
-      name: "Класичний шаблон",
-      description: "Стандартний формат КП з логотипом та детальним описом",
-      createdAt: "2025-10-01",
-      usageCount: 45,
-      content: {
-        header: "Комерційна пропозиція від компанії [Назва]",
-        footer: "Дякуємо за вибір нашої компанії!",
-        showPhotos: true,
-        showPrices: true,
-      },
-    },
-    {
-      id: "2",
-      name: "Преміум шаблон",
-      description: "Елегантний дизайн для VIP клієнтів з фотографіями страв",
-      createdAt: "2025-09-15",
-      usageCount: 28,
-      content: {
-        header: "Ексклюзивна пропозиція для [Клієнт]",
-        footer: "З повагою, команда [Компанія]",
-        showPhotos: true,
-        showPrices: true,
-      },
-    },
-    {
-      id: "3",
-      name: "Мінімалістичний",
-      description: "Лаконічний формат зі списком та цінами",
-      createdAt: "2025-08-20",
-      usageCount: 67,
-      content: {
-        header: "Пропозиція",
-        footer: "Контакти: info@company.com",
-        showPhotos: false,
-        showPrices: true,
-      },
-    },
-  ]);
-
+  const [templates, setTemplates] = useState<ApiTemplate[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<ApiTemplate | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    header: "",
-    footer: "",
-    showPhotos: true,
-    showPrices: true,
+    filename: "",
+    is_default: false,
+    html_content: "",
   });
+
+  const loadTemplates = async () => {
+    setIsLoading(true);
+    try {
+      const data = await templatesApi.getTemplates();
+      setTemplates(data);
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Не вдалося завантажити шаблони КП");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const autoFilenameFromName = (name: string) => {
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9\-]+/g, "");
+    return slug ? `${slug}.html` : "";
+  };
 
   const resetForm = () => {
     setFormData({
       name: "",
       description: "",
-      header: "",
-      footer: "",
-      showPhotos: true,
-      showPrices: true,
+      filename: "",
+      is_default: false,
+      html_content: "",
     });
     setEditingTemplate(null);
     setIsAddDialogOpen(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name) {
       toast.error("Будь ласка, введіть назву шаблону");
       return;
     }
 
-    const templateData: Template = {
-      id: editingTemplate?.id || Date.now().toString(),
-      name: formData.name,
-      description: formData.description,
-      createdAt: editingTemplate?.createdAt || new Date().toISOString().split("T")[0],
-      usageCount: editingTemplate?.usageCount || 0,
-      content: {
-        header: formData.header,
-        footer: formData.footer,
-        showPhotos: formData.showPhotos,
-        showPrices: formData.showPrices,
-      },
-    };
-
-    if (editingTemplate) {
-      setTemplates((prev) =>
-        prev.map((t) => (t.id === editingTemplate.id ? templateData : t))
-      );
-      toast.success("Шаблон оновлено");
-    } else {
-      setTemplates((prev) => [...prev, templateData]);
-      toast.success("Шаблон створено");
+    if (!formData.filename) {
+      toast.error("Вкажіть ім'я файлу шаблону (наприклад, classic.html)");
+      return;
     }
 
-    resetForm();
+    try {
+      if (editingTemplate) {
+        const updated = await templatesApi.updateTemplate(editingTemplate.id, {
+          name: formData.name,
+          description: formData.description,
+          filename: formData.filename,
+          is_default: formData.is_default,
+          html_content: formData.html_content,
+        });
+        setTemplates((prev) =>
+          prev.map((t) => (t.id === updated.id ? updated : t))
+        );
+        toast.success("Шаблон оновлено");
+      } else {
+        const created = await templatesApi.createTemplate({
+          name: formData.name,
+          description: formData.description,
+          filename: formData.filename,
+          is_default: formData.is_default,
+          html_content: formData.html_content,
+        });
+        setTemplates((prev) => [...prev, created]);
+        toast.success("Шаблон створено");
+      }
+
+      resetForm();
+    } catch (error: any) {
+      console.error(error);
+      const message =
+        error?.detail ||
+        error?.message ||
+        "Сталася помилка при збереженні шаблону";
+      toast.error(
+        typeof message === "string" ? message : "Сталася помилка при збереженні шаблону"
+      );
+    }
   };
 
-  const handleEdit = (template: Template) => {
-    setEditingTemplate(template);
-    setFormData({
-      name: template.name,
-      description: template.description,
-      header: template.content.header,
-      footer: template.content.footer,
-      showPhotos: template.content.showPhotos,
-      showPrices: template.content.showPrices,
-    });
-    setIsAddDialogOpen(true);
+  const handleEdit = async (template: ApiTemplate) => {
+    try {
+      const fullTemplate = await templatesApi.getTemplate(template.id);
+      setEditingTemplate(fullTemplate);
+      setFormData({
+        name: fullTemplate.name,
+        description: fullTemplate.description || "",
+        filename: fullTemplate.filename,
+        is_default: fullTemplate.is_default,
+        html_content: fullTemplate.html_content || "",
+      });
+      setIsAddDialogOpen(true);
+    } catch (error) {
+      console.error(error);
+      toast.error("Не вдалося завантажити шаблон");
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
-    toast.success("Шаблон видалено");
-  };
-
-  const handleDuplicate = (template: Template) => {
-    const duplicated: Template = {
-      ...template,
-      id: Date.now().toString(),
-      name: `${template.name} (копія)`,
-      createdAt: new Date().toISOString().split("T")[0],
-      usageCount: 0,
-    };
-    setTemplates((prev) => [...prev, duplicated]);
-    toast.success("Шаблон продубльовано");
+  const handleDelete = async (id: number) => {
+    try {
+      await templatesApi.deleteTemplate(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Шаблон видалено");
+    } catch (error) {
+      console.error(error);
+      toast.error("Не вдалося видалити шаблон");
+    }
   };
 
   return (
@@ -213,52 +199,58 @@ export function KPTemplates() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="header">Заголовок КП</Label>
+                <Label htmlFor="template-filename">
+                  Ім&apos;я файлу шаблону (на сервері)
+                </Label>
                 <Input
-                  id="header"
-                  placeholder="Текст заголовка (можна використовувати змінні [Клієнт], [Дата])"
-                  value={formData.header}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, header: e.target.value }))}
+                  id="template-filename"
+                  placeholder="Наприклад: classic.html"
+                  value={formData.filename}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      filename: e.target.value,
+                    }))
+                  }
+                  onBlur={() => {
+                    if (!formData.filename && formData.name) {
+                      setFormData((prev) => ({
+                        ...prev,
+                        filename: autoFilenameFromName(formData.name),
+                      }));
+                    }
+                  }}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="footer">Футер КП</Label>
+                <Label htmlFor="html-content">
+                  HTML шаблону (Jinja2) <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
-                  id="footer"
-                  placeholder="Текст внизу КП (контакти, подяка тощо)"
-                  rows={2}
-                  value={formData.footer}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, footer: e.target.value }))}
+                  id="html-content"
+                  placeholder="Вставте готовий HTML (можна з змінними {{ kp }}, {{ items }} тощо)..."
+                  rows={12}
+                  value={formData.html_content}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, html_content: e.target.value }))
+                  }
                 />
               </div>
 
-              <div className="space-y-3">
-                <Label>Налаштування відображення</Label>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.showPhotos}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, showPhotos: e.target.checked }))
-                      }
-                      className="w-4 h-4 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00]"
-                    />
-                    <span className="text-sm text-gray-700">Показувати фото страв</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.showPrices}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, showPrices: e.target.checked }))
-                      }
-                      className="w-4 h-4 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00]"
-                    />
-                    <span className="text-sm text-gray-700">Показувати ціни</span>
-                  </label>
-                </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is-default"
+                  checked={formData.is_default}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, is_default: e.target.checked }))
+                  }
+                  className="w-4 h-4 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00]"
+                />
+                <Label htmlFor="is-default" className="text-sm text-gray-700">
+                  Зробити шаблоном за замовчуванням
+                </Label>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -283,9 +275,11 @@ export function KPTemplates() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <FileText className="w-8 h-8 text-[#FF5A00]" />
-                <Badge variant="secondary" className="text-xs">
-                  Використано: {template.usageCount}
-                </Badge>
+                {template.is_default && (
+                  <Badge variant="secondary" className="text-xs">
+                    За замовчуванням
+                  </Badge>
+                )}
               </div>
               <CardTitle className="mt-4">{template.name}</CardTitle>
             </CardHeader>
@@ -304,17 +298,16 @@ export function KPTemplates() {
               <div className="space-y-2 mb-4 text-xs text-gray-600">
                 <div className="flex items-center gap-2">
                   <span>Дата створення:</span>
-                  <span className="text-gray-900">{template.createdAt}</span>
+                  <span className="text-gray-900">
+                    {template.created_at
+                      ? new Date(template.created_at).toLocaleDateString()
+                      : "-"}
+                  </span>
                 </div>
-                <div className="flex gap-2">
-                  {template.content.showPhotos && (
+                <div className="flex gap-2 flex-wrap">
+                  {template.filename && (
                     <Badge variant="outline" className="text-xs">
-                      З фото
-                    </Badge>
-                  )}
-                  {template.content.showPrices && (
-                    <Badge variant="outline" className="text-xs">
-                      З цінами
+                      {template.filename}
                     </Badge>
                   )}
                 </div>
@@ -329,14 +322,6 @@ export function KPTemplates() {
                 >
                   <Edit className="w-3 h-3 md:mr-1" />
                   <span className="hidden md:inline">Редагувати</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDuplicate(template)}
-                  title="Дублювати"
-                >
-                  <Copy className="w-3 h-3" />
                 </Button>
                 <Button
                   variant="outline"

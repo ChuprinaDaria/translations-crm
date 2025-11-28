@@ -58,12 +58,17 @@ def read_item(item_id: int, db: Session = Depends(get_db), user = Depends(get_cu
     return item
 
 
-# Створюємо директорії для фото та прев'ю якщо не існують
+# Створюємо директорії для фото, прев'ю та лого якщо не існують
 PHOTOS_DIR = Path("app/uploads/photos")
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
 TEMPLATE_PREVIEWS_DIR = Path("app/uploads/template-previews")
 TEMPLATE_PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+
+BRANDING_DIR = Path("app/uploads/branding")
+BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+
+COMPANY_LOGO_FILENAME = "logo.png"
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
 
@@ -122,6 +127,14 @@ def delete_old_preview(preview_url: str):
                 preview_path.unlink()
             except Exception as e:
                 print(f"Error deleting old preview: {e}")
+
+
+def get_company_logo_path() -> Path | None:
+    """
+    Повертає шлях до файлу лого компанії, якщо він існує.
+    """
+    logo_path = BRANDING_DIR / COMPANY_LOGO_FILENAME
+    return logo_path if logo_path.exists() else None
 
 @router.post("/items", response_model=schema.Item)
 async def create_item(
@@ -333,15 +346,24 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     except Exception as e:
         raise HTTPException(500, f"Template file not found: {template_filename}")
     
+    # Підготуємо шлях до лого, щоб його можна було вставити в HTML
+    logo_path = get_company_logo_path()
+    logo_src = None
+    if logo_path:
+        # WeasyPrint підтримує file:// шляхи для локальних ресурсів
+        logo_src = f"file://{logo_path.resolve()}"
+    
     html_content = template.render(
         kp=kp,
         items=items_data,
         total_price=sum(item['total'] for item in items_data),
-        total_weight = item_weight,
+        total_weight=total_weight,
         total_items=len(items_data),
+        logo_src=logo_src,
     )
     
-    pdf_bytes = HTML(string=html_content).write_pdf(zoom=1)
+    # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
+    pdf_bytes = HTML(string=html_content, base_url=os.getcwd()).write_pdf(zoom=1)
     filename = f"{kp.title}.pdf"
     
     return pdf_bytes, filename
@@ -427,7 +449,51 @@ def send_kp_by_email(
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, f"Error sending email: {str(e)}")
+        
+@router.get("/settings/logo")
+def get_company_logo(user = Depends(get_current_user)):
+    """
+    Повертає поточне лого компанії (якщо воно завантажене).
+    """
+    logo_path = get_company_logo_path()
+    if not logo_path:
+        return {"logo_url": None}
+    
+    # Віддаємо відносний шлях, який фронт може перетворити через /uploads
+    rel_path = logo_path.relative_to(Path("app/uploads"))
+    return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
+
+@router.post("/settings/logo")
+async def upload_company_logo(
+    logo: UploadFile = File(...),
+    user = Depends(get_current_user)
+):
+    """
+    Завантажує / оновлює лого компанії.
+    Очікується PNG з прозорим фоном, але технічно дозволяємо всі ALLOWED_IMAGE_TYPES.
+    """
+    if logo.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимий тип файлу. Дозволені: JPEG, PNG, WebP, GIF"
+        )
+    
+    # Визначаємо розширення файлу (зберігаємо як logo.<ext>)
+    ext = Path(logo.filename).suffix.lower() if logo.filename else ".png"
+    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
+        ext = ".png"
+    
+    global COMPANY_LOGO_FILENAME
+    COMPANY_LOGO_FILENAME = f"logo{ext}"
+    logo_path = BRANDING_DIR / COMPANY_LOGO_FILENAME
+    
+    # Зберігаємо файл
+    with open(logo_path, "wb") as buffer:
+        shutil.copyfileobj(logo.file, buffer)
+    
+    rel_path = logo_path.relative_to(Path("app/uploads"))
+    return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 # Categories
 @router.get("/categories", response_model=list[schema.Category])
@@ -493,9 +559,28 @@ def get_templates(db: Session = Depends(get_db), user = Depends(get_current_user
 
 @router.get("/templates/{template_id}", response_model=schema.Template)
 def get_template(template_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає один шаблон КП.
+    Додатково підтягує html_content з відповідного файлу, якщо він існує.
+    """
+    import os
+
     template = crud.get_template(db, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+
+    # Підтягуємо HTML з файлу, якщо є filename
+    if template.filename:
+        template_path = os.path.join("app", "uploads", template.filename)
+        if os.path.exists(template_path):
+            try:
+                with open(template_path, "r", encoding="utf-8") as f:
+                    # Додаємо динамічне поле, яке зчитає Pydantic
+                    template.html_content = f.read()
+            except Exception as e:
+                # Не падаємо, просто не віддаємо html_content
+                print(f"Error reading template HTML file '{template_path}': {e}")
+
     return template
 
 @router.post("/templates", response_model=schema.Template)
@@ -506,14 +591,33 @@ async def create_template(
     is_default: bool = Form(False),
     preview_image: UploadFile = File(None),
     preview_image_url: str = Form(None),
+    html_content: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    # Перевіряємо чи існує файл шаблону
+    """
+    Створення шаблону КП.
+    
+    Варіанти:
+    - Клієнт завантажує готовий HTML‑файл у файлову систему (старий варіант, через filename).
+    - Клієнт вставляє HTML напряму (html_content) — ми створюємо / перезаписуємо файл app/uploads/{filename}.
+    """
     import os
-    template_path = f"app/uploads/{filename}"
-    if not os.path.exists(template_path):
-        raise HTTPException(status_code=400, detail=f"Template file not found: {filename}")
+
+    template_path = os.path.join("app", "uploads", filename)
+
+    # Якщо html_content передано – створюємо / перезаписуємо файл
+    if html_content:
+        os.makedirs(os.path.dirname(template_path), exist_ok=True)
+        try:
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
+    else:
+        # Старий режим: очікуємо, що файл вже існує
+        if not os.path.exists(template_path):
+            raise HTTPException(status_code=400, detail=f"Template file not found: {filename}")
     
     # Обробка прев'ю: пріоритет має завантажений файл
     final_preview_url = preview_image_url
@@ -532,7 +636,8 @@ async def create_template(
         filename=filename,
         description=description,
         preview_image_url=final_preview_url,
-        is_default=is_default
+        is_default=is_default,
+        html_content=html_content,
     )
     
     return crud.create_template(db, template_data)
@@ -546,20 +651,37 @@ async def update_template(
     is_default: bool = Form(None),
     preview_image: UploadFile = File(None),
     preview_image_url: str = Form(None),
+    html_content: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
+    """
+    Оновлення шаблону КП.
+    Дозволяє як змінювати метадані, так і оновлювати HTML‑вміст файлу шаблону.
+    """
+    import os
+
     # Отримуємо поточний шаблон для видалення старого прев'ю
     current_template = crud.get_template(db, template_id)
     if not current_template:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    # Якщо оновлюється filename, перевіряємо чи існує файл
-    if filename:
-        import os
-        template_path = f"app/uploads/{filename}"
-        if not os.path.exists(template_path):
-            raise HTTPException(status_code=400, detail=f"Template file not found: {filename}")
+    # Визначаємо фінальне ім'я файлу (якщо не передано нове — залишаємо старе)
+    final_filename = filename or current_template.filename
+    template_path = os.path.join("app", "uploads", final_filename)
+
+    # Якщо оновлюється filename без html_content – переконуємось, що новий файл існує
+    if filename and not html_content and not os.path.exists(template_path):
+        raise HTTPException(status_code=400, detail=f"Template file not found: {final_filename}")
+
+    # Якщо передано html_content – записуємо / перезаписуємо файл
+    if html_content:
+        os.makedirs(os.path.dirname(template_path), exist_ok=True)
+        try:
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
     
     # Обробка прев'ю: пріоритет має завантажений файл
     final_preview_url = preview_image_url
@@ -582,10 +704,11 @@ async def update_template(
     # Створюємо об'єкт TemplateUpdate
     template_data = schema.TemplateUpdate(
         name=name,
-        filename=filename,
+        filename=final_filename if filename else None,
         description=description,
         preview_image_url=final_preview_url,
-        is_default=is_default
+        is_default=is_default,
+        html_content=html_content,
     )
     
     updated = crud.update_template(db, template_id, template_data)

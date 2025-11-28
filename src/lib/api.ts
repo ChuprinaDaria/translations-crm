@@ -485,6 +485,10 @@ export interface Template {
   is_default: boolean;
   created_at?: string;
   updated_at?: string;
+  /**
+   * HTML‑вміст шаблону (читається при запиті конкретного шаблону).
+   */
+  html_content?: string;
 }
 
 export interface TemplateCreate {
@@ -493,7 +497,8 @@ export interface TemplateCreate {
   description?: string;
   preview_image_url?: string;
   is_default?: boolean;
-  preview_image?: File; // Для завантаження файлу
+  preview_image?: File; // Для завантаження прев'ю
+  html_content?: string; // HTML шаблону (ctrl+V)
 }
 
 export interface TemplateUpdate {
@@ -502,7 +507,13 @@ export interface TemplateUpdate {
   description?: string;
   preview_image_url?: string;
   is_default?: boolean;
-  preview_image?: File; // Для завантаження файлу
+  preview_image?: File; // Для завантаження прев'ю
+  html_content?: string; // Оновлений HTML шаблону
+}
+
+// Branding / Settings
+export interface BrandingSettings {
+  logo_url?: string | null;
 }
 
 // Templates API
@@ -516,45 +527,31 @@ export const templatesApi = {
   },
 
   async createTemplate(data: TemplateCreate): Promise<Template> {
-    // Якщо є файл прев'ю, використовуємо multipart/form-data
-    if (data.preview_image) {
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('filename', data.filename);
-      if (data.description) formData.append('description', data.description);
-      if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
-      if (data.preview_image) formData.append('preview_image', data.preview_image);
-      if (data.preview_image_url) formData.append('preview_image_url', data.preview_image_url);
-      
-      return apiFetchMultipart<Template>('/templates', formData, 'POST');
-    }
+    // Завжди використовуємо multipart/form-data, щоб мати можливість передати html_content
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('filename', data.filename);
+    if (data.description) formData.append('description', data.description);
+    if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
+    if (data.preview_image) formData.append('preview_image', data.preview_image);
+    if (data.preview_image_url) formData.append('preview_image_url', data.preview_image_url);
+    if (data.html_content) formData.append('html_content', data.html_content);
     
-    // Інакше використовуємо JSON
-    return apiFetch<Template>('/templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    return apiFetchMultipart<Template>('/templates', formData, 'POST');
   },
 
   async updateTemplate(templateId: number, data: TemplateUpdate): Promise<Template> {
-    // Якщо є файл прев'ю, використовуємо multipart/form-data
-    if (data.preview_image) {
-      const formData = new FormData();
-      if (data.name) formData.append('name', data.name);
-      if (data.filename) formData.append('filename', data.filename);
-      if (data.description !== undefined) formData.append('description', data.description || '');
-      if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
-      if (data.preview_image) formData.append('preview_image', data.preview_image);
-      if (data.preview_image_url !== undefined) formData.append('preview_image_url', data.preview_image_url || '');
-      
-      return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
-    }
+    // Так само завжди multipart/form-data
+    const formData = new FormData();
+    if (data.name) formData.append('name', data.name);
+    if (data.filename) formData.append('filename', data.filename);
+    if (data.description !== undefined) formData.append('description', data.description || '');
+    if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
+    if (data.preview_image) formData.append('preview_image', data.preview_image);
+    if (data.preview_image_url !== undefined) formData.append('preview_image_url', data.preview_image_url || '');
+    if (data.html_content !== undefined) formData.append('html_content', data.html_content);
     
-    // Інакше використовуємо JSON
-    return apiFetch<Template>(`/templates/${templateId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
   },
 
   async deleteTemplate(templateId: number): Promise<{ status: string }> {
@@ -562,4 +559,17 @@ export const templatesApi = {
       method: 'DELETE',
     });
   }
+};
+
+// Settings / Branding API
+export const settingsApi = {
+  async getBranding(): Promise<BrandingSettings> {
+    return apiFetch<BrandingSettings>("/settings/logo");
+  },
+
+  async uploadLogo(file: File): Promise<BrandingSettings> {
+    const formData = new FormData();
+    formData.append("logo", file);
+    return apiFetchMultipart<BrandingSettings>("/settings/logo", formData, "POST");
+  },
 };

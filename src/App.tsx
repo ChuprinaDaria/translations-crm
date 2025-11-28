@@ -6,6 +6,7 @@ import { MenuManagement } from "./components/MenuManagement";
 import { CreateKP } from "./components/CreateKP";
 import { KPTemplates } from "./components/KPTemplates";
 import { KPArchive } from "./components/KPArchive";
+import { Settings } from "./components/Settings";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -337,18 +338,7 @@ function App() {
           </div>
         );
       case "settings":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Налаштування
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Налаштування системи будуть тут
-              </p>
-            </div>
-          </div>
-        );
+        return <Settings />;
       case "users-access":
         return (
           <div className="space-y-6">
