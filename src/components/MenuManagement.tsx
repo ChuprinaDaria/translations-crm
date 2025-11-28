@@ -447,15 +447,16 @@ export function MenuManagement() {
           ) : (
             <Card>
               <CardContent className="p-0">
+                {/* Без фіксованих мінімальних ширин, щоб не було горизонтального скролу */}
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-20">Фото</TableHead>
-                        <TableHead className="min-w-[220px]">Страва</TableHead>
-                        <TableHead className="min-w-[140px]">Ціна / вага</TableHead>
-                        <TableHead className="min-w-[120px]">Статус</TableHead>
-                        <TableHead className="w-28 text-right">Дії</TableHead>
+                        <TableHead className="w-[60px]">Фото</TableHead>
+                        <TableHead>Страва</TableHead>
+                        <TableHead className="whitespace-nowrap">Ціна / вага</TableHead>
+                        <TableHead className="whitespace-nowrap">Статус</TableHead>
+                        <TableHead className="w-[90px] text-right whitespace-nowrap">Дії</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -478,7 +479,7 @@ export function MenuManagement() {
                             )}
                           </TableCell>
                           <TableCell className="align-top">
-                            <div className="text-gray-900 font-medium">
+                            <div className="text-gray-900 font-medium leading-snug max-w-xs line-clamp-2">
                               {item.name}
                             </div>
                             <div className="text-xs text-gray-500">
