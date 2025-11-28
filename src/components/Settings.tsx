@@ -333,7 +333,8 @@ export function Settings() {
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-600">
             Ці параметри використовуються для відправки комерційних пропозицій
-            на email клієнта. Дані зберігаються в базі, а не в .env.
+            на email клієнта. Дані зберігаються у базі даних і не залежать від файлів
+            конфігурації на сервері.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

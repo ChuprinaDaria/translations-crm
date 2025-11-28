@@ -452,13 +452,20 @@ export function MenuManagement() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-20">Фото</TableHead>
-                        <TableHead>Назва</TableHead>
-                        <TableHead>Опис</TableHead>
-                        <TableHead>Вага</TableHead>
-                        <TableHead>Ціна</TableHead>
-                        <TableHead>Категорія</TableHead>
-                        <TableHead>Статус</TableHead>
-                        <TableHead className="w-32">Дії</TableHead>
+                        <TableHead className="min-w-[160px]">Назва</TableHead>
+                        {/* Дії ставимо ближче до початку, щоб не потрібно було скролити */}
+                        <TableHead className="w-28 text-right">Дії</TableHead>
+                        <TableHead className="hidden xl:table-cell min-w-[220px]">
+                          Опис
+                        </TableHead>
+                        <TableHead className="hidden lg:table-cell min-w-[90px]">
+                          Вага
+                        </TableHead>
+                        <TableHead className="min-w-[90px]">Ціна</TableHead>
+                        <TableHead className="hidden md:table-cell min-w-[140px]">
+                          Категорія
+                        </TableHead>
+                        <TableHead className="min-w-[90px]">Статус</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -480,30 +487,13 @@ export function MenuManagement() {
                               </div>
                             )}
                           </TableCell>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {item.description || '-'}
-                          </TableCell>
-                          <TableCell>
-                            {item.weight ? `${item.weight}${item.unit}` : '-'}
-                          </TableCell>
-                          <TableCell className="text-[#FF5A00]">
-                            {item.price} грн
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <Badge variant="outline">
-                                {item.subcategory?.name}
-                              </Badge>
+                          <TableCell className="align-top">
+                            <div className="text-gray-900 font-medium">
+                              {item.name}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant={item.active ? 'default' : 'secondary'}>
-                              {item.active ? 'В меню' : 'Неактивна'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
+                          <TableCell className="align-top">
+                            <div className="flex justify-end gap-2">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -522,6 +512,27 @@ export function MenuManagement() {
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
                             </div>
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell max-w-xs truncate align-top">
+                            {item.description || "-"}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell align-top">
+                            {item.weight ? `${item.weight}${item.unit}` : "-"}
+                          </TableCell>
+                          <TableCell className="text-[#FF5A00] align-top">
+                            {item.price} грн
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell align-top">
+                            <div className="text-sm">
+                              <Badge variant="outline">
+                                {item.subcategory?.name}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Badge variant={item.active ? "default" : "secondary"}>
+                              {item.active ? "В меню" : "Неактивна"}
+                            </Badge>
                           </TableCell>
                         </TableRow>
                       ))}
