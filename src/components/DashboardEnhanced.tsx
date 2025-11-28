@@ -24,7 +24,7 @@ import {
 } from "./ui/dropdown-menu";
 import { InfoTooltip } from "./InfoTooltip";
 import { Skeleton } from "./ui/skeleton";
-import { itemsApi, categoriesApi, type Item, type Category } from "../lib/api";
+import { itemsApi, categoriesApi, kpApi, type Item, type Category, type KP } from "../lib/api";
 import { toast } from "sonner";
 
 interface DashboardProps {
@@ -56,6 +56,7 @@ interface DashboardStats {
 export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentKP, setRecentKP] = useState<KP[] | null>(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -64,9 +65,10 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [items, categories] = await Promise.all([
+      const [items, categories, kps] = await Promise.all([
         itemsApi.getItems(0, 1000),
-        categoriesApi.getCategories()
+        categoriesApi.getCategories(),
+        kpApi.getKPs(),
       ]);
 
       // Calculate statistics
@@ -117,8 +119,16 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         totalValue,
         averagePrice,
         categoriesBreakdown,
-        priceRanges
+        priceRanges,
       });
+
+      // Recent KP: беремо останні 5 за датою створення
+      const sortedKps = [...kps].sort((a, b) => {
+        const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return db - da;
+      });
+      setRecentKP(sortedKps.slice(0, 5));
     } catch (error: any) {
       toast.error("Помилка завантаження даних");
       console.error("Dashboard load error:", error);
@@ -127,36 +137,7 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
     }
   };
 
-  // Mock recent KP data (will be replaced with real API later)
-  const recentKP = [
-    {
-      id: "KP-2025-147",
-      name: "Корпоративний банкет IT компанії",
-      status: "approved",
-      statusLabel: "Затверджено",
-      date: "2025-10-18",
-      manager: "Олена Коваль",
-      price: "45 000 грн",
-    },
-    {
-      id: "KP-2025-146",
-      name: "Весільна церемонія + банкет",
-      status: "in-progress",
-      statusLabel: "В роботі",
-      date: "2025-10-17",
-      manager: "Іван Петренко",
-      price: "120 000 грн",
-    },
-    {
-      id: "KP-2025-145",
-      name: "Бізнес-ланч для 50 осіб",
-      status: "sent",
-      statusLabel: "Відправлено",
-      date: "2025-10-17",
-      manager: "Марія Шевченко",
-      price: "22 500 грн",
-    }
-  ];
+  // статуси КП поки не зберігаються в БД, тому тимчасово позначаємо всі як "Відправлено"
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {

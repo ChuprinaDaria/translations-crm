@@ -626,11 +626,11 @@ export function CreateKP() {
                           }`}
                         >
                           {template.preview_image_url && (
-                            <div className="mb-3 h-24 rounded-md overflow-hidden border border-gray-200 bg-gray-50">
+                            <div className="mb-3 h-40 rounded-md overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center">
                               <img
                                 src={getImageUrl(template.preview_image_url)}
                                 alt={template.name}
-                                className="w-full h-full object-cover"
+                                className="max-w-full max-h-full object-contain"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = "none";
                                 }}

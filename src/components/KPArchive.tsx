@@ -42,12 +42,16 @@ interface KPArchiveItem {
   number: string;
   clientName: string;
   createdDate: string;
+  // опціональні поля для майбутніх розширень (подія, менеджер)
+  eventDate?: string;
+  createdBy?: string;
   status: "sent" | "approved" | "rejected" | "completed";
   statusLabel: string;
   totalAmount: number;
   dishCount: number;
   guestCount: number;
   template: string;
+  templateId?: number;
 }
 
 export function KPArchive() {
@@ -74,6 +78,7 @@ export function KPArchive() {
           createdDate: kp.created_at
             ? new Date(kp.created_at).toISOString().split("T")[0]
             : "",
+          // поки що всі нові КП мають статус "відправлено"
           status: "sent",
           statusLabel: "Відправлено",
           totalAmount: kp.total_price || 0,
@@ -82,6 +87,7 @@ export function KPArchive() {
           template: kp.template_id
             ? templateMap.get(kp.template_id) || "Шаблон"
             : "Шаблон",
+          templateId: kp.template_id,
         }));
 
         setArchiveItems(mapped);
@@ -112,8 +118,7 @@ export function KPArchive() {
   const filteredItems = archiveItems.filter((item) => {
     const matchesSearch =
       item.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.createdBy.toLowerCase().includes(searchQuery.toLowerCase());
+      item.clientName.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = selectedStatus === "all" || item.status === selectedStatus;
 
@@ -139,12 +144,32 @@ export function KPArchive() {
     return matchesSearch && matchesStatus && matchesPeriod;
   });
 
-  const handleView = (item: KPArchiveItem) => {
-    toast.success(`Перегляд КП: ${item.number}`);
+  const handleView = async (item: KPArchiveItem) => {
+    try {
+      const blob = await kpApi.generateKPPDF(item.id, item.templateId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Помилка генерації PDF:", error);
+      toast.error("Не вдалося згенерувати PDF для КП");
+    }
   };
 
-  const handleDownload = (item: KPArchiveItem) => {
-    toast.success(`Завантаження КП: ${item.number}`);
+  const handleDownload = async (item: KPArchiveItem) => {
+    try {
+      const blob = await kpApi.generateKPPDF(item.id, item.templateId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${item.number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Помилка завантаження PDF:", error);
+      toast.error("Не вдалося завантажити PDF для КП");
+    }
   };
 
   const getTotalStats = () => {
