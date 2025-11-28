@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Search, X, Send, FileText, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -16,8 +16,15 @@ import { Checkbox } from "./ui/checkbox";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { itemsApi, categoriesApi } from "../lib/api";
-import type { Item, Category } from "../lib/api";
+import {
+  itemsApi,
+  categoriesApi,
+  kpApi,
+  templatesApi,
+  type Item,
+  type Category,
+  type Template as ApiTemplate,
+} from "../lib/api";
 
 interface Dish {
   id: number;
@@ -31,26 +38,27 @@ interface Dish {
   subcategory: string;
 }
 
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-}
-
 export function CreateKP() {
   const [step, setStep] = useState(1);
   const [selectedDishes, setSelectedDishes] = useState<number[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
+    null
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [clientName, setClientName] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [guestCount, setGuestCount] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [sendEmail, setSendEmail] = useState(false);
+  const [emailMessage, setEmailMessage] = useState("");
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [templates, setTemplates] = useState<ApiTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   // Load dishes from API
   useEffect(() => {
@@ -91,23 +99,24 @@ export function CreateKP() {
     loadDishes();
   }, []);
 
-  const templates: Template[] = [
-    {
-      id: "1",
-      name: "Класичний шаблон",
-      description: "Стандартний формат КП з логотипом та детальним описом",
-    },
-    {
-      id: "2",
-      name: "Преміум шаблон",
-      description: "Елегантний дизайн для VIP клієнтів з фотографіями страв",
-    },
-    {
-      id: "3",
-      name: "Мінімалістичний",
-      description: "Лаконічний формат зі списком та цінами",
-    },
-  ];
+  // Load templates from API
+  useEffect(() => {
+    const loadTemplates = async () => {
+      setTemplatesLoading(true);
+      try {
+        const data = await templatesApi.getTemplates();
+        setTemplates(data);
+      } catch (error: any) {
+        console.error("Error loading templates", error);
+        toast.error("Помилка завантаження шаблонів КП");
+      } finally {
+        setTemplatesLoading(false);
+      }
+    };
+
+    loadTemplates();
+  }, []);
+
 
   const allTags = Array.from(new Set(dishes.flatMap((dish) => dish.category)));
 
@@ -141,7 +150,9 @@ export function CreateKP() {
     return getSelectedDishesData().reduce((sum, dish) => sum + dish.price, 0);
   };
 
-  const handleCreateKP = () => {
+  const [creatingKP, setCreatingKP] = useState(false);
+
+  const handleCreateKP = async () => {
     if (!clientName || !eventDate || !guestCount) {
       toast.error("Будь ласка, заповніть всі дані клієнта");
       return;
@@ -150,20 +161,74 @@ export function CreateKP() {
       toast.error("Будь ласка, оберіть хоча б одну страву");
       return;
     }
-    if (!selectedTemplate) {
+    if (!selectedTemplateId) {
       toast.error("Будь ласка, оберіть шаблон КП");
       return;
     }
+    if (sendEmail && !clientEmail) {
+      toast.error("Вкажіть email клієнта для відправки КП");
+      return;
+    }
 
-    toast.success("КП спішно створено та відправлено клієнту!");
-    
-    // Reset form
-    setStep(1);
-    setSelectedDishes([]);
-    setSelectedTemplate("");
-    setClientName("");
-    setEventDate("");
-    setGuestCount("");
+    const peopleCountNum = parseInt(guestCount, 10) || 0;
+    const totalPrice = getTotalPrice();
+    const title =
+      clientName ||
+      `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
+
+    const itemsPayload = getSelectedDishesData().map((dish) => ({
+      item_id: dish.id,
+      quantity: 1,
+    }));
+
+    setCreatingKP(true);
+    try {
+      const kp = await kpApi.createKP({
+        title,
+        people_count: peopleCountNum,
+        total_price: totalPrice,
+        price_per_person:
+          peopleCountNum > 0 ? totalPrice / peopleCountNum : undefined,
+        items: itemsPayload,
+        template_id: selectedTemplateId || undefined,
+        client_email: clientEmail || undefined,
+        send_email: sendEmail,
+        email_message: emailMessage || undefined,
+      });
+
+      toast.success(
+        sendEmail
+          ? "КП створено та відправлено клієнту"
+          : "КП створено успішно"
+      );
+
+      // Відкриваємо PDF у новій вкладці для перегляду
+      try {
+        const blob = await kpApi.generateKPPDF(kp.id, selectedTemplateId || undefined);
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      } catch (pdfError) {
+        console.error("Помилка генерації PDF:", pdfError);
+      }
+
+      // Reset form
+      setStep(1);
+      setSelectedDishes([]);
+      setSelectedTemplateId(null);
+      setClientName("");
+      setEventDate("");
+      setGuestCount("");
+      setClientEmail("");
+      setSendEmail(false);
+      setEmailMessage("");
+    } catch (error: any) {
+      console.error("Error creating KP:", error);
+      toast.error(
+        error?.data?.detail || error?.message || "Помилка створення КП"
+      );
+    } finally {
+      setCreatingKP(false);
+    }
   };
 
   return (
@@ -248,6 +313,47 @@ export function CreateKP() {
                   onChange={(e) => setGuestCount(e.target.value)}
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="client-email">Email клієнта</Label>
+                  <Input
+                    id="client-email"
+                    type="email"
+                    placeholder="client@example.com"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Налаштування відправки</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Checkbox
+                      id="send-email"
+                      checked={sendEmail}
+                      onCheckedChange={(checked) =>
+                        setSendEmail(!!checked)
+                      }
+                    />
+                    <Label htmlFor="send-email" className="text-sm text-gray-700">
+                      Автоматично відправити КП на email клієнта
+                    </Label>
+                  </div>
+                </div>
+              </div>
+              {sendEmail && (
+                <div className="space-y-2">
+                  <Label htmlFor="email-message">
+                    Супровідний текст листа
+                  </Label>
+                  <textarea
+                    id="email-message"
+                    className="w-full px-3 py-2 border rounded-md min-h-[80px] text-sm"
+                    placeholder="Напишіть коротке повідомлення для клієнта..."
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="flex justify-end">
                 <Button
                   onClick={() => setStep(2)}
@@ -426,18 +532,40 @@ export function CreateKP() {
                 <div className="space-y-2">
                   <Label>Оберіть шаблон КП</Label>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {templates.map((template) => {
-                      const isSelected = selectedTemplate === template.id;
+                    {templatesLoading && (
+                      <div className="col-span-3 py-8 text-center text-gray-500">
+                        Завантаження шаблонів...
+                      </div>
+                    )}
+                    {!templatesLoading && templates.length === 0 && (
+                      <div className="col-span-3 py-8 text-center text-gray-500">
+                        Немає доступних шаблонів. Створіть шаблон у розділі
+                        &quot;Шаблони КП&quot;.
+                      </div>
+                    )}
+                    {!templatesLoading &&
+                      templates.map((template) => {
+                        const isSelected =
+                          selectedTemplateId === template.id;
                       return (
                         <div
                           key={template.id}
-                          onClick={() => setSelectedTemplate(template.id)}
+                          onClick={() => setSelectedTemplateId(template.id)}
                           className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                             isSelected
                               ? "border-[#FF5A00] bg-[#FF5A00]/5"
                               : "border-gray-200 hover:border-gray-300"
                           }`}
                         >
+                          {template.preview_image_url && (
+                            <div className="mb-3 h-24 rounded-md overflow-hidden border border-gray-200">
+                              <img
+                                src={template.preview_image_url}
+                                alt={template.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
                           <div className="flex items-start justify-between mb-2">
                             <FileText
                               className={`w-5 h-5 ${
@@ -508,10 +636,19 @@ export function CreateKP() {
             <Button
               onClick={handleCreateKP}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto sm:flex-1"
-              disabled={!selectedTemplate}
+              disabled={!selectedTemplateId || creatingKP}
             >
-              <Send className="w-4 h-4 mr-2" />
-              Створити та відправити КП
+              {creatingKP ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Створення КП...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Створити КП
+                </>
+              )}
             </Button>
           </div>
         </div>

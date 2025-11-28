@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -35,14 +35,13 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { toast } from "sonner";
+import { kpApi, templatesApi, type KP, type Template } from "../lib/api";
 
 interface KPArchiveItem {
-  id: string;
+  id: number;
   number: string;
   clientName: string;
-  eventDate: string;
   createdDate: string;
-  createdBy: string;
   status: "sent" | "approved" | "rejected" | "completed";
   statusLabel: string;
   totalAmount: number;
@@ -55,107 +54,45 @@ export function KPArchive() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("all");
+  const [archiveItems, setArchiveItems] = useState<KPArchiveItem[]>([]);
 
-  const [archiveItems] = useState<KPArchiveItem[]>([
-    {
-      id: "1",
-      number: "KP-2025-147",
-      clientName: "ТОВ 'IT Solutions'",
-      eventDate: "2025-11-15",
-      createdDate: "2025-10-18",
-      createdBy: "Олена Коваль",
-      status: "approved",
-      statusLabel: "Затверджено",
-      totalAmount: 45000,
-      dishCount: 12,
-      guestCount: 80,
-      template: "Класичний шаблон",
-    },
-    {
-      id: "2",
-      number: "KP-2025-146",
-      clientName: "Іван та Марія Петренко",
-      eventDate: "2025-11-20",
-      createdDate: "2025-10-17",
-      createdBy: "Іван Петренко",
-      status: "completed",
-      statusLabel: "Виконано",
-      totalAmount: 120000,
-      dishCount: 25,
-      guestCount: 120,
-      template: "Преміум шаблон",
-    },
-    {
-      id: "3",
-      number: "KP-2025-145",
-      clientName: "Компанія 'БізнесКонсалт'",
-      eventDate: "2025-10-25",
-      createdDate: "2025-10-17",
-      createdBy: "Марія Шевченко",
-      status: "sent",
-      statusLabel: "Відправлено",
-      totalAmount: 22500,
-      dishCount: 8,
-      guestCount: 50,
-      template: "Мінімалістичний",
-    },
-    {
-      id: "4",
-      number: "KP-2025-144",
-      clientName: "Startup Hub",
-      eventDate: "2025-10-30",
-      createdDate: "2025-10-16",
-      createdBy: "Олена Коваль",
-      status: "rejected",
-      statusLabel: "Відхилено",
-      totalAmount: 38000,
-      dishCount: 15,
-      guestCount: 100,
-      template: "Класичний шаблон",
-    },
-    {
-      id: "5",
-      number: "KP-2025-143",
-      clientName: "Tech Conference 2025",
-      eventDate: "2025-10-28",
-      createdDate: "2025-10-15",
-      createdBy: "Іван Петренко",
-      status: "approved",
-      statusLabel: "Затверджено",
-      totalAmount: 15000,
-      dishCount: 5,
-      guestCount: 30,
-      template: "Мінімалістичний",
-    },
-    {
-      id: "6",
-      number: "KP-2025-142",
-      clientName: "ТОВ 'Будівельна Компанія'",
-      eventDate: "2025-11-05",
-      createdDate: "2025-10-14",
-      createdBy: "Марія Шевченко",
-      status: "completed",
-      statusLabel: "Виконано",
-      totalAmount: 67500,
-      dishCount: 18,
-      guestCount: 150,
-      template: "Преміум шаблон",
-    },
-    {
-      id: "7",
-      number: "KP-2025-141",
-      clientName: "Приватна вечірка",
-      eventDate: "2025-10-22",
-      createdDate: "2025-10-13",
-      createdBy: "Олена Коваль",
-      status: "completed",
-      statusLabel: "Виконано",
-      totalAmount: 28000,
-      dishCount: 10,
-      guestCount: 40,
-      template: "Класичний шаблон",
-    },
-  ]);
+  useEffect(() => {
+    const loadArchive = async () => {
+      try {
+        const [kps, templates] = await Promise.all([
+          kpApi.getKPs(),
+          templatesApi.getTemplates(),
+        ]);
+
+        const templateMap = new Map<number, string>();
+        templates.forEach((t) => templateMap.set(t.id, t.name));
+
+        const mapped: KPArchiveItem[] = kps.map((kp) => ({
+          id: kp.id,
+          number: `KP-${kp.id.toString().padStart(4, "0")}`,
+          clientName: kp.title,
+          createdDate: kp.created_at
+            ? new Date(kp.created_at).toISOString().split("T")[0]
+            : "",
+          status: "sent",
+          statusLabel: "Відправлено",
+          totalAmount: kp.total_price || 0,
+          dishCount: kp.items?.length || 0,
+          guestCount: kp.people_count,
+          template: kp.template_id
+            ? templateMap.get(kp.template_id) || "Шаблон"
+            : "Шаблон",
+        }));
+
+        setArchiveItems(mapped);
+      } catch (error: any) {
+        console.error("Error loading KP archive:", error);
+        toast.error("Помилка завантаження архіву КП");
+      }
+    };
+
+    loadArchive();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
