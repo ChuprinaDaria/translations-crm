@@ -16,6 +16,7 @@ from pathlib import Path
 # import schema
 import pyotp
 from email_service import send_kp_email
+from telegram_service import send_kp_telegram
 
 router = APIRouter()
 
@@ -400,6 +401,26 @@ def create_kp(kp_in: schema.KPCreate, db: Session = Depends(get_db), user = Depe
                 print(f"Error sending email after KP creation: {e}")
                 # Можна додати логування в базу даних або повернути попередження
         
+        # Якщо вказано відправку в Telegram
+        if kp_in.send_telegram and kp_in.client_phone:
+            try:
+                pdf_bytes, pdf_filename = generate_kp_pdf_bytes(kp.id, kp_in.template_id, db)
+                
+                # Обираємо Telegram акаунт за замовчуванням
+                account = crud.get_first_active_telegram_account(db)
+                if not account:
+                    print("No active Telegram account configured; skipping Telegram send.")
+                else:
+                    send_kp_telegram(
+                        session_string=account.session_string,
+                        to_phone=kp_in.client_phone,
+                        pdf_content=pdf_bytes,
+                        pdf_filename=pdf_filename,
+                        message=kp_in.telegram_message,
+                    )
+            except Exception as e:
+                print(f"Error sending Telegram after KP creation: {e}")
+        
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return kp
@@ -450,6 +471,58 @@ def send_kp_by_email(
     except Exception as e:
         raise HTTPException(500, f"Error sending email: {str(e)}")
         
+@router.post("/kp/{kp_id}/send-telegram")
+def send_kp_by_telegram(
+    kp_id: int,
+    telegram_request: schema.TelegramSendRequest,
+    template_id: int = None,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Відправляє КП в Telegram клієнту за номером телефону.
+    """
+    kp = crud.get_kp(db, kp_id)
+    if not kp:
+        raise HTTPException(404, "KP not found")
+    
+    # Генеруємо PDF
+    try:
+        pdf_bytes, pdf_filename = generate_kp_pdf_bytes(kp_id, template_id, db)
+    except Exception as e:
+        raise HTTPException(500, f"Error generating PDF: {str(e)}")
+    
+    # Обираємо Telegram акаунт
+    account = None
+    if telegram_request.telegram_account_id is not None:
+        account = crud.get_telegram_account(db, telegram_request.telegram_account_id)
+    else:
+        account = crud.get_first_active_telegram_account(db)
+    
+    if not account:
+        raise HTTPException(400, "Не налаштовано жодного Telegram акаунта для відправки")
+    
+    # Відправляємо повідомлення
+    try:
+        send_kp_telegram(
+            session_string=account.session_string,
+            to_phone=telegram_request.to_phone,
+            pdf_content=pdf_bytes,
+            pdf_filename=pdf_filename,
+            message=telegram_request.message,
+        )
+        
+        # Зберігаємо телефон клієнта в КП, якщо його ще не було
+        if not kp.client_phone:
+            kp.client_phone = telegram_request.to_phone
+            db.commit()
+        
+        return {"status": "success", "message": f"КП відправлено в Telegram на {telegram_request.to_phone}"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Error sending Telegram message: {str(e)}")
+
 @router.get("/settings/logo")
 def get_company_logo(user = Depends(get_current_user)):
     """
@@ -494,6 +567,42 @@ async def upload_company_logo(
     
     rel_path = logo_path.relative_to(Path("app/uploads"))
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
+
+
+@router.get("/settings/telegram-accounts", response_model=list[schema.TelegramAccount])
+def list_telegram_accounts(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає всі активні Telegram акаунти, з яких можна надсилати КП.
+    """
+    return crud.get_telegram_accounts(db)
+
+
+@router.post("/settings/telegram-accounts", response_model=schema.TelegramAccount)
+def create_telegram_account(
+    account_in: schema.TelegramAccountCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Додає Telegram акаунт для відправки КП (звичайний акаунт, не бот).
+    Очікується, що session_string вже згенерований окремим інструментом.
+    """
+    return crud.create_telegram_account(db, account_in)
+
+
+@router.delete("/settings/telegram-accounts/{account_id}")
+def delete_telegram_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Видаляє/деактивує Telegram акаунт.
+    """
+    deleted = crud.delete_telegram_account(db, account_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Telegram account not found")
+    return {"status": "success"}
 
 # Categories
 @router.get("/categories", response_model=list[schema.Category])

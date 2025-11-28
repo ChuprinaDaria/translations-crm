@@ -100,8 +100,11 @@ class KPCreate(KPBase):
     items: list[KPItemCreate] = []
     template_id: Optional[int] = None
     client_email: Optional[str] = None  # Email клієнта
+    client_phone: Optional[str] = None  # Телефон клієнта (Telegram)
     send_email: Optional[bool] = False  # Відправити email одразу після створення
     email_message: Optional[str] = None  # Додаткове повідомлення для email
+    send_telegram: Optional[bool] = False  # Відправити КП в Telegram одразу після створення
+    telegram_message: Optional[str] = None  # Повідомлення в Telegram
 
 class KPItem(BaseModel):
     id: int
@@ -120,6 +123,7 @@ class KP(KPBase):
     price_per_person: Optional[float] = None
     template_id: Optional[int] = None
     client_email: Optional[str] = None
+    client_phone: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -180,3 +184,27 @@ class Template(TemplateBase):
 class EmailSendRequest(BaseModel):
     to_email: str
     message: Optional[str] = None  # Додаткове повідомлення в листі
+
+
+class TelegramSendRequest(BaseModel):
+    to_phone: str
+    message: Optional[str] = None  # Додаткове повідомлення в Telegram
+    telegram_account_id: Optional[int] = None  # Якщо не вказано — використати перший активний акаунт
+
+
+class TelegramAccountBase(BaseModel):
+    name: str
+    phone: Optional[str] = None
+
+
+class TelegramAccountCreate(TelegramAccountBase):
+    session_string: str
+
+
+class TelegramAccount(TelegramAccountBase):
+    id: int
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

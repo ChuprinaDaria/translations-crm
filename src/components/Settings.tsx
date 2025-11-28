@@ -5,7 +5,12 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
-import { settingsApi, getImageUrl, type BrandingSettings } from "../lib/api";
+import {
+  settingsApi,
+  getImageUrl,
+  type BrandingSettings,
+  type TelegramAccount,
+} from "../lib/api";
 
 export function Settings() {
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
@@ -13,17 +18,27 @@ export function Settings() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  const [telegramAccounts, setTelegramAccounts] = useState<TelegramAccount[]>([]);
+  const [newTgName, setNewTgName] = useState("");
+  const [newTgPhone, setNewTgPhone] = useState("");
+  const [newTgSession, setNewTgSession] = useState("");
+  const [isSavingTg, setIsSavingTg] = useState(false);
+
   useEffect(() => {
-    const loadBranding = async () => {
+    const loadData = async () => {
       try {
-        const data = await settingsApi.getBranding();
-        setBranding(data);
+        const [brandingData, tgAccounts] = await Promise.all([
+          settingsApi.getBranding(),
+          settingsApi.getTelegramAccounts(),
+        ]);
+        setBranding(brandingData);
+        setTelegramAccounts(tgAccounts);
       } catch (error) {
         console.error(error);
       }
     };
 
-    loadBranding();
+    loadData();
   }, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -151,6 +166,141 @@ export function Settings() {
               PDF.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Telegram акаунти для відправки КП</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Тут можна додати Telegram акаунти (звичайні, не боти), з яких буде
+            відправлятися КП клієнтам. Потрібно попередньо згенерувати{" "}
+            <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">
+              session string
+            </span>{" "}
+            за допомогою інструменту на базі Telethon.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="tg-name">Назва акаунта в системі</Label>
+              <Input
+                id="tg-name"
+                placeholder="Наприклад: Менеджер Іван"
+                value={newTgName}
+                onChange={(e) => setNewTgName(e.target.value)}
+              />
+
+              <Label htmlFor="tg-phone">Телефон акаунта (опційно)</Label>
+              <Input
+                id="tg-phone"
+                placeholder="+380..."
+                value={newTgPhone}
+                onChange={(e) => setNewTgPhone(e.target.value)}
+              />
+
+              <Label htmlFor="tg-session">Session string (обовʼязково)</Label>
+              <textarea
+                id="tg-session"
+                className="w-full px-3 py-2 border rounded-md text-xs font-mono min-h-[80px]"
+                placeholder="Вставте сюди згенерований session string Telethon..."
+                value={newTgSession}
+                onChange={(e) => setNewTgSession(e.target.value)}
+              />
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingTg || !newTgName || !newTgSession}
+                  onClick={async () => {
+                    setIsSavingTg(true);
+                    try {
+                      const created = await settingsApi.createTelegramAccount({
+                        name: newTgName,
+                        phone: newTgPhone || undefined,
+                        session_string: newTgSession.trim(),
+                      });
+                      setTelegramAccounts((prev) => [...prev, created]);
+                      setNewTgName("");
+                      setNewTgPhone("");
+                      setNewTgSession("");
+                      toast.success("Telegram акаунт додано");
+                    } catch (error: any) {
+                      console.error(error);
+                      const message =
+                        error?.detail ||
+                        error?.message ||
+                        "Не вдалося додати Telegram акаунт";
+                      toast.error(
+                        typeof message === "string"
+                          ? message
+                          : "Не вдалося додати Telegram акаунт"
+                      );
+                    } finally {
+                      setIsSavingTg(false);
+                    }
+                  }}
+                >
+                  {isSavingTg ? "Збереження..." : "Додати акаунт"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Поточні акаунти</Label>
+              {telegramAccounts.length === 0 ? (
+                <p className="text-xs text-gray-500">
+                  Ще не додано жодного Telegram акаунта.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-2">
+                  {telegramAccounts.map((acc) => (
+                    <div
+                      key={acc.id}
+                      className="flex items-center justify-between gap-2 text-xs border-b last:border-b-0 pb-1 last:pb-0"
+                    >
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {acc.name}
+                        </div>
+                        {acc.phone && (
+                          <div className="text-gray-500">{acc.phone}</div>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={async () => {
+                          try {
+                            await settingsApi.deleteTelegramAccount(acc.id);
+                            setTelegramAccounts((prev) =>
+                              prev.filter((a) => a.id !== acc.id)
+                            );
+                            toast.success("Акаунт видалено");
+                          } catch (error) {
+                            console.error(error);
+                            toast.error("Не вдалося видалити акаунт");
+                          }
+                        }}
+                      >
+                        Видалити
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Відправка КП в Telegram працює від імені цих акаунтів. Клієнти мають
+            бути в контактах або доступні за вказаним номером телефону.
+          </p>
         </CardContent>
       </Card>
     </div>

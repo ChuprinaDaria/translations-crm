@@ -401,6 +401,7 @@ export interface KP {
   price_per_person?: number;
   template_id?: number;
   client_email?: string;
+  client_phone?: string;
 }
 
 export interface KPCreate {
@@ -413,11 +414,20 @@ export interface KPCreate {
   client_email?: string;
   send_email?: boolean;
   email_message?: string;
+  client_phone?: string;
+  send_telegram?: boolean;
+  telegram_message?: string;
 }
 
 export interface EmailSendRequest {
   to_email: string;
   message?: string;
+}
+
+export interface TelegramSendRequest {
+  to_phone: string;
+  message?: string;
+  telegram_account_id?: number;
 }
 
 // KP API
@@ -472,6 +482,14 @@ export const kpApi = {
       method: 'POST',
       body: JSON.stringify(emailData),
     });
+  },
+
+  async sendKPByTelegram(kpId: number, data: TelegramSendRequest, templateId?: number): Promise<{ status: string; message: string }> {
+    const params = templateId ? `?template_id=${templateId}` : '';
+    return apiFetch<{ status: string; message: string }>(`/kp/${kpId}/send-telegram${params}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 };
 
@@ -514,6 +532,20 @@ export interface TemplateUpdate {
 // Branding / Settings
 export interface BrandingSettings {
   logo_url?: string | null;
+}
+
+export interface TelegramAccount {
+  id: number;
+  name: string;
+  phone?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface TelegramAccountCreate {
+  name: string;
+  phone?: string;
+  session_string: string;
 }
 
 // Templates API
@@ -571,5 +603,22 @@ export const settingsApi = {
     const formData = new FormData();
     formData.append("logo", file);
     return apiFetchMultipart<BrandingSettings>("/settings/logo", formData, "POST");
+  },
+
+  async getTelegramAccounts(): Promise<TelegramAccount[]> {
+    return apiFetch<TelegramAccount[]>("/settings/telegram-accounts");
+  },
+
+  async createTelegramAccount(data: TelegramAccountCreate): Promise<TelegramAccount> {
+    return apiFetch<TelegramAccount>("/settings/telegram-accounts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteTelegramAccount(id: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/settings/telegram-accounts/${id}`, {
+      method: "DELETE",
+    });
   },
 };

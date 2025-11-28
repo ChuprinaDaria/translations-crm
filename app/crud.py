@@ -108,6 +108,7 @@ def create_kp(db: Session, kp_in: schemas.KPCreate):
         price_per_person=price_per_person,
         template_id=kp_in.template_id,
         client_email=kp_in.client_email,
+        client_phone=kp_in.client_phone,
     )
 
     db.add(kp)
@@ -244,5 +245,45 @@ def delete_template(db: Session, template_id: int):
         return None
     
     db.delete(db_template)
+    db.commit()
+    return True
+
+
+# Telegram accounts CRUD
+def create_telegram_account(db: Session, account_in: schemas.TelegramAccountCreate):
+    db_account = models.TelegramAccount(
+        name=account_in.name,
+        phone=account_in.phone,
+        session_string=account_in.session_string,
+        is_active=True,
+    )
+    db.add(db_account)
+    db.commit()
+    db.refresh(db_account)
+    return db_account
+
+
+def get_telegram_accounts(db: Session):
+    return db.query(models.TelegramAccount).filter(models.TelegramAccount.is_active == True).all()
+
+
+def get_telegram_account(db: Session, account_id: int):
+    return db.query(models.TelegramAccount).filter(models.TelegramAccount.id == account_id, models.TelegramAccount.is_active == True).first()
+
+
+def get_first_active_telegram_account(db: Session):
+    return (
+        db.query(models.TelegramAccount)
+        .filter(models.TelegramAccount.is_active == True)
+        .order_by(models.TelegramAccount.id.asc())
+        .first()
+    )
+
+
+def delete_telegram_account(db: Session, account_id: int):
+    account = db.query(models.TelegramAccount).filter(models.TelegramAccount.id == account_id).first()
+    if not account:
+        return False
+    db.delete(account)
     db.commit()
     return True

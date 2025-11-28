@@ -51,8 +51,11 @@ export function CreateKP() {
   const [eventDate, setEventDate] = useState("");
   const [guestCount, setGuestCount] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [sendEmail, setSendEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
+  const [sendTelegram, setSendTelegram] = useState(false);
+  const [telegramMessage, setTelegramMessage] = useState("");
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -195,10 +198,13 @@ export function CreateKP() {
         client_email: clientEmail || undefined,
         send_email: sendEmail,
         email_message: emailMessage || undefined,
+        client_phone: clientPhone || undefined,
+        send_telegram: sendTelegram,
+        telegram_message: telegramMessage || undefined,
       });
 
       toast.success(
-        sendEmail
+        sendEmail || sendTelegram
           ? "КП створено та відправлено клієнту"
           : "КП створено успішно"
       );
@@ -326,35 +332,82 @@ export function CreateKP() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Налаштування відправки</Label>
+                  <Label htmlFor="client-phone">Телефон клієнта (Telegram)</Label>
+                  <Input
+                    id="client-phone"
+                    type="tel"
+                    placeholder="+380..."
+                    value={clientPhone}
+                    onChange={(e) => setClientPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Відправка email</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Checkbox
                       id="send-email"
                       checked={sendEmail}
-                      onCheckedChange={(checked) =>
-                        setSendEmail(!!checked)
-                      }
+                      onCheckedChange={(checked) => setSendEmail(!!checked)}
                     />
-                    <Label htmlFor="send-email" className="text-sm text-gray-700">
+                    <Label
+                      htmlFor="send-email"
+                      className="text-sm text-gray-700"
+                    >
                       Автоматично відправити КП на email клієнта
                     </Label>
                   </div>
+                  {sendEmail && (
+                    <div className="space-y-2 mt-2">
+                      <Label htmlFor="email-message">
+                        Супровідний текст листа
+                      </Label>
+                      <textarea
+                        id="email-message"
+                        className="w-full px-3 py-2 border rounded-md min-h-[80px] text-sm"
+                        placeholder="Напишіть коротке повідомлення для клієнта..."
+                        value={emailMessage}
+                        onChange={(e) => setEmailMessage(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Відправка в Telegram</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Checkbox
+                      id="send-telegram"
+                      checked={sendTelegram}
+                      onCheckedChange={(checked) =>
+                        setSendTelegram(!!checked)
+                      }
+                    />
+                    <Label
+                      htmlFor="send-telegram"
+                      className="text-sm text-gray-700"
+                    >
+                      Автоматично відправити КП в Telegram
+                    </Label>
+                  </div>
+                  {sendTelegram && (
+                    <div className="space-y-2 mt-2">
+                      <Label htmlFor="telegram-message">
+                        Повідомлення в Telegram
+                      </Label>
+                      <textarea
+                        id="telegram-message"
+                        className="w-full px-3 py-2 border rounded-md min-h-[80px] text-sm"
+                        placeholder="Коротке повідомлення, яке побачить клієнт в Telegram..."
+                        value={telegramMessage}
+                        onChange={(e) => setTelegramMessage(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
-              {sendEmail && (
-                <div className="space-y-2">
-                  <Label htmlFor="email-message">
-                    Супровідний текст листа
-                  </Label>
-                  <textarea
-                    id="email-message"
-                    className="w-full px-3 py-2 border rounded-md min-h-[80px] text-sm"
-                    placeholder="Напишіть коротке повідомлення для клієнта..."
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                  />
-                </div>
-              )}
               <div className="flex justify-end">
                 <Button
                   onClick={() => setStep(2)}

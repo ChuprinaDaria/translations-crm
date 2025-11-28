@@ -86,9 +86,25 @@ class KP(Base):
     price_per_person = Column(Float)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     client_email = Column(String, nullable=True, index=True)  # Email клієнта
+    client_phone = Column(String, nullable=True, index=True)  # Телефон клієнта (Telegram / Viber etc.)
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
     template = relationship("Template", back_populates="kps")
+
+
+class TelegramAccount(Base):
+    """
+    Обліковий запис Telegram, з якого можуть надсилатися КП.
+    Зберігаємо лише метадані та session_string (створюється окремим інструментом).
+    """
+    __tablename__ = "telegram_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)          # Назва в UI (наприклад, "Менеджер 1")
+    phone = Column(String, nullable=True, index=True)          # Телефон акаунта (для інформації)
+    session_string = Column(String, nullable=False)            # Секретна сесія Telethon
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 
