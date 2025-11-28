@@ -109,6 +109,7 @@ def create_kp(db: Session, kp_in: schemas.KPCreate):
         template_id=kp_in.template_id,
         client_email=kp_in.client_email,
         client_phone=kp_in.client_phone,
+        status=kp_in.status or "sent",
     )
 
     db.add(kp)
@@ -139,7 +140,12 @@ def get_kp(db: Session, kp_id: int):
 
 
 def get_all_kps(db: Session):
-    return db.query(models.KP).all()
+    # Повертаємо КП разом з позиціями, щоб фронтенд міг показувати деталізацію
+    return (
+        db.query(models.KP)
+        .options(selectinload(models.KP.items).selectinload(models.KPItem.item))
+        .all()
+    )
 
 
 def delete_kp(db: Session, kp_id: int):

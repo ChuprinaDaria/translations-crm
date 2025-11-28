@@ -84,6 +84,12 @@ class KP(Base):
     people_count = Column(Integer)
     total_price = Column(Float)
     price_per_person = Column(Float)
+    # Статус життєвого циклу КП:
+    # sent      – відправлено клієнту
+    # approved  – затверджено клієнтом
+    # rejected  – відхилено клієнтом
+    # completed – виконано (подія відбулася)
+    status = Column(String, default="sent", index=True)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     client_email = Column(String, nullable=True, index=True)  # Email клієнта
     client_phone = Column(String, nullable=True, index=True)  # Телефон клієнта (Telegram / Viber etc.)

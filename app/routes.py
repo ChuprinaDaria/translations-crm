@@ -537,6 +537,26 @@ def create_kp(kp_in: schema.KPCreate, db: Session = Depends(get_db), user = Depe
 def list_kp(db: Session = Depends(get_db), user = Depends(get_current_user)):
     return crud.get_all_kps(db)
 
+
+@router.patch("/kp/{kp_id}/status", response_model=schema.KP)
+def update_kp_status(
+    kp_id: int,
+    status_in: schema.KPStatusUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Оновлення статусу КП (sent / approved / rejected / completed).
+    """
+    kp = crud.get_kp(db, kp_id)
+    if not kp:
+        raise HTTPException(404, "KP not found")
+
+    kp.status = status_in.status
+    db.commit()
+    db.refresh(kp)
+    return kp
+
 @router.post("/kp/{kp_id}/send-email")
 def send_kp_by_email(
     kp_id: int,

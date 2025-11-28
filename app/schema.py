@@ -88,6 +88,8 @@ class LoginRequest(BaseModel):
 class KPBase(BaseModel):
     title: str
     people_count: int
+    # Статус КП (за замовчуванням "sent")
+    status: Optional[str] = "sent"
 
 
 class KPItemCreate(BaseModel):
@@ -127,6 +129,10 @@ class KP(KPBase):
     
     class Config:
         from_attributes = True
+
+
+class KPStatusUpdate(BaseModel):
+    status: str
 
 ############################################################
 # Template schemas

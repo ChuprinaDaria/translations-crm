@@ -6,7 +6,9 @@ import { MenuManagement } from "./components/MenuManagement";
 import { CreateKP } from "./components/CreateKP";
 import { KPTemplates } from "./components/KPTemplates";
 import { KPArchive } from "./components/KPArchive";
+import { AllKP } from "./components/AllKP";
 import { Settings } from "./components/Settings";
+import { Clients } from "./components/Clients";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -201,16 +203,7 @@ function App() {
       case "kp-archive":
         return <KPArchive />;
       case "all-kp":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">Усі КП</h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Список всіх комерційних пропозицій буде тут
-              </p>
-            </div>
-          </div>
-        );
+        return <AllKP />;
       case "client-questionnaires":
         return (
           <div className="space-y-6">
@@ -327,16 +320,7 @@ function App() {
           </div>
         );
       case "clients":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">Клієнти</h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                База клієнтів буде тут
-              </p>
-            </div>
-          </div>
-        );
+        return <Clients />;
       case "settings":
         return <Settings />;
       case "users-access":

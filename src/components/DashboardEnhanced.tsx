@@ -53,6 +53,8 @@ interface DashboardStats {
   };
 }
 
+type KPStatus = "sent" | "approved" | "rejected" | "completed";
+
 export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -137,16 +139,72 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
     }
   };
 
-  // статуси КП поки не зберігаються в БД, тому тимчасово позначаємо всі як "Відправлено"
+  const getStatusLabel = (status: KPStatus): string => {
+    switch (status) {
+      case "approved":
+        return "Затверджено";
+      case "rejected":
+        return "Відхилено";
+      case "completed":
+        return "Виконано";
+      case "sent":
+      default:
+        return "Відправлено";
+    }
+  };
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      approved: "default",
-      "in-progress": "secondary",
-      sent: "outline",
-      draft: "secondary",
-    };
-    return colors[status] || "default";
+  const getStatusVariant = (status: KPStatus): "default" | "secondary" | "outline" | "destructive" => {
+    switch (status) {
+      case "approved":
+        return "default";
+      case "rejected":
+        return "destructive";
+      case "completed":
+        return "secondary";
+      case "sent":
+      default:
+        return "outline";
+    }
+  };
+
+  const handleViewKP = async (kp: KP) => {
+    try {
+      const blob = await kpApi.generateKPPDF(kp.id, kp.template_id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Помилка генерації PDF:", error);
+      toast.error("Не вдалося згенерувати PDF для КП");
+    }
+  };
+
+  const handleDownloadKP = async (kp: KP) => {
+    try {
+      const blob = await kpApi.generateKPPDF(kp.id, kp.template_id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `KP-${kp.id.toString().padStart(4, "0")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Помилка завантаження PDF:", error);
+      toast.error("Не вдалося завантажити PDF для КП");
+    }
+  };
+
+  const handleDeleteKP = async (kp: KP) => {
+    if (!window.confirm("Видалити цю КП?")) return;
+    try {
+      await kpApi.deleteKP(kp.id);
+      toast.success("КП видалено");
+      await loadDashboardData();
+    } catch (error) {
+      console.error("Помилка видалення КП:", error);
+      toast.error("Не вдалося видалити КП");
+    }
   };
 
   if (loading) {
@@ -512,7 +570,7 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         </Card>
       </div>
 
-      {/* Recent KP (mock data for now) */}
+      {/* Recent KP */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -541,25 +599,41 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentKP.map((kp) => (
+                {(!recentKP || recentKP.length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-6 text-gray-500">
+                      КП ще не створювалися
+                    </TableCell>
+                  </TableRow>
+                )}
+                {recentKP?.map((kp) => {
+                  const status = ((kp.status as KPStatus) || "sent") as KPStatus;
+                  const createdDate = kp.created_at
+                    ? new Date(kp.created_at).toLocaleDateString("uk-UA")
+                    : "—";
+                  const total = kp.total_price ?? null;
+
+                  return (
                   <TableRow key={kp.id} className="hover:bg-gray-50">
-                    <TableCell className="text-gray-900">{kp.id}</TableCell>
+                    <TableCell className="text-gray-900">
+                      KP-{kp.id.toString().padStart(4, "0")}
+                    </TableCell>
                     <TableCell>
                       <div className="max-w-xs">
-                        <div className="truncate text-gray-900">{kp.name}</div>
+                        <div className="truncate text-gray-900">{kp.title}</div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusColor(kp.status) as any}>
-                        {kp.statusLabel}
+                      <Badge variant={getStatusVariant(status)}>
+                        {getStatusLabel(status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-gray-600">
-                      {new Date(kp.date).toLocaleDateString('uk-UA')}
+                      {createdDate}
                     </TableCell>
-                    <TableCell className="text-gray-600">{kp.manager}</TableCell>
+                    <TableCell className="text-gray-600">—</TableCell>
                     <TableCell className="text-right text-gray-900">
-                      {kp.price}
+                      {total !== null ? `${total.toLocaleString()} грн` : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -569,15 +643,18 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewKP(kp)}>
                             <Eye className="mr-2 h-4 w-4" />
                             Переглянути
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDownloadKP(kp)}>
                             <Edit className="mr-2 h-4 w-4" />
-                            Редагувати
+                            Завантажити PDF
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600">
+                          <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={() => handleDeleteKP(kp)}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Видалити
                           </DropdownMenuItem>
@@ -585,7 +662,8 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

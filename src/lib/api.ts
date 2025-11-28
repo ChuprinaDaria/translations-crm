@@ -402,6 +402,7 @@ export interface KP {
   template_id?: number;
   client_email?: string;
   client_phone?: string;
+  status?: string;
 }
 
 export interface KPCreate {
@@ -450,6 +451,13 @@ export const kpApi = {
   async deleteKP(kpId: number): Promise<{ status: string }> {
     return apiFetch<{ status: string }>(`/kp/${kpId}`, {
       method: 'DELETE',
+    });
+  },
+
+  async updateKPStatus(kpId: number, status: string): Promise<KP> {
+    return apiFetch<KP>(`/kp/${kpId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     });
   },
 
