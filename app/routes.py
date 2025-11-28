@@ -607,17 +607,21 @@ async def create_template(
     template_path = os.path.join("app", "uploads", filename)
 
     # Якщо html_content передано – створюємо / перезаписуємо файл
+    os.makedirs(os.path.dirname(template_path), exist_ok=True)
     if html_content:
-        os.makedirs(os.path.dirname(template_path), exist_ok=True)
         try:
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
     else:
-        # Старий режим: очікуємо, що файл вже існує
-        if not os.path.exists(template_path):
-            raise HTTPException(status_code=400, detail=f"Template file not found: {filename}")
+        # Якщо HTML не передали, все одно створюємо порожній шаблон,
+        # щоб його можна було відредагувати пізніше з фронта
+        try:
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
     
     # Обробка прев'ю: пріоритет має завантажений файл
     final_preview_url = preview_image_url
@@ -670,18 +674,22 @@ async def update_template(
     final_filename = filename or current_template.filename
     template_path = os.path.join("app", "uploads", final_filename)
 
-    # Якщо оновлюється filename без html_content – переконуємось, що новий файл існує
-    if filename and not html_content and not os.path.exists(template_path):
-        raise HTTPException(status_code=400, detail=f"Template file not found: {final_filename}")
-
-    # Якщо передано html_content – записуємо / перезаписуємо файл
+    # Оновлюємо файл шаблону:
+    # - якщо є html_content — перезаписуємо його
+    # - якщо немає, але файлу ще не існує — створюємо порожній шаблон
+    os.makedirs(os.path.dirname(template_path), exist_ok=True)
     if html_content:
-        os.makedirs(os.path.dirname(template_path), exist_ok=True)
         try:
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
+    elif not os.path.exists(template_path):
+        try:
+            with open(template_path, "w", encoding="utf-8") as f:
+                f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
     
     # Обробка прев'ю: пріоритет має завантажений файл
     final_preview_url = preview_image_url
