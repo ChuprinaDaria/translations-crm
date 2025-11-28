@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { templatesApi, Template, getImageUrl } from "../../lib/api";
 
 export function TemplateList() {

@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react";
+import React, { useState, useEffect, FormEvent } from "react";
 import { kpApi, templatesApi, Template, getImageUrl } from "../../lib/api";
 
 interface KPCreateFormProps {
