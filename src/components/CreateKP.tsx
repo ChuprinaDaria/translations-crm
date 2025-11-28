@@ -21,6 +21,7 @@ import {
   categoriesApi,
   kpApi,
   templatesApi,
+  getImageUrl,
   type Item,
   type Category,
   type Template as ApiTemplate,
@@ -448,15 +449,21 @@ export function CreateKP() {
                             }`}
                           >
                             <div className="flex gap-4">
-                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
-                                <img
-                                  src={dish.photo_url || 'https://via.placeholder.com/150?text=No+Image'}
-                                  alt={dish.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=No+Image';
-                                  }}
-                                />
+                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
+                                {dish.photo_url ? (
+                                  <img
+                                    src={getImageUrl(dish.photo_url) || ""}
+                                    alt={dish.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 text-center px-1">
+                                    Нема фото
+                                  </span>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2 mb-1">

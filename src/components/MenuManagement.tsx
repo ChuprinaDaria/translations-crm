@@ -465,14 +465,20 @@ export function MenuManagement() {
                       {filteredItems.map(item => (
                         <TableRow key={item.id}>
                           <TableCell>
-                            <img
-                              src={item.photo_url || '/placeholder.png'}
-                              alt={item.name}
-                              className="w-12 h-12 object-cover rounded"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=No+Image';
-                              }}
-                            />
+                            {item.photo_url ? (
+                              <img
+                                src={getImageUrl(item.photo_url) || ""}
+                                alt={item.name}
+                                className="w-12 h-12 object-cover rounded border border-gray-200"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[9px] text-gray-400 text-center px-1">
+                                Нема фото
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>{item.name}</TableCell>
                           <TableCell className="max-w-xs truncate">
