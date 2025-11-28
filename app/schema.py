@@ -68,7 +68,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    role: str
+    role: Optional[str] = "user"
 
 class UserOut(UserBase):
     id: int
