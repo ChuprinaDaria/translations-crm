@@ -137,6 +137,75 @@ def delete_old_preview(preview_url: str):
                 print(f"Error deleting old preview: {e}")
 
 
+def generate_template_preview(html_content: str, filename: str) -> str:
+    """
+    Генерує прев'ю зображення з HTML шаблону.
+    Повертає відносний шлях до збереженого зображення.
+    """
+    try:
+        from pdf2image import convert_from_bytes
+        from io import BytesIO
+        
+        # Генеруємо PDF з HTML (використовуємо тестові дані)
+        test_data = {
+            'kp': {
+                'title': 'Тестова КП',
+                'client_email': 'test@example.com',
+                'people_count': 50,
+            },
+            'items': [
+                {'name': 'Салат Цезар', 'quantity': 10, 'weight': '5.00 кг', 'price': '120.00 грн', 'total': '1200.00 грн'},
+                {'name': 'Стейк яловичий', 'quantity': 25, 'weight': '6.25 кг', 'price': '250.00 грн', 'total': '6250.00 грн'},
+            ],
+            'total_items': 2,
+            'total_weight': '11.25 кг',
+            'total_price': '7450.00 грн',
+            'company_name': 'Дзиґа Кейтерінґ',
+            'created_date': '28.11.2025',
+            'event_date': '01.12.2025',
+            'logo_src': None,
+        }
+        
+        # Рендеримо HTML через Jinja2
+        from jinja2 import Template
+        template = Template(html_content)
+        rendered_html = template.render(**test_data)
+        
+        # Генеруємо PDF з HTML
+        pdf_bytes = HTML(string=rendered_html).write_pdf(zoom=0.75)
+        
+        # Конвертуємо першу сторінку PDF у зображення
+        images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
+        
+        if not images:
+            raise Exception("Failed to convert PDF to image")
+        
+        # Зберігаємо зображення
+        preview_image = images[0]
+        
+        # Зменшуємо розмір для прев'ю (макс. 800px по ширині)
+        max_width = 800
+        if preview_image.width > max_width:
+            ratio = max_width / preview_image.width
+            new_height = int(preview_image.height * ratio)
+            preview_image = preview_image.resize((max_width, new_height))
+        
+        # Генеруємо унікальне ім'я файлу
+        unique_filename = f"{uuid.uuid4()}.png"
+        preview_path = TEMPLATE_PREVIEWS_DIR / unique_filename
+        
+        # Зберігаємо зображення
+        preview_image.save(preview_path, "PNG", optimize=True)
+        
+        print(f"✓ Template preview generated: {preview_path}")
+        return f"uploads/template-previews/{unique_filename}"
+        
+    except Exception as e:
+        print(f"Error generating template preview: {e}")
+        # Повертаємо None якщо не вдалося згенерувати прев'ю
+        return None
+
+
 def get_company_logo_path() -> Path | None:
     """
     Повертає шлях до файлу лого компанії, якщо він існує.
@@ -859,6 +928,12 @@ async def create_template(
         
         # Зберігаємо файл
         final_preview_url = save_template_preview(preview_image)
+    elif html_content and not preview_image_url:
+        # Автоматично генеруємо прев'ю з HTML, якщо не завантажено зображення
+        print(f"Generating automatic preview for template: {filename}")
+        auto_preview = generate_template_preview(html_content, filename)
+        if auto_preview:
+            final_preview_url = auto_preview
     
     # Створюємо об'єкт TemplateCreate
     template_data = schema.TemplateCreate(
@@ -933,6 +1008,17 @@ async def update_template(
     elif preview_image_url is None:
         # Якщо preview_image_url не передано, залишаємо поточне значення
         final_preview_url = current_template.preview_image_url
+        
+        # Якщо оновлено HTML, регенеруємо прев'ю автоматично
+        if html_content:
+            print(f"Regenerating automatic preview for template: {final_filename}")
+            # Видаляємо старе прев'ю
+            if current_template.preview_image_url:
+                delete_old_preview(current_template.preview_image_url)
+            # Генеруємо нове
+            auto_preview = generate_template_preview(html_content, final_filename)
+            if auto_preview:
+                final_preview_url = auto_preview
     
     # Створюємо об'єкт TemplateUpdate
     template_data = schema.TemplateUpdate(
