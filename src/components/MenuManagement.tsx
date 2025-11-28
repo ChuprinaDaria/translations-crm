@@ -452,24 +452,14 @@ export function MenuManagement() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-20">Фото</TableHead>
-                        <TableHead className="min-w-[160px]">Назва</TableHead>
-                        {/* Дії ставимо ближче до початку, щоб не потрібно було скролити */}
+                        <TableHead className="min-w-[220px]">Страва</TableHead>
+                        <TableHead className="min-w-[140px]">Ціна / вага</TableHead>
+                        <TableHead className="min-w-[120px]">Статус</TableHead>
                         <TableHead className="w-28 text-right">Дії</TableHead>
-                        <TableHead className="hidden xl:table-cell min-w-[220px]">
-                          Опис
-                        </TableHead>
-                        <TableHead className="hidden lg:table-cell min-w-[90px]">
-                          Вага
-                        </TableHead>
-                        <TableHead className="min-w-[90px]">Ціна</TableHead>
-                        <TableHead className="hidden md:table-cell min-w-[140px]">
-                          Категорія
-                        </TableHead>
-                        <TableHead className="min-w-[90px]">Статус</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredItems.map(item => (
+                      {filteredItems.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>
                             {item.photo_url ? (
@@ -491,6 +481,30 @@ export function MenuManagement() {
                             <div className="text-gray-900 font-medium">
                               {item.name}
                             </div>
+                            <div className="text-xs text-gray-500">
+                              {item.subcategory?.category?.name}
+                              {item.subcategory?.name
+                                ? ` • ${item.subcategory.name}`
+                                : ""}
+                            </div>
+                            {item.description && (
+                              <div className="hidden xl:block text-xs text-gray-500 max-w-xs truncate">
+                                {item.description}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="text-[#FF5A00] font-medium">
+                              {item.price} грн
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {item.weight ? `${item.weight}${item.unit}` : "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Badge variant={item.active ? "default" : "secondary"}>
+                              {item.active ? "В меню" : "Неактивна"}
+                            </Badge>
                           </TableCell>
                           <TableCell className="align-top">
                             <div className="flex justify-end gap-2">
@@ -512,27 +526,6 @@ export function MenuManagement() {
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
                             </div>
-                          </TableCell>
-                          <TableCell className="hidden xl:table-cell max-w-xs truncate align-top">
-                            {item.description || "-"}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell align-top">
-                            {item.weight ? `${item.weight}${item.unit}` : "-"}
-                          </TableCell>
-                          <TableCell className="text-[#FF5A00] align-top">
-                            {item.price} грн
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell align-top">
-                            <div className="text-sm">
-                              <Badge variant="outline">
-                                {item.subcategory?.name}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant={item.active ? "default" : "secondary"}>
-                              {item.active ? "В меню" : "Неактивна"}
-                            </Badge>
                           </TableCell>
                         </TableRow>
                       ))}
