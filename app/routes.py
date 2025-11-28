@@ -313,15 +313,23 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         total_weight += item_weight
 
         if item:
+            # Форматуємо дані для відображення в шаблоні
+            weight_str = f"{item.weight:.2f} {item.unit or 'кг'}" if item.weight else "-"
+            price_str = f"{item.price:.2f} грн" if item.price else "-"
+            total_str = f"{(item.price or 0) * kp_item.quantity:.2f} грн"
+            
             items_data.append({
                 'name': item.name,
-                'price': item.price or 0,
+                'price': price_str,
                 'quantity': kp_item.quantity,
-                'total': (item.price or 0) * kp_item.quantity,
+                'total': total_str,
                 'description': item.description,
                 'unit': item.unit,
-                'weight': item.weight,
+                'weight': weight_str,
                 'total_weight': item_weight,
+                # Зберігаємо також числові значення для підрахунків
+                'price_raw': item.price or 0,
+                'total_raw': (item.price or 0) * kp_item.quantity,
             })
             total_quantity += kp_item.quantity
 
@@ -356,13 +364,27 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         # WeasyPrint підтримує file:// шляхи для локальних ресурсів
         logo_src = f"file://{logo_path.resolve()}"
     
+    # Отримуємо назву компанії з налаштувань або використовуємо дефолтну
+    company_name = crud.get_setting(db, "company_name") or "Дзиґа Кейтерінґ"
+    
+    # Форматуємо дати для шаблону
+    created_date = kp.created_at.strftime("%d.%m.%Y") if kp.created_at else ""
+    event_date = ""  # TODO: додати поле event_date в модель KP, якщо потрібно
+    
+    # Форматуємо ціни та вагу
+    formatted_total_price = f"{sum(item['total_raw'] for item in items_data):.2f} грн"
+    formatted_total_weight = f"{total_weight:.2f} кг"
+    
     html_content = template.render(
         kp=kp,
         items=items_data,
-        total_price=sum(item['total'] for item in items_data),
-        total_weight=total_weight,
+        total_price=formatted_total_price,
+        total_weight=formatted_total_weight,
         total_items=len(items_data),
         logo_src=logo_src,
+        company_name=company_name,
+        created_date=created_date,
+        event_date=event_date,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -818,7 +840,7 @@ async def create_template(
         if "does not exist" in error_msg or "not found" in error_msg.lower():
             raise HTTPException(
                 status_code=400, 
-                detail=f"Template file not found: {filename}. Можливо, ваш HTML використовує {% extends %} або {% include %} з файлом, якого не існує в директорії uploads."
+                detail=f"Template file not found: {filename}. Можливо, ваш HTML використовує extends або include з файлом, якого не існує в директорії uploads."
             )
         raise HTTPException(status_code=400, detail=f"Template validation error: {error_msg}")
     
