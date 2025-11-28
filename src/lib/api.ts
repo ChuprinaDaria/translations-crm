@@ -663,4 +663,14 @@ export const settingsApi = {
     formData.append("sender_name", data.sender_name);
     return apiFetchMultipart<{ status: string }>("/settings/telegram-config", formData, "POST");
   },
+
+  async importMenuCsv(file: File): Promise<{ status: string; created: number }> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetchMultipart<{ status: string; created: number }>(
+      "/settings/import-menu-csv",
+      formData,
+      "POST"
+    );
+  },
 };

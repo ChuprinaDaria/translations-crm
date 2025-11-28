@@ -16,6 +16,7 @@ from pathlib import Path
 import pyotp
 from email_service import send_kp_email
 from telegram_service import send_kp_telegram
+from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
 
 
 router = APIRouter()
@@ -376,36 +377,39 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     kp_items = crud.get_kp_items(db, kp_id)
 
     # Prepare items data with actual Item information
-    items_data = []
+    items_data: list[dict] = []
     total_quantity = 0
-    total_weight = 0
+    total_weight = 0.0
 
     for kp_item in kp_items.items:
-        item = crud.get_item(db, kp_item.id)
+        # kp_item.id — це ID запису kp_items, нам потрібен item_id
+        item = crud.get_item(db, kp_item.item_id)
+        if not item:
+            # Якщо страву видалили з меню після створення КП — просто пропускаємо її
+            continue
 
         item_weight = (item.weight or 0) * kp_item.quantity
         total_weight += item_weight
 
-        if item:
-            # Форматуємо дані для відображення в шаблоні
-            weight_str = f"{item.weight:.2f} {item.unit or 'кг'}" if item.weight else "-"
-            price_str = f"{item.price:.2f} грн" if item.price else "-"
-            total_str = f"{(item.price or 0) * kp_item.quantity:.2f} грн"
-            
-            items_data.append({
-                'name': item.name,
-                'price': price_str,
-                'quantity': kp_item.quantity,
-                'total': total_str,
-                'description': item.description,
-                'unit': item.unit,
-                'weight': weight_str,
-                'total_weight': item_weight,
-                # Зберігаємо також числові значення для підрахунків
-                'price_raw': item.price or 0,
-                'total_raw': (item.price or 0) * kp_item.quantity,
-            })
-            total_quantity += kp_item.quantity
+        # Форматуємо дані для відображення в шаблоні
+        weight_str = f"{item.weight:.2f} {item.unit or 'кг'}" if item.weight else "-"
+        price_str = f"{item.price:.2f} грн" if item.price else "-"
+        total_str = f"{(item.price or 0) * kp_item.quantity:.2f} грн"
+        
+        items_data.append({
+            'name': item.name,
+            'price': price_str,
+            'quantity': kp_item.quantity,
+            'total': total_str,
+            'description': item.description,
+            'unit': item.unit,
+            'weight': weight_str,
+            'total_weight': item_weight,
+            # Зберігаємо також числові значення для підрахунків
+            'price_raw': item.price or 0,
+            'total_raw': (item.price or 0) * kp_item.quantity,
+        })
+        total_quantity += kp_item.quantity
 
     # Визначаємо який шаблон використовувати
     selected_template = None
@@ -741,6 +745,34 @@ def update_telegram_config(
     crud.set_setting(db, "telegram_api_hash", api_hash)
     crud.set_setting(db, "telegram_sender_name", sender_name)
     return {"status": "success"}
+
+
+@router.post("/settings/import-menu-csv")
+async def import_menu_csv_endpoint(
+    file: UploadFile = File(...),
+    user = Depends(get_current_user),
+):
+    """
+    Імпорт меню з CSV-файлу в базу даних.
+
+    З frontend завантажується CSV (експорт з Excel меню),
+    файл тимчасово зберігається в uploads/imports, парситься
+    та імпортується в таблиці categories / subcategories / items.
+    """
+    # Зберігаємо тимчасовий файл
+    imports_dir = UPLOADS_DIR / "imports"
+    imports_dir.mkdir(parents=True, exist_ok=True)
+
+    temp_path = imports_dir / file.filename
+    contents = await file.read()
+    with temp_path.open("wb") as f:
+        f.write(contents)
+
+    # Парсимо та імпортуємо в БД
+    items = parse_menu_csv(temp_path)
+    import_menu_items(items)
+
+    return {"status": "success", "created": len(items)}
 
 
 @router.get("/settings/telegram-accounts", response_model=list[schema.TelegramAccount])

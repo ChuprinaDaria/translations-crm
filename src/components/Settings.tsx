@@ -41,6 +41,10 @@ export function Settings() {
     sender_name: "",
   });
 
+  // CSV import state
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -187,6 +191,72 @@ export function Settings() {
               PDF.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Імпорт меню з CSV</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Завантажте CSV, експортований з файлу{" "}
+            <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">
+              Загальне_меню_Dzyga_2025 --3.xlsm
+            </span>
+            . Система автоматично створить категорії, підкатегорії та страви.
+          </p>
+
+          <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+            <Input
+              type="file"
+              accept=".csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setCsvFile(file);
+              }}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+              disabled={isImportingCsv || !csvFile}
+              onClick={async () => {
+                if (!csvFile) {
+                  toast.error("Оберіть CSV-файл перед імпортом");
+                  return;
+                }
+                setIsImportingCsv(true);
+                try {
+                  const result = await settingsApi.importMenuCsv(csvFile);
+                  toast.success(
+                    `Імпорт завершено. Створено страв: ${result.created}`
+                  );
+                  setCsvFile(null);
+                } catch (error: any) {
+                  console.error(error);
+                  const message =
+                    error?.detail ||
+                    error?.message ||
+                    "Не вдалося імпортувати меню з CSV";
+                  toast.error(
+                    typeof message === "string"
+                      ? message
+                      : "Не вдалося імпортувати меню з CSV"
+                  );
+                } finally {
+                  setIsImportingCsv(false);
+                }
+              }}
+            >
+              {isImportingCsv ? "Імпорт..." : "Імпортувати меню"}
+            </Button>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            Після імпорту нові страви будуть доступні в розділі «Меню / Страви»
+            та при створенні КП.
+          </p>
         </CardContent>
       </Card>
 
