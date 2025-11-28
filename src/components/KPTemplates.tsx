@@ -290,6 +290,13 @@ export function KPTemplates() {
               <CardTitle className="mt-4">{template.name}</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Прев'ю шаблону КП */}
+              <div className="mb-3 h-24 rounded-md bg-gradient-to-br from-gray-50 to-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-500 text-center px-2">
+                Прев'ю шаблону КП
+                <br />
+                (умовний макет вигляду комерційної пропозиції)
+              </div>
+
               <p className="text-sm text-gray-600 mb-4 min-h-[40px]">
                 {template.description}
               </p>

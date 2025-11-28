@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { itemsApi, categoriesApi, subcategoriesApi } from "../lib/api";
+import React, { useState, useEffect, ChangeEvent } from "react";
+import { itemsApi, categoriesApi, subcategoriesApi, type ItemCreate, getImageUrl } from "../lib/api";
 import type { Item, Category, Subcategory } from "../lib/api";
 import { toast } from "sonner";
 import {
@@ -72,7 +72,7 @@ export function MenuManagement() {
   const [selectedCategoryForSubcategory, setSelectedCategoryForSubcategory] = useState<number | null>(null);
   
   // Form - Item
-  const [itemFormData, setItemFormData] = useState({
+  const [itemFormData, setItemFormData] = useState<ItemCreate>({
     name: "",
     description: "",
     price: 0,
@@ -82,6 +82,8 @@ export function MenuManagement() {
     active: true,
     subcategory_id: 0,
   });
+  const [itemPhotoFile, setItemPhotoFile] = useState<File | null>(null);
+  const [itemPhotoPreview, setItemPhotoPreview] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("");
   
   // Form - Category
@@ -132,6 +134,20 @@ export function MenuManagement() {
   });
 
   // ITEM HANDLERS
+  const handleItemPhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setItemPhotoFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setItemPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setItemPhotoPreview(null);
+    }
+  };
+
   const resetItemForm = () => {
     setItemFormData({
       name: "",
@@ -144,6 +160,8 @@ export function MenuManagement() {
       subcategory_id: 0,
     });
     setSelectedCategory("");
+    setItemPhotoFile(null);
+    setItemPhotoPreview(null);
   };
 
   const handleCreateItem = async (e: React.FormEvent) => {
@@ -164,7 +182,11 @@ export function MenuManagement() {
     
     setLoading(true);
     try {
-      const newItem = await itemsApi.createItem(itemFormData);
+      const payload: ItemCreate = {
+        ...itemFormData,
+        photo: itemPhotoFile || undefined,
+      };
+      const newItem = await itemsApi.createItem(payload);
       setItems([...items, newItem]);
       setIsCreateItemModalOpen(false);
       resetItemForm();
@@ -189,6 +211,8 @@ export function MenuManagement() {
       subcategory_id: item.subcategory_id,
     });
     setSelectedCategory(item.subcategory?.category_id?.toString() || "");
+    setItemPhotoFile(null);
+    setItemPhotoPreview(item.photo_url ? getImageUrl(item.photo_url) || null : null);
     setIsEditItemModalOpen(true);
   };
 
@@ -198,7 +222,11 @@ export function MenuManagement() {
     
     setLoading(true);
     try {
-      const updatedItem = await itemsApi.updateItem(editingItem.id, itemFormData);
+      const payload: ItemCreate = {
+        ...itemFormData,
+        photo: itemPhotoFile || undefined,
+      };
+      const updatedItem = await itemsApi.updateItem(editingItem.id, payload);
       setItems(items.map(item => item.id === editingItem.id ? updatedItem : item));
       setIsEditItemModalOpen(false);
       setEditingItem(null);
@@ -747,15 +775,54 @@ export function MenuManagement() {
                 </div>
               </div>
               
-              <div className="col-span-2">
-                <Label htmlFor="photo_url">URL фото</Label>
-                <Input
-                  id="photo_url"
-                  type="url"
-                  placeholder="https://example.com/photo.jpg"
-                  value={itemFormData.photo_url}
-                  onChange={(e) => setItemFormData({...itemFormData, photo_url: e.target.value})}
-                />
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="photo">Фото страви</Label>
+                <div className="flex flex-col md:flex-row gap-4 items-start">
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      id="photo_url"
+                      type="url"
+                      placeholder="https://example.com/photo.jpg"
+                      value={itemFormData.photo_url}
+                      onChange={(e) =>
+                        setItemFormData({
+                          ...itemFormData,
+                          photo_url: e.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      id="photo"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleItemPhotoChange}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Ви можете або вставити URL, або завантажити файл. Якщо
+                      завантажено файл, він буде використаний при збереженні.
+                    </p>
+                  </div>
+                  <div className="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center">
+                    {itemPhotoPreview || itemFormData.photo_url ? (
+                      <img
+                        src={
+                          itemPhotoPreview ||
+                          getImageUrl(itemFormData.photo_url) ||
+                          ""
+                        }
+                        alt={itemFormData.name || "Прев'ю"}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-xs text-gray-400 text-center px-2">
+                        Прев'ю фото
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
               
               <div className="col-span-2 flex items-center gap-2">
