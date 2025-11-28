@@ -13,16 +13,21 @@ import jwt, os
 import shutil
 import uuid
 from pathlib import Path
-# import schema
 import pyotp
 from email_service import send_kp_email
 from telegram_service import send_kp_telegram
+
 
 router = APIRouter()
 
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+
+# Абсолютні шляхи до директорії `uploads` всередині модуля `app`
+BASE_DIR = Path(__file__).resolve().parent
+UPLOADS_DIR = BASE_DIR / "uploads"
+
 
 def get_db():
     db = SessionLocal()
@@ -31,10 +36,12 @@ def get_db():
     finally:
         db.close()
 
+
 bearer_scheme = HTTPBearer()
 
+
 def get_current_user(
-    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
     token = creds.credentials
     try:
@@ -44,11 +51,6 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
-
-@router.get("/items", response_model=list[schema.Item])
-def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_items(db, skip=skip, limit=limit)
 
 
 @router.get("/items/{item_id}", response_model=schema.Item)
@@ -59,14 +61,14 @@ def read_item(item_id: int, db: Session = Depends(get_db), user = Depends(get_cu
     return item
 
 
-# Створюємо директорії для фото, прев'ю та лого якщо не існують
-PHOTOS_DIR = Path("uploads/photos")
+# Створюємо директорії для фото, прев'ю та лого якщо не існують (в межах UPLOADS_DIR)
+PHOTOS_DIR = UPLOADS_DIR / "photos"
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
-TEMPLATE_PREVIEWS_DIR = Path("uploads/template-previews")
+TEMPLATE_PREVIEWS_DIR = UPLOADS_DIR / "template-previews"
 TEMPLATE_PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
 
-BRANDING_DIR = Path("uploads/branding")
+BRANDING_DIR = UPLOADS_DIR / "branding"
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 
 COMPANY_LOGO_FILENAME = "logo.png"
@@ -341,7 +343,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         template_filename = selected_template.filename
 
     # Render template with data
-    env = Environment(loader=FileSystemLoader("uploads"))
+    env = Environment(loader=FileSystemLoader(str(UPLOADS_DIR)))
     try:
         template = env.get_template(template_filename)
     except Exception as e:
@@ -533,7 +535,7 @@ def get_company_logo(user = Depends(get_current_user)):
         return {"logo_url": None}
     
     # Віддаємо відносний шлях, який фронт може перетворити через /uploads
-    rel_path = logo_path.relative_to(Path("uploads"))
+    rel_path = logo_path.relative_to(UPLOADS_DIR)
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 
@@ -565,7 +567,7 @@ async def upload_company_logo(
     with open(logo_path, "wb") as buffer:
         shutil.copyfileobj(logo.file, buffer)
     
-    rel_path = logo_path.relative_to(Path("uploads"))
+    rel_path = logo_path.relative_to(UPLOADS_DIR)
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 
@@ -742,18 +744,16 @@ def get_template(template_id: int, db: Session = Depends(get_db), user = Depends
     Повертає один шаблон КП.
     Додатково підтягує html_content з відповідного файлу, якщо він існує.
     """
-    import os
-
     template = crud.get_template(db, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
     # Підтягуємо HTML з файлу, якщо є filename
     if template.filename:
-        template_path = os.path.join("uploads", template.filename)
-        if os.path.exists(template_path):
+        template_path = UPLOADS_DIR / template.filename
+        if template_path.exists():
             try:
-                with open(template_path, "r", encoding="utf-8") as f:
+                with template_path.open("r", encoding="utf-8") as f:
                     # Додаємо динамічне поле, яке зчитає Pydantic
                     template.html_content = f.read()
             except Exception as e:
@@ -776,20 +776,20 @@ async def create_template(
 ):
     """
     Створення шаблону КП.
-    
+
     Варіанти:
     - Клієнт завантажує готовий HTML‑файл у файлову систему (старий варіант, через filename).
-    - Клієнт вставляє HTML напряму (html_content) — ми створюємо / перезаписуємо файл app/uploads/{filename}.
+    - Клієнт вставляє HTML напряму (html_content) — ми створюємо / перезаписуємо файл uploads/{filename}
+      всередині директорії `app/uploads`.
     """
-    import os
 
-    template_path = os.path.join("uploads", filename)
+    template_path = UPLOADS_DIR / filename
 
     # Якщо html_content передано – створюємо / перезаписуємо файл
-    os.makedirs(os.path.dirname(template_path), exist_ok=True)
+    template_path.parent.mkdir(parents=True, exist_ok=True)
     if html_content:
         try:
-            with open(template_path, "w", encoding="utf-8") as f:
+            with template_path.open("w", encoding="utf-8") as f:
                 f.write(html_content)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
@@ -797,7 +797,7 @@ async def create_template(
         # Якщо HTML не передали, все одно створюємо порожній шаблон,
         # щоб його можна було відредагувати пізніше з фронта
         try:
-            with open(template_path, "w", encoding="utf-8") as f:
+            with template_path.open("w", encoding="utf-8") as f:
                 f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
@@ -842,7 +842,6 @@ async def update_template(
     Оновлення шаблону КП.
     Дозволяє як змінювати метадані, так і оновлювати HTML‑вміст файлу шаблону.
     """
-    import os
 
     # Отримуємо поточний шаблон для видалення старого прев'ю
     current_template = crud.get_template(db, template_id)
@@ -851,21 +850,21 @@ async def update_template(
     
     # Визначаємо фінальне ім'я файлу (якщо не передано нове — залишаємо старе)
     final_filename = filename or current_template.filename
-    template_path = os.path.join("uploads", final_filename)
+    template_path = UPLOADS_DIR / final_filename
 
     # Оновлюємо файл шаблону:
     # - якщо є html_content — перезаписуємо його
     # - якщо немає, але файлу ще не існує — створюємо порожній шаблон
-    os.makedirs(os.path.dirname(template_path), exist_ok=True)
+    template_path.parent.mkdir(parents=True, exist_ok=True)
     if html_content:
         try:
-            with open(template_path, "w", encoding="utf-8") as f:
+            with template_path.open("w", encoding="utf-8") as f:
                 f.write(html_content)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
     elif not os.path.exists(template_path):
         try:
-            with open(template_path, "w", encoding="utf-8") as f:
+            with template_path.open("w", encoding="utf-8") as f:
                 f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
