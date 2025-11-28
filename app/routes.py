@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
-import crud, schema, crud_user
+import crud, schema, crud_user, models
 import jwt, os
 import shutil
 import uuid
@@ -1037,10 +1037,30 @@ async def update_template(
 
 @router.delete("/templates/{template_id}")
 def delete_template(template_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    # Отримуємо шаблон перед видаленням для видалення прев'ю
+    # Отримуємо шаблон перед видаленням для перевірок та видалення прев'ю
     template = crud.get_template(db, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+
+    # Забороняємо видаляти шаблон за замовчуванням
+    if template.is_default:
+        raise HTTPException(
+            status_code=400,
+            detail="Неможливо видалити шаблон за замовчуванням. "
+                   "Спочатку зніміть позначку 'За замовчуванням' з цього шаблону."
+        )
+
+    # Перевіряємо, чи шаблон не використовується в існуючих КП
+    kp_using_template = (
+        db.query(models.KP)
+        .filter(models.KP.template_id == template_id)
+        .first()
+    )
+    if kp_using_template:
+        raise HTTPException(
+            status_code=400,
+            detail="Неможливо видалити шаблон, оскільки він уже використовується в існуючих КП."
+        )
     
     # Видаляємо прев'ю якщо воно існує
     if template.preview_image_url:
