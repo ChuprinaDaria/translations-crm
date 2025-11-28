@@ -110,6 +110,14 @@ export function CreateKP() {
       try {
         const data = await templatesApi.getTemplates();
         setTemplates(data);
+
+        // Автовибір шаблону:
+        // 1) якщо є шаблон за замовчуванням (is_default === true) – беремо його
+        // 2) інакше беремо перший у списку
+        if (data.length > 0) {
+          const defaultTemplate = data.find((t) => t.is_default) || data[0];
+          setSelectedTemplateId(defaultTemplate.id);
+        }
       } catch (error: any) {
         console.error("Error loading templates", error);
         toast.error("Помилка завантаження шаблонів КП");
