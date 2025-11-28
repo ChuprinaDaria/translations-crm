@@ -163,7 +163,7 @@ export function KPTemplates() {
               Додати шаблон
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingTemplate ? "Редагувати шаблон" : "Створити новий шаблон"}
@@ -230,7 +230,8 @@ export function KPTemplates() {
                 <Textarea
                   id="html-content"
                   placeholder="Вставте готовий HTML (можна з змінними {{ kp }}, {{ items }} тощо)..."
-                  rows={12}
+                  rows={20}
+                  className="min-h-[60vh] font-mono text-xs leading-snug"
                   value={formData.html_content}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, html_content: e.target.value }))
