@@ -9,7 +9,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cafe_db}
     ports:
-      - "5433:5432"  # Використовуємо порт 5433 зовні, щоб не конфліктувати з існуючим PostgreSQL
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -22,10 +22,13 @@ services:
   backend:
     build: ./app
     container_name: cafe_backend
+    networks:
+      - default
+      - whiteout_network
     expose:
       - "8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cafe_db}
+      - DATABASE_URL=postgresql://postgres:postgres@cafe_postgres:5432/cafe_db
       - JWT_SECRET=${JWT_SECRET}
       - APP_ENV=${APP_ENV:-dev}
     volumes:
@@ -41,18 +44,12 @@ services:
       retries: 3
       start_period: 10s
 
-  nginx:
-    image: nginx:alpine
-    container_name: cafe_nginx
-    ports:
-      - "8080:80"    # Для проксування з хостингу
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./build:/usr/share/nginx/html:ro  # Фронтенд файли (зібраний фронт у каталозі build)
-    depends_on:
-      - backend
-    restart: unless-stopped
-
 volumes:
   postgres_data:
 
+networks:
+  default:
+    name: cafe-crm_default
+  whiteout_network:
+    external: true
+    name: whiteout-community_whiteout_network
