@@ -118,3 +118,15 @@ class KPItem(Base):
 
     kp = relationship("KP", back_populates="items")
     item = relationship("Item", back_populates="kp_items", lazy="joined")
+
+
+class AppSetting(Base):
+    """
+    Загальні налаштування системи (key/value), наприклад SMTP та Telegram API.
+    """
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

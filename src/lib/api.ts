@@ -548,6 +548,21 @@ export interface TelegramAccountCreate {
   session_string: string;
 }
 
+export interface SmtpSettings {
+  host: string;
+  port: string;
+  user: string;
+  password: string;
+  from_email: string;
+  from_name: string;
+}
+
+export interface TelegramApiConfig {
+  api_id: string;
+  api_hash: string;
+  sender_name: string;
+}
+
 // Templates API
 export const templatesApi = {
   async getTemplates(): Promise<Template[]> {
@@ -620,5 +635,32 @@ export const settingsApi = {
     return apiFetch<{ status: string }>(`/settings/telegram-accounts/${id}`, {
       method: "DELETE",
     });
+  },
+
+  async getSmtpSettings(): Promise<SmtpSettings> {
+    return apiFetch<SmtpSettings>("/settings/smtp");
+  },
+
+  async updateSmtpSettings(data: SmtpSettings): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("host", data.host);
+    formData.append("port", data.port);
+    formData.append("user", data.user);
+    formData.append("password", data.password);
+    formData.append("from_email", data.from_email);
+    formData.append("from_name", data.from_name);
+    return apiFetchMultipart<{ status: string }>("/settings/smtp", formData, "POST");
+  },
+
+  async getTelegramApiConfig(): Promise<TelegramApiConfig> {
+    return apiFetch<TelegramApiConfig>("/settings/telegram-config");
+  },
+
+  async updateTelegramApiConfig(data: TelegramApiConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("api_id", data.api_id);
+    formData.append("api_hash", data.api_hash);
+    formData.append("sender_name", data.sender_name);
+    return apiFetchMultipart<{ status: string }>("/settings/telegram-config", formData, "POST");
   },
 };

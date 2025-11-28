@@ -287,3 +287,52 @@ def delete_telegram_account(db: Session, account_id: int):
     db.delete(account)
     db.commit()
     return True
+
+
+# App settings (SMTP, Telegram API, etc.)
+def set_setting(db: Session, key: str, value: str | None):
+    setting = db.query(models.AppSetting).filter(models.AppSetting.key == key).first()
+    if not setting:
+        setting = models.AppSetting(key=key, value=value or "")
+        db.add(setting)
+    else:
+        setting.value = value or ""
+    db.commit()
+    db.refresh(setting)
+    return setting
+
+
+def get_setting(db: Session, key: str) -> str | None:
+    setting = db.query(models.AppSetting).filter(models.AppSetting.key == key).first()
+    return setting.value if setting else None
+
+
+def get_settings(db: Session, keys: list[str]) -> dict[str, str | None]:
+    rows = (
+        db.query(models.AppSetting)
+        .filter(models.AppSetting.key.in_(keys))
+        .all()
+    )
+    mapping = {row.key: row.value for row in rows}
+    return {k: mapping.get(k) for k in keys}
+
+
+def get_smtp_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "smtp_host",
+        "smtp_port",
+        "smtp_user",
+        "smtp_password",
+        "smtp_from_email",
+        "smtp_from_name",
+    ]
+    return get_settings(db, keys)
+
+
+def get_telegram_api_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "telegram_api_id",
+        "telegram_api_hash",
+        "telegram_sender_name",
+    ]
+    return get_settings(db, keys)

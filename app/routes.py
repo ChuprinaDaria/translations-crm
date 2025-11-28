@@ -569,6 +569,76 @@ async def upload_company_logo(
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 
+@router.get("/settings/smtp")
+def get_smtp_settings(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає поточні SMTP налаштування.
+    Пароль повертаємо як є (потрібно захищати доступ до налаштувань ролями на рівні додатку / nginx).
+    """
+    settings = crud.get_smtp_settings(db)
+    return {
+        "host": settings.get("smtp_host") or "",
+        "port": settings.get("smtp_port") or "",
+        "user": settings.get("smtp_user") or "",
+        "password": settings.get("smtp_password") or "",
+        "from_email": settings.get("smtp_from_email") or "",
+        "from_name": settings.get("smtp_from_name") or "",
+    }
+
+
+@router.post("/settings/smtp")
+def update_smtp_settings(
+    host: str = Form(""),
+    port: str = Form(""),
+    user: str = Form(""),
+    password: str = Form(""),
+    from_email: str = Form(""),
+    from_name: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """
+    Оновлює SMTP налаштування, які використовуються при відправці КП.
+    """
+    crud.set_setting(db, "smtp_host", host)
+    crud.set_setting(db, "smtp_port", port)
+    crud.set_setting(db, "smtp_user", user)
+    crud.set_setting(db, "smtp_password", password)
+    crud.set_setting(db, "smtp_from_email", from_email)
+    crud.set_setting(db, "smtp_from_name", from_name)
+    return {"status": "success"}
+
+
+@router.get("/settings/telegram-config")
+def get_telegram_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає налаштування Telegram API (API ID, HASH, ім'я відправника).
+    """
+    settings = crud.get_telegram_api_settings(db)
+    return {
+        "api_id": settings.get("telegram_api_id") or "",
+        "api_hash": settings.get("telegram_api_hash") or "",
+        "sender_name": settings.get("telegram_sender_name") or "",
+    }
+
+
+@router.post("/settings/telegram-config")
+def update_telegram_config(
+    api_id: str = Form(""),
+    api_hash: str = Form(""),
+    sender_name: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """
+    Оновлює налаштування Telegram API.
+    """
+    crud.set_setting(db, "telegram_api_id", api_id)
+    crud.set_setting(db, "telegram_api_hash", api_hash)
+    crud.set_setting(db, "telegram_sender_name", sender_name)
+    return {"status": "success"}
+
+
 @router.get("/settings/telegram-accounts", response_model=list[schema.TelegramAccount])
 def list_telegram_accounts(db: Session = Depends(get_db), user = Depends(get_current_user)):
     """

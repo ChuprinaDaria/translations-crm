@@ -8,13 +8,41 @@ from email.mime.base import MIMEBase
 from email import encoders
 from typing import Optional
 
-# Конфігурація SMTP з змінних оточення
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", SMTP_USER)
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "BOX Catering")
+from db import SessionLocal
+import crud
+
+
+def _load_smtp_config() -> dict:
+  """
+  Завантажує SMTP налаштування з бази даних (app_settings),
+  а якщо їх немає — підтягує значення з env як fallback.
+  """
+  db = SessionLocal()
+  try:
+      settings = crud.get_smtp_settings(db)
+  finally:
+      db.close()
+
+  host = settings.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
+  port_str = settings.get("smtp_port") or os.getenv("SMTP_PORT", "587")
+  user = settings.get("smtp_user") or os.getenv("SMTP_USER", "")
+  password = settings.get("smtp_password") or os.getenv("SMTP_PASSWORD", "")
+  from_email = settings.get("smtp_from_email") or os.getenv("SMTP_FROM_EMAIL", user)
+  from_name = settings.get("smtp_from_name") or os.getenv("SMTP_FROM_NAME", "BOX Catering")
+
+  try:
+      port = int(port_str)
+  except (TypeError, ValueError):
+      port = 587
+
+  return {
+      "host": host,
+      "port": port,
+      "user": user,
+      "password": password,
+      "from_email": from_email,
+      "from_name": from_name,
+  }
 
 def send_kp_email(
     to_email: str,
@@ -36,13 +64,21 @@ def send_kp_email(
     Returns:
         True якщо відправка успішна, False інакше
     """
-    if not SMTP_USER or not SMTP_PASSWORD:
-        raise ValueError("SMTP credentials not configured. Please set SMTP_USER and SMTP_PASSWORD environment variables.")
+    config = _load_smtp_config()
+    host = config["host"]
+    port = config["port"]
+    user = config["user"]
+    password = config["password"]
+    from_email = config["from_email"]
+    from_name = config["from_name"]
+
+    if not user or not password:
+        raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
     
     try:
         # Створюємо повідомлення
         msg = MIMEMultipart()
-        msg['From'] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
+        msg['From'] = f"{from_name} <{from_email}>"
         msg['To'] = to_email
         msg['Subject'] = f"Комерційна пропозиція: {kp_title}"
         
@@ -79,9 +115,9 @@ def send_kp_email(
         msg.attach(attachment)
         
         # Відправляємо email
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server = smtplib.SMTP(host, port)
         server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.login(user, password)
         server.send_message(msg)
         server.quit()
         

@@ -10,6 +10,8 @@ import {
   getImageUrl,
   type BrandingSettings,
   type TelegramAccount,
+  type SmtpSettings,
+  type TelegramApiConfig,
 } from "../lib/api";
 
 export function Settings() {
@@ -24,15 +26,34 @@ export function Settings() {
   const [newTgSession, setNewTgSession] = useState("");
   const [isSavingTg, setIsSavingTg] = useState(false);
 
+  const [smtp, setSmtp] = useState<SmtpSettings>({
+    host: "",
+    port: "",
+    user: "",
+    password: "",
+    from_email: "",
+    from_name: "",
+  });
+
+  const [telegramApi, setTelegramApi] = useState<TelegramApiConfig>({
+    api_id: "",
+    api_hash: "",
+    sender_name: "",
+  });
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [brandingData, tgAccounts] = await Promise.all([
+        const [brandingData, tgAccounts, smtpSettings, tgConfig] = await Promise.all([
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
+          settingsApi.getSmtpSettings(),
+          settingsApi.getTelegramApiConfig(),
         ]);
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
+        setSmtp(smtpSettings);
+        setTelegramApi(tgConfig);
       } catch (error) {
         console.error(error);
       }
@@ -165,6 +186,158 @@ export function Settings() {
               Цей блок автоматично отримає шлях до вашого лого при генерації
               PDF.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Telegram API налаштування</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Дані доступу до Telegram API, які використовуються для підключення
+            акаунтів (через session string) та відправки КП в Telegram.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="tg-api-id">API ID</Label>
+              <Input
+                id="tg-api-id"
+                value={telegramApi.api_id}
+                onChange={(e) =>
+                  setTelegramApi({ ...telegramApi, api_id: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tg-api-hash">API HASH</Label>
+              <Input
+                id="tg-api-hash"
+                value={telegramApi.api_hash}
+                onChange={(e) =>
+                  setTelegramApi({ ...telegramApi, api_hash: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="tg-sender-name">Назва відправника</Label>
+              <Input
+                id="tg-sender-name"
+                value={telegramApi.sender_name}
+                onChange={(e) =>
+                  setTelegramApi({
+                    ...telegramApi,
+                    sender_name: e.target.value,
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+              onClick={async () => {
+                try {
+                  await settingsApi.updateTelegramApiConfig(telegramApi);
+                  toast.success("Telegram API налаштування збережено");
+                } catch (error) {
+                  console.error(error);
+                  toast.error("Не вдалося зберегти Telegram API налаштування");
+                }
+              }}
+            >
+              Зберегти Telegram API
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>SMTP налаштування для email‑відправки КП</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Ці параметри використовуються для відправки комерційних пропозицій
+            на email клієнта. Дані зберігаються в базі, а не в .env.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="smtp-host">SMTP Host</Label>
+              <Input
+                id="smtp-host"
+                value={smtp.host}
+                onChange={(e) => setSmtp({ ...smtp, host: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-port">SMTP Port</Label>
+              <Input
+                id="smtp-port"
+                value={smtp.port}
+                onChange={(e) => setSmtp({ ...smtp, port: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-user">SMTP User (логін)</Label>
+              <Input
+                id="smtp-user"
+                value={smtp.user}
+                onChange={(e) => setSmtp({ ...smtp, user: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-password">SMTP Password</Label>
+              <Input
+                id="smtp-password"
+                type="password"
+                value={smtp.password}
+                onChange={(e) => setSmtp({ ...smtp, password: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-from-email">Відправник (email)</Label>
+              <Input
+                id="smtp-from-email"
+                value={smtp.from_email}
+                onChange={(e) =>
+                  setSmtp({ ...smtp, from_email: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="smtp-from-name">Відправник (ім&apos;я)</Label>
+              <Input
+                id="smtp-from-name"
+                value={smtp.from_name}
+                onChange={(e) =>
+                  setSmtp({ ...smtp, from_name: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+              onClick={async () => {
+                try {
+                  await settingsApi.updateSmtpSettings(smtp);
+                  toast.success("SMTP налаштування збережено");
+                } catch (error) {
+                  console.error(error);
+                  toast.error("Не вдалося зберегти SMTP налаштування");
+                }
+              }}
+            >
+              Зберегти SMTP
+            </Button>
           </div>
         </CardContent>
       </Card>
