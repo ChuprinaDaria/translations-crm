@@ -17,7 +17,7 @@ def init_default_template():
         default_template = crud.get_default_template(db)
         if not default_template:
             # Перевіряємо чи існує файл commercial-offer.html
-            template_path = "app/uploads/commercial-offer.html"
+            template_path = "uploads/commercial-offer.html"
             if os.path.exists(template_path):
                 template_data = schema.TemplateCreate(
                     name="Стандартний шаблон",
@@ -68,19 +68,19 @@ from pathlib import Path
 Ініціалізація директорій для статичних файлів
 """
 # Фото страв
-photos_dir = Path("app/uploads/photos")
+photos_dir = Path("uploads/photos")
 photos_dir.mkdir(parents=True, exist_ok=True)
 
 # Прев'ю шаблонів КП
-template_previews_dir = Path("app/uploads/template-previews")
+template_previews_dir = Path("uploads/template-previews")
 template_previews_dir.mkdir(parents=True, exist_ok=True)
 
 # Лого компанії / бренду
-branding_dir = Path("app/uploads/branding")
+branding_dir = Path("uploads/branding")
 branding_dir.mkdir(parents=True, exist_ok=True)
 
 # Монтуємо статичні файли
-app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Ініціалізуємо дефолтний шаблон при старті
 @app.on_event("startup")

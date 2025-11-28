@@ -60,13 +60,13 @@ def read_item(item_id: int, db: Session = Depends(get_db), user = Depends(get_cu
 
 
 # Створюємо директорії для фото, прев'ю та лого якщо не існують
-PHOTOS_DIR = Path("app/uploads/photos")
+PHOTOS_DIR = Path("uploads/photos")
 PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
-TEMPLATE_PREVIEWS_DIR = Path("app/uploads/template-previews")
+TEMPLATE_PREVIEWS_DIR = Path("uploads/template-previews")
 TEMPLATE_PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
 
-BRANDING_DIR = Path("app/uploads/branding")
+BRANDING_DIR = Path("uploads/branding")
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 
 COMPANY_LOGO_FILENAME = "logo.png"
@@ -94,7 +94,7 @@ def delete_old_photo(photo_url: str):
     
     # Перевіряємо чи це локальний файл (не URL)
     if photo_url.startswith("uploads/photos/"):
-        photo_path = Path(f"app/{photo_url}")
+        photo_path = Path(photo_url)
         if photo_path.exists():
             try:
                 photo_path.unlink()
@@ -122,7 +122,7 @@ def delete_old_preview(preview_url: str):
     
     # Перевіряємо чи це локальний файл (не URL)
     if preview_url.startswith("uploads/template-previews/"):
-        preview_path = Path(f"app/{preview_url}")
+        preview_path = Path(preview_url)
         if preview_path.exists():
             try:
                 preview_path.unlink()
@@ -341,7 +341,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         template_filename = selected_template.filename
 
     # Render template with data
-    env = Environment(loader=FileSystemLoader("app/uploads"))
+    env = Environment(loader=FileSystemLoader("uploads"))
     try:
         template = env.get_template(template_filename)
     except Exception as e:
@@ -533,7 +533,7 @@ def get_company_logo(user = Depends(get_current_user)):
         return {"logo_url": None}
     
     # Віддаємо відносний шлях, який фронт може перетворити через /uploads
-    rel_path = logo_path.relative_to(Path("app/uploads"))
+    rel_path = logo_path.relative_to(Path("uploads"))
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 
@@ -565,7 +565,7 @@ async def upload_company_logo(
     with open(logo_path, "wb") as buffer:
         shutil.copyfileobj(logo.file, buffer)
     
-    rel_path = logo_path.relative_to(Path("app/uploads"))
+    rel_path = logo_path.relative_to(Path("uploads"))
     return {"logo_url": f"/uploads/{rel_path.as_posix()}"}
 
 
@@ -750,7 +750,7 @@ def get_template(template_id: int, db: Session = Depends(get_db), user = Depends
 
     # Підтягуємо HTML з файлу, якщо є filename
     if template.filename:
-        template_path = os.path.join("app", "uploads", template.filename)
+        template_path = os.path.join("uploads", template.filename)
         if os.path.exists(template_path):
             try:
                 with open(template_path, "r", encoding="utf-8") as f:
@@ -783,7 +783,7 @@ async def create_template(
     """
     import os
 
-    template_path = os.path.join("app", "uploads", filename)
+    template_path = os.path.join("uploads", filename)
 
     # Якщо html_content передано – створюємо / перезаписуємо файл
     os.makedirs(os.path.dirname(template_path), exist_ok=True)
@@ -851,7 +851,7 @@ async def update_template(
     
     # Визначаємо фінальне ім'я файлу (якщо не передано нове — залишаємо старе)
     final_filename = filename or current_template.filename
-    template_path = os.path.join("app", "uploads", final_filename)
+    template_path = os.path.join("uploads", final_filename)
 
     # Оновлюємо файл шаблону:
     # - якщо є html_content — перезаписуємо його
