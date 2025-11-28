@@ -53,6 +53,11 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+@router.get("/items", response_model=list[schema.Item])
+def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    return crud.get_items(db, skip=skip, limit=limit)
+
+
 @router.get("/items/{item_id}", response_model=schema.Item)
 def read_item(item_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
     item = crud.get_item(db, item_id)
