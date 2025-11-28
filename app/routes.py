@@ -791,6 +791,7 @@ async def create_template(
         try:
             with template_path.open("w", encoding="utf-8") as f:
                 f.write(html_content)
+            print(f"✓ Template file created successfully: {template_path}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
     else:
@@ -799,8 +800,27 @@ async def create_template(
         try:
             with template_path.open("w", encoding="utf-8") as f:
                 f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+            print(f"✓ Empty template file created: {template_path}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
+    
+    # ВАЛІДАЦІЯ: перевіряємо, що шаблон можна завантажити через Jinja2
+    try:
+        env = Environment(loader=FileSystemLoader(str(UPLOADS_DIR)))
+        test_template = env.get_template(filename)
+        print(f"✓ Template validation passed: {filename}")
+    except Exception as e:
+        # Видаляємо файл, якщо валідація не пройшла
+        if template_path.exists():
+            template_path.unlink()
+        error_msg = str(e)
+        # Якщо помилка про відсутність базового шаблону (extends/include)
+        if "does not exist" in error_msg or "not found" in error_msg.lower():
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Template file not found: {filename}. Можливо, ваш HTML використовує {% extends %} або {% include %} з файлом, якого не існує в директорії uploads."
+            )
+        raise HTTPException(status_code=400, detail=f"Template validation error: {error_msg}")
     
     # Обробка прев'ю: пріоритет має завантажений файл
     final_preview_url = preview_image_url
