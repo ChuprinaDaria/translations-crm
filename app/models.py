@@ -60,6 +60,21 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
+class Template(Base):
+    __tablename__ = "templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    filename = Column(String, nullable=False)  # Назва файлу шаблону в uploads/
+    description = Column(String, nullable=True)
+    preview_image_url = Column(String, nullable=True)  # URL прев'ю зображення шаблону
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    kps = relationship("KP", back_populates="template")
+
+
 class KP(Base):
     __tablename__ = "kps"
 
@@ -69,8 +84,11 @@ class KP(Base):
     people_count = Column(Integer)
     total_price = Column(Float)
     price_per_person = Column(Float)
+    template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
+    client_email = Column(String, nullable=True, index=True)  # Email клієнта
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
+    template = relationship("Template", back_populates="kps")
 
 
 

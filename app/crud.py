@@ -106,6 +106,8 @@ def create_kp(db: Session, kp_in: schemas.KPCreate):
         people_count=kp_in.people_count,
         total_price=kp_in.total_price,
         price_per_person=price_per_person,
+        template_id=kp_in.template_id,
+        client_email=kp_in.client_email,
     )
 
     db.add(kp)
@@ -177,5 +179,59 @@ def delete_kp_item(db: Session, kp_item_id: int):
     if not kp_item:
         return None
     db.delete(kp_item)
+    db.commit()
+    return True
+
+# Template CRUD
+def create_template(db: Session, template_in: schemas.TemplateCreate):
+    # Якщо встановлюється як default, знімаємо default з інших шаблонів
+    if template_in.is_default:
+        db.query(models.Template).update({models.Template.is_default: False})
+    
+    db_template = models.Template(
+        name=template_in.name,
+        filename=template_in.filename,
+        description=template_in.description,
+        preview_image_url=template_in.preview_image_url,
+        is_default=template_in.is_default or False
+    )
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+def get_templates(db: Session):
+    return db.query(models.Template).all()
+
+def get_template(db: Session, template_id: int):
+    return db.query(models.Template).filter(models.Template.id == template_id).first()
+
+def get_default_template(db: Session):
+    return db.query(models.Template).filter(models.Template.is_default == True).first()
+
+def update_template(db: Session, template_id: int, template_data: schemas.TemplateUpdate):
+    db_template = get_template(db, template_id)
+    if not db_template:
+        return None
+
+    update_data = template_data.dict(exclude_unset=True)
+    
+    # Якщо встановлюється як default, знімаємо default з інших шаблонів
+    if update_data.get('is_default') == True:
+        db.query(models.Template).filter(models.Template.id != template_id).update({models.Template.is_default: False})
+
+    for key, value in update_data.items():
+        setattr(db_template, key, value)
+
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+def delete_template(db: Session, template_id: int):
+    db_template = get_template(db, template_id)
+    if not db_template:
+        return None
+    
+    db.delete(db_template)
     db.commit()
     return True

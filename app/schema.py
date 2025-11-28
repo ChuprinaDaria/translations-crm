@@ -98,6 +98,10 @@ class KPCreate(KPBase):
     total_price: Optional[float] = None
     price_per_person: Optional[float] = None
     items: list[KPItemCreate] = []
+    template_id: Optional[int] = None
+    client_email: Optional[str] = None  # Email клієнта
+    send_email: Optional[bool] = False  # Відправити email одразу після створення
+    email_message: Optional[str] = None  # Додаткове повідомлення для email
 
 class KPItem(BaseModel):
     id: int
@@ -114,6 +118,39 @@ class KP(KPBase):
     items: list[KPItem] = []
     total_price: Optional[float] = None
     price_per_person: Optional[float] = None
+    template_id: Optional[int] = None
+    client_email: Optional[str] = None
     
     class Config:
         from_attributes = True
+
+# Template schemas
+class TemplateBase(BaseModel):
+    name: str
+    filename: str
+    description: Optional[str] = None
+    preview_image_url: Optional[str] = None
+    is_default: Optional[bool] = False
+
+class TemplateCreate(TemplateBase):
+    pass
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    filename: Optional[str] = None
+    description: Optional[str] = None
+    preview_image_url: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class Template(TemplateBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+# Email schemas
+class EmailSendRequest(BaseModel):
+    to_email: str
+    message: Optional[str] = None  # Додаткове повідомлення в листі

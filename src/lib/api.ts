@@ -3,6 +3,19 @@
 // Use relative path /api - will be proxied by nginx in Docker
 const API_BASE_URL = '/api';
 
+// Helper function to get full URL for uploaded images
+export function getImageUrl(imagePath?: string | null): string | undefined {
+  if (!imagePath) return undefined;
+  
+  // Якщо це вже повний URL, повертаємо як є
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // Якщо це відносний шлях, додаємо базовий URL
+  return `${API_BASE_URL}/${imagePath}`;
+}
+
 // Types
 export interface LoginRequest {
   email: string;
@@ -58,12 +71,13 @@ export interface Item {
 export interface ItemCreate {
   name: string;
   description?: string;
-  price: number;
+  price?: number;
   weight?: number;
   unit?: string;
   photo_url?: string;
-  active: boolean;
-  subcategory_id: number;
+  active?: boolean;
+  subcategory_id?: number;
+  photo?: File; // Для завантаження файлу
 }
 
 // Error handling
@@ -162,6 +176,53 @@ async function apiFetch<T>(
   return jsonData;
 }
 
+// Fetch wrapper for multipart/form-data
+async function apiFetchMultipart<T>(
+  endpoint: string,
+  formData: FormData,
+  method: string = 'POST'
+): Promise<T> {
+  const token = tokenManager.getToken();
+  
+  console.log(`[API] ${method} ${endpoint} (multipart/form-data)`);
+  
+  const headers: Record<string, string> = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log('[API] Authorization header added');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    body: formData,
+    mode: 'cors',
+  });
+
+  console.log(`[API] Response status: ${response.status}`);
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { detail: response.statusText };
+    }
+    console.error('[API] Error response:', errorData);
+    throw new ApiError(response.status, response.statusText, errorData);
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  const jsonData = await response.json();
+  console.log('[API] JSON response received');
+  return jsonData;
+}
+
 // Auth API
 export const authApi = {
   async register(data: RegisterRequest): Promise<RegisterResponse> {
@@ -234,6 +295,23 @@ export const itemsApi = {
   },
 
   async createItem(data: ItemCreate): Promise<Item> {
+    // Якщо є файл фото, використовуємо multipart/form-data
+    if (data.photo) {
+      const formData = new FormData();
+      formData.append('name', data.name);
+      if (data.description) formData.append('description', data.description);
+      if (data.price !== undefined) formData.append('price', data.price.toString());
+      if (data.weight !== undefined) formData.append('weight', data.weight.toString());
+      if (data.unit) formData.append('unit', data.unit);
+      if (data.subcategory_id !== undefined) formData.append('subcategory_id', data.subcategory_id.toString());
+      if (data.active !== undefined) formData.append('active', data.active.toString());
+      if (data.photo) formData.append('photo', data.photo);
+      if (data.photo_url) formData.append('photo_url', data.photo_url);
+      
+      return apiFetchMultipart<Item>('/items', formData, 'POST');
+    }
+    
+    // Інакше використовуємо JSON
     return apiFetch<Item>('/items', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -241,6 +319,23 @@ export const itemsApi = {
   },
 
   async updateItem(itemId: number, data: Partial<ItemCreate>): Promise<Item> {
+    // Якщо є файл фото, використовуємо multipart/form-data
+    if (data.photo) {
+      const formData = new FormData();
+      if (data.name) formData.append('name', data.name);
+      if (data.description !== undefined) formData.append('description', data.description || '');
+      if (data.price !== undefined) formData.append('price', data.price.toString());
+      if (data.weight !== undefined) formData.append('weight', data.weight.toString());
+      if (data.unit) formData.append('unit', data.unit);
+      if (data.subcategory_id !== undefined) formData.append('subcategory_id', data.subcategory_id.toString());
+      if (data.active !== undefined) formData.append('active', data.active.toString());
+      if (data.photo) formData.append('photo', data.photo);
+      if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
+      
+      return apiFetchMultipart<Item>(`/items/${itemId}`, formData, 'PUT');
+    }
+    
+    // Інакше використовуємо JSON
     return apiFetch<Item>(`/items/${itemId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -279,6 +374,192 @@ export const subcategoriesApi = {
     return apiFetch<Subcategory>('/subcategories', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+};
+
+// KP (Commercial Proposal) Types
+export interface KPItem {
+  id: number;
+  kp_id: number;
+  item_id: number;
+  quantity: number;
+}
+
+export interface KPItemCreate {
+  item_id: number;
+  quantity: number;
+}
+
+export interface KP {
+  id: number;
+  title: string;
+  people_count: number;
+  created_at?: string;
+  items: KPItem[];
+  total_price?: number;
+  price_per_person?: number;
+  template_id?: number;
+  client_email?: string;
+}
+
+export interface KPCreate {
+  title: string;
+  people_count: number;
+  total_price?: number;
+  price_per_person?: number;
+  items: KPItemCreate[];
+  template_id?: number;
+  client_email?: string;
+  send_email?: boolean;
+  email_message?: string;
+}
+
+export interface EmailSendRequest {
+  to_email: string;
+  message?: string;
+}
+
+// KP API
+export const kpApi = {
+  async getKPs(): Promise<KP[]> {
+    return apiFetch<KP[]>('/kp');
+  },
+
+  async getKP(kpId: number): Promise<KP> {
+    return apiFetch<KP>(`/kp/${kpId}`);
+  },
+
+  async createKP(data: KPCreate): Promise<KP> {
+    return apiFetch<KP>('/kp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteKP(kpId: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/kp/${kpId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async generateKPPDF(kpId: number, templateId?: number): Promise<Blob> {
+    const token = tokenManager.getToken();
+    const params = templateId ? `?template_id=${templateId}` : '';
+    const url = `${API_BASE_URL}/kp/${kpId}/pdf${params}`;
+    
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      mode: 'cors',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+
+    return response.blob();
+  },
+
+  async sendKPByEmail(kpId: number, emailData: EmailSendRequest, templateId?: number): Promise<{ status: string; message: string }> {
+    const params = templateId ? `?template_id=${templateId}` : '';
+    return apiFetch<{ status: string; message: string }>(`/kp/${kpId}/send-email${params}`, {
+      method: 'POST',
+      body: JSON.stringify(emailData),
+    });
+  }
+};
+
+// Template Types
+export interface Template {
+  id: number;
+  name: string;
+  filename: string;
+  description?: string;
+  preview_image_url?: string;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TemplateCreate {
+  name: string;
+  filename: string;
+  description?: string;
+  preview_image_url?: string;
+  is_default?: boolean;
+  preview_image?: File; // Для завантаження файлу
+}
+
+export interface TemplateUpdate {
+  name?: string;
+  filename?: string;
+  description?: string;
+  preview_image_url?: string;
+  is_default?: boolean;
+  preview_image?: File; // Для завантаження файлу
+}
+
+// Templates API
+export const templatesApi = {
+  async getTemplates(): Promise<Template[]> {
+    return apiFetch<Template[]>('/templates');
+  },
+
+  async getTemplate(templateId: number): Promise<Template> {
+    return apiFetch<Template>(`/templates/${templateId}`);
+  },
+
+  async createTemplate(data: TemplateCreate): Promise<Template> {
+    // Якщо є файл прев'ю, використовуємо multipart/form-data
+    if (data.preview_image) {
+      const formData = new FormData();
+      formData.append('name', data.name);
+      formData.append('filename', data.filename);
+      if (data.description) formData.append('description', data.description);
+      if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
+      if (data.preview_image) formData.append('preview_image', data.preview_image);
+      if (data.preview_image_url) formData.append('preview_image_url', data.preview_image_url);
+      
+      return apiFetchMultipart<Template>('/templates', formData, 'POST');
+    }
+    
+    // Інакше використовуємо JSON
+    return apiFetch<Template>('/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateTemplate(templateId: number, data: TemplateUpdate): Promise<Template> {
+    // Якщо є файл прев'ю, використовуємо multipart/form-data
+    if (data.preview_image) {
+      const formData = new FormData();
+      if (data.name) formData.append('name', data.name);
+      if (data.filename) formData.append('filename', data.filename);
+      if (data.description !== undefined) formData.append('description', data.description || '');
+      if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
+      if (data.preview_image) formData.append('preview_image', data.preview_image);
+      if (data.preview_image_url !== undefined) formData.append('preview_image_url', data.preview_image_url || '');
+      
+      return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
+    }
+    
+    // Інакше використовуємо JSON
+    return apiFetch<Template>(`/templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteTemplate(templateId: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/templates/${templateId}`, {
+      method: 'DELETE',
     });
   }
 };
