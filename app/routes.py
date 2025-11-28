@@ -9,7 +9,7 @@ from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
 import crud, schema, crud_user, models
-import jwt, os
+import jwt, os, re
 import shutil
 import uuid
 from pathlib import Path
@@ -470,11 +470,17 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
 @router.get("/kp/{kp_id}/pdf")
 def generate_kp_pdf(kp_id: int, template_id: int = None, db: Session = Depends(get_db), user = Depends(get_current_user)):
     pdf_bytes, filename = generate_kp_pdf_bytes(kp_id, template_id, db)
-    
+
+    # Starlette кодує заголовки як latin-1, тому кирилиця в filename викликає UnicodeEncodeError.
+    # Робимо безпечне ASCII-ім'я файлу.
+    safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
+    if not safe_filename or safe_filename == '.pdf':
+        safe_filename = f'kp_{kp_id}.pdf'
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        headers={'Content-Disposition': f'attachment; filename="{safe_filename}"'}
     )
 
 
