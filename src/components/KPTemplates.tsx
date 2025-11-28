@@ -15,7 +15,7 @@ import {
 } from "./ui/dialog";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
-import { templatesApi, type Template as ApiTemplate } from "../lib/api";
+import { templatesApi, type Template as ApiTemplate, getImageUrl } from "../lib/api";
 
 export function KPTemplates() {
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
@@ -286,11 +286,25 @@ export function KPTemplates() {
             </CardHeader>
             <CardContent>
               {/* Прев'ю шаблону КП */}
-              <div className="mb-3 h-24 rounded-md bg-gradient-to-br from-gray-50 to-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-500 text-center px-2">
-                Прев'ю шаблону КП
-                <br />
-                (умовний макет вигляду комерційної пропозиції)
-              </div>
+              {template.preview_image_url ? (
+                <div className="mb-3 rounded-md border border-gray-200 overflow-hidden bg-gray-50">
+                  <img
+                    src={getImageUrl(template.preview_image_url)}
+                    alt={template.name}
+                    className="w-full h-40 object-cover"
+                    onError={(e) => {
+                      // Якщо картинка не завантажилась – ховаємо її і показуємо плейсхолдер
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="mb-3 h-24 rounded-md bg-gradient-to-br from-gray-50 to-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-500 text-center px-2">
+                  Прев'ю шаблону КП
+                  <br />
+                  (умовний макет вигляду комерційної пропозиції)
+                </div>
+              )}
 
               <p className="text-sm text-gray-600 mb-4 min-h-[40px]">
                 {template.description}
