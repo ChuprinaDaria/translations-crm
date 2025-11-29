@@ -452,51 +452,50 @@ export function MenuManagement() {
                   {filteredItems.map((item) => (
                     <div
                       key={item.id}
-                      className="flex gap-3 p-3"
+                      className="flex flex-col gap-2 p-3"
                     >
                       {/* Фото */}
-                      <div className="flex-shrink-0">
+                      <div className="w-full">
                         {item.photo_url ? (
                           <img
                             src={getImageUrl(item.photo_url) || ""}
                             alt={item.name}
-                            className="w-14 h-14 object-cover rounded border border-gray-200"
+                            className="w-full h-40 object-cover rounded border border-gray-200"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         ) : (
-                          <div className="w-14 h-14 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[8px] leading-tight text-gray-400 text-center px-1">
+                          <div className="w-full h-40 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[10px] leading-tight text-gray-400 text-center px-6">
                             Нема фото
                           </div>
                         )}
                       </div>
 
                       {/* Контент */}
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="text-gray-900 font-medium leading-snug line-clamp-2">
-                              {item.name}
-                            </div>
-                            <div className="text-[11px] text-gray-500">
-                              {item.subcategory?.category?.name}
-                              {item.subcategory?.name
-                                ? ` • ${item.subcategory.name}`
-                                : ""}
-                            </div>
+                      <div className="flex-1 space-y-2 pt-1">
+                        <div>
+                          <div className="text-gray-900 font-medium leading-snug line-clamp-2">
+                            {item.name}
                           </div>
-                          <div className="text-right">
-                            <div className="text-[#FF5A00] font-semibold text-sm whitespace-nowrap">
-                              {item.price} грн
-                            </div>
-                            <div className="text-[11px] text-gray-500 whitespace-nowrap">
-                              {item.weight ? `${item.weight}${item.unit}` : "-"}
-                            </div>
+                          <div className="text-[11px] text-gray-500">
+                            {item.subcategory?.category?.name}
+                            {item.subcategory?.name
+                              ? ` • ${item.subcategory.name}`
+                              : ""}
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 pt-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="text-[#FF5A00] font-semibold text-sm">
+                            {item.price} грн
+                          </div>
+                          <div className="text-[11px] text-gray-500">
+                            {item.weight ? `${item.weight}${item.unit}` : "-"}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
                           <Badge variant={item.active ? "default" : "secondary"}>
                             {item.active ? "В меню" : "Неактивна"}
                           </Badge>
