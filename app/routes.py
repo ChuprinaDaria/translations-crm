@@ -391,6 +391,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         item_weight = (item.weight or 0) * kp_item.quantity
         total_weight += item_weight
 
+        # Готуємо дані для фото та категорій
+        photo_url = item.photo_url
+        photo_src = None
+        if photo_url:
+            try:
+                photo_path = (BASE_DIR / photo_url).resolve()
+                if photo_path.exists():
+                    # WeasyPrint підтримує file:// шляхи для локальних ресурсів
+                    photo_src = f"file://{photo_path}"
+            except Exception:
+                photo_src = None
+
         # Форматуємо дані для відображення в шаблоні
         weight_str = f"{item.weight:.2f} {item.unit or 'кг'}" if item.weight else "-"
         price_str = f"{item.price:.2f} грн" if item.price else "-"
@@ -403,8 +415,14 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'total': total_str,
             'description': item.description,
             'unit': item.unit,
-            'weight': weight_str,
+            # Вага однієї одиниці страви
+            'weight': weight_str,          # форматований текст, напр. "0.50 кг"
+            'weight_raw': item.weight or 0,  # числове значення ваги 1 одиниці (float, кг)
             'total_weight': item_weight,
+            'photo_url': photo_url,  # Відносний шлях (наприклад, uploads/photos/...)
+            'photo_src': photo_src,  # Повний file:// шлях для використання в <img src="...">
+            'category_name': item.subcategory.category.name if getattr(item, "subcategory", None) and getattr(item.subcategory, "category", None) else None,
+            'subcategory_name': item.subcategory.name if getattr(item, "subcategory", None) else None,
             # Зберігаємо також числові значення для підрахунків
             'price_raw': item.price or 0,
             'total_raw': (item.price or 0) * kp_item.quantity,

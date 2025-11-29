@@ -73,7 +73,6 @@ async def _send_kp_telegram_async(
             file=pdf_content,
             caption=caption,
             force_document=True,
-            attributes=[],
             filename=pdf_filename,
         )
 
