@@ -148,15 +148,55 @@ def generate_template_preview(html_content: str, filename: str) -> str:
         from io import BytesIO
         
         # Генеруємо PDF з HTML (використовуємо тестові дані)
+        # Важливо: дані повинні містити всі поля, які використовує HTML шаблон
         test_data = {
             'kp': {
-                'title': 'Тестова КП',
+                'id': 1,
+                'title': 'Тестова КП - Дитяче свято',
                 'client_email': 'test@example.com',
+                'client_phone': '+380501234567',
                 'people_count': 50,
+                'status': 'sent',
+                'total_price': 7450.0,
+                'price_per_person': 149.0,
+                'template_id': 1,
+                'created_at': None,
             },
             'items': [
-                {'name': 'Салат Цезар', 'quantity': 10, 'weight': '5.00 кг', 'price': '120.00 грн', 'total': '1200.00 грн'},
-                {'name': 'Стейк яловичий', 'quantity': 25, 'weight': '6.25 кг', 'price': '250.00 грн', 'total': '6250.00 грн'},
+                {
+                    'name': 'Салат Цезар',
+                    'quantity': 10,
+                    'weight': '0.50 кг',  # вага 1 одиниці
+                    'weight_raw': 0.5,
+                    'unit': 'кг',
+                    'price': '120.00 грн',
+                    'price_raw': 120.0,
+                    'total': '1200.00 грн',
+                    'total_raw': 1200.0,
+                    'total_weight': 5.0,  # загальна вага по позиції
+                    'description': 'Класичний салат Цезар з куркою та пармезаном',
+                    'category_name': 'Салати',
+                    'subcategory_name': 'Овочеві салати',
+                    'photo_url': None,
+                    'photo_src': None,
+                },
+                {
+                    'name': 'Стейк яловичий',
+                    'quantity': 25,
+                    'weight': '0.25 кг',  # вага 1 одиниці
+                    'weight_raw': 0.25,
+                    'unit': 'кг',
+                    'price': '250.00 грн',
+                    'price_raw': 250.0,
+                    'total': '6250.00 грн',
+                    'total_raw': 6250.0,
+                    'total_weight': 6.25,  # загальна вага по позиції
+                    'description': 'Соковитий стейк з яловичини середньої прожарки',
+                    'category_name': 'Гарячі страви',
+                    'subcategory_name': 'М\'ясні страви',
+                    'photo_url': None,
+                    'photo_src': None,
+                },
             ],
             'total_items': 2,
             'total_weight': '11.25 кг',
@@ -202,7 +242,10 @@ def generate_template_preview(html_content: str, filename: str) -> str:
         return f"uploads/template-previews/{unique_filename}"
         
     except Exception as e:
-        print(f"Error generating template preview: {e}")
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Error generating template preview: {e}")
+        print(f"Full traceback:\n{error_trace}")
         # Повертаємо None якщо не вдалося згенерувати прев'ю
         return None
 
@@ -1011,12 +1054,15 @@ async def create_template(
         
         # Зберігаємо файл
         final_preview_url = save_template_preview(preview_image)
-    elif html_content and not preview_image_url:
-        # Автоматично генеруємо прев'ю з HTML, якщо не завантажено зображення
+    elif html_content and not preview_image:
+        # Автоматично генеруємо прев'ю з HTML, якщо не завантажено файл прев'ю
+        # (незалежно від того, чи передано preview_image_url)
         print(f"Generating automatic preview for template: {filename}")
         auto_preview = generate_template_preview(html_content, filename)
         if auto_preview:
             final_preview_url = auto_preview
+        else:
+            print(f"⚠ Warning: Failed to generate preview for template {filename}")
     
     # Створюємо об'єкт TemplateCreate
     template_data = schema.TemplateCreate(
@@ -1102,6 +1148,9 @@ async def update_template(
         auto_preview = generate_template_preview(html_content, final_filename)
         if auto_preview:
             final_preview_url = auto_preview
+            print(f"✓ Preview regenerated successfully: {auto_preview}")
+        else:
+            print(f"⚠ Warning: Failed to regenerate preview for template {final_filename}")
     
     # Створюємо об'єкт TemplateUpdate
     template_data = schema.TemplateUpdate(
