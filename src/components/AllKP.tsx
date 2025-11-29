@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, FileText, Calendar, User, ChevronDown, Eye, Download } from "lucide-react";
+import { Search, FileText, Calendar, User, ChevronDown, Eye, Download, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -75,6 +75,7 @@ export function AllKP() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [kpItems, setKpItems] = useState<KPListItem[]>([]);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -175,6 +176,28 @@ export function AllKP() {
     } catch (error) {
       console.error("Помилка завантаження PDF:", error);
       toast.error("Не вдалося завантажити PDF для КП");
+    }
+  };
+
+  const handleDelete = async (item: KPListItem) => {
+    if (!window.confirm(`Видалити КП ${item.number}? Цю дію не можна скасувати.`)) {
+      return;
+    }
+
+    const previous = [...kpItems];
+    setDeletingId(item.id);
+    // Оптимістично прибираємо з таблиці
+    setKpItems((items) => items.filter((kp) => kp.id !== item.id));
+
+    try {
+      await kpApi.deleteKP(item.id);
+      toast.success("КП видалено");
+    } catch (error: any) {
+      console.error("Помилка видалення КП:", error);
+      toast.error(error?.data?.detail || "Не вдалося видалити КП");
+      setKpItems(previous);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -412,6 +435,14 @@ export function AllKP() {
                               <DropdownMenuItem onClick={() => handleDownload(item)}>
                                 <Download className="w-4 h-4 mr-2" />
                                 Завантажити PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(item)}
+                                className="text-red-600 focus:text-red-600"
+                                disabled={deletingId === item.id}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Видалити КП
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

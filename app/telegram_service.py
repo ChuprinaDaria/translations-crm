@@ -1,5 +1,6 @@
 import os
 import asyncio
+from io import BytesIO
 from typing import Optional
 
 from telethon import TelegramClient
@@ -67,13 +68,22 @@ async def _send_kp_telegram_async(
 
         caption = message or f"Комерційна пропозиція від {sender_name}"
 
+        # Готуємо PDF як файловий об'єкт із ім'ям, щоб Telegram коректно
+        # відображав назву файлу та тип (PDF), а не "unnamed".
+        pdf_stream = BytesIO(pdf_content)
+
+        # Якщо ім'я не закінчується на .pdf — додаємо розширення
+        safe_filename = pdf_filename or "kp.pdf"
+        if not safe_filename.lower().endswith(".pdf"):
+            safe_filename = f"{safe_filename}.pdf"
+        pdf_stream.name = safe_filename
+
         # Надсилаємо PDF як документ
         await client.send_file(
             entity,
-            file=pdf_content,
+            file=pdf_stream,
             caption=caption,
             force_document=True,
-            filename=pdf_filename,
         )
 
 

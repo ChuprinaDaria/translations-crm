@@ -447,91 +447,173 @@ export function MenuManagement() {
           ) : (
             <Card>
               <CardContent className="p-0">
-                {/* Без фіксованих мінімальних ширин, щоб не було горизонтального скролу */}
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[60px]">Фото</TableHead>
-                        <TableHead>Страва</TableHead>
-                        <TableHead className="whitespace-nowrap">Ціна / вага</TableHead>
-                        <TableHead className="whitespace-nowrap">Статус</TableHead>
-                        <TableHead className="w-[90px] text-right whitespace-nowrap">Дії</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredItems.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            {item.photo_url ? (
-                              <img
-                                src={getImageUrl(item.photo_url) || ""}
-                                alt={item.name}
-                                className="w-12 h-12 object-cover rounded border border-gray-200"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[9px] text-gray-400 text-center px-1">
-                                Нема фото
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-gray-900 font-medium leading-snug max-w-xs line-clamp-2">
+                {/* Mobile layout: компактні картки без горизонтального скролу */}
+                <div className="md:hidden divide-y">
+                  {filteredItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex gap-3 p-3"
+                    >
+                      {/* Фото */}
+                      <div className="flex-shrink-0">
+                        {item.photo_url ? (
+                          <img
+                            src={getImageUrl(item.photo_url) || ""}
+                            alt={item.name}
+                            className="w-14 h-14 object-cover rounded border border-gray-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[8px] leading-tight text-gray-400 text-center px-1">
+                            Нема фото
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Контент */}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="text-gray-900 font-medium leading-snug line-clamp-2">
                               {item.name}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-[11px] text-gray-500">
                               {item.subcategory?.category?.name}
                               {item.subcategory?.name
                                 ? ` • ${item.subcategory.name}`
                                 : ""}
                             </div>
-                            {item.description && (
-                              <div className="hidden xl:block text-xs text-gray-500 max-w-xs truncate">
-                                {item.description}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-[#FF5A00] font-medium">
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[#FF5A00] font-semibold text-sm whitespace-nowrap">
                               {item.price} грн
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-[11px] text-gray-500 whitespace-nowrap">
                               {item.weight ? `${item.weight}${item.unit}` : "-"}
                             </div>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant={item.active ? "default" : "secondary"}>
-                              {item.active ? "В меню" : "Неактивна"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditItem(item)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setItemToDelete(item);
-                                  setIsDeleteItemDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <Badge variant={item.active ? "default" : "secondary"}>
+                            {item.active ? "В меню" : "Неактивна"}
+                          </Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleEditItem(item)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setItemToDelete(item);
+                                setIsDeleteItemDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop / tablet layout: таблиця */}
+                <div className="hidden md:block">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[60px]">Фото</TableHead>
+                          <TableHead>Страва</TableHead>
+                          <TableHead className="whitespace-nowrap">Ціна / вага</TableHead>
+                          <TableHead className="whitespace-nowrap">Статус</TableHead>
+                          <TableHead className="w-[90px] text-right whitespace-nowrap">Дії</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              {item.photo_url ? (
+                                <img
+                                  src={getImageUrl(item.photo_url) || ""}
+                                  alt={item.name}
+                                  className="w-12 h-12 object-cover rounded border border-gray-200"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[8px] leading-tight text-gray-400 text-center px-1">
+                                  Нема фото
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <div className="text-gray-900 font-medium leading-snug max-w-xs line-clamp-2">
+                                {item.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.subcategory?.category?.name}
+                                {item.subcategory?.name
+                                  ? ` • ${item.subcategory.name}`
+                                  : ""}
+                              </div>
+                              {item.description && (
+                                <div className="hidden xl:block text-xs text-gray-500 max-w-xs truncate">
+                                  {item.description}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <div className="text-[#FF5A00] font-medium">
+                                {item.price} грн
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {item.weight ? `${item.weight}${item.unit}` : "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <Badge variant={item.active ? "default" : "secondary"}>
+                                {item.active ? "В меню" : "Неактивна"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditItem(item)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setItemToDelete(item);
+                                    setIsDeleteItemDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </CardContent>
             </Card>
