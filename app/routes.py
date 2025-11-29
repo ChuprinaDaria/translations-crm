@@ -1074,8 +1074,12 @@ async def update_template(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
     
-    # Обробка прев'ю: пріоритет має завантажений файл
-    final_preview_url = preview_image_url
+    # Обробка прев'ю:
+    # 1) Якщо завантажено новий файл прев'ю — використовуємо його.
+    # 2) Якщо прев'ю не завантажено, але оновлено HTML — автоматично
+    #    регенеруємо прев'ю з нового HTML, щоб картинка в списку шаблонів
+    #    завжди відповідала актуальному вигляду КП.
+    final_preview_url = current_template.preview_image_url
     
     if preview_image:
         # Перевіряємо тип файлу
@@ -1085,23 +1089,19 @@ async def update_template(
         # Видаляємо старе прев'ю якщо воно існує
         if current_template.preview_image_url:
             delete_old_preview(current_template.preview_image_url)
-        
         # Зберігаємо новий файл
         final_preview_url = save_template_preview(preview_image)
-    elif preview_image_url is None:
-        # Якщо preview_image_url не передано, залишаємо поточне значення
-        final_preview_url = current_template.preview_image_url
-        
-        # Якщо оновлено HTML, регенеруємо прев'ю автоматично
-        if html_content:
-            print(f"Regenerating automatic preview for template: {final_filename}")
-            # Видаляємо старе прев'ю
-            if current_template.preview_image_url:
-                delete_old_preview(current_template.preview_image_url)
-            # Генеруємо нове
-            auto_preview = generate_template_preview(html_content, final_filename)
-            if auto_preview:
-                final_preview_url = auto_preview
+    elif html_content:
+        # Якщо HTML оновлено, а власноручне прев'ю не завантажено —
+        # автоматично перегенеровуємо прев'ю з нового HTML
+        print(f"Regenerating automatic preview for template: {final_filename}")
+        # Видаляємо старе прев'ю
+        if current_template.preview_image_url:
+            delete_old_preview(current_template.preview_image_url)
+        # Генеруємо нове
+        auto_preview = generate_template_preview(html_content, final_filename)
+        if auto_preview:
+            final_preview_url = auto_preview
     
     # Створюємо об'єкт TemplateUpdate
     template_data = schema.TemplateUpdate(
