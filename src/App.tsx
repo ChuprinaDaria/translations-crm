@@ -3,6 +3,8 @@ import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
 import { DashboardEnhanced } from "./components/DashboardEnhanced";
 import { MenuManagement } from "./components/MenuManagement";
+import { EquipmentManagement } from "./components/EquipmentManagement";
+import { ServiceManagement } from "./components/ServiceManagement";
 import { CreateKP } from "./components/CreateKP";
 import { KPTemplates } from "./components/KPTemplates";
 import { KPArchive } from "./components/KPArchive";
@@ -38,6 +40,7 @@ function App() {
     useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [editingKPId, setEditingKPId] = useState<number | null>(null);
 
   // Check authentication on mount
   useEffect(() => {
@@ -178,6 +181,10 @@ function App() {
         { label: "Загальні", href: "#" },
         { label: "Клієнти" },
       ],
+      users: [
+        { label: "Загальні", href: "#" },
+        { label: "Користувачі" },
+      ],
       settings: [
         { label: "Загальні", href: "#" },
         { label: "Налаштування" },
@@ -202,9 +209,13 @@ function App() {
       case "dashboard":
         return <DashboardEnhanced userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
       case "create-kp":
-        return <CreateKP />;
+        return <CreateKP kpId={editingKPId} onClose={() => setEditingKPId(null)} />;
       case "menu-dishes":
         return <MenuManagement />;
+      case "equipment":
+        return <EquipmentManagement />;
+      case "service":
+        return <ServiceManagement />;
       case "kp-templates":
         return <KPTemplates />;
       case "kp-archive":
@@ -212,7 +223,10 @@ function App() {
       case "calendar":
         return <EventsCalendar />;
       case "all-kp":
-        return <AllKP />;
+        return <AllKP onEditKP={(kpId) => {
+          setEditingKPId(kpId);
+          setActiveItem("create-kp");
+        }} />;
       case "client-questionnaires":
         return (
           <div className="space-y-6">
@@ -317,6 +331,8 @@ function App() {
         );
       case "clients":
         return <Clients />;
+      case "users":
+        return <UsersManagement />;
       case "settings":
         return <Settings />;
       case "users-access":

@@ -84,6 +84,20 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           roles: ["kp-manager", "sales-lead"],
         },
         {
+          id: "equipment",
+          label: "Обладнання",
+          icon: <Monitor className="w-5 h-5" />,
+          tooltip: "Управління обладнанням",
+          roles: ["kp-manager", "sales-lead"],
+        },
+        {
+          id: "service",
+          label: "Обслуговування",
+          icon: <UserCog className="w-5 h-5" />,
+          tooltip: "Управління обслуговуванням",
+          roles: ["kp-manager", "sales-lead"],
+        },
+        {
           id: "kp-templates",
           label: "Шаблони КП",
           icon: <FileStack className="w-5 h-5" />,
@@ -182,6 +196,12 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           label: "Клієнти",
           icon: <Users className="w-5 h-5" />,
           tooltip: "База клієнтів",
+        },
+        {
+          id: "users",
+          label: "Користувачі",
+          icon: <UserCog className="w-5 h-5" />,
+          tooltip: "Управління користувачами та призначення ролей",
         },
         {
           id: "settings",

@@ -99,6 +99,48 @@ export function UsersManagement() {
     }
   };
 
+  const handleRoleChange = async (user: User, newRole: string) => {
+    // Перевірка: тільки адміністратори можуть змінювати ролі
+    const currentUser = users.find(u => u.email === currentUserEmail);
+    if (!currentUser?.is_admin) {
+      toast.error("Тільки адміністратори можуть змінювати ролі користувачів");
+      return;
+    }
+
+    try {
+      const updateData: UserUpdate = {
+        role: newRole,
+      };
+      const updated = await usersApi.updateUser(user.id, updateData);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      toast.success(`Роль користувача змінено на "${getRoleLabel(newRole)}"`);
+    } catch (error: any) {
+      toast.error("Помилка оновлення ролі користувача");
+      console.error(error);
+    }
+  };
+
+  const getRoleLabel = (role: string): string => {
+    const roleLabels: Record<string, string> = {
+      "kp-manager": "Менеджер КП",
+      "sales-manager": "Менеджер продажів",
+      "service-manager": "Менеджер сервісу",
+      "sales-lead": "Керівник продажів",
+      "service-lead": "Керівник сервісу",
+      "user": "Користувач",
+    };
+    return roleLabels[role] || role;
+  };
+
+  const availableRoles = [
+    { value: "user", label: "Користувач" },
+    { value: "kp-manager", label: "Менеджер КП" },
+    { value: "sales-manager", label: "Менеджер продажів" },
+    { value: "service-manager", label: "Менеджер сервісу" },
+    { value: "sales-lead", label: "Керівник продажів" },
+    { value: "service-lead", label: "Керівник сервісу" },
+  ];
+
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       !searchQuery ||
@@ -119,7 +161,7 @@ export function UsersManagement() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <UserCog className="w-5 h-5" />
-              Користувачі і доступи
+              Користувачі
             </CardTitle>
           </div>
         </CardHeader>
@@ -188,7 +230,21 @@ export function UsersManagement() {
                             : "-"}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{user.role}</Badge>
+                          {isCurrentUserAdmin ? (
+                            <select
+                              className="border rounded-md px-2 py-1 text-sm min-w-[180px]"
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user, e.target.value)}
+                            >
+                              {availableRoles.map((role) => (
+                                <option key={role.value} value={role.value}>
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
+                          )}
                         </TableCell>
                         <TableCell>{user.department || "-"}</TableCell>
                         <TableCell>
