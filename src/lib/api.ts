@@ -123,6 +123,8 @@ export interface Client {
   payment_format?: string;
   cash_collector?: string;
   payment_plan_date?: string;
+  discount?: string;
+  cashback?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -144,6 +146,8 @@ export interface ClientUpdate {
   payment_format?: string;
   cash_collector?: string;
   payment_plan_date?: string;
+  discount?: string;
+  cashback?: number;
 }
 
 // Menus types
@@ -535,6 +539,11 @@ export interface KP {
   weight_per_person?: number; // Вага на 1 гостя в грамах
   created_by_id?: number;
   status?: string;
+  discount_id?: number;
+  cashback_id?: number;
+  use_cashback?: boolean;
+  discount_amount?: number;
+  cashback_amount?: number;
 }
 
 export interface KPCreate {
@@ -564,6 +573,11 @@ export interface KPCreate {
   transport_total?: number;
   total_weight?: number; // Орієнтовний вихід (сума ваги) - загальна вага в грамах
   weight_per_person?: number; // Вага на 1 гостя в грамах
+  discount_id?: number;
+  cashback_id?: number;
+  use_cashback?: boolean;
+  discount_amount?: number;
+  cashback_amount?: number;
 }
 
 export interface EmailSendRequest {
@@ -901,6 +915,68 @@ export const menusApi = {
 
   async deleteMenu(menuId: number): Promise<{ status: string }> {
     return apiFetch<{ status: string }>(`/menus/${menuId}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// Benefits types
+export interface Benefit {
+  id: number;
+  name: string;
+  type: "discount" | "cashback";
+  value: number;
+  description?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BenefitCreate {
+  name: string;
+  type: "discount" | "cashback";
+  value: number;
+  description?: string;
+  is_active?: boolean;
+}
+
+export interface BenefitUpdate {
+  name?: string;
+  type?: "discount" | "cashback";
+  value?: number;
+  description?: string;
+  is_active?: boolean;
+}
+
+// Benefits API
+export const benefitsApi = {
+  async getBenefits(type?: "discount" | "cashback", activeOnly: boolean = true): Promise<Benefit[]> {
+    const params = new URLSearchParams();
+    if (type) params.append("type", type);
+    params.append("active_only", activeOnly.toString());
+    return apiFetch<Benefit[]>(`/benefits?${params.toString()}`);
+  },
+
+  async getBenefit(id: number): Promise<Benefit> {
+    return apiFetch<Benefit>(`/benefits/${id}`);
+  },
+
+  async createBenefit(data: BenefitCreate): Promise<Benefit> {
+    return apiFetch<Benefit>("/benefits", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateBenefit(id: number, data: BenefitUpdate): Promise<Benefit> {
+    return apiFetch<Benefit>(`/benefits/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteBenefit(id: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/benefits/${id}`, {
       method: "DELETE",
     });
   },

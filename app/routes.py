@@ -1447,3 +1447,79 @@ def delete_template(template_id: int, db: Session = Depends(get_db), user = Depe
         raise HTTPException(status_code=404, detail="Template not found")
     return {"status": "success"}
 
+
+
+############################################################
+# Benefits (admin only)
+############################################################
+
+@router.get("/benefits", response_model=list[schema.Benefit])
+def list_benefits(
+    type: str | None = None,
+    active_only: bool = True,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """Отримати список рівнів знижок/кешбеку. Можна фільтрувати за типом та активністю."""
+    return crud.get_benefits(db, type_filter=type, active_only=active_only)
+
+
+@router.get("/benefits/{benefit_id}", response_model=schema.Benefit)
+def get_benefit(
+    benefit_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    benefit = crud.get_benefit(db, benefit_id)
+    if not benefit:
+        raise HTTPException(status_code=404, detail="Benefit not found")
+    return benefit
+
+
+@router.post("/benefits", response_model=schema.Benefit)
+def create_benefit(
+    benefit_in: schema.BenefitCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_db),
+):
+    """Створити новий рівень знижки або кешбеку. Тільки для адмінів."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    if benefit_in.type not in ["discount", "cashback"]:
+        raise HTTPException(status_code=400, detail="Type must be 'discount' or 'cashback'")
+    
+    return crud.create_benefit(db, benefit_in)
+
+
+@router.put("/benefits/{benefit_id}", response_model=schema.Benefit)
+def update_benefit(
+    benefit_id: int,
+    benefit_in: schema.BenefitUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_db),
+):
+    """Оновити рівень знижки або кешбеку. Тільки для адмінів."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    updated = crud.update_benefit(db, benefit_id, benefit_in)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Benefit not found")
+    return updated
+
+
+@router.delete("/benefits/{benefit_id}")
+def delete_benefit(
+    benefit_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_db),
+):
+    """Видалити рівень знижки або кешбеку. Тільки для адмінів."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    deleted = crud.delete_benefit(db, benefit_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Benefit not found")
+    return {"status": "success"}

@@ -11,6 +11,7 @@ import { Settings } from "./components/Settings";
 import { Clients } from "./components/Clients";
 import { EventsCalendar } from "./components/EventsCalendar";
 import { UsersManagement } from "./components/UsersManagement";
+import { BenefitsManagement } from "./components/BenefitsManagement";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -185,6 +186,10 @@ function App() {
         { label: "Загальні", href: "#" },
         { label: "Користувачі і доступи" },
       ],
+      benefits: [
+        { label: "Загальні", href: "#" },
+        { label: "Бенфіти" },
+      ],
     };
 
     return (
@@ -316,6 +321,8 @@ function App() {
         return <Settings />;
       case "users-access":
         return <UsersManagement />;
+      case "benefits":
+        return <BenefitsManagement />;
       default:
         return <DashboardEnhanced userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
     }

@@ -123,6 +123,11 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         transport_total=getattr(kp_in, "transport_total", None),
         created_by_id=created_by_id,
         status=kp_in.status or "sent",
+        discount_id=getattr(kp_in, "discount_id", None),
+        cashback_id=getattr(kp_in, "cashback_id", None),
+        use_cashback=getattr(kp_in, "use_cashback", False),
+        discount_amount=getattr(kp_in, "discount_amount", None),
+        cashback_amount=getattr(kp_in, "cashback_amount", None),
     )
 
     db.add(kp)
@@ -182,6 +187,10 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
 
     db.commit()
     db.refresh(kp)
+    
+    # Автоматично оновлюємо клієнта з даними про знижки та кешбек
+    upsert_client_from_kp(db, kp)
+    
     # eager load items+item for immediate use
     return (
         db.query(models.KP)
@@ -585,7 +594,76 @@ def upsert_client_from_kp(db: Session, kp: models.KP):
         client.unpaid_amount = max(kp.total_price - client.paid_amount, 0)
     else:
         client.unpaid_amount = kp.total_price
+    
+    # Оновлення знижки та кешбеку
+    if kp.discount_id and kp.discount_amount:
+        # Завантажуємо benefit для отримання значення
+        discount_benefit = db.query(models.Benefit).filter(models.Benefit.id == kp.discount_id).first()
+        discount_value = discount_benefit.value if discount_benefit else '?'
+        # Додаємо інформацію про знижку до текстового поля
+        discount_text = f"{discount_value}% до КП #{kp.id}"
+        if client.discount:
+            client.discount = f"{client.discount}; {discount_text}"
+        else:
+            client.discount = discount_text
+    
+    # Оновлюємо кешбек (сумуємо всі кешбеки з усіх КП клієнта)
+    # Знаходимо всі КП цього клієнта та сумуємо кешбек
+    all_client_kps = db.query(models.KP).filter(
+        (models.KP.client_name == client.name) |
+        (models.KP.client_phone == client.phone) |
+        (models.KP.client_email == client.email)
+    ).all()
+    total_cashback = sum(k.cashback_amount or 0 for k in all_client_kps)
+    client.cashback = total_cashback
 
     db.commit()
     db.refresh(client)
     return client
+
+############################################################
+# Benefits (discounts and cashback levels)
+############################################################
+
+def get_benefits(db: Session, type_filter: str | None = None, active_only: bool = True):
+    query = db.query(models.Benefit)
+    if type_filter:
+        query = query.filter(models.Benefit.type == type_filter)
+    if active_only:
+        query = query.filter(models.Benefit.is_active == True)
+    return query.order_by(models.Benefit.value.desc()).all()
+
+
+def get_benefit(db: Session, benefit_id: int):
+    return db.query(models.Benefit).filter(models.Benefit.id == benefit_id).first()
+
+
+def create_benefit(db: Session, benefit_in: schemas.BenefitCreate):
+    benefit = models.Benefit(**benefit_in.dict())
+    db.add(benefit)
+    db.commit()
+    db.refresh(benefit)
+    return benefit
+
+
+def update_benefit(db: Session, benefit_id: int, benefit_in: schemas.BenefitUpdate):
+    benefit = get_benefit(db, benefit_id)
+    if not benefit:
+        return None
+    
+    update_data = benefit_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(benefit, key, value)
+    
+    db.commit()
+    db.refresh(benefit)
+    return benefit
+
+
+def delete_benefit(db: Session, benefit_id: int):
+    benefit = get_benefit(db, benefit_id)
+    if not benefit:
+        return False
+    db.delete(benefit)
+    db.commit()
+    return True

@@ -177,36 +177,41 @@ export function EventsCalendar() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2">
               <CalendarIcon className="w-5 h-5" />
               Календар подій
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={goToToday}
+                className="text-xs md:text-sm"
               >
                 Сьогодні
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={goToPreviousMonth}
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-lg font-semibold min-w-[200px] text-center">
-                {monthNames[month]} {year}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={goToNextMonth}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-1 md:gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goToPreviousMonth}
+                  className="h-8 w-8 md:h-10 md:w-10"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm md:text-lg font-semibold min-w-[140px] md:min-w-[200px] text-center">
+                  {monthNames[month]} {year}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goToNextMonth}
+                  className="h-8 w-8 md:h-10 md:w-10"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -216,69 +221,73 @@ export function EventsCalendar() {
               Завантаження подій...
             </div>
           ) : (
-            <div className="grid grid-cols-7 gap-1">
+            <div className="space-y-2">
               {/* Заголовки днів тижня */}
-              {weekDays.map((day) => (
-                <div
-                  key={day}
-                  className="p-2 text-center text-sm font-medium text-gray-600"
-                >
-                  {day}
-                </div>
-              ))}
+              <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+                {weekDays.map((day) => (
+                  <div
+                    key={day}
+                    className="p-1.5 md:p-2 text-center text-xs md:text-sm font-semibold text-gray-700 bg-gray-50 rounded-md"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
 
               {/* Дні місяця */}
-              {days.map((date, index) => {
-                const dayEvents = getEventsForDay(date);
-                const isCurrentDay = isToday(date);
+              <div className="grid grid-cols-7 gap-1 md:gap-2">
+                {days.map((date, index) => {
+                  const dayEvents = getEventsForDay(date);
+                  const isCurrentDay = isToday(date);
 
-                return (
-                  <div
-                    key={index}
-                    className={`min-h-[100px] border rounded-lg p-1 ${
-                      date
-                        ? isCurrentDay
-                          ? "bg-[#FF5A00]/10 border-[#FF5A00]"
-                          : "bg-white border-gray-200 hover:border-gray-300"
-                        : "bg-gray-50 border-transparent"
-                    }`}
-                  >
-                    {date && (
-                      <>
-                        <div
-                          className={`text-sm font-medium mb-1 ${
-                            isCurrentDay
-                              ? "text-[#FF5A00]"
-                              : "text-gray-900"
-                          }`}
-                        >
-                          {date.getDate()}
-                        </div>
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 2).map((event) => (
-                            <div
-                              key={`${event.type}-${event.id}`}
-                              onClick={() => {
-                                setSelectedEvent(event);
-                                setIsEventDialogOpen(true);
-                              }}
-                              className="text-xs p-1 rounded bg-[#FF5A00] text-white cursor-pointer hover:bg-[#FF5A00]/90 truncate"
-                              title={event.title}
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-xs text-gray-500 p-1">
-                              +{dayEvents.length - 2} ще
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                  return (
+                    <div
+                      key={index}
+                      className={`min-h-[80px] md:min-h-[120px] border rounded-lg p-1 md:p-2 transition-colors ${
+                        date
+                          ? isCurrentDay
+                            ? "bg-[#FF5A00]/10 border-2 border-[#FF5A00]"
+                            : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                          : "bg-gray-50/50 border-transparent"
+                      }`}
+                    >
+                      {date && (
+                        <>
+                          <div
+                            className={`text-xs md:text-sm font-semibold mb-1 md:mb-2 ${
+                              isCurrentDay
+                                ? "text-[#FF5A00]"
+                                : "text-gray-900"
+                            }`}
+                          >
+                            {date.getDate()}
+                          </div>
+                          <div className="space-y-1 md:space-y-1.5">
+                            {dayEvents.slice(0, 2).map((event) => (
+                              <div
+                                key={`${event.type}-${event.id}`}
+                                onClick={() => {
+                                  setSelectedEvent(event);
+                                  setIsEventDialogOpen(true);
+                                }}
+                                className="text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-md bg-[#FF5A00] text-white cursor-pointer hover:bg-[#FF5A00]/90 transition-colors truncate"
+                                title={event.title}
+                              >
+                                {event.title}
+                              </div>
+                            ))}
+                            {dayEvents.length > 2 && (
+                              <div className="text-[10px] md:text-xs text-gray-500 px-1.5 md:px-2 py-0.5 md:py-1 bg-gray-100 rounded-md">
+                                +{dayEvents.length - 2} ще
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </CardContent>

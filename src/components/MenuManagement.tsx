@@ -699,18 +699,18 @@ export function MenuManagement() {
                       className="flex flex-col gap-2 p-3"
                     >
                       {/* Фото */}
-                      <div className="w-full">
+                      <div className="w-full flex justify-center">
                         {item.photo_url ? (
                           <img
                             src={getImageUrl(item.photo_url) || ""}
                             alt={item.name}
-                            className="w-full h-40 object-cover rounded border border-gray-200"
+                            className="w-20 h-20 object-cover rounded border border-gray-200"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         ) : (
-                          <div className="w-full h-40 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[10px] leading-tight text-gray-400 text-center px-6">
+                          <div className="w-20 h-20 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[10px] leading-tight text-gray-400 text-center px-2">
                             Нема фото
                           </div>
                         )}

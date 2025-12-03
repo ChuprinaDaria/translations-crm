@@ -137,6 +137,12 @@ class KPCreate(KPBase):
     transport_total: Optional[float] = None
     total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
     weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
+    # Знижки та кешбек
+    discount_id: Optional[int] = None
+    cashback_id: Optional[int] = None
+    use_cashback: Optional[bool] = False  # Чи списати кешбек з бонусного рахунку
+    discount_amount: Optional[float] = None
+    cashback_amount: Optional[float] = None
 
 class KPItem(BaseModel):
     id: int
@@ -162,6 +168,11 @@ class KP(KPBase):
     total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
     weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
     created_by_id: Optional[int] = None
+    discount_id: Optional[int] = None
+    cashback_id: Optional[int] = None
+    use_cashback: Optional[bool] = False
+    discount_amount: Optional[float] = None
+    cashback_amount: Optional[float] = None
     
     class Config:
         from_attributes = True
@@ -325,6 +336,8 @@ class ClientBase(BaseModel):
     payment_format: Optional[str] = None
     cash_collector: Optional[str] = None
     payment_plan_date: Optional[datetime] = None
+    discount: Optional[str] = None
+    cashback: Optional[float] = None
 
 
 class ClientCreate(ClientBase):
@@ -348,9 +361,41 @@ class ClientUpdate(BaseModel):
     payment_format: Optional[str] = None
     cash_collector: Optional[str] = None
     payment_plan_date: Optional[datetime] = None
+    discount: Optional[str] = None
+    cashback: Optional[float] = None
 
 
 class Client(ClientBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Benefits schemas
+class BenefitBase(BaseModel):
+    name: str
+    type: str  # 'discount' або 'cashback'
+    value: float  # Значення у відсотках
+    description: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class BenefitCreate(BenefitBase):
+    pass
+
+
+class BenefitUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    value: Optional[float] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class Benefit(BenefitBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

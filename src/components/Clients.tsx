@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Edit2, Search, Users } from "lucide-react";
+import { Edit2, Search, Users, Calendar, FileText, Percent, Gift } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
+import { Checkbox } from "./ui/checkbox";
 import {
   Table,
   TableBody,
@@ -19,7 +20,16 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
-import { clientsApi, type Client, type ClientUpdate } from "../lib/api";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Badge } from "./ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { clientsApi, kpApi, type Client, type ClientUpdate, type KP } from "../lib/api";
 import { toast } from "sonner";
 
 export function Clients() {
@@ -28,6 +38,9 @@ export function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editForm, setEditForm] = useState<ClientUpdate>({});
   const [saving, setSaving] = useState(false);
+  const [selectedClientForEvents, setSelectedClientForEvents] = useState<Client | null>(null);
+  const [clientKPs, setClientKPs] = useState<KP[]>([]);
+  const [loadingKPs, setLoadingKPs] = useState(false);
 
   useEffect(() => {
     const loadClients = async () => {
@@ -42,6 +55,36 @@ export function Clients() {
 
     loadClients();
   }, []);
+
+  // Завантаження КП для вибраного клієнта
+  useEffect(() => {
+    const loadClientKPs = async () => {
+      if (!selectedClientForEvents) {
+        setClientKPs([]);
+        return;
+      }
+
+      setLoadingKPs(true);
+      try {
+        const allKPs = await kpApi.getKPs();
+        // Фільтруємо КП за ім'ям клієнта, телефоном або email
+        const filtered = allKPs.filter(
+          (kp) =>
+            (kp.client_name && kp.client_name === selectedClientForEvents.name) ||
+            (kp.client_phone && kp.client_phone === selectedClientForEvents.phone) ||
+            (kp.client_email && kp.client_email === selectedClientForEvents.email)
+        );
+        setClientKPs(filtered);
+      } catch (error: any) {
+        console.error("Error loading client KPs:", error);
+        toast.error("Помилка завантаження КП клієнта");
+      } finally {
+        setLoadingKPs(false);
+      }
+    };
+
+    loadClientKPs();
+  }, [selectedClientForEvents]);
 
   const filtered = clients.filter((c) => {
     const q = searchQuery.toLowerCase();
@@ -71,6 +114,8 @@ export function Clients() {
       payment_format: client.payment_format,
       cash_collector: client.cash_collector,
       payment_plan_date: client.payment_plan_date,
+      discount: client.discount,
+      cashback: client.cashback,
     });
   };
 
@@ -112,6 +157,19 @@ export function Clients() {
         </p>
       </div>
 
+      <Tabs defaultValue="list" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list">
+            <Users className="w-4 h-4 mr-2" />
+            Список клієнтів
+          </TabsTrigger>
+          <TabsTrigger value="events">
+            <Calendar className="w-4 h-4 mr-2" />
+            Події / Заходи
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list">
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -136,6 +194,7 @@ export function Clients() {
                   <TableHead className="min-w-[160px]">Статус</TableHead>
                   <TableHead className="min-w-[200px]">Дата / Формат / Локація</TableHead>
                   <TableHead className="min-w-[180px]">Сума КП / Оплата</TableHead>
+                  <TableHead className="min-w-[120px]">Знижка / Кешбек</TableHead>
                   <TableHead className="min-w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -143,7 +202,7 @@ export function Clients() {
                 {filtered.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="py-8 text-center text-gray-500"
                     >
                       Клієнтів ще немає
@@ -202,6 +261,25 @@ export function Clients() {
                         <div>
                           Не оплачено:{" "}
                           {client.unpaid_amount?.toLocaleString() || "0"} грн
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-col gap-1">
+                          {client.discount && (
+                            <div className="flex items-center gap-1 text-[#FF5A00]">
+                              <Percent className="w-3 h-3" />
+                              <span>{client.discount}</span>
+                            </div>
+                          )}
+                          {client.cashback && client.cashback > 0 && (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <Gift className="w-3 h-3" />
+                              <span>{client.cashback.toLocaleString()} грн</span>
+                            </div>
+                          )}
+                          {!client.discount && (!client.cashback || client.cashback === 0) && (
+                            <span className="text-gray-400">—</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -419,6 +497,39 @@ export function Clients() {
                   onChange={(e) => handleChange("comments", e.target.value)}
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                <div className="space-y-2">
+                  <Label htmlFor="discount">Знижка</Label>
+                  <Input
+                    id="discount"
+                    value={editForm.discount || ""}
+                    onChange={(e) => handleChange("discount", e.target.value)}
+                    placeholder="Наприклад: 5% до КП #123"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Текст про знижки до конкретних КП
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cashback">Кешбек (грн)</Label>
+                  <Input
+                    id="cashback"
+                    type="number"
+                    value={editForm.cashback ?? ""}
+                    onChange={(e) =>
+                      handleChange(
+                        "cashback",
+                        e.target.value ? Number(e.target.value) : undefined,
+                      )
+                    }
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Сума всіх кешбеків з усіх КП (автоматично оновлюється)
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -439,6 +550,114 @@ export function Clients() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="events">
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <Label>Оберіть клієнта для перегляду подій</Label>
+                  <Select
+                    value={selectedClientForEvents?.id.toString() || ""}
+                    onValueChange={(value) => {
+                      const client = clients.find((c) => c.id.toString() === value);
+                      setSelectedClientForEvents(client || null);
+                    }}
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="Оберіть клієнта" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.name} {client.phone ? `(${client.phone})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedClientForEvents && (
+                  <div className="space-y-4">
+                    <div className="border-t pt-4">
+                      <h3 className="text-lg font-semibold mb-4">
+                        Події / Заходи для клієнта: {selectedClientForEvents.name}
+                      </h3>
+                      
+                      {loadingKPs ? (
+                        <div className="text-center py-8 text-gray-500">
+                          Завантаження подій...
+                        </div>
+                      ) : clientKPs.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          Немає заходів для цього клієнта
+                        </div>
+                      ) : (
+                        <div className="border rounded-lg overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Дата</TableHead>
+                                <TableHead>Формат</TableHead>
+                                <TableHead>Локація</TableHead>
+                                <TableHead>Час</TableHead>
+                                <TableHead>Кількість гостей</TableHead>
+                                <TableHead>Сума КП</TableHead>
+                                <TableHead>Статус</TableHead>
+                                <TableHead>КП</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {clientKPs.map((kp) => (
+                                <TableRow key={kp.id}>
+                                  <TableCell>
+                                    {kp.event_date
+                                      ? new Date(kp.event_date).toLocaleDateString("uk-UA", {
+                                          day: "numeric",
+                                          month: "long",
+                                          year: "numeric",
+                                        })
+                                      : "—"}
+                                  </TableCell>
+                                  <TableCell>{kp.event_format || "—"}</TableCell>
+                                  <TableCell>{kp.event_location || "—"}</TableCell>
+                                  <TableCell>{kp.event_time || "—"}</TableCell>
+                                  <TableCell>{kp.people_count || "—"}</TableCell>
+                                  <TableCell>
+                                    {kp.total_price
+                                      ? `${kp.total_price.toLocaleString()} грн`
+                                      : "—"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {kp.status ? (
+                                      <Badge variant="outline">{kp.status}</Badge>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="w-4 h-4 text-gray-400" />
+                                      <span className="text-sm text-gray-600">
+                                        КП #{kp.id}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

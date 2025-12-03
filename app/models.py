@@ -117,9 +117,33 @@ class KP(Base):
     # Орієнтовний вихід (сума ваги)
     total_weight = Column(Float, nullable=True)  # Загальна вага в грамах
     weight_per_person = Column(Float, nullable=True)  # Вага на 1 гостя в грамах
+    # Знижки та кешбек
+    discount_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
+    cashback_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
+    use_cashback = Column(Boolean, default=False, nullable=False)  # Чи списати кешбек з бонусного рахунку
+    discount_amount = Column(Float, nullable=True)  # Сума знижки
+    cashback_amount = Column(Float, nullable=True)  # Сума кешбеку
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
     template = relationship("Template", back_populates="kps")
+    discount_benefit = relationship("Benefit", foreign_keys=[discount_id])
+    cashback_benefit = relationship("Benefit", foreign_keys=[cashback_id])
+
+
+class Benefit(Base):
+    """
+    Рівні знижок та кешбеку, які адмін створює, а менеджер вибирає для КП.
+    """
+    __tablename__ = "benefits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # Назва рівня (напр. "Знижка 5%", "Кешбек 3%")
+    type = Column(String, nullable=False, index=True)  # 'discount' або 'cashback'
+    value = Column(Float, nullable=False)  # Значення у відсотках (напр. 5 для 5%)
+    description = Column(String, nullable=True)  # Опис
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class TelegramAccount(Base):
@@ -224,6 +248,9 @@ class Client(Base):
     payment_format = Column(String, nullable=True)  # ФОП / юрособа / інше
     cash_collector = Column(String, nullable=True)  # Хто забирав готівку
     payment_plan_date = Column(DateTime(timezone=True), nullable=True)
+    # Знижки та кешбек
+    discount = Column(String, nullable=True)  # Текст про знижки до КП (напр. "5% до КП #123")
+    cashback = Column(Float, default=0, nullable=False)  # Сума всіх кешбеків з усіх КП
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

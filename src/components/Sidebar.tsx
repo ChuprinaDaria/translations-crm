@@ -20,6 +20,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Gift,
 } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
 import { cn } from "./ui/utils";
@@ -194,6 +195,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           icon: <UserCog className="w-5 h-5" />,
           tooltip: "Управління користувачами та правами доступу",
           roles: ["sales-lead", "service-lead"],
+        },
+        {
+          id: "benefits",
+          label: "Бенфіти",
+          icon: <Gift className="w-5 h-5" />,
+          tooltip: "Управління рівнями знижок та кешбеку",
+          roles: ["kp-manager"], // Тільки для адмінів
         },
       ],
     },

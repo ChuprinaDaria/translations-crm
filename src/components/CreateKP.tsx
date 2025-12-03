@@ -22,11 +22,15 @@ import {
   kpApi,
   templatesApi,
   menusApi,
+  clientsApi,
+  benefitsApi,
   getImageUrl,
   type Item,
   type Category,
   type Template as ApiTemplate,
   type Menu,
+  type Client,
+  type Benefit,
 } from "../lib/api";
 
 interface Dish {
@@ -84,14 +88,28 @@ export function CreateKP() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [clientSelectionMode, setClientSelectionMode] = useState<"existing" | "new">("new");
+  const [benefits, setBenefits] = useState<Benefit[]>([]);
+  const [selectedDiscountId, setSelectedDiscountId] = useState<number | null>(null);
+  const [selectedCashbackId, setSelectedCashbackId] = useState<number | null>(null);
+  const [useCashback, setUseCashback] = useState(false);
 
   // Функція для валідації кроку 1 (без показу помилок)
   const isStep1Valid = (): boolean => {
+    if (clientSelectionMode === "existing" && !selectedClientId) {
+      return false;
+    }
     return !!(clientName && eventDate && guestCount && eventGroup && eventFormat);
   };
 
   // Функція для валідації кроку 1 з показом помилок
   const validateStep1 = (): boolean => {
+    if (clientSelectionMode === "existing" && !selectedClientId) {
+      toast.error("Будь ласка, оберіть клієнта зі списку");
+      return false;
+    }
     if (!clientName || !eventDate || !guestCount) {
       toast.error("Будь ласка, заповніть всі обов'язкові дані клієнта та заходу");
       return false;
@@ -270,6 +288,34 @@ export function CreateKP() {
     };
     
     loadDishes();
+  }, []);
+
+  // Load clients from API
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const clientsData = await clientsApi.getClients();
+        setClients(clientsData);
+      } catch (error: any) {
+        console.error("Помилка завантаження клієнтів:", error);
+      }
+    };
+    
+    loadClients();
+  }, []);
+
+  // Load benefits from API
+  useEffect(() => {
+    const loadBenefits = async () => {
+      try {
+        const benefitsData = await benefitsApi.getBenefits(undefined, true);
+        setBenefits(benefitsData);
+      } catch (error: any) {
+        console.error("Помилка завантаження бенфітів:", error);
+      }
+    };
+    
+    loadBenefits();
   }, []);
 
   // Load templates and menus from API
@@ -517,12 +563,39 @@ export function CreateKP() {
       setStep(1);
       return;
     }
+    // Перевірка, що не можна використовувати знижку та кешбек разом
+    if (selectedDiscountId && selectedCashbackId) {
+      toast.error("Не можна використовувати знижку та кешбек разом");
+      setStep(7);
+      return;
+    }
 
     const peopleCountNum = parseInt(guestCount, 10) || 0;
     const foodTotalPrice = getTotalPrice();
     const transportTotalNum = parseFloat(transportTotal || "0") || 0;
-    const totalPrice =
-      foodTotalPrice + equipmentTotal + serviceTotal + transportTotalNum;
+    
+    // Розрахунок знижки (тільки на меню/їжу, не на обладнання, обслуговування та транспорт)
+    let discountAmount = 0;
+    let finalFoodPrice = foodTotalPrice;
+    if (selectedDiscountId) {
+      const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+      if (discountBenefit) {
+        discountAmount = (foodTotalPrice * discountBenefit.value) / 100;
+        finalFoodPrice = foodTotalPrice - discountAmount;
+      }
+    }
+    
+    // Розрахунок кешбеку (від загальної суми)
+    let cashbackAmount = 0;
+    const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + transportTotalNum;
+    if (selectedCashbackId) {
+      const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+      if (cashbackBenefit) {
+        cashbackAmount = (totalBeforeCashback * cashbackBenefit.value) / 100;
+      }
+    }
+    
+    const totalPrice = totalBeforeCashback - (useCashback ? cashbackAmount : 0);
     const title =
       clientName ||
       `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
@@ -561,6 +634,11 @@ export function CreateKP() {
         transport_total: transportTotalNum || undefined,
         total_weight: getTotalWeight() > 0 ? getTotalWeight() : undefined,
         weight_per_person: getWeightPerPerson() > 0 ? getWeightPerPerson() : undefined,
+        discount_id: selectedDiscountId || undefined,
+        cashback_id: selectedCashbackId || undefined,
+        use_cashback: useCashback,
+        discount_amount: discountAmount > 0 ? discountAmount : undefined,
+        cashback_amount: cashbackAmount > 0 ? cashbackAmount : undefined,
       });
 
       toast.success(
@@ -686,6 +764,93 @@ export function CreateKP() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4 md:space-y-6">
+              {/* Вибір між новим та існуючим клієнтом */}
+              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                <Label>Оберіть клієнта</Label>
+                <div className="flex gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="new-client"
+                      checked={clientSelectionMode === "new"}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setClientSelectionMode("new");
+                          setSelectedClientId(null);
+                          // Очищаємо поля при переключенні на новий клієнт
+                          setClientName("");
+                          setClientEmail("");
+                          setClientPhone("");
+                        }
+                      }}
+                    />
+                    <Label htmlFor="new-client" className="cursor-pointer">
+                      Новий клієнт
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="existing-client"
+                      checked={clientSelectionMode === "existing"}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setClientSelectionMode("existing");
+                        }
+                      }}
+                    />
+                    <Label htmlFor="existing-client" className="cursor-pointer">
+                      Обрати існуючого клієнта
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Вибір існуючого клієнта */}
+              {clientSelectionMode === "existing" && (
+                <div className="space-y-2">
+                  <Label htmlFor="select-client">
+                    Оберіть клієнта <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={selectedClientId?.toString() || ""}
+                    onValueChange={(value) => {
+                      const clientId = parseInt(value);
+                      setSelectedClientId(clientId);
+                      const client = clients.find((c) => c.id === clientId);
+                      if (client) {
+                        setClientName(client.name || "");
+                        setClientEmail(client.email || "");
+                        setClientPhone(client.phone || "");
+                        // Заповнюємо дані заходу, якщо вони є
+                        if (client.event_date) {
+                          const date = new Date(client.event_date);
+                          setEventDate(date.toISOString().split("T")[0]);
+                        }
+                        if (client.event_format) {
+                          setEventFormat(client.event_format);
+                        }
+                        if (client.event_location) {
+                          setEventLocation(client.event_location);
+                        }
+                        if (client.event_time) {
+                          setEventTime(client.event_time);
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="select-client">
+                      <SelectValue placeholder="Оберіть клієнта зі списку" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.name} {client.phone ? `(${client.phone})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="client-name">
@@ -696,6 +861,7 @@ export function CreateKP() {
                     placeholder="ТОВ 'Компанія' або Іван Петренко"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
+                    disabled={clientSelectionMode === "existing" && !selectedClientId}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1864,38 +2030,88 @@ export function CreateKP() {
                   </div>
                 </div>
 
-                <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-600 mb-1">
-                      Загальна вартість заходу
+                {/* Розрахунок фінальної суми з урахуванням знижок та кешбеку */}
+                {(() => {
+                  const foodPrice = getTotalPrice();
+                  const discountAmount = selectedDiscountId
+                    ? (() => {
+                        const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                        return discountBenefit ? (foodPrice * discountBenefit.value) / 100 : 0;
+                      })()
+                    : 0;
+                  const finalFoodPrice = foodPrice - discountAmount;
+                  const transportTotalNum = parseFloat(transportTotal || "0") || 0;
+                  const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + transportTotalNum;
+                  const cashbackAmount = selectedCashbackId
+                    ? (() => {
+                        const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+                        return cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
+                      })()
+                    : 0;
+                  const finalTotal = totalBeforeCashback - (useCashback ? cashbackAmount : 0);
+                  const peopleCountNum = parseInt(guestCount, 10) || 0;
+                  
+                  return (
+                    <div className="border-t pt-4 space-y-4">
+                      {(selectedDiscountId || selectedCashbackId) && (
+                        <div className="space-y-2 text-sm">
+                          {selectedDiscountId && (
+                            <div className="flex justify-between text-[#FF5A00]">
+                              <span>Знижка:</span>
+                              <span>-{discountAmount.toLocaleString()} грн</span>
+                            </div>
+                          )}
+                          {selectedCashbackId && (
+                            <>
+                              <div className="flex justify-between text-green-600">
+                                <span>Кешбек:</span>
+                                <span>+{cashbackAmount.toLocaleString()} грн</span>
+                              </div>
+                              {useCashback && (
+                                <div className="flex justify-between text-red-600">
+                                  <span>Списано з бонусного рахунку:</span>
+                                  <span>-{cashbackAmount.toLocaleString()} грн</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <div className="text-sm text-gray-600 mb-1">
+                            Загальна вартість заходу
+                          </div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {finalTotal.toLocaleString()} грн
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <div className="text-sm text-gray-600 mb-1">
+                            На 1 гостя
+                          </div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {peopleCountNum > 0
+                              ? Math.round(finalTotal / peopleCountNum).toLocaleString()
+                              : "-"}{" "}
+                            грн
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <div className="text-sm text-gray-600 mb-1">
+                            Орієнтовний вихід на 1 гостя
+                          </div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {peopleCountNum > 0
+                              ? (getTotalWeight() / peopleCountNum).toFixed(2)
+                              : "-"}{" "}
+                            {dishes[0]?.unit || "г"}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-lg font-semibold text-gray-900">
-                      {totalPrice} грн
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-600 mb-1">
-                      На 1 гостя
-                    </div>
-                    <div className="text-lg font-semibold text-gray-900">
-                      {peopleCountNum > 0
-                        ? (totalPrice / peopleCountNum).toFixed(2)
-                        : "-"}{" "}
-                      грн
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-600 mb-1">
-                      Орієнтовний вихід на 1 гостя
-                    </div>
-                    <div className="text-lg font-semibold text-gray-900">
-                      {peopleCountNum > 0
-                        ? (getTotalWeight() / peopleCountNum).toFixed(2)
-                        : "-"}{" "}
-                      {dishes[0]?.unit || "г"}
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -1927,6 +2143,85 @@ export function CreateKP() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
+                {/* Discount and Cashback Selection */}
+                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
+                  <h3 className="text-gray-900 font-medium">Знижка та кешбек</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="discount-select">Знижка</Label>
+                      <Select
+                        value={selectedDiscountId?.toString() || ""}
+                        onValueChange={(value) => {
+                          const id = parseInt(value);
+                          setSelectedDiscountId(id);
+                          // Якщо обрано знижку, скидаємо кешбек
+                          if (id) {
+                            setSelectedCashbackId(null);
+                            setUseCashback(false);
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="discount-select">
+                          <SelectValue placeholder="Оберіть знижку" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {benefits
+                            .filter((b) => b.type === "discount" && b.is_active)
+                            .map((benefit) => (
+                              <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                {benefit.name} ({benefit.value}%)
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cashback-select">Кешбек</Label>
+                      <Select
+                        value={selectedCashbackId?.toString() || ""}
+                        onValueChange={(value) => {
+                          const id = parseInt(value);
+                          setSelectedCashbackId(id);
+                          // Якщо обрано кешбек, скидаємо знижку
+                          if (id) {
+                            setSelectedDiscountId(null);
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="cashback-select">
+                          <SelectValue placeholder="Оберіть кешбек" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {benefits
+                            .filter((b) => b.type === "cashback" && b.is_active)
+                            .map((benefit) => (
+                              <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                {benefit.name} ({benefit.value}%)
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {selectedCashbackId && (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="use-cashback"
+                        checked={useCashback}
+                        onCheckedChange={(checked) => setUseCashback(checked as boolean)}
+                      />
+                      <Label htmlFor="use-cashback" className="cursor-pointer">
+                        Списати кешбек з бонусного рахунку клієнта
+                      </Label>
+                    </div>
+                  )}
+                  {(selectedDiscountId && selectedCashbackId) && (
+                    <p className="text-sm text-red-600">
+                      ⚠️ Не можна використовувати знижку та кешбек разом
+                    </p>
+                  )}
+                </div>
+
                 {/* Template Selection */}
                 <div className="space-y-2">
                   <Label>Оберіть шаблон КП</Label>
@@ -2020,9 +2315,77 @@ export function CreateKP() {
                           </div>
                         ))}
                       </div>
-                      <div className="border-t mt-4 pt-4 flex justify-between">
-                        <span className="text-gray-900">Загальна сума:</span>
-                        <span className="text-gray-900">{getTotalPrice()} грн</span>
+                      <div className="border-t mt-4 pt-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Сума меню:</span>
+                          <span className="text-gray-900">{getTotalPrice().toLocaleString()} грн</span>
+                        </div>
+                        {selectedDiscountId && (() => {
+                          const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                          const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
+                          return (
+                            <>
+                              <div className="flex justify-between text-sm text-[#FF5A00]">
+                                <span>Знижка ({discountBenefit?.value}%):</span>
+                                <span>-{discountAmount.toLocaleString()} грн</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Сума меню зі знижкою:</span>
+                                <span className="text-gray-900">{(getTotalPrice() - discountAmount).toLocaleString()} грн</span>
+                              </div>
+                            </>
+                          );
+                        })()}
+                        {selectedCashbackId && (() => {
+                          const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+                          const foodPrice = selectedDiscountId 
+                            ? (() => {
+                                const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                                const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
+                                return getTotalPrice() - discountAmount;
+                              })()
+                            : getTotalPrice();
+                          const totalBeforeCashback = foodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                          const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
+                          return (
+                            <>
+                              <div className="flex justify-between text-sm text-green-600">
+                                <span>Кешбек ({cashbackBenefit?.value}%):</span>
+                                <span>+{cashbackAmount.toLocaleString()} грн</span>
+                              </div>
+                              {useCashback && (
+                                <div className="flex justify-between text-sm text-red-600">
+                                  <span>Списано з бонусного рахунку:</span>
+                                  <span>-{cashbackAmount.toLocaleString()} грн</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                        <div className="flex justify-between font-semibold text-lg border-t pt-2">
+                          <span className="text-gray-900">Загальна сума:</span>
+                          <span className="text-gray-900">
+                            {(() => {
+                              const foodPrice = getTotalPrice();
+                              const discountAmount = selectedDiscountId
+                                ? (() => {
+                                    const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                                    return discountBenefit ? (foodPrice * discountBenefit.value) / 100 : 0;
+                                  })()
+                                : 0;
+                              const finalFoodPrice = foodPrice - discountAmount;
+                              const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                              const cashbackAmount = selectedCashbackId
+                                ? (() => {
+                                    const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+                                    return cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
+                                  })()
+                                : 0;
+                              const finalTotal = totalBeforeCashback - (useCashback ? cashbackAmount : 0);
+                              return finalTotal.toLocaleString();
+                            })()} грн
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
