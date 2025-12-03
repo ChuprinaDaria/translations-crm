@@ -28,7 +28,6 @@ export function KPTemplates() {
     description: "",
     filename: "",
     is_default: false,
-    html_content: "",
     primary_color: "#FF5A00",
     secondary_color: "#1a1a2e",
     text_color: "#333333",
@@ -69,7 +68,6 @@ export function KPTemplates() {
       description: "",
       filename: "",
       is_default: false,
-      html_content: "",
       primary_color: "#FF5A00",
       secondary_color: "#1a1a2e",
       text_color: "#333333",
@@ -87,19 +85,17 @@ export function KPTemplates() {
       return;
     }
 
-    if (!formData.filename) {
-      toast.error("Вкажіть ім'я файлу шаблону (наприклад, classic.html)");
-      return;
-    }
+    // Автоматично генеруємо filename з назви шаблону
+    const autoFilename = autoFilenameFromName(formData.name);
 
     try {
       if (editingTemplate) {
         const updated = await templatesApi.updateTemplate(editingTemplate.id, {
           name: formData.name,
           description: formData.description,
-          filename: formData.filename,
+          filename: autoFilename,
           is_default: formData.is_default,
-          html_content: formData.html_content,
+          // html_content тепер опціональний - бекенд скопіює дефолтний шаблон при створенні
           header_image: headerFile || undefined,
           background_image: backgroundFile || undefined,
           primary_color: formData.primary_color,
@@ -115,9 +111,9 @@ export function KPTemplates() {
         const created = await templatesApi.createTemplate({
           name: formData.name,
           description: formData.description,
-          filename: formData.filename,
+          filename: autoFilename,
           is_default: formData.is_default,
-          html_content: formData.html_content,
+          // html_content не передаємо - бекенд створить на основі commercial-offer.html
           header_image: headerFile || undefined,
           background_image: backgroundFile || undefined,
           primary_color: formData.primary_color,
@@ -151,7 +147,6 @@ export function KPTemplates() {
         description: fullTemplate.description || "",
         filename: fullTemplate.filename,
         is_default: fullTemplate.is_default,
-        html_content: fullTemplate.html_content || "",
         primary_color: fullTemplate.primary_color || "#FF5A00",
         secondary_color: fullTemplate.secondary_color || "#1a1a2e",
         text_color: fullTemplate.text_color || "#333333",
@@ -227,60 +222,96 @@ export function KPTemplates() {
               </div>
 
               {/* Налаштування дизайну (шрифти та кольори) */}
-              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                <p className="text-sm font-medium text-gray-900">
-                  Оформлення шаблону (для нетехнічних користувачів)
-                </p>
-                <p className="text-xs text-gray-500">
-                  Оберіть базові кольори та шрифт. Вони автоматично застосуються до заголовків, тексту та основних елементів у PDF.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-600">Основний колір (акценти)</Label>
-                    <input
-                      type="color"
-                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
-                      value={formData.primary_color}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
-                      }
-                    />
+              <div className="space-y-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-base font-semibold text-gray-900 mb-1">
+                    Оформлення шаблону
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Оберіть базові кольори та шрифт. Вони автоматично застосуються до PDF.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Основний колір</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
+                        value={formData.primary_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
+                        }
+                      />
+                      <Input
+                        type="text"
+                        className="flex-1 h-10 text-sm font-mono"
+                        value={formData.primary_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-600">Фон/другорядний колір</Label>
-                    <input
-                      type="color"
-                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
-                      value={formData.secondary_color}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
-                      }
-                    />
+                  
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Фон</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
+                        value={formData.secondary_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
+                        }
+                      />
+                      <Input
+                        type="text"
+                        className="flex-1 h-10 text-sm font-mono"
+                        value={formData.secondary_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-600">Колір тексту</Label>
-                    <input
-                      type="color"
-                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
-                      value={formData.text_color}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, text_color: e.target.value }))
-                      }
-                    />
+                  
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Текст</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
+                        value={formData.text_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, text_color: e.target.value }))
+                        }
+                      />
+                      <Input
+                        type="text"
+                        className="flex-1 h-10 text-sm font-mono"
+                        value={formData.text_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, text_color: e.target.value }))
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-gray-600">Шрифт</Label>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-gray-700">Шрифт</Label>
                     <select
-                      className="h-9 w-full rounded border border-gray-200 text-sm px-2"
+                      className="h-10 w-full rounded border-2 border-gray-300 text-sm px-3 hover:border-gray-400 transition-colors focus:ring-2 focus:ring-[#FF5A00] focus:border-[#FF5A00]"
                       value={formData.font_family}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, font_family: e.target.value }))
                       }
                     >
                       <option value="Segoe UI, Tahoma, Geneva, Verdana, sans-serif">
-                        Системний (Segoe UI)
+                        Segoe UI
                       </option>
-                      <option value="Roboto, Arial, sans-serif">Roboto / Arial</option>
+                      <option value="Roboto, Arial, sans-serif">Roboto</option>
                       <option value="Montserrat, Arial, sans-serif">Montserrat</option>
                       <option value="'Times New Roman', serif">Times New Roman</option>
                       <option value="'Playfair Display', 'Times New Roman', serif">
@@ -291,77 +322,44 @@ export function KPTemplates() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="template-filename">
-                  Ім&apos;я файлу шаблону (на сервері)
-                </Label>
-                <Input
-                  id="template-filename"
-                  placeholder="Наприклад: classic.html"
-                  value={formData.filename}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      filename: e.target.value,
-                    }))
-                  }
-                  onBlur={() => {
-                    if (!formData.filename && formData.name) {
-                      setFormData((prev) => ({
-                        ...prev,
-                        filename: autoFilenameFromName(formData.name),
-                      }));
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="html-content">
-                  HTML шаблону (Jinja2) <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  id="html-content"
-                  placeholder="Вставте готовий HTML (можна з змінними {{ kp }}, {{ items }} тощо)..."
-                  rows={20}
-                  className="min-h-[60vh] font-mono text-xs leading-snug"
-                  value={formData.html_content}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, html_content: e.target.value }))
-                  }
-                />
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="header-image">Зображення шапки (jpg, png)</Label>
+                  <Label htmlFor="header-image" className="text-sm font-medium">Зображення шапки</Label>
                   <Input
                     id="header-image"
                     type="file"
                     accept="image/*"
+                    className="cursor-pointer"
                     onChange={(e) =>
                       setHeaderFile(e.target.files && e.target.files[0]
                         ? e.target.files[0]
                         : null)
                     }
                   />
+                  {editingTemplate && editingTemplate.header_image_url && (
+                    <p className="text-xs text-gray-500">Поточне: {editingTemplate.header_image_url.split('/').pop()}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="background-image">Фонове зображення сторінки</Label>
+                  <Label htmlFor="background-image" className="text-sm font-medium">Фонове зображення</Label>
                   <Input
                     id="background-image"
                     type="file"
                     accept="image/*"
+                    className="cursor-pointer"
                     onChange={(e) =>
                       setBackgroundFile(e.target.files && e.target.files[0]
                         ? e.target.files[0]
                         : null)
                     }
                   />
+                  {editingTemplate && editingTemplate.background_image_url && (
+                    <p className="text-xs text-gray-500">Поточне: {editingTemplate.background_image_url.split('/').pop()}</p>
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <input
                   type="checkbox"
                   id="is-default"
@@ -369,21 +367,21 @@ export function KPTemplates() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, is_default: e.target.checked }))
                   }
-                  className="w-4 h-4 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00]"
+                  className="w-5 h-5 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00] cursor-pointer"
                 />
-                <Label htmlFor="is-default" className="text-sm text-gray-700">
+                <Label htmlFor="is-default" className="text-sm font-medium text-gray-800 cursor-pointer">
                   Зробити шаблоном за замовчуванням
                 </Label>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-6 border-t">
                 <Button
                   onClick={handleSubmit}
-                  className="flex-1 bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  className="flex-1 h-11 bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white font-medium"
                 >
                   {editingTemplate ? "Зберегти зміни" : "Створити шаблон"}
                 </Button>
-                <Button onClick={resetForm} variant="outline" className="flex-1">
+                <Button onClick={resetForm} variant="outline" className="flex-1 h-11 font-medium">
                   Скасувати
                 </Button>
               </div>
