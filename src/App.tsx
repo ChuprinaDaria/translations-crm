@@ -9,6 +9,8 @@ import { KPArchive } from "./components/KPArchive";
 import { AllKP } from "./components/AllKP";
 import { Settings } from "./components/Settings";
 import { Clients } from "./components/Clients";
+import { EventsCalendar } from "./components/EventsCalendar";
+import { UsersManagement } from "./components/UsersManagement";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -202,6 +204,8 @@ function App() {
         return <KPTemplates />;
       case "kp-archive":
         return <KPArchive />;
+      case "calendar":
+        return <EventsCalendar />;
       case "all-kp":
         return <AllKP />;
       case "client-questionnaires":
@@ -306,37 +310,12 @@ function App() {
             </div>
           </div>
         );
-      case "calendar":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Календар подій
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Календар заходів та подій буде тут
-              </p>
-            </div>
-          </div>
-        );
       case "clients":
         return <Clients />;
       case "settings":
         return <Settings />;
       case "users-access":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Користувачі і доступи
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Управління користувачами та правами доступу буде
-                тут
-              </p>
-            </div>
-          </div>
-        );
+        return <UsersManagement />;
       default:
         return <DashboardEnhanced userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
     }

@@ -130,13 +130,55 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
 
     # validate item ids and create KPItem rows
     item_ids = [it.item_id for it in kp_in.items]
+    total_weight_grams = 0.0
+    
     if item_ids:
-        existing = {i.id for i in db.query(models.Item).filter(models.Item.id.in_(item_ids)).all()}
+        existing_items = {i.id: i for i in db.query(models.Item).filter(models.Item.id.in_(item_ids)).all()}
         for it in kp_in.items:
-            if it.item_id not in existing:
+            if it.item_id not in existing_items:
                 raise ValueError(f"Item id {it.item_id} not found")
+            
+            item = existing_items[it.item_id]
+            # Розраховуємо вагу в грамах
+            if item.weight:
+                item_weight = item.weight
+                unit = (item.unit or 'кг').lower()
+                # Конвертуємо в грами
+                if unit == 'кг':
+                    item_weight_grams = item_weight * 1000
+                elif unit == 'г':
+                    item_weight_grams = item_weight
+                elif unit == 'л' or unit == 'мл':
+                    # Для рідини приблизно 1л = 1000г
+                    if unit == 'л':
+                        item_weight_grams = item_weight * 1000
+                    else:
+                        item_weight_grams = item_weight
+                else:
+                    # Для інших одиниць (шт тощо) вважаємо вагу 0
+                    item_weight_grams = 0
+                
+                # Множимо на кількість
+                total_weight_grams += item_weight_grams * it.quantity
+            
             kp_item = models.KPItem(kp_id=kp.id, item_id=it.item_id, quantity=it.quantity)
             db.add(kp_item)
+    
+    # Розраховуємо вагу на 1 гостя
+    weight_per_person = None
+    if total_weight_grams > 0 and kp_in.people_count and kp_in.people_count > 0:
+        weight_per_person = total_weight_grams / kp_in.people_count
+    
+    # Оновлюємо вагу в KP (якщо не передано явно)
+    if kp_in.total_weight is None:
+        kp.total_weight = total_weight_grams if total_weight_grams > 0 else None
+    else:
+        kp.total_weight = kp_in.total_weight
+    
+    if kp_in.weight_per_person is None:
+        kp.weight_per_person = weight_per_person
+    else:
+        kp.weight_per_person = kp_in.weight_per_person
 
     db.commit()
     db.refresh(kp)

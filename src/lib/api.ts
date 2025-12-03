@@ -531,6 +531,8 @@ export interface KP {
   equipment_total?: number;
   service_total?: number;
   transport_total?: number;
+  total_weight?: number; // Орієнтовний вихід (сума ваги) - загальна вага в грамах
+  weight_per_person?: number; // Вага на 1 гостя в грамах
   created_by_id?: number;
   status?: string;
 }
@@ -559,8 +561,9 @@ export interface KPCreate {
   telegram_message?: string;
   equipment_total?: number;
   service_total?: number;
-  created_by_id?: number;
   transport_total?: number;
+  total_weight?: number; // Орієнтовний вихід (сума ваги) - загальна вага в грамах
+  weight_per_person?: number; // Вага на 1 гостя в грамах
 }
 
 export interface EmailSendRequest {

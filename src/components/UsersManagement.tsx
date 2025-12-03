@@ -1,0 +1,259 @@
+import React, { useState, useEffect } from "react";
+import { Users, UserCog, Shield, ShieldCheck, UserX, Loader2, Mail, Calendar } from "lucide-react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { Switch } from "./ui/switch";
+import { toast } from "sonner";
+import { usersApi, type User, type UserUpdate } from "../lib/api";
+
+export function UsersManagement() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadUsers();
+    // Отримуємо email поточного користувача з токену
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserEmail(payload.email || null);
+      } catch (e) {
+        console.error("Помилка декодування токену:", e);
+      }
+    }
+  }, []);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const usersData = await usersApi.getUsers();
+      setUsers(usersData);
+    } catch (error: any) {
+      toast.error("Помилка завантаження користувачів");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleAdmin = async (user: User) => {
+    // Перевірка: тільки адміністратори можуть призначати інших адміністраторів
+    const currentUser = users.find(u => u.email === currentUserEmail);
+    if (!currentUser?.is_admin) {
+      toast.error("Тільки адміністратори можуть призначати інших адміністраторів");
+      return;
+    }
+
+    // Не можна зняти права адміністратора з себе
+    if (user.email === currentUserEmail && user.is_admin) {
+      toast.error("Ви не можете зняти права адміністратора з себе");
+      return;
+    }
+
+    try {
+      const updateData: UserUpdate = {
+        is_admin: !user.is_admin,
+      };
+      const updated = await usersApi.updateUser(user.id, updateData);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      toast.success(
+        updated.is_admin
+          ? "Користувачу надано права адміністратора"
+          : "Права адміністратора знято"
+      );
+    } catch (error: any) {
+      toast.error("Помилка оновлення користувача");
+      console.error(error);
+    }
+  };
+
+  const handleToggleActive = async (user: User) => {
+    try {
+      const updateData: UserUpdate = {
+        is_active: !user.is_active,
+      };
+      const updated = await usersApi.updateUser(user.id, updateData);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      toast.success(
+        updated.is_active
+          ? "Користувача активовано"
+          : "Користувача деактивовано"
+      );
+    } catch (error: any) {
+      toast.error("Помилка оновлення користувача");
+      console.error(error);
+    }
+  };
+
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      !searchQuery ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.first_name &&
+        user.first_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (user.last_name &&
+        user.last_name.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesSearch;
+  });
+
+  const isCurrentUserAdmin = users.find(u => u.email === currentUserEmail)?.is_admin || false;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <UserCog className="w-5 h-5" />
+              Користувачі і доступи
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!isCurrentUserAdmin && (
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                Тільки адміністратори можуть призначати інших адміністраторів.
+                Поточний email: {currentUserEmail || "не визначено"}
+              </p>
+            </div>
+          )}
+
+          <div className="mb-4">
+            <Input
+              placeholder="Пошук користувачів за email, ім'ям..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center">
+              <Loader2 className="h-12 w-12 text-[#FF5A00] animate-spin mx-auto mb-4" />
+              <p className="text-gray-500">Завантаження користувачів...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-12 text-center">
+              <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Користувачів не знайдено</p>
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Ім'я</TableHead>
+                    <TableHead>Роль</TableHead>
+                    <TableHead>Відділ</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Адміністратор</TableHead>
+                    <TableHead className="text-right">Дії</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((user) => {
+                    const isCurrentUser = user.email === currentUserEmail;
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{user.email}</span>
+                            {isCurrentUser && (
+                              <Badge variant="outline" className="text-xs">
+                                Ви
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.first_name || user.last_name
+                            ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{user.role}</Badge>
+                        </TableCell>
+                        <TableCell>{user.department || "-"}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={user.is_active ? "default" : "secondary"}
+                          >
+                            {user.is_active ? "Активний" : "Неактивний"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {user.is_admin ? (
+                              <ShieldCheck className="w-5 h-5 text-[#FF5A00]" />
+                            ) : (
+                              <Shield className="w-5 h-5 text-gray-300" />
+                            )}
+                            <span className="text-sm">
+                              {user.is_admin ? "Так" : "Ні"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`active-${user.id}`} className="text-xs">
+                                Активний
+                              </Label>
+                              <Switch
+                                id={`active-${user.id}`}
+                                checked={user.is_active}
+                                onCheckedChange={() => handleToggleActive(user)}
+                              />
+                            </div>
+                            {isCurrentUserAdmin && (
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor={`admin-${user.id}`} className="text-xs">
+                                  Адмін
+                                </Label>
+                                <Switch
+                                  id={`admin-${user.id}`}
+                                  checked={user.is_admin}
+                                  onCheckedChange={() => handleToggleAdmin(user)}
+                                  disabled={isCurrentUser && user.is_admin}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Примітка:</strong> Тільки адміністратори можуть призначати інших адміністраторів.
+              Адміністратор не може зняти права адміністратора з себе.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+

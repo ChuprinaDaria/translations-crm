@@ -87,6 +87,10 @@ export function MenuManagement() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   
+  // Menu form filters for dish selection
+  const [menuFormSearchQuery, setMenuFormSearchQuery] = useState("");
+  const [menuFormSelectedCategories, setMenuFormSelectedCategories] = useState<string[]>([]);
+  
   // Modals - Items
   const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
   const [isEditItemModalOpen, setIsEditItemModalOpen] = useState(false);
@@ -393,6 +397,8 @@ export function MenuManagement() {
       people_count: "",
       items: [],
     });
+    setMenuFormSearchQuery("");
+    setMenuFormSelectedCategories([]);
   };
 
   const openCreateMenu = () => {
@@ -415,21 +421,80 @@ export function MenuManagement() {
     setIsMenuFormOpen(true);
   };
 
-  const addItemToMenuForm = () => {
+  const addItemToMenuForm = (itemId?: number, quantity: number = 1) => {
     if (items.length === 0) {
       toast.error("Спочатку додайте хоч одну страву");
       return;
     }
-    setMenuForm((prev) => ({
-      ...prev,
-      items: [
-        ...prev.items,
-        {
-          item_id: items[0].id,
-          quantity: 1,
-        },
-      ],
-    }));
+    const idToAdd = itemId || items[0].id;
+    // Перевіряємо, чи страва вже додана
+    const existingIndex = menuForm.items.findIndex((it) => it.item_id === idToAdd);
+    if (existingIndex >= 0) {
+      // Якщо вже є, збільшуємо кількість
+      updateMenuFormItem(existingIndex, "quantity", (menuForm.items[existingIndex].quantity + quantity).toString());
+    } else {
+      // Додаємо нову страву
+      setMenuForm((prev) => ({
+        ...prev,
+        items: [
+          ...prev.items,
+          {
+            item_id: idToAdd,
+            quantity: quantity,
+          },
+        ],
+      }));
+    }
+  };
+
+  const toggleMenuItem = (itemId: number, quantity: number = 1) => {
+    const existingIndex = menuForm.items.findIndex((it) => it.item_id === itemId);
+    if (existingIndex >= 0) {
+      // Якщо страва вже вибрана, видаляємо її
+      removeMenuFormItem(existingIndex);
+    } else {
+      // Додаємо страву
+      addItemToMenuForm(itemId, quantity);
+    }
+  };
+
+  const isMenuItemSelected = (itemId: number) => {
+    return menuForm.items.some((it) => it.item_id === itemId);
+  };
+
+  const getMenuItemQuantity = (itemId: number) => {
+    const item = menuForm.items.find((it) => it.item_id === itemId);
+    return item ? item.quantity : 0;
+  };
+
+  // Фільтрація страв для форми меню
+  const filteredMenuItems = items.filter((item) => {
+    const matchesSearch = !menuFormSearchQuery || 
+      item.name.toLowerCase().includes(menuFormSearchQuery.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(menuFormSearchQuery.toLowerCase()));
+    
+    const matchesCategory = menuFormSelectedCategories.length === 0 || 
+      menuFormSelectedCategories.includes(item.subcategory?.category?.name || "");
+    
+    return matchesSearch && matchesCategory && item.active;
+  });
+
+  // Отримуємо всі категорії для фільтрів
+  const allMenuCategories: string[] = Array.from(
+    new Set(
+      items
+        .filter((item) => item.active && item.subcategory?.category)
+        .map((item) => item.subcategory?.category?.name || "")
+        .filter((name): name is string => Boolean(name))
+    )
+  );
+
+  const toggleMenuCategory = (categoryName: string) => {
+    setMenuFormSelectedCategories((prev) =>
+      prev.includes(categoryName)
+        ? prev.filter((c) => c !== categoryName)
+        : [...prev, categoryName]
+    );
   };
 
   const updateMenuFormItem = (
@@ -1123,81 +1188,203 @@ export function MenuManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-gray-900">
-                      Страви в меню
+                      Виберіть страви для меню
                     </h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addItemToMenuForm}
-                    >
-                      <Plus className="mr-1 h-4 w-4" />
-                      Додати страву
-                    </Button>
                   </div>
 
-                  {menuForm.items.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-xs text-gray-500 text-center">
-                      Поки що жодної страви. Натисніть «Додати страву», щоб зібрати меню.
+                  {/* Пошук */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Пошук страв..."
+                      value={menuFormSearchQuery}
+                      onChange={(e) => setMenuFormSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+
+                  {/* Фільтри по категоріях */}
+                  {allMenuCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-sm text-gray-600 py-1">Категорії:</span>
+                      {allMenuCategories.map((category) => (
+                        <Badge
+                          key={category}
+                          variant={menuFormSelectedCategories.includes(category) ? "default" : "outline"}
+                          className={`cursor-pointer ${
+                            menuFormSelectedCategories.includes(category)
+                              ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                              : "hover:bg-gray-100"
+                          }`}
+                          onClick={() => toggleMenuCategory(category)}
+                        >
+                          {category}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Сітка страв */}
+                  {filteredMenuItems.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                      <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500">
+                        Не знайдено страв за вашим запитом
+                      </p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {menuForm.items.map((mi, index) => (
-                        <div
-                          key={index}
-                          className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end border rounded-lg p-3 bg-gray-50"
-                        >
-                          <div className="space-y-1 md:col-span-2">
-                            <Label>Страва</Label>
-                            <select
-                              className="w-full border rounded-md px-3 py-2 text-sm"
-                              value={mi.item_id}
-                              onChange={(e) =>
-                                updateMenuFormItem(index, "item_id", e.target.value)
-                              }
-                            >
-                              <option value="">Оберіть страву</option>
-                              {items.map((it) => (
-                                <option key={it.id} value={it.id}>
-                                  {it.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label>Кількість порцій</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={mi.quantity}
-                              onChange={(e) =>
-                                updateMenuFormItem(index, "quantity", e.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="flex items-center justify-between md:justify-end gap-2">
-                            <div className="text-xs text-gray-600">
-                              Ціна за всі порції:{" "}
-                              <span className="font-medium text-gray-900">
-                                {(items.find((it) => it.id === mi.item_id)?.price || 0) *
-                                  mi.quantity}{" "}
-                                грн
-                              </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1 border rounded-lg">
+                      {filteredMenuItems.map((item) => {
+                        const isSelected = isMenuItemSelected(item.id);
+                        const quantity = getMenuItemQuantity(item.id);
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => toggleMenuItem(item.id, 1)}
+                            className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected
+                                ? "border-[#FF5A00] bg-[#FF5A00]/5"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="flex gap-2">
+                              <div className="w-12 h-12 rounded-md overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
+                                {item.photo_url ? (
+                                  <img
+                                    src={getImageUrl(item.photo_url) || ""}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-[8px] text-gray-400 text-center px-1">
+                                    Нема фото
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h4 className="text-sm font-medium text-gray-900 truncate">
+                                    {item.name}
+                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    {isSelected && (
+                                      <span className="text-xs text-[#FF5A00] font-medium">
+                                        ×{quantity}
+                                      </span>
+                                    )}
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                      isSelected
+                                        ? "border-[#FF5A00] bg-[#FF5A00]"
+                                        : "border-gray-300"
+                                    }`}>
+                                      {isSelected && (
+                                        <span className="text-white text-xs">✓</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {item.description && (
+                                  <p className="text-xs text-gray-600 line-clamp-1 mb-1">
+                                    {item.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between">
+                                  <div className="text-xs text-gray-600">
+                                    {item.weight ? `${item.weight}${item.unit}` : '-'}
+                                  </div>
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {item.price} грн
+                                  </div>
+                                </div>
+                                {item.subcategory && (
+                                  <Badge variant="outline" className="mt-1 text-xs">
+                                    {item.subcategory.name}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeMenuFormItem(index)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Вибрані страви */}
+                  {menuForm.items.length > 0 && (
+                    <div className="space-y-2 border-t pt-4">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Вибрані страви ({menuForm.items.length})
+                      </h4>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {menuForm.items.map((mi, index) => {
+                          const item = items.find((it) => it.id === mi.item_id);
+                          if (!item) return null;
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between gap-3 p-2 border rounded-lg bg-gray-50"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {item.photo_url && (
+                                  <img
+                                    src={getImageUrl(item.photo_url) || ""}
+                                    alt={item.name}
+                                    className="w-12 h-12 rounded object-cover border border-gray-200"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = "none";
+                                    }}
+                                  />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-900 truncate">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {item.price} грн × {mi.quantity} = {(item.price * mi.quantity).toFixed(2)} грн
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={mi.quantity}
+                                  onChange={(e) => {
+                                    const newQuantity = parseInt(e.target.value) || 1;
+                                    updateMenuFormItem(index, "quantity", newQuantity.toString());
+                                  }}
+                                  className="w-20"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeMenuFormItem(index)}
+                                  className="h-8 w-8"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="text-sm text-gray-600 pt-2 border-t">
+                        Загальна вартість:{" "}
+                        <span className="font-medium text-gray-900">
+                          {menuForm.items.reduce((sum, mi) => {
+                            const item = items.find((it) => it.id === mi.item_id);
+                            return sum + (item?.price || 0) * mi.quantity;
+                          }, 0).toFixed(2)} грн
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -482,8 +482,28 @@
                         <span class="info-value">{{ kp.people_count }} осіб</span>
                     </div>
                     <div class="info-item">
+                        <span class="info-label">Орієнтовний вихід (сума ваги):</span>
+                        <span class="info-value">
+                            {% if total_weight_grams %}
+                                {{ total_weight_grams|int }} г
+                            {% else %}
+                                {{ total_weight }} г
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-item">
                         <span class="info-label">Вихід на 1 гостя:</span>
-                        <span class="info-value">{{ total_weight / kp.people_count }} г</span>
+                        <span class="info-value">
+                            {% if weight_per_person %}
+                                {{ weight_per_person|int }} г
+                            {% elif total_weight_grams and kp.people_count %}
+                                {{ (total_weight_grams / kp.people_count)|int }} г
+                            {% elif total_weight and kp.people_count %}
+                                {{ (total_weight / kp.people_count)|int }} г
+                            {% else %}
+                                - г
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
                 <div class="total-box">

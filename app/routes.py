@@ -554,7 +554,25 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     # Форматуємо ціни та вагу
     food_total_raw = sum(item["total_raw"] for item in items_data)
     formatted_food_total = f"{food_total_raw:.2f} грн"
-    formatted_total_weight = f"{total_weight:.2f} кг"
+    
+    # Використовуємо вагу з бази даних, якщо вона є, інакше розраховуємо
+    kp_total_weight = getattr(kp, "total_weight", None)
+    kp_weight_per_person = getattr(kp, "weight_per_person", None)
+    
+    # total_weight з розрахунку в кг, конвертуємо в грами для порівняння
+    calculated_total_weight_grams = total_weight * 1000 if total_weight else 0
+    
+    if kp_total_weight is not None:
+        # Вага зберігається в грамах
+        total_weight_grams_value = kp_total_weight
+        formatted_total_weight = f"{kp_total_weight:.0f} г"
+        calculated_weight_per_person = kp_weight_per_person if kp_weight_per_person is not None else (kp_total_weight / kp.people_count if kp.people_count else 0)
+    else:
+        # Якщо ваги немає в БД, використовуємо розраховану (в кг, конвертуємо в г)
+        total_weight_grams_value = calculated_total_weight_grams
+        formatted_total_weight = f"{calculated_total_weight_grams:.0f} г"
+        calculated_weight_per_person = calculated_total_weight_grams / kp.people_count if kp.people_count else 0
+    
     equipment_total = getattr(kp, "equipment_total", None) or 0
     service_total = getattr(kp, "service_total", None) or 0
     transport_total = getattr(kp, "transport_total", None) or 0
@@ -568,6 +586,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         service_total=service_total,
         transport_total=transport_total,
         total_weight=formatted_total_weight,
+        total_weight_grams=total_weight_grams_value,
+        weight_per_person=calculated_weight_per_person,
         total_items=len(items_data),
         logo_src=logo_src,
         header_image_src=header_image_src,

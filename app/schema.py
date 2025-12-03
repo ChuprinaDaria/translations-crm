@@ -135,6 +135,8 @@ class KPCreate(KPBase):
     equipment_total: Optional[float] = None
     service_total: Optional[float] = None
     transport_total: Optional[float] = None
+    total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
+    weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
 
 class KPItem(BaseModel):
     id: int
@@ -157,6 +159,8 @@ class KP(KPBase):
     equipment_total: Optional[float] = None
     service_total: Optional[float] = None
     transport_total: Optional[float] = None
+    total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
+    weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
     created_by_id: Optional[int] = None
     
     class Config:

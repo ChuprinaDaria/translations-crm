@@ -114,6 +114,9 @@ class KP(Base):
     equipment_total = Column(Float, nullable=True)
     service_total = Column(Float, nullable=True)
     transport_total = Column(Float, nullable=True)
+    # Орієнтовний вихід (сума ваги)
+    total_weight = Column(Float, nullable=True)  # Загальна вага в грамах
+    weight_per_person = Column(Float, nullable=True)  # Вага на 1 гостя в грамах
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
     template = relationship("Template", back_populates="kps")

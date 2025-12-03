@@ -85,6 +85,154 @@ export function CreateKP() {
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
+  // Функція для валідації кроку 1 (без показу помилок)
+  const isStep1Valid = (): boolean => {
+    return !!(clientName && eventDate && guestCount && eventGroup && eventFormat);
+  };
+
+  // Функція для валідації кроку 1 з показом помилок
+  const validateStep1 = (): boolean => {
+    if (!clientName || !eventDate || !guestCount) {
+      toast.error("Будь ласка, заповніть всі обов'язкові дані клієнта та заходу");
+      return false;
+    }
+    if (!eventGroup) {
+      toast.error("Оберіть групу формату заходу");
+      return false;
+    }
+    if (!eventFormat) {
+      toast.error("Вкажіть формат заходу");
+      return false;
+    }
+    return true;
+  };
+
+  // Функція для валідації кроку 2
+  const validateStep2 = (): boolean => {
+    if (selectedDishes.length === 0) {
+      toast.error("Будь ласка, оберіть хоча б одну страву");
+      return false;
+    }
+    return true;
+  };
+
+  // Функція для переходу на крок з валідацією
+  const goToStep = (targetStep: number) => {
+    // Дозволяємо повертатися назад без валідації
+    if (targetStep < step) {
+      setStep(targetStep);
+      saveFormDataToLocalStorage();
+      return;
+    }
+
+    // Валідація перед переходом вперед
+    if (step === 1 && !validateStep1()) {
+      return;
+    }
+    if (step === 2 && targetStep > 2 && !validateStep2()) {
+      return;
+    }
+
+    setStep(targetStep);
+    saveFormDataToLocalStorage();
+  };
+
+  // Збереження даних форми в localStorage
+  const saveFormDataToLocalStorage = () => {
+    const formData = {
+      clientName,
+      eventGroup,
+      eventFormat,
+      eventDate,
+      eventTime,
+      guestCount,
+      eventLocation,
+      clientEmail,
+      clientPhone,
+      coordinatorName,
+      coordinatorPhone,
+      sendEmail,
+      emailMessage,
+      sendTelegram,
+      telegramMessage,
+      selectedDishes,
+      dishQuantities,
+      equipmentItems,
+      serviceItems,
+      transportTotal,
+      selectedTemplateId,
+    };
+    localStorage.setItem('kp_form_data', JSON.stringify(formData));
+  };
+
+  // Завантаження даних форми з localStorage
+  const loadFormDataFromLocalStorage = () => {
+    const savedData = localStorage.getItem('kp_form_data');
+    if (savedData) {
+      try {
+        const formData = JSON.parse(savedData);
+        setClientName(formData.clientName || "");
+        setEventGroup(formData.eventGroup || "");
+        setEventFormat(formData.eventFormat || "");
+        setEventDate(formData.eventDate || "");
+        setEventTime(formData.eventTime || "");
+        setGuestCount(formData.guestCount || "");
+        setEventLocation(formData.eventLocation || "");
+        setClientEmail(formData.clientEmail || "");
+        setClientPhone(formData.clientPhone || "");
+        setCoordinatorName(formData.coordinatorName || "");
+        setCoordinatorPhone(formData.coordinatorPhone || "");
+        setSendEmail(formData.sendEmail || false);
+        setEmailMessage(formData.emailMessage || "");
+        setSendTelegram(formData.sendTelegram || false);
+        setTelegramMessage(formData.telegramMessage || "");
+        setSelectedDishes(formData.selectedDishes || []);
+        setDishQuantities(formData.dishQuantities || {});
+        setEquipmentItems(formData.equipmentItems || []);
+        setServiceItems(formData.serviceItems || []);
+        setTransportTotal(formData.transportTotal || "");
+        setSelectedTemplateId(formData.selectedTemplateId || null);
+      } catch (error) {
+        console.error("Помилка завантаження даних з localStorage:", error);
+      }
+    }
+  };
+
+  // Завантаження даних при ініціалізації
+  useEffect(() => {
+    loadFormDataFromLocalStorage();
+  }, []);
+
+  // Автоматичне збереження даних при зміні полів форми
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveFormDataToLocalStorage();
+    }, 500); // Debounce на 500мс
+    return () => clearTimeout(timer);
+  }, [
+    clientName,
+    eventGroup,
+    eventFormat,
+    eventDate,
+    eventTime,
+    guestCount,
+    eventLocation,
+    clientEmail,
+    clientPhone,
+    coordinatorName,
+    coordinatorPhone,
+    sendEmail,
+    emailMessage,
+    sendTelegram,
+    telegramMessage,
+    selectedDishes,
+    dishQuantities,
+    equipmentItems,
+    serviceItems,
+    transportTotal,
+    selectedTemplateId,
+  ]);
+
   // Load dishes from API
   useEffect(() => {
     const loadDishes = async () => {
@@ -178,16 +326,24 @@ export function CreateKP() {
         const updated = prev.filter((id) => id !== dishId);
         setDishQuantities((q) => {
           const { [dishId]: _, ...rest } = q;
+          saveFormDataToLocalStorage();
           return rest;
         });
+        saveFormDataToLocalStorage();
         return updated;
       }
       // За замовчуванням: 1 порція на гостя, якщо відома кількість гостей
-      setDishQuantities((q) => ({
-        ...q,
-        [dishId]: q[dishId] ?? (guestCount ? parseInt(guestCount, 10) || 1 : 1),
-      }));
-      return [...prev, dishId];
+      setDishQuantities((q) => {
+        const newQuantities = {
+          ...q,
+          [dishId]: q[dishId] ?? (guestCount ? parseInt(guestCount, 10) || 1 : 1),
+        };
+        setTimeout(() => saveFormDataToLocalStorage(), 0);
+        return newQuantities;
+      });
+      const updated = [...prev, dishId];
+      setTimeout(() => saveFormDataToLocalStorage(), 0);
+      return updated;
     });
   };
 
@@ -209,10 +365,36 @@ export function CreateKP() {
   };
 
   const getTotalWeight = () => {
+    // Розраховуємо загальну вагу в грамах
     return getSelectedDishesData().reduce((sum, dish) => {
       const qty = dishQuantities[dish.id] ?? 1;
-      return sum + (dish.weight || 0) * qty;
+      let weightInGrams = dish.weight || 0;
+      const unit = (dish.unit || 'кг').toLowerCase();
+      
+      // Конвертуємо в грами
+      if (unit === 'кг') {
+        weightInGrams = weightInGrams * 1000;
+      } else if (unit === 'г') {
+        weightInGrams = weightInGrams;
+      } else if (unit === 'л') {
+        // Для рідини приблизно 1л = 1000г
+        weightInGrams = weightInGrams * 1000;
+      } else if (unit === 'мл') {
+        weightInGrams = weightInGrams;
+      }
+      // Для інших одиниць (шт тощо) вважаємо вагу 0
+      
+      return sum + weightInGrams * qty;
     }, 0);
+  };
+
+  const getWeightPerPerson = () => {
+    const totalWeight = getTotalWeight();
+    const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+    if (totalWeight > 0 && peopleCountNum > 0) {
+      return totalWeight / peopleCountNum;
+    }
+    return 0;
   };
 
   const calculateAdditionalTotal = (items: AdditionalItem[]) =>
@@ -316,28 +498,23 @@ export function CreateKP() {
   const [creatingKP, setCreatingKP] = useState(false);
 
   const handleCreateKP = async () => {
-    if (!clientName || !eventDate || !guestCount) {
-      toast.error("Будь ласка, заповніть всі обов'язкові дані клієнта та заходу");
+    // Валідація всіх обов'язкових полів
+    if (!validateStep1()) {
+      setStep(1);
       return;
     }
-    if (!eventGroup) {
-      toast.error("Оберіть групу формату заходу");
-      return;
-    }
-    if (!eventFormat) {
-      toast.error("Вкажіть формат заходу");
-      return;
-    }
-    if (selectedDishes.length === 0) {
-      toast.error("Будь ласка, оберіть хоча б одну страву");
+    if (!validateStep2()) {
+      setStep(2);
       return;
     }
     if (!selectedTemplateId) {
       toast.error("Будь ласка, оберіть шаблон КП");
+      setStep(7);
       return;
     }
     if (sendEmail && !clientEmail) {
       toast.error("Вкажіть email клієнта для відправки КП");
+      setStep(1);
       return;
     }
 
@@ -382,6 +559,8 @@ export function CreateKP() {
         equipment_total: equipmentTotal || undefined,
         service_total: serviceTotal || undefined,
         transport_total: transportTotalNum || undefined,
+        total_weight: getTotalWeight() > 0 ? getTotalWeight() : undefined,
+        weight_per_person: getWeightPerPerson() > 0 ? getWeightPerPerson() : undefined,
       });
 
       toast.success(
@@ -400,9 +579,29 @@ export function CreateKP() {
       }
 
       // Reset form
+      localStorage.removeItem('kp_form_data');
       setStep(1);
       setSelectedDishes([]);
       setSelectedTemplateId(null);
+      setClientName("");
+      setEventGroup("");
+      setEventFormat("");
+      setEventDate("");
+      setEventTime("");
+      setGuestCount("");
+      setEventLocation("");
+      setClientEmail("");
+      setClientPhone("");
+      setCoordinatorName("");
+      setCoordinatorPhone("");
+      setSendEmail(false);
+      setEmailMessage("");
+      setSendTelegram(false);
+      setTelegramMessage("");
+      setDishQuantities({});
+      setEquipmentItems([]);
+      setServiceItems([]);
+      setTransportTotal("");
       setClientName("");
       setEventGroup("");
       setEventDate("");
@@ -452,22 +651,25 @@ export function CreateKP() {
         ].map((s, idx, arr) => (
           <div key={s.num} className="flex items-center gap-2 md:gap-4">
             <div className="flex items-center gap-2">
-              <div
-                className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm ${
-                  step >= s.num
-                    ? "bg-[#FF5A00] text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                {s.num}
-              </div>
-              <span
-                className={`text-xs md:text-sm whitespace-nowrap ${
-                  step >= s.num ? "text-gray-900" : "text-gray-600"
-                }`}
-              >
-                {s.label}
-              </span>
+            <div
+              className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-sm cursor-pointer transition-all ${
+                step >= s.num
+                  ? "bg-[#FF5A00] text-white hover:bg-[#FF5A00]/90"
+                  : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+              }`}
+              onClick={() => goToStep(s.num)}
+              title={`Перейти до кроку ${s.num}: ${s.label}`}
+            >
+              {s.num}
+            </div>
+            <span
+              className={`text-xs md:text-sm whitespace-nowrap cursor-pointer ${
+                step >= s.num ? "text-gray-900" : "text-gray-600"
+              }`}
+              onClick={() => goToStep(s.num)}
+            >
+              {s.label}
+            </span>
             </div>
             {idx < arr.length - 1 && (
               <ChevronRight className="w-3 h-3 md:w-4 md:h-4 text-gray-400" />
@@ -727,8 +929,9 @@ export function CreateKP() {
               </div>
               <div className="flex justify-end">
                 <Button
-                  onClick={() => setStep(2)}
+                  onClick={() => goToStep(2)}
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full md:w-auto"
+                  disabled={!isStep1Valid()}
                 >
                   Далі: Вибір страв
                   <ChevronRight className="w-4 h-4 ml-2" />
@@ -739,14 +942,23 @@ export function CreateKP() {
         </Card>
       )}
 
-      {/* Step 2: Select Dishes */}
+      {/* Step 2: Select Dishes, Equipment, Service */}
       {step === 2 && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Крок 2: Виберіть страви для меню</CardTitle>
+              <CardTitle>Крок 2: Виберіть страви, обладнання та обслуговування</CardTitle>
             </CardHeader>
             <CardContent>
+              <Tabs defaultValue="dishes" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="dishes">Страви</TabsTrigger>
+                  <TabsTrigger value="equipment">Обладнання</TabsTrigger>
+                  <TabsTrigger value="service">Обслуговування</TabsTrigger>
+                </TabsList>
+                
+                {/* Tab: Страви */}
+                <TabsContent value="dishes" className="mt-4">
               {loading ? (
                 <div className="py-12 text-center">
                   <Loader2 className="h-12 w-12 text-[#FF5A00] animate-spin mx-auto mb-4" />
@@ -916,15 +1128,227 @@ export function CreateKP() {
                   )}
                 </div>
               )}
+                </TabsContent>
+
+                {/* Tab: Обладнання */}
+                <TabsContent value="equipment" className="mt-4">
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Додайте все необхідне обладнання для заходу (столи, посуд, текстиль тощо).
+                    </p>
+                    <div className="space-y-3">
+                      {equipmentItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+                        >
+                          <div className="space-y-1 md:col-span-2">
+                            <Label>Найменування</Label>
+                            <Input
+                              value={item.name}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "equipment",
+                                  item.id,
+                                  "name",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Наприклад, коктейльний стіл у чохлі"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Кількість</Label>
+                            <Input
+                              type="number"
+                              value={item.quantity || ""}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "equipment",
+                                  item.id,
+                                  "quantity",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Ціна за одиницю, грн</Label>
+                            <Input
+                              type="number"
+                              value={item.unitPrice || ""}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "equipment",
+                                  item.id,
+                                  "unitPrice",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between md:col-span-4 pt-2">
+                            <span className="text-sm text-gray-600">
+                              Сума:{" "}
+                              <span className="font-semibold text-gray-900">
+                                {(item.quantity || 0) * (item.unitPrice || 0)} грн
+                              </span>
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleRemoveAdditionalItem("equipment", item.id)
+                              }
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Видалити
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleAddAdditionalItem("equipment")}
+                        className="w-full md:w-auto"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Додати позицію
+                      </Button>
+                    </div>
+                    {equipmentItems.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-900">
+                            Позицій: {equipmentItems.length}
+                          </span>
+                          <span className="text-gray-900">
+                            Всього: {equipmentTotal} грн
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                {/* Tab: Обслуговування */}
+                <TabsContent value="service" className="mt-4">
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Додайте послуги обслуговування (офіціанти, бармени, адміністратори тощо).
+                    </p>
+                    <div className="space-y-3">
+                      {serviceItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+                        >
+                          <div className="space-y-1 md:col-span-2">
+                            <Label>Найменування</Label>
+                            <Input
+                              value={item.name}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "service",
+                                  item.id,
+                                  "name",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="Наприклад, офіціант"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Кількість</Label>
+                            <Input
+                              type="number"
+                              value={item.quantity || ""}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "service",
+                                  item.id,
+                                  "quantity",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Ціна за одиницю, грн</Label>
+                            <Input
+                              type="number"
+                              value={item.unitPrice || ""}
+                              onChange={(e) =>
+                                handleAdditionalItemChange(
+                                  "service",
+                                  item.id,
+                                  "unitPrice",
+                                  e.target.value
+                                )
+                              }
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between md:col-span-4 pt-2">
+                            <span className="text-sm text-gray-600">
+                              Сума:{" "}
+                              <span className="font-semibold text-gray-900">
+                                {(item.quantity || 0) * (item.unitPrice || 0)} грн
+                              </span>
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleRemoveAdditionalItem("service", item.id)
+                              }
+                            >
+                              <X className="w-4 h-4 mr-1" />
+                              Видалити
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleAddAdditionalItem("service")}
+                        className="w-full md:w-auto"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Додати позицію
+                      </Button>
+                    </div>
+                    {serviceItems.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-900">
+                            Позицій: {serviceItems.length}
+                          </span>
+                          <span className="text-gray-900">
+                            Всього: {serviceTotal} грн
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button onClick={() => setStep(1)} variant="outline" className="w-full sm:w-auto">
+            <Button onClick={() => goToStep(1)} variant="outline" className="w-full sm:w-auto">
               Назад
             </Button>
             <Button
-              onClick={() => setStep(3)}
+              onClick={() => goToStep(3)}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
               disabled={selectedDishes.length === 0 || loading}
             >
@@ -1045,14 +1469,14 @@ export function CreateKP() {
           </Card>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              onClick={() => setStep(2)}
+              onClick={() => goToStep(2)}
               variant="outline"
               className="w-full sm:w-auto"
             >
               Назад
             </Button>
             <Button
-              onClick={() => setStep(4)}
+              onClick={() => goToStep(4)}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
             >
               Далі: Обслуговування
@@ -1186,14 +1610,14 @@ export function CreateKP() {
           </Card>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              onClick={() => setStep(3)}
+              onClick={() => goToStep(3)}
               variant="outline"
               className="w-full sm:w-auto"
             >
               Назад
             </Button>
             <Button
-              onClick={() => setStep(5)}
+              onClick={() => goToStep(5)}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
             >
               Далі: Конструктор
@@ -1279,7 +1703,10 @@ export function CreateKP() {
                           Орієнтовний вихід (сума ваги)
                         </div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {getTotalWeight()} {dishes[0]?.unit || "г"}
+                          {getTotalWeight().toFixed(0)} г
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          На 1 гостя: {getWeightPerPerson().toFixed(0)} г
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -1301,14 +1728,14 @@ export function CreateKP() {
           </Card>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              onClick={() => setStep(4)}
+              onClick={() => goToStep(4)}
               variant="outline"
               className="w-full sm:w-auto"
             >
               Назад
             </Button>
             <Button
-              onClick={() => setStep(6)}
+              onClick={() => goToStep(6)}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
             >
               Далі: Прев'ю КП
@@ -1474,14 +1901,14 @@ export function CreateKP() {
           </Card>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              onClick={() => setStep(5)}
+              onClick={() => goToStep(5)}
               variant="outline"
               className="w-full sm:w-auto"
             >
               Назад
             </Button>
             <Button
-              onClick={() => setStep(7)}
+              onClick={() => goToStep(7)}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
             >
               Далі: Шаблон та відправка

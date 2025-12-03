@@ -25,9 +25,11 @@ ADD COLUMN IF NOT EXISTS event_time VARCHAR NULL,
 ADD COLUMN IF NOT EXISTS coordinator_name VARCHAR NULL,
 ADD COLUMN IF NOT EXISTS coordinator_phone VARCHAR NULL,
 ADD COLUMN IF NOT EXISTS created_by_id INTEGER NULL,
-ADD COLUMN IF NOT EXISTS equipment_total DOUBLE PRECISION NULL,
-ADD COLUMN IF NOT EXISTS service_total DOUBLE PRECISION NULL,
-ADD COLUMN IF NOT EXISTS transport_total DOUBLE PRECISION NULL;
+    ADD COLUMN IF NOT EXISTS equipment_total DOUBLE PRECISION NULL,
+    ADD COLUMN IF NOT EXISTS service_total DOUBLE PRECISION NULL,
+    ADD COLUMN IF NOT EXISTS transport_total DOUBLE PRECISION NULL,
+    ADD COLUMN IF NOT EXISTS total_weight DOUBLE PRECISION NULL,
+    ADD COLUMN IF NOT EXISTS weight_per_person DOUBLE PRECISION NULL;
 
 -- Додавання індексів для нових полів (якщо потрібно)
 CREATE INDEX IF NOT EXISTS idx_kps_client_name ON kps(client_name);
@@ -99,6 +101,11 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 CREATE INDEX IF NOT EXISTS idx_menu_items_menu_id ON menu_items(menu_id);
 CREATE INDEX IF NOT EXISTS idx_menu_items_item_id ON menu_items(item_id);
+
+-- 7. Призначення адміністратора для користувача chuprina.dariia@gmail.com
+UPDATE users 
+SET is_admin = TRUE 
+WHERE email = 'chuprina.dariia@gmail.com';
 
 -- ============================================
 -- Перевірка: після виконання перевірте структуру таблиць
