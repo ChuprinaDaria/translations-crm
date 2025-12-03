@@ -103,7 +103,11 @@ export function EventsCalendar() {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    
+    // getDay() повертає 0 (неділя) до 6 (субота)
+    // Конвертуємо до понеділок = 0, вівторок = 1, ..., неділя = 6
+    let startingDayOfWeek = firstDay.getDay() - 1;
+    if (startingDayOfWeek < 0) startingDayOfWeek = 6; // Неділя стає 6
 
     const days: (Date | null)[] = [];
 
@@ -159,7 +163,7 @@ export function EventsCalendar() {
     "Грудень",
   ];
 
-  const weekDays = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+  const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
   const days = getDaysInMonth(currentDate);
   const today = new Date();
@@ -175,6 +179,130 @@ export function EventsCalendar() {
 
   return (
     <div className="space-y-4">
+      <style>{`
+        .calendar {
+          width: 100%;
+        }
+        
+        .calendar-weekdays {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          border-bottom: 2px solid #e5e7eb;
+          margin-bottom: 0;
+        }
+        
+        .calendar-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 1px;
+          background: #e5e7eb;
+          border: 1px solid #e5e7eb;
+        }
+        
+        .calendar-cell {
+          min-height: 100px;
+          background: white;
+          padding: 8px;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          transition: background-color 0.2s;
+        }
+        
+        @media (min-width: 768px) {
+          .calendar-cell {
+            min-height: 120px;
+            padding: 12px;
+          }
+        }
+        
+        .calendar-cell-empty {
+          background: #f9fafb;
+        }
+        
+        .calendar-cell-default {
+          cursor: pointer;
+        }
+        
+        .calendar-cell-default:hover {
+          background: #f9fafb;
+        }
+        
+        .calendar-cell-today {
+          background: #fff7ed;
+          border: 2px solid #ff5a00;
+          border-radius: 4px;
+        }
+        
+        .day-number {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          color: #374151;
+        }
+        
+        @media (min-width: 768px) {
+          .day-number {
+            top: 12px;
+            right: 12px;
+            font-size: 16px;
+          }
+        }
+        
+        .day-number-today {
+          color: #ff5a00;
+          font-weight: 700;
+        }
+        
+        .events {
+          margin-top: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex: 1;
+          overflow: hidden;
+        }
+        
+        @media (min-width: 768px) {
+          .events {
+            margin-top: 28px;
+            gap: 6px;
+          }
+        }
+        
+        .event-badge {
+          display: block;
+          font-size: 11px;
+          padding: 3px 8px;
+          color: white;
+          border-radius: 4px;
+          cursor: pointer;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: opacity 0.2s;
+          line-height: 1.4;
+        }
+        
+        @media (min-width: 768px) {
+          .event-badge {
+            font-size: 12px;
+            padding: 4px 10px;
+          }
+        }
+        
+        .event-badge:hover {
+          opacity: 0.8;
+        }
+        
+        .event-badge-more {
+          background: #e5e7eb !important;
+          color: #6b7280 !important;
+          font-weight: 500;
+        }
+      `}</style>
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -221,21 +349,21 @@ export function EventsCalendar() {
               Завантаження подій...
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="calendar">
               {/* Заголовки днів тижня */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+              <div className="calendar-weekdays">
                 {weekDays.map((day) => (
                   <div
                     key={day}
-                    className="p-1.5 md:p-2 text-center text-xs md:text-sm font-semibold text-gray-700 bg-gray-50 rounded-md"
+                    className="text-center text-xs md:text-sm font-semibold text-gray-700 py-2"
                   >
                     {day}
                   </div>
                 ))}
               </div>
 
-              {/* Дні місяця */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2">
+              {/* Grid календаря */}
+              <div className="calendar-grid">
                 {days.map((date, index) => {
                   const dayEvents = getEventsForDay(date);
                   const isCurrentDay = isToday(date);
@@ -243,43 +371,44 @@ export function EventsCalendar() {
                   return (
                     <div
                       key={index}
-                      className={`min-h-[80px] md:min-h-[120px] border rounded-lg p-1 md:p-2 transition-colors ${
+                      className={`calendar-cell ${
                         date
                           ? isCurrentDay
-                            ? "bg-[#FF5A00]/10 border-2 border-[#FF5A00]"
-                            : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                          : "bg-gray-50/50 border-transparent"
+                            ? "calendar-cell-today"
+                            : "calendar-cell-default"
+                          : "calendar-cell-empty"
                       }`}
                     >
                       {date && (
                         <>
-                          <div
-                            className={`text-xs md:text-sm font-semibold mb-1 md:mb-2 ${
-                              isCurrentDay
-                                ? "text-[#FF5A00]"
-                                : "text-gray-900"
+                          <span
+                            className={`day-number ${
+                              isCurrentDay ? "day-number-today" : ""
                             }`}
                           >
                             {date.getDate()}
-                          </div>
-                          <div className="space-y-1 md:space-y-1.5">
-                            {dayEvents.slice(0, 2).map((event) => (
-                              <div
+                          </span>
+                          <div className="events">
+                            {dayEvents.slice(0, 3).map((event) => (
+                              <span
                                 key={`${event.type}-${event.id}`}
                                 onClick={() => {
                                   setSelectedEvent(event);
                                   setIsEventDialogOpen(true);
                                 }}
-                                className="text-[10px] md:text-xs px-1.5 md:px-2 py-0.5 md:py-1 rounded-md bg-[#FF5A00] text-white cursor-pointer hover:bg-[#FF5A00]/90 transition-colors truncate"
+                                className="event-badge"
+                                style={{
+                                  backgroundColor: event.type === "kp" ? "#fb923c" : "#22c55e",
+                                }}
                                 title={event.title}
                               >
                                 {event.title}
-                              </div>
+                              </span>
                             ))}
-                            {dayEvents.length > 2 && (
-                              <div className="text-[10px] md:text-xs text-gray-500 px-1.5 md:px-2 py-0.5 md:py-1 bg-gray-100 rounded-md">
-                                +{dayEvents.length - 2} ще
-                              </div>
+                            {dayEvents.length > 3 && (
+                              <span className="event-badge event-badge-more">
+                                +{dayEvents.length - 3}
+                              </span>
                             )}
                           </div>
                         </>

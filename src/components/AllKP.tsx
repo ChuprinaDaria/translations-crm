@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, FileText, Calendar, User, ChevronDown, Eye, Download, Trash2 } from "lucide-react";
+import { Search, FileText, Calendar, User, ChevronDown, Eye, Download, Trash2, Edit } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -27,7 +27,7 @@ import {
   usersApi,
   type KP,
   type Template,
-  type User,
+  type User as ApiUser,
 } from "../lib/api";
 
 type KPStatus = "sent" | "approved" | "rejected" | "completed";
@@ -77,13 +77,17 @@ function getStatusColor(status: KPStatus): string {
   }
 }
 
-export function AllKP() {
+interface AllKPProps {
+  onEditKP?: (kpId: number) => void;
+}
+
+export function AllKP({ onEditKP }: AllKPProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [kpItems, setKpItems] = useState<KPListItem[]>([]);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<ApiUser[]>([]);
   const [selectedManager, setSelectedManager] = useState<string>("all");
 
   useEffect(() => {
@@ -92,13 +96,13 @@ export function AllKP() {
         const [kps, templates, usersData] = await Promise.all([
           kpApi.getKPs(),
           templatesApi.getTemplates(),
-          usersApi.getUsers().catch(() => [] as User[]),
+          usersApi.getUsers().catch(() => [] as ApiUser[]),
         ]);
 
         const templateMap = new Map<number, string>();
         templates.forEach((t) => templateMap.set(t.id, t.name));
 
-        const userMap = new Map<number, User>();
+        const userMap = new Map<number, ApiUser>();
         usersData.forEach((u) => userMap.set(u.id, u));
 
         const mapped: KPListItem[] = kps.map((kp) => {
@@ -113,6 +117,9 @@ export function AllKP() {
             createdDate: kp.created_at
               ? new Date(kp.created_at).toISOString().split("T")[0]
               : "",
+            eventDate: kp.event_date
+              ? new Date(kp.event_date).toISOString().split("T")[0]
+              : undefined,
             status,
             statusLabel: getStatusLabel(status),
             totalAmount: kp.total_price || 0,
@@ -478,6 +485,12 @@ export function AllKP() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {onEditKP && (
+                                <DropdownMenuItem onClick={() => onEditKP(item.id)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Редагувати КП
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => handleView(item)}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 Переглянути

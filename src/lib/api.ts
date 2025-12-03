@@ -621,6 +621,13 @@ export const kpApi = {
     });
   },
 
+  async updateKP(kpId: number, data: KPCreate): Promise<KP> {
+    return apiFetch<KP>(`/kp/${kpId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
   async generateKPPDF(kpId: number, templateId?: number): Promise<Blob> {
     const token = tokenManager.getToken();
     const params = templateId ? `?template_id=${templateId}` : '';

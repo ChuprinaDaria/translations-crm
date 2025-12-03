@@ -52,7 +52,12 @@ interface AdditionalItem {
   unitPrice: number;
 }
 
-export function CreateKP() {
+interface CreateKPProps {
+  kpId?: number | null;
+  onClose?: () => void;
+}
+
+export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [step, setStep] = useState(1);
   const [selectedDishes, setSelectedDishes] = useState<number[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(
@@ -317,6 +322,60 @@ export function CreateKP() {
     
     loadBenefits();
   }, []);
+
+  // Load KP data for editing
+  useEffect(() => {
+    if (!kpId) return;
+
+    const loadKPData = async () => {
+      try {
+        setLoading(true);
+        const kp = await kpApi.getKP(kpId);
+        
+        // Заповнюємо всі поля з даних КП
+        setClientName(kp.client_name || kp.title || "");
+        setEventGroup((kp.event_group as "" | "delivery-boxes" | "catering" | "other") || "");
+        setEventFormat(kp.event_format || "");
+        setEventDate(kp.event_date ? new Date(kp.event_date).toISOString().split("T")[0] : "");
+        setEventTime(kp.event_time || "");
+        setGuestCount(kp.people_count?.toString() || "");
+        setEventLocation(kp.event_location || "");
+        setClientEmail(kp.client_email || "");
+        setClientPhone(kp.client_phone || "");
+        setCoordinatorName(kp.coordinator_name || "");
+        setCoordinatorPhone(kp.coordinator_phone || "");
+        setTransportTotal(kp.transport_total?.toString() || "");
+        setSelectedTemplateId(kp.template_id || null);
+        setSelectedDiscountId(kp.discount_id || null);
+        setSelectedCashbackId(kp.cashback_id || null);
+        setUseCashback(kp.use_cashback || false);
+
+        // Завантажуємо страви
+        if (kp.items && kp.items.length > 0) {
+          const dishIds = kp.items.map(item => item.item_id);
+          setSelectedDishes(dishIds);
+          
+          const quantities: Record<number, number> = {};
+          kp.items.forEach(item => {
+            quantities[item.item_id] = item.quantity;
+          });
+          setDishQuantities(quantities);
+        }
+
+        // Завантажуємо обладнання та обслуговування (якщо є в API)
+        // Поки що залишаємо порожніми, оскільки в моделі KP немає цих полів як масивів
+
+        toast.success("Дані КП завантажено для редагування");
+      } catch (error: any) {
+        console.error("Помилка завантаження КП:", error);
+        toast.error("Не вдалося завантажити дані КП для редагування");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadKPData();
+  }, [kpId]);
 
   // Load templates and menus from API
   useEffect(() => {
@@ -602,12 +661,12 @@ export function CreateKP() {
 
     const itemsPayload = getSelectedDishesData().map((dish) => ({
       item_id: dish.id,
-      quantity: 1,
+      quantity: dishQuantities[dish.id] || 1,
     }));
 
     setCreatingKP(true);
     try {
-      const kp = await kpApi.createKP({
+      const kpData = {
         title,
         people_count: peopleCountNum,
         event_group: eventGroup || undefined,
@@ -639,13 +698,26 @@ export function CreateKP() {
         use_cashback: useCashback,
         discount_amount: discountAmount > 0 ? discountAmount : undefined,
         cashback_amount: cashbackAmount > 0 ? cashbackAmount : undefined,
-      });
+      };
 
-      toast.success(
-        sendEmail || sendTelegram
-          ? "КП створено та відправлено клієнту"
-          : "КП створено успішно"
-      );
+      let kp;
+      if (kpId) {
+        // Редагування існуючого КП
+        kp = await kpApi.updateKP(kpId, kpData);
+        toast.success(
+          sendEmail || sendTelegram
+            ? "КП оновлено та відправлено клієнту"
+            : "КП оновлено успішно"
+        );
+      } else {
+        // Створення нового КП
+        kp = await kpApi.createKP(kpData);
+        toast.success(
+          sendEmail || sendTelegram
+            ? "КП створено та відправлено клієнту"
+            : "КП створено успішно"
+        );
+      }
 
       // Відкриваємо PDF у новій вкладці для перегляду
       try {
@@ -654,6 +726,11 @@ export function CreateKP() {
         window.open(url, "_blank");
       } catch (pdfError) {
         console.error("Помилка генерації PDF:", pdfError);
+      }
+
+      // Якщо є onClose callback (для редагування), викликаємо його
+      if (onClose) {
+        onClose();
       }
 
       // Reset form
@@ -712,8 +789,12 @@ export function CreateKP() {
   return (
     <div className="space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-xl md:text-2xl text-gray-900 mb-2">Створити КП</h1>
-        <p className="text-sm md:text-base text-gray-600">Створення нової комерційної пропозиції для клієнта</p>
+        <h1 className="text-xl md:text-2xl text-gray-900 mb-2">
+          {kpId ? "Редагувати КП" : "Створити КП"}
+        </h1>
+        <p className="text-sm md:text-base text-gray-600">
+          {kpId ? "Редагування комерційної пропозиції" : "Створення нової комерційної пропозиції для клієнта"}
+        </p>
       </div>
 
       {/* Progress Steps */}
@@ -1812,31 +1893,36 @@ export function CreateKP() {
                 ) : (
                   <>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm">
+                      <table className="min-w-full text-sm border-collapse">
                         <thead>
-                          <tr className="border-b">
-                            <th className="py-2 pr-4 text-left">Страва</th>
-                            <th className="py-2 px-4 text-right">Вага порції</th>
-                            <th className="py-2 px-4 text-right">Ціна порції, грн</th>
-                            <th className="py-2 px-4 text-right">Кількість порцій</th>
-                            <th className="py-2 pl-4 text-right">Всього, грн</th>
+                          <tr className="border-b bg-[#FF5A00] text-white">
+                            <th className="py-3 px-4 text-left font-semibold">Страва</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід на стіл,<br />порція/вага, гр.</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Кіл-сть<br />порцій</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Ціна,<br />грн</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Сума,<br />грн</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід грам<br />на особу</th>
                           </tr>
                         </thead>
                         <tbody>
                           {getSelectedDishesData().map((dish) => {
                             const qty = dishQuantities[dish.id] ?? 1;
                             const total = qty * dish.price;
+                            const peopleCountNum = parseInt(guestCount, 10) || 1;
+                            const weightPerPerson = dish.weight && qty > 0 && peopleCountNum > 0 
+                              ? (dish.weight * qty / peopleCountNum).toFixed(2)
+                              : "0.00";
                             return (
-                              <tr key={dish.id} className="border-b last:border-0">
-                                <td className="py-2 pr-4">{dish.name}</td>
-                                <td className="py-2 px-4 text-right">
-                                  {dish.weight > 0 ? `${dish.weight}${dish.unit}` : "-"}
+                              <tr key={dish.id} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="py-3 px-4 text-left">{dish.name}</td>
+                                <td className="py-3 px-4 text-right">
+                                  {dish.weight > 0 ? `${dish.weight} ${dish.unit || 'г'}` : "-"}
                                 </td>
-                                <td className="py-2 px-4 text-right">{dish.price}</td>
-                                <td className="py-2 px-4 text-right">
+                                <td className="py-3 px-4 text-right">
                                   <Input
                                     type="number"
-                                    className="w-24 ml-auto"
+                                    className="w-20 ml-auto text-right"
+                                    min="0"
                                     value={qty}
                                     onChange={(e) => {
                                       const value = parseInt(e.target.value, 10) || 0;
@@ -1847,7 +1933,9 @@ export function CreateKP() {
                                     }}
                                   />
                                 </td>
-                                <td className="py-2 pl-4 text-right">{total}</td>
+                                <td className="py-3 px-4 text-right">{dish.price.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right font-medium">{total.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right">{weightPerPerson}</td>
                               </tr>
                             );
                           })}
@@ -1886,6 +1974,85 @@ export function CreateKP() {
                           грн
                         </div>
                       </div>
+                    </div>
+
+                    {/* Discount and Cashback Selection */}
+                    <div className="space-y-4 p-4 bg-gray-50 rounded-lg border mt-6">
+                      <h3 className="text-gray-900 font-medium">Знижка та кешбек</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="discount-select-step5">Знижка</Label>
+                          <Select
+                            value={selectedDiscountId?.toString() || ""}
+                            onValueChange={(value) => {
+                              const id = parseInt(value);
+                              setSelectedDiscountId(id);
+                              // Якщо обрано знижку, скидаємо кешбек
+                              if (id) {
+                                setSelectedCashbackId(null);
+                                setUseCashback(false);
+                              }
+                            }}
+                          >
+                            <SelectTrigger id="discount-select-step5">
+                              <SelectValue placeholder="Оберіть знижку" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {benefits
+                                .filter((b) => b.type === "discount" && b.is_active)
+                                .map((benefit) => (
+                                  <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                    {benefit.name} ({benefit.value}%)
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cashback-select-step5">Кешбек</Label>
+                          <Select
+                            value={selectedCashbackId?.toString() || ""}
+                            onValueChange={(value) => {
+                              const id = parseInt(value);
+                              setSelectedCashbackId(id);
+                              // Якщо обрано кешбек, скидаємо знижку
+                              if (id) {
+                                setSelectedDiscountId(null);
+                              }
+                            }}
+                          >
+                            <SelectTrigger id="cashback-select-step5">
+                              <SelectValue placeholder="Оберіть кешбек" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {benefits
+                                .filter((b) => b.type === "cashback" && b.is_active)
+                                .map((benefit) => (
+                                  <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                    {benefit.name} ({benefit.value}%)
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {selectedCashbackId && (
+                        <div className="flex items-center space-x-2 mt-4">
+                          <Checkbox
+                            id="use-cashback-step5"
+                            checked={useCashback}
+                            onCheckedChange={(checked) => setUseCashback(checked as boolean)}
+                          />
+                          <Label htmlFor="use-cashback-step5" className="cursor-pointer">
+                            Списати кешбек з бонусного рахунку клієнта
+                          </Label>
+                        </div>
+                      )}
+                      {(selectedDiscountId && selectedCashbackId) && (
+                        <p className="text-sm text-red-600 mt-2">
+                          ⚠️ Не можна використовувати знижку та кешбек разом
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -2143,85 +2310,6 @@ export function CreateKP() {
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {/* Discount and Cashback Selection */}
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
-                  <h3 className="text-gray-900 font-medium">Знижка та кешбек</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="discount-select">Знижка</Label>
-                      <Select
-                        value={selectedDiscountId?.toString() || ""}
-                        onValueChange={(value) => {
-                          const id = parseInt(value);
-                          setSelectedDiscountId(id);
-                          // Якщо обрано знижку, скидаємо кешбек
-                          if (id) {
-                            setSelectedCashbackId(null);
-                            setUseCashback(false);
-                          }
-                        }}
-                      >
-                        <SelectTrigger id="discount-select">
-                          <SelectValue placeholder="Оберіть знижку" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {benefits
-                            .filter((b) => b.type === "discount" && b.is_active)
-                            .map((benefit) => (
-                              <SelectItem key={benefit.id} value={benefit.id.toString()}>
-                                {benefit.name} ({benefit.value}%)
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cashback-select">Кешбек</Label>
-                      <Select
-                        value={selectedCashbackId?.toString() || ""}
-                        onValueChange={(value) => {
-                          const id = parseInt(value);
-                          setSelectedCashbackId(id);
-                          // Якщо обрано кешбек, скидаємо знижку
-                          if (id) {
-                            setSelectedDiscountId(null);
-                          }
-                        }}
-                      >
-                        <SelectTrigger id="cashback-select">
-                          <SelectValue placeholder="Оберіть кешбек" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {benefits
-                            .filter((b) => b.type === "cashback" && b.is_active)
-                            .map((benefit) => (
-                              <SelectItem key={benefit.id} value={benefit.id.toString()}>
-                                {benefit.name} ({benefit.value}%)
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {selectedCashbackId && (
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="use-cashback"
-                        checked={useCashback}
-                        onCheckedChange={(checked) => setUseCashback(checked as boolean)}
-                      />
-                      <Label htmlFor="use-cashback" className="cursor-pointer">
-                        Списати кешбек з бонусного рахунку клієнта
-                      </Label>
-                    </div>
-                  )}
-                  {(selectedDiscountId && selectedCashbackId) && (
-                    <p className="text-sm text-red-600">
-                      ⚠️ Не можна використовувати знижку та кешбек разом
-                    </p>
-                  )}
-                </div>
-
                 {/* Template Selection */}
                 <div className="space-y-2">
                   <Label>Оберіть шаблон КП</Label>
