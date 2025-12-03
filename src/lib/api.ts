@@ -25,6 +25,8 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 export interface RegisterResponse {
@@ -78,6 +80,109 @@ export interface ItemCreate {
   active?: boolean;
   subcategory_id?: number;
   photo?: File; // Для завантаження файлу
+}
+
+// Users API types
+export interface User {
+  id: number;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  role: string;
+  department?: string | null;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at?: string;
+}
+
+export interface UserUpdate {
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  department?: string | null;
+  is_active?: boolean;
+  is_admin?: boolean;
+}
+
+// Clients types
+export interface Client {
+  id: number;
+  name: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  event_date?: string;
+  event_format?: string;
+  event_group?: string;
+  event_time?: string;
+  event_location?: string;
+  comments?: string;
+  kp_total_amount?: number;
+  paid_amount?: number;
+  unpaid_amount?: number;
+  payment_format?: string;
+  cash_collector?: string;
+  payment_plan_date?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ClientUpdate {
+  name?: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  event_date?: string;
+  event_format?: string;
+  event_group?: string;
+  event_time?: string;
+  event_location?: string;
+  comments?: string;
+  kp_total_amount?: number;
+  paid_amount?: number;
+  unpaid_amount?: number;
+  payment_format?: string;
+  cash_collector?: string;
+  payment_plan_date?: string;
+}
+
+// Menus types
+export interface MenuItemCreate {
+  item_id: number;
+  quantity: number;
+}
+
+export interface MenuItem {
+  id: number;
+  item_id: number;
+  quantity: number;
+  item?: Item;
+}
+
+export interface Menu {
+  id: number;
+  name: string;
+  description?: string;
+  event_format?: string;
+  people_count?: number;
+  created_at?: string;
+  items: MenuItem[];
+}
+
+export interface MenuCreate {
+  name: string;
+  description?: string;
+  event_format?: string;
+  people_count?: number;
+  items: MenuItemCreate[];
+}
+
+export interface MenuUpdate {
+  name?: string;
+  description?: string;
+  event_format?: string;
+  people_count?: number;
+  items?: MenuItemCreate[];
 }
 
 // Error handling
@@ -360,7 +465,13 @@ export const categoriesApi = {
       method: 'POST',
       body: JSON.stringify({ name }),
     });
-  }
+  },
+
+  async deleteCategory(categoryId: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 // Subcategories API
@@ -375,7 +486,13 @@ export const subcategoriesApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
+  },
+
+  async deleteSubcategory(subcategoryId: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/subcategories/${subcategoryId}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 // KP (Commercial Proposal) Types
@@ -396,18 +513,40 @@ export interface KP {
   title: string;
   people_count: number;
   created_at?: string;
+  // Дані про клієнта та подію
+  client_name?: string;
+  event_format?: string;
+  event_group?: string;
+  event_date?: string;
+  event_location?: string;
+  event_time?: string;
+  coordinator_name?: string;
+  coordinator_phone?: string;
   items: KPItem[];
   total_price?: number;
   price_per_person?: number;
   template_id?: number;
   client_email?: string;
   client_phone?: string;
+  equipment_total?: number;
+  service_total?: number;
+  transport_total?: number;
+  created_by_id?: number;
   status?: string;
 }
 
 export interface KPCreate {
   title: string;
   people_count: number;
+  // Дані про клієнта та подію
+  client_name?: string;
+  event_format?: string;
+  event_group?: string;
+  event_date?: string;
+  event_location?: string;
+  event_time?: string;
+  coordinator_name?: string;
+  coordinator_phone?: string;
   total_price?: number;
   price_per_person?: number;
   items: KPItemCreate[];
@@ -418,6 +557,10 @@ export interface KPCreate {
   client_phone?: string;
   send_telegram?: boolean;
   telegram_message?: string;
+  equipment_total?: number;
+  service_total?: number;
+  created_by_id?: number;
+  transport_total?: number;
 }
 
 export interface EmailSendRequest {
@@ -508,6 +651,8 @@ export interface Template {
   filename: string;
   description?: string;
   preview_image_url?: string;
+  header_image_url?: string;
+  background_image_url?: string;
   is_default: boolean;
   created_at?: string;
   updated_at?: string;
@@ -525,6 +670,8 @@ export interface TemplateCreate {
   is_default?: boolean;
   preview_image?: File; // Для завантаження прев'ю
   html_content?: string; // HTML шаблону (ctrl+V)
+  header_image?: File; // Шапка
+  background_image?: File; // Фонове зображення
 }
 
 export interface TemplateUpdate {
@@ -535,6 +682,10 @@ export interface TemplateUpdate {
   is_default?: boolean;
   preview_image?: File; // Для завантаження прев'ю
   html_content?: string; // Оновлений HTML шаблону
+  header_image?: File;
+  background_image?: File;
+  header_image_url?: string;
+  background_image_url?: string;
 }
 
 // Branding / Settings
@@ -591,6 +742,8 @@ export const templatesApi = {
     if (data.preview_image) formData.append('preview_image', data.preview_image);
     if (data.preview_image_url) formData.append('preview_image_url', data.preview_image_url);
     if (data.html_content) formData.append('html_content', data.html_content);
+    if (data.header_image) formData.append('header_image', data.header_image);
+    if (data.background_image) formData.append('background_image', data.background_image);
     
     return apiFetchMultipart<Template>('/templates', formData, 'POST');
   },
@@ -605,6 +758,10 @@ export const templatesApi = {
     if (data.preview_image) formData.append('preview_image', data.preview_image);
     if (data.preview_image_url !== undefined) formData.append('preview_image_url', data.preview_image_url || '');
     if (data.html_content !== undefined) formData.append('html_content', data.html_content);
+    if (data.header_image) formData.append('header_image', data.header_image);
+    if (data.background_image) formData.append('background_image', data.background_image);
+    if (data.header_image_url !== undefined) formData.append('header_image_url', data.header_image_url || '');
+    if (data.background_image_url !== undefined) formData.append('background_image_url', data.background_image_url || '');
     
     return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
   },
@@ -680,5 +837,68 @@ export const settingsApi = {
       formData,
       "POST"
     );
+  },
+};
+
+// Users API
+export const usersApi = {
+  async getUsers(): Promise<User[]> {
+    return apiFetch<User[]>("/users");
+  },
+
+  async updateUser(id: number, data: UserUpdate): Promise<User> {
+    return apiFetch<User>(`/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// Clients API
+export const clientsApi = {
+  async getClients(): Promise<Client[]> {
+    return apiFetch<Client[]>("/clients");
+  },
+
+  async getClient(id: number): Promise<Client> {
+    return apiFetch<Client>(`/clients/${id}`);
+  },
+
+  async updateClient(id: number, data: ClientUpdate): Promise<Client> {
+    return apiFetch<Client>(`/clients/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// Menus API
+export const menusApi = {
+  async getMenus(): Promise<Menu[]> {
+    return apiFetch<Menu[]>("/menus");
+  },
+
+  async getMenu(menuId: number): Promise<Menu> {
+    return apiFetch<Menu>(`/menus/${menuId}`);
+  },
+
+  async createMenu(data: MenuCreate): Promise<Menu> {
+    return apiFetch<Menu>("/menus", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateMenu(menuId: number, data: MenuUpdate): Promise<Menu> {
+    return apiFetch<Menu>(`/menus/${menuId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteMenu(menuId: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/menus/${menuId}`, {
+      method: "DELETE",
+    });
   },
 };

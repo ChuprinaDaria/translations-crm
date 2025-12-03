@@ -1,10 +1,26 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
-import { itemsApi, categoriesApi, subcategoriesApi, type ItemCreate, getImageUrl } from "../lib/api";
+import {
+  itemsApi,
+  categoriesApi,
+  subcategoriesApi,
+  menusApi,
+  type ItemCreate,
+  type Menu,
+  type MenuItemCreate,
+  getImageUrl,
+} from "../lib/api";
 import type { Item, Category, Subcategory } from "../lib/api";
 import { toast } from "sonner";
 import {
-  ChefHat, Plus, Search, Pencil, Trash2,
-  FolderOpen, Tag, Loader2
+  ChefHat,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  FolderOpen,
+  Tag,
+  Loader2,
+  ListChecks,
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -47,6 +63,24 @@ export function MenuManagement() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Menus
+  const [menus, setMenus] = useState<Menu[]>([]);
+  const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
+  const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
+  const [menuForm, setMenuForm] = useState<{
+    name: string;
+    description: string;
+    event_format: string;
+    people_count: string;
+    items: MenuItemCreate[];
+  }>({
+    name: "",
+    description: "",
+    event_format: "",
+    people_count: "",
+    items: [],
+  });
   
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,15 +137,17 @@ export function MenuManagement() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [itemsData, categoriesData, subcategoriesData] = await Promise.all([
+      const [itemsData, categoriesData, subcategoriesData, menusData] = await Promise.all([
         itemsApi.getItems(0, 1000),
         categoriesApi.getCategories(),
         subcategoriesApi.getSubcategories(),
+        menusApi.getMenus(),
       ]);
       
       setItems(itemsData);
       setCategories(categoriesData);
       setSubcategories(subcategoriesData);
+      setMenus(menusData);
       toast.success("Дані завантажено");
     } catch (error: any) {
       toast.error("Помилка завантаження даних");
@@ -347,6 +383,145 @@ export function MenuManagement() {
     ? subcategories.filter(sub => sub.category_id === parseInt(selectedCategory))
     : [];
 
+  // MENU HELPERS
+  const resetMenuForm = () => {
+    setSelectedMenu(null);
+    setMenuForm({
+      name: "",
+      description: "",
+      event_format: "",
+      people_count: "",
+      items: [],
+    });
+  };
+
+  const openCreateMenu = () => {
+    resetMenuForm();
+    setIsMenuFormOpen(true);
+  };
+
+  const openEditMenu = (menu: Menu) => {
+    setSelectedMenu(menu);
+    setMenuForm({
+      name: menu.name,
+      description: menu.description || "",
+      event_format: menu.event_format || "",
+      people_count: menu.people_count?.toString() || "",
+      items: menu.items.map(mi => ({
+        item_id: mi.item_id,
+        quantity: mi.quantity,
+      })),
+    });
+    setIsMenuFormOpen(true);
+  };
+
+  const addItemToMenuForm = () => {
+    if (items.length === 0) {
+      toast.error("Спочатку додайте хоч одну страву");
+      return;
+    }
+    setMenuForm((prev) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          item_id: items[0].id,
+          quantity: 1,
+        },
+      ],
+    }));
+  };
+
+  const updateMenuFormItem = (
+    index: number,
+    field: "item_id" | "quantity",
+    value: string
+  ) => {
+    setMenuForm((prev) => {
+      const updated = [...prev.items];
+      if (field === "item_id") {
+        updated[index] = { ...updated[index], item_id: parseInt(value, 10) || 0 };
+      } else {
+        updated[index] = {
+          ...updated[index],
+          quantity: parseInt(value, 10) || 0,
+        };
+      }
+      return { ...prev, items: updated };
+    });
+  };
+
+  const removeMenuFormItem = (index: number) => {
+    setMenuForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSaveMenu = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!menuForm.name.trim()) {
+      toast.error("Введіть назву меню");
+      return;
+    }
+
+    const payload = {
+      name: menuForm.name.trim(),
+      description: menuForm.description.trim() || undefined,
+      event_format: menuForm.event_format.trim() || undefined,
+      people_count: menuForm.people_count
+        ? parseInt(menuForm.people_count, 10) || undefined
+        : undefined,
+      items: menuForm.items.filter((it) => it.item_id && it.quantity > 0),
+    };
+
+    if (payload.items.length === 0) {
+      toast.error("Додайте хоча б одну страву до меню");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      let saved: Menu;
+      if (selectedMenu) {
+        saved = await menusApi.updateMenu(selectedMenu.id, payload);
+        setMenus((prev) =>
+          prev.map((m) => (m.id === selectedMenu.id ? saved : m))
+        );
+        toast.success("Меню оновлено");
+      } else {
+        saved = await menusApi.createMenu(payload);
+        setMenus((prev) => [...prev, saved]);
+        toast.success("Меню створено");
+      }
+      setIsMenuFormOpen(false);
+      resetMenuForm();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Помилка збереження меню");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMenu = async (menu: Menu) => {
+    if (!window.confirm(`Видалити меню "${menu.name}"?`)) return;
+    setLoading(true);
+    try {
+      await menusApi.deleteMenu(menu.id);
+      setMenus((prev) => prev.filter((m) => m.id !== menu.id));
+      if (selectedMenu?.id === menu.id) {
+        resetMenuForm();
+        setIsMenuFormOpen(false);
+      }
+      toast.success("Меню видалено");
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Помилка видалення меню");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -374,6 +549,10 @@ export function MenuManagement() {
           <TabsTrigger value="categories">
             <FolderOpen className="mr-2 h-4 w-4" />
             Категорії
+          </TabsTrigger>
+          <TabsTrigger value="menus">
+            <ListChecks className="mr-2 h-4 w-4" />
+            Формувати меню
           </TabsTrigger>
         </TabsList>
 
@@ -752,6 +931,308 @@ export function MenuManagement() {
               })}
             </div>
           )}
+        </TabsContent>
+
+        {/* TAB 3: MENUS – конструктор меню */}
+        <TabsContent value="menus" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl text-gray-900">Готові меню</h2>
+              <p className="text-gray-500 text-sm">
+                Створюйте типові набори страв (наприклад, «Фуршет 55 осіб»), щоб швидше формувати КП.
+              </p>
+            </div>
+            <Button
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+              onClick={openCreateMenu}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Додати меню
+            </Button>
+          </div>
+
+          {/* Список меню */}
+          {menus.length === 0 ? (
+            <Card>
+              <CardContent className="p-10 text-center text-sm text-gray-500 space-y-3">
+                <p>Ще немає жодного меню.</p>
+                <Button
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  onClick={openCreateMenu}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Створити перше меню
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {menus.map((menu) => {
+                const totalPositions = menu.items.length;
+                const totalPrice = menu.items.reduce((sum, mi) => {
+                  const price = mi.item?.price || 0;
+                  return sum + price * mi.quantity;
+                }, 0);
+
+                return (
+                  <Card key={menu.id} className="flex flex-col">
+                    <CardContent className="p-5 flex-1 flex flex-col space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {menu.name}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            Формат: {menu.event_format || "—"} • Гостей:{" "}
+                            {menu.people_count ?? "—"}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => openEditMenu(menu)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteMenu(menu)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {menu.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {menu.description}
+                        </p>
+                      )}
+
+                      <div className="text-xs text-gray-500">
+                        Позицій: {totalPositions} • Орієнтовна сума:{" "}
+                        <span className="font-medium text-gray-900">
+                          {totalPrice} грн
+                        </span>
+                      </div>
+
+                      {menu.items.length > 0 && (
+                        <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-3 max-h-40 overflow-y-auto">
+                          <ul className="text-xs space-y-1">
+                            {menu.items.map((mi) => (
+                              <li key={mi.id} className="flex justify-between">
+                                <span className="truncate max-w-[60%]">
+                                  {mi.item?.name || `Страва #${mi.item_id}`}
+                                </span>
+                                <span className="text-gray-600">
+                                  × {mi.quantity} •{" "}
+                                  {(mi.item?.price || 0) * mi.quantity} грн
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Форма створення / редагування меню */}
+          <Dialog
+            open={isMenuFormOpen}
+            onOpenChange={(open) => {
+              setIsMenuFormOpen(open);
+              if (!open) {
+                resetMenuForm();
+              }
+            }}
+          >
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {selectedMenu ? "Редагувати меню" : "Нове меню"}
+                </DialogTitle>
+              </DialogHeader>
+
+              <form
+                onSubmit={handleSaveMenu}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="menu-name">Назва меню *</Label>
+                    <Input
+                      id="menu-name"
+                      value={menuForm.name}
+                      onChange={(e) =>
+                        setMenuForm((prev) => ({ ...prev, name: e.target.value }))
+                      }
+                      placeholder="Наприклад, Фуршет 55 осіб"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="menu-format">Формат</Label>
+                    <Input
+                      id="menu-format"
+                      value={menuForm.event_format}
+                      onChange={(e) =>
+                        setMenuForm((prev) => ({
+                          ...prev,
+                          event_format: e.target.value,
+                        }))
+                      }
+                      placeholder="Фуршет, Банкет, Кава-брейк..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="menu-people">Кількість гостей</Label>
+                    <Input
+                      id="menu-people"
+                      type="number"
+                      min={1}
+                      value={menuForm.people_count}
+                      onChange={(e) =>
+                        setMenuForm((prev) => ({
+                          ...prev,
+                          people_count: e.target.value,
+                        }))
+                      }
+                      placeholder="Наприклад, 55"
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label htmlFor="menu-description">Опис</Label>
+                    <Textarea
+                      id="menu-description"
+                      value={menuForm.description}
+                      onChange={(e) =>
+                        setMenuForm((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="Короткий опис меню для команди"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-900">
+                      Страви в меню
+                    </h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addItemToMenuForm}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Додати страву
+                    </Button>
+                  </div>
+
+                  {menuForm.items.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-xs text-gray-500 text-center">
+                      Поки що жодної страви. Натисніть «Додати страву», щоб зібрати меню.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {menuForm.items.map((mi, index) => (
+                        <div
+                          key={index}
+                          className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end border rounded-lg p-3 bg-gray-50"
+                        >
+                          <div className="space-y-1 md:col-span-2">
+                            <Label>Страва</Label>
+                            <select
+                              className="w-full border rounded-md px-3 py-2 text-sm"
+                              value={mi.item_id}
+                              onChange={(e) =>
+                                updateMenuFormItem(index, "item_id", e.target.value)
+                              }
+                            >
+                              <option value="">Оберіть страву</option>
+                              {items.map((it) => (
+                                <option key={it.id} value={it.id}>
+                                  {it.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Кількість порцій</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={mi.quantity}
+                              onChange={(e) =>
+                                updateMenuFormItem(index, "quantity", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="flex items-center justify-between md:justify-end gap-2">
+                            <div className="text-xs text-gray-600">
+                              Ціна за всі порції:{" "}
+                              <span className="font-medium text-gray-900">
+                                {(items.find((it) => it.id === mi.item_id)?.price || 0) *
+                                  mi.quantity}{" "}
+                                грн
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeMenuFormItem(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsMenuFormOpen(false);
+                      resetMenuForm();
+                    }}
+                  >
+                    Скасувати
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Збереження...
+                      </>
+                    ) : selectedMenu ? (
+                      "Зберегти меню"
+                    ) : (
+                      "Створити меню"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
 

@@ -93,7 +93,7 @@ def delete_kp(db: Session, kp_id: int):
     return True
 
 
-def create_kp(db: Session, kp_in: schemas.KPCreate):
+def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = None):
 
     price_per_person = kp_in.price_per_person
     print(f"Price per person: {price_per_person}")
@@ -107,8 +107,21 @@ def create_kp(db: Session, kp_in: schemas.KPCreate):
         total_price=kp_in.total_price,
         price_per_person=price_per_person,
         template_id=kp_in.template_id,
+        # Загальні дані про клієнта та захід
+        client_name=kp_in.client_name,
+        event_format=kp_in.event_format,
+        event_group=kp_in.event_group,
+        event_date=kp_in.event_date,
+        event_location=kp_in.event_location,
+        event_time=kp_in.event_time,
+        coordinator_name=kp_in.coordinator_name,
+        coordinator_phone=kp_in.coordinator_phone,
         client_email=kp_in.client_email,
         client_phone=kp_in.client_phone,
+        equipment_total=kp_in.equipment_total,
+        service_total=kp_in.service_total,
+        transport_total=getattr(kp_in, "transport_total", None),
+        created_by_id=created_by_id,
         status=kp_in.status or "sent",
     )
 
@@ -140,10 +153,13 @@ def get_kp(db: Session, kp_id: int):
 
 
 def get_all_kps(db: Session):
-    # Повертаємо КП разом з позиціями, щоб фронтенд міг показувати деталізацію
+    # Повертаємо КП разом з позиціями та менеджером, щоб фронтенд міг показувати деталізацію
     return (
         db.query(models.KP)
-        .options(selectinload(models.KP.items).selectinload(models.KPItem.item))
+        .options(
+            selectinload(models.KP.items).selectinload(models.KPItem.item),
+            selectinload(models.KP.created_by),
+        )
         .all()
     )
 
@@ -342,3 +358,192 @@ def get_telegram_api_settings(db: Session) -> dict[str, str | None]:
         "telegram_sender_name",
     ]
     return get_settings(db, keys)
+
+
+############################################################
+# Menus CRUD
+############################################################
+def get_menus(db: Session):
+    """
+    Повертає всі меню з підвантаженими елементами.
+    """
+    return (
+        db.query(models.Menu)
+        .options(selectinload(models.Menu.items).selectinload(models.MenuItem.item))
+        .all()
+    )
+
+
+def get_menu(db: Session, menu_id: int):
+    return (
+        db.query(models.Menu)
+        .options(selectinload(models.Menu.items).selectinload(models.MenuItem.item))
+        .filter(models.Menu.id == menu_id)
+        .first()
+    )
+
+
+def create_menu(db: Session, menu_in: schemas.MenuCreate):
+    menu = models.Menu(
+        name=menu_in.name,
+        description=menu_in.description,
+        event_format=menu_in.event_format,
+        people_count=menu_in.people_count,
+    )
+    db.add(menu)
+    db.flush()  # щоб отримати menu.id
+
+    item_ids = [it.item_id for it in menu_in.items]
+    if item_ids:
+        existing = {
+            i.id
+            for i in db.query(models.Item)
+            .filter(models.Item.id.in_(item_ids))
+            .all()
+        }
+        for it in menu_in.items:
+            if it.item_id not in existing:
+                raise ValueError(f"Item id {it.item_id} not found")
+            db.add(
+                models.MenuItem(
+                    menu_id=menu.id,
+                    item_id=it.item_id,
+                    quantity=it.quantity,
+                )
+            )
+
+    db.commit()
+    db.refresh(menu)
+    return get_menu(db, menu.id)
+
+
+def update_menu(db: Session, menu_id: int, menu_in: schemas.MenuUpdate):
+    menu = db.query(models.Menu).filter(models.Menu.id == menu_id).first()
+    if not menu:
+        return None
+
+    update_data = menu_in.dict(exclude_unset=True, exclude={"items"})
+    for key, value in update_data.items():
+        setattr(menu, key, value)
+
+    # Якщо передано items – повністю перезаписуємо склад меню
+    if menu_in.items is not None:
+        db.query(models.MenuItem).filter(models.MenuItem.menu_id == menu_id).delete()
+
+        item_ids = [it.item_id for it in menu_in.items]
+        if item_ids:
+            existing = {
+                i.id
+                for i in db.query(models.Item)
+                .filter(models.Item.id.in_(item_ids))
+                .all()
+            }
+            for it in menu_in.items:
+                if it.item_id not in existing:
+                    raise ValueError(f"Item id {it.item_id} not found")
+                db.add(
+                    models.MenuItem(
+                        menu_id=menu.id,
+                        item_id=it.item_id,
+                        quantity=it.quantity,
+                    )
+                )
+
+    db.commit()
+    db.refresh(menu)
+    return get_menu(db, menu.id)
+
+
+def delete_menu(db: Session, menu_id: int):
+    menu = db.query(models.Menu).filter(models.Menu.id == menu_id).first()
+    if not menu:
+        return False
+    db.delete(menu)
+    db.commit()
+    return True
+
+
+############################################################
+# Clients CRUD
+############################################################
+
+def get_clients(db: Session):
+    return db.query(models.Client).order_by(models.Client.created_at.desc()).all()
+
+
+def get_client(db: Session, client_id: int):
+    return db.query(models.Client).filter(models.Client.id == client_id).first()
+
+
+def create_client(db: Session, client_in: schemas.ClientCreate):
+    client = models.Client(**client_in.dict(exclude_unset=True))
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+def update_client(db: Session, client_id: int, client_in: schemas.ClientUpdate):
+    client = get_client(db, client_id)
+    if not client:
+        return None
+
+    update_data = client_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(client, key, value)
+
+    # Якщо не оплачена сума не задана явно — рахуємо як total - paid
+    if "kp_total_amount" in update_data or "paid_amount" in update_data:
+        total = client.kp_total_amount or 0
+        paid = client.paid_amount or 0
+        client.unpaid_amount = max(total - paid, 0)
+
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+def upsert_client_from_kp(db: Session, kp: models.KP):
+    """
+    Автоматично створює або оновлює клієнта на основі даних КП.
+    Пошук клієнта: спочатку по телефону, потім по email, потім по імені.
+    """
+    if not (kp.client_name or kp.client_phone or kp.client_email):
+        return None
+
+    query = db.query(models.Client)
+    client = None
+
+    if kp.client_phone:
+        client = query.filter(models.Client.phone == kp.client_phone).first()
+    if not client and kp.client_email:
+        client = query.filter(models.Client.email == kp.client_email).first()
+    if not client and kp.client_name:
+        client = query.filter(models.Client.name == kp.client_name).first()
+
+    if not client:
+        client = models.Client(
+            name=kp.client_name or kp.title,
+            phone=kp.client_phone,
+            email=kp.client_email,
+            status="новий",
+        )
+        db.add(client)
+
+    # Оновлюємо актуальні дані заходу
+    client.event_date = kp.event_date
+    client.event_format = kp.event_format
+    client.event_group = kp.event_group
+    client.event_time = kp.event_time
+    client.event_location = kp.event_location
+
+    # Підсумки по КП
+    client.kp_total_amount = kp.total_price
+    if client.paid_amount is not None and kp.total_price is not None:
+        client.unpaid_amount = max(kp.total_price - client.paid_amount, 0)
+    else:
+        client.unpaid_amount = kp.total_price
+
+    db.commit()
+    db.refresh(client)
+    return client

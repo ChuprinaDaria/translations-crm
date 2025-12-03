@@ -21,7 +21,14 @@ import {
 } from "./ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
-import { kpApi, templatesApi, type KP, type Template } from "../lib/api";
+import {
+  kpApi,
+  templatesApi,
+  usersApi,
+  type KP,
+  type Template,
+  type User,
+} from "../lib/api";
 
 type KPStatus = "sent" | "approved" | "rejected" | "completed";
 
@@ -76,20 +83,28 @@ export function AllKP() {
   const [kpItems, setKpItems] = useState<KPListItem[]>([]);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedManager, setSelectedManager] = useState<string>("all");
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [kps, templates] = await Promise.all([
+        const [kps, templates, usersData] = await Promise.all([
           kpApi.getKPs(),
           templatesApi.getTemplates(),
+          usersApi.getUsers().catch(() => [] as User[]),
         ]);
 
         const templateMap = new Map<number, string>();
         templates.forEach((t) => templateMap.set(t.id, t.name));
 
+        const userMap = new Map<number, User>();
+        usersData.forEach((u) => userMap.set(u.id, u));
+
         const mapped: KPListItem[] = kps.map((kp) => {
           const status = ((kp.status as KPStatus) || "sent") as KPStatus;
+          const createdByUser =
+            (kp.created_by_id && userMap.get(kp.created_by_id)) || undefined;
 
           return {
             id: kp.id,
@@ -107,10 +122,16 @@ export function AllKP() {
               ? templateMap.get(kp.template_id) || "Шаблон"
               : "Шаблон",
             templateId: kp.template_id,
+            createdBy: createdByUser
+              ? `${createdByUser.first_name || ""} ${
+                  createdByUser.last_name || ""
+                }`.trim() || createdByUser.email
+              : undefined,
           };
         });
 
         setKpItems(mapped);
+        setUsers(usersData);
       } catch (error: any) {
         console.error("Error loading KPs:", error);
         toast.error("Помилка завантаження КП");
@@ -206,9 +227,15 @@ export function AllKP() {
       item.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.clientName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus = selectedStatus === "all" || item.status === selectedStatus;
+    const matchesStatus =
+      selectedStatus === "all" || item.status === selectedStatus;
 
-    return matchesSearch && matchesStatus;
+    const matchesManager =
+      selectedManager === "all" ||
+      (selectedManager === "none" && !item.createdBy) ||
+      item.createdBy === selectedManager;
+
+    return matchesSearch && matchesStatus && matchesManager;
   });
 
   const total = filteredItems.length;
@@ -297,6 +324,29 @@ export function AllKP() {
                   <SelectItem value="approved">Затверджено</SelectItem>
                   <SelectItem value="rejected">Відхилено</SelectItem>
                   <SelectItem value="completed">Виконано</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={selectedManager}
+                onValueChange={setSelectedManager}
+              >
+                <SelectTrigger className="w-full sm:w-[200px] md:w-[220px]">
+                  <SelectValue placeholder="Менеджер" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Всі менеджери</SelectItem>
+                  <SelectItem value="none">Без менеджера</SelectItem>
+                  {Array.from(
+                    new Set(
+                      kpItems
+                        .map((i) => i.createdBy)
+                        .filter((v): v is string => !!v),
+                    ),
+                  ).map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

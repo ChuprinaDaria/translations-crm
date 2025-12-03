@@ -54,6 +54,22 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def get_current_user_db(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """
+    Повертає поточного користувача з БД (об'єкт models.User).
+    Використовується там, де потрібен доступ до полів користувача
+    та перевірка is_admin.
+    """
+    user_id = int(user_payload.get("sub"))
+    user = crud_user.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
 @router.get("/items", response_model=list[schema.Item])
 def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), user = Depends(get_current_user)):
     return crud.get_items(db, skip=skip, limit=limit)
@@ -503,24 +519,59 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         # WeasyPrint підтримує file:// шляхи для локальних ресурсів
         logo_src = f"file://{logo_path.resolve()}"
     
+    # Отримаємо шляхи до зображень шапки та фону (якщо задані в шаблоні)
+    header_image_src = None
+    background_image_src = None
+    if selected_template:
+        if getattr(selected_template, "header_image_url", None):
+            try:
+                header_path = (BASE_DIR / selected_template.header_image_url).resolve()
+                if header_path.exists():
+                    header_image_src = f"file://{header_path}"
+            except Exception:
+                header_image_src = None
+        if getattr(selected_template, "background_image_url", None):
+            try:
+                bg_path = (BASE_DIR / selected_template.background_image_url).resolve()
+                if bg_path.exists():
+                    background_image_src = f"file://{bg_path}"
+            except Exception:
+                background_image_src = None
+    
     # Отримуємо назву компанії з налаштувань або використовуємо дефолтну
     company_name = crud.get_setting(db, "company_name") or "Дзиґа Кейтерінґ"
     
     # Форматуємо дати для шаблону
     created_date = kp.created_at.strftime("%d.%m.%Y") if kp.created_at else ""
-    event_date = ""  # TODO: додати поле event_date в модель KP, якщо потрібно
+    event_date = ""
+    # Використовуємо окреме поле дати події, якщо воно є
+    if getattr(kp, "event_date", None):
+        try:
+            event_date = kp.event_date.strftime("%d.%m.%Y")
+        except Exception:
+            event_date = ""
     
     # Форматуємо ціни та вагу
-    formatted_total_price = f"{sum(item['total_raw'] for item in items_data):.2f} грн"
+    food_total_raw = sum(item["total_raw"] for item in items_data)
+    formatted_food_total = f"{food_total_raw:.2f} грн"
     formatted_total_weight = f"{total_weight:.2f} кг"
+    equipment_total = getattr(kp, "equipment_total", None) or 0
+    service_total = getattr(kp, "service_total", None) or 0
+    transport_total = getattr(kp, "transport_total", None) or 0
     
     html_content = template.render(
         kp=kp,
         items=items_data,
-        total_price=formatted_total_price,
+        # Підсумки по кухні та додаткових блоках
+        food_total=formatted_food_total,
+        equipment_total=equipment_total,
+        service_total=service_total,
+        transport_total=transport_total,
         total_weight=formatted_total_weight,
         total_items=len(items_data),
         logo_src=logo_src,
+        header_image_src=header_image_src,
+        background_image_src=background_image_src,
         company_name=company_name,
         created_date=created_date,
         event_date=event_date,
@@ -552,7 +603,14 @@ def generate_kp_pdf(kp_id: int, template_id: int = None, db: Session = Depends(g
 @router.post("/kp", response_model=schema.KP)
 def create_kp(kp_in: schema.KPCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
     try:
-        kp = crud.create_kp(db, kp_in)
+        created_by_id = int(user.get("sub")) if user and user.get("sub") else None
+        kp = crud.create_kp(db, kp_in, created_by_id=created_by_id)
+        # Автоматично створюємо / оновлюємо клієнта на основі даних КП
+        try:
+            crud.upsert_client_from_kp(db, kp)
+        except Exception as e:
+            # Не ламаємо створення КП, якщо щось пішло не так з клієнтом
+            print(f"Error upserting client from KP: {e}")
         
         # Якщо вказано email та потрібно відправити одразу
         if kp_in.send_email and kp_in.client_email:
@@ -917,13 +975,130 @@ def create_subcategory(subcategory: schema.SubcategoryCreate, db: Session = Depe
     return crud.create_subcategory(db, subcategory.name, subcategory.category_id)
 
 
+############################################################
+# Users (admin only)
+############################################################
+
+@router.get("/users", response_model=list[schema.UserOut])
+def list_users(db: Session = Depends(get_db), current_user = Depends(get_current_user_db)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return crud_user.get_users(db)
+
+
+@router.put("/users/{user_id}", response_model=schema.UserOut)
+def update_user(
+    user_id: int,
+    user_in: schema.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_db),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    updated = crud_user.update_user(db, user_id, user_in)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return updated
+
+
+############################################################
+# Menus
+############################################################
+
+@router.get("/menus", response_model=list[schema.Menu])
+def list_menus(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    return crud.get_menus(db)
+
+
+@router.get("/menus/{menu_id}", response_model=schema.Menu)
+def get_menu(menu_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    menu = crud.get_menu(db, menu_id)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    return menu
+
+
+@router.post("/menus", response_model=schema.Menu)
+def create_menu(menu_in: schema.MenuCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    try:
+        return crud.create_menu(db, menu_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/menus/{menu_id}", response_model=schema.Menu)
+def update_menu(
+    menu_id: int,
+    menu_in: schema.MenuUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    try:
+        updated = crud.update_menu(db, menu_id, menu_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    return updated
+
+
+@router.delete("/menus/{menu_id}")
+def delete_menu(menu_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    deleted = crud.delete_menu(db, menu_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    return {"status": "success"}
+
+
+############################################################
+# Clients
+############################################################
+
+@router.get("/clients", response_model=list[schema.Client])
+def list_clients(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    return crud.get_clients(db)
+
+
+@router.get("/clients/{client_id}", response_model=schema.Client)
+def get_client(client_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    client = crud.get_client(db, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+@router.post("/clients", response_model=schema.Client)
+def create_client(client_in: schema.ClientCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    return crud.create_client(db, client_in)
+
+
+@router.put("/clients/{client_id}", response_model=schema.Client)
+def update_client(
+    client_id: int,
+    client_in: schema.ClientUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    updated = crud.update_client(db, client_id, client_in)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return updated
+
+
 @router.post("/auth/register", response_model=schema.UserOut)
 def register(user_in: schema.UserCreate, db: Session = Depends(get_db)):
     existing = crud_user.get_user_by_email(db, user_in.email)
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
     role = user_in.role or "user"
-    user = crud_user.create_user(db, user_in.email, role, user_in.password)
+    user = crud_user.create_user(
+        db,
+        user_in.email,
+        role,
+        user_in.password,
+        user_in.first_name,
+        user_in.last_name,
+    )
 
     return {"id": user.id, 
             "email": user.email, 
@@ -993,6 +1168,10 @@ async def create_template(
     preview_image: UploadFile = File(None),
     preview_image_url: str = Form(None),
     html_content: str = Form(None),
+    header_image: UploadFile = File(None),
+    header_image_url: str = Form(None),
+    background_image: UploadFile = File(None),
+    background_image_url: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1063,6 +1242,20 @@ async def create_template(
             final_preview_url = auto_preview
         else:
             print(f"⚠ Warning: Failed to generate preview for template {filename}")
+
+    # Обробка зображень шапки та фону
+    final_header_url = header_image_url
+    final_background_url = background_image_url
+
+    if header_image:
+        if header_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу шапки. Дозволені: JPEG, PNG, WebP, GIF")
+        final_header_url = save_template_preview(header_image)
+
+    if background_image:
+        if background_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу фону. Дозволені: JPEG, PNG, WebP, GIF")
+        final_background_url = save_template_preview(background_image)
     
     # Створюємо об'єкт TemplateCreate
     template_data = schema.TemplateCreate(
@@ -1072,6 +1265,8 @@ async def create_template(
         preview_image_url=final_preview_url,
         is_default=is_default,
         html_content=html_content,
+        header_image_url=final_header_url,
+        background_image_url=final_background_url,
     )
     
     return crud.create_template(db, template_data)
@@ -1086,6 +1281,10 @@ async def update_template(
     preview_image: UploadFile = File(None),
     preview_image_url: str = Form(None),
     html_content: str = Form(None),
+    header_image: UploadFile = File(None),
+    header_image_url: str = Form(None),
+    background_image: UploadFile = File(None),
+    background_image_url: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1152,6 +1351,29 @@ async def update_template(
         else:
             print(f"⚠ Warning: Failed to regenerate preview for template {final_filename}")
     
+    # Обробка зображень шапки та фону
+    final_header_url = current_template.header_image_url
+    final_background_url = current_template.background_image_url
+
+    if header_image:
+        if header_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу шапки. Дозволені: JPEG, PNG, WebP, GIF")
+        if current_template.header_image_url:
+            delete_old_preview(current_template.header_image_url)
+        final_header_url = save_template_preview(header_image)
+    elif header_image_url is not None:
+        # Можемо обнулити / змінити URL напряму
+        final_header_url = header_image_url or None
+
+    if background_image:
+        if background_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу фону. Дозволені: JPEG, PNG, WebP, GIF")
+        if current_template.background_image_url:
+            delete_old_preview(current_template.background_image_url)
+        final_background_url = save_template_preview(background_image)
+    elif background_image_url is not None:
+        final_background_url = background_image_url or None
+
     # Створюємо об'єкт TemplateUpdate
     template_data = schema.TemplateUpdate(
         name=name,
@@ -1160,6 +1382,8 @@ async def update_template(
         preview_image_url=final_preview_url,
         is_default=is_default,
         html_content=html_content,
+        header_image_url=final_header_url,
+        background_image_url=final_background_url,
     )
     
     updated = crud.update_template(db, template_id, template_data)

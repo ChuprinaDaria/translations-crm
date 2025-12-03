@@ -30,6 +30,8 @@ export function KPTemplates() {
     is_default: false,
     html_content: "",
   });
+  const [headerFile, setHeaderFile] = useState<File | null>(null);
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
 
   const loadTemplates = async () => {
     setIsLoading(true);
@@ -65,6 +67,8 @@ export function KPTemplates() {
       is_default: false,
       html_content: "",
     });
+    setHeaderFile(null);
+    setBackgroundFile(null);
     setEditingTemplate(null);
     setIsAddDialogOpen(false);
   };
@@ -88,6 +92,8 @@ export function KPTemplates() {
           filename: formData.filename,
           is_default: formData.is_default,
           html_content: formData.html_content,
+          header_image: headerFile || undefined,
+          background_image: backgroundFile || undefined,
         });
         setTemplates((prev) =>
           prev.map((t) => (t.id === updated.id ? updated : t))
@@ -100,6 +106,8 @@ export function KPTemplates() {
           filename: formData.filename,
           is_default: formData.is_default,
           html_content: formData.html_content,
+          header_image: headerFile || undefined,
+          background_image: backgroundFile || undefined,
         });
         setTemplates((prev) => [...prev, created]);
         toast.success("Шаблон створено");
@@ -237,6 +245,35 @@ export function KPTemplates() {
                     setFormData((prev) => ({ ...prev, html_content: e.target.value }))
                   }
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="header-image">Зображення шапки (jpg, png)</Label>
+                  <Input
+                    id="header-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      setHeaderFile(e.target.files && e.target.files[0]
+                        ? e.target.files[0]
+                        : null)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="background-image">Фонове зображення сторінки</Label>
+                  <Input
+                    id="background-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) =>
+                      setBackgroundFile(e.target.files && e.target.files[0]
+                        ? e.target.files[0]
+                        : null)
+                    }
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

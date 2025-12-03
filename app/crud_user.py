@@ -8,6 +8,10 @@ def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
 
+def get_user_by_id(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
 def verify_totp(db: Session, email: str, code: str) -> bool:
     user = get_user_by_email(db, email)
     if not user:
@@ -21,17 +25,51 @@ def update_last_login(db: Session, user: models.User):
     db.refresh(user)
     return user
 
-def create_user(db: Session, email: str, role: str, password: str = None) -> models.User:
+
+def get_users(db: Session):
+    return db.query(models.User).all()
+
+
+def update_user(db: Session, user_id: int, user_in: schema.UserUpdate):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    update_data = user_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+def create_user(
+    db: Session,
+    email: str,
+    role: str,
+    password: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> models.User:
+    """
+    Створює користувача з email, паролем, роллю та іменем/прізвищем.
+    """
 
     secret = pyotp.random_base32()
-    hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8') if password else None 
+    hashed_pw = (
+        bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        if password
+        else None
+    )
     
     db_user = models.User(
         email=email,
+        first_name=first_name,
+        last_name=last_name,
         totp_secret=secret,
         hashed_password=hashed_pw,
         is_active=True,
-        role=role
+        role=role,
     )
     db.add(db_user)
     db.commit()

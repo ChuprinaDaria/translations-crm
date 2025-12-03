@@ -65,16 +65,30 @@ class Item(ItemBase):
 # User schemas
 class UserBase(BaseModel):
     email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
 
 class UserCreate(UserBase):
     password: str
     role: Optional[str] = "user"
+
+
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
+
 
 class UserOut(UserBase):
     id: int
     is_active: bool
     is_admin: bool
     role: str
+    department: Optional[str] = None
     created_at: Optional[datetime] = None
     otpauth_url: Optional[str] = None
     
@@ -90,6 +104,15 @@ class KPBase(BaseModel):
     people_count: int
     # Статус КП (за замовчуванням "sent")
     status: Optional[str] = "sent"
+    # Загальні дані про клієнта та захід
+    client_name: Optional[str] = None
+    event_format: Optional[str] = None
+    event_group: Optional[str] = None  # delivery-boxes / catering / other
+    event_date: Optional[datetime] = None
+    event_location: Optional[str] = None
+    event_time: Optional[str] = None
+    coordinator_name: Optional[str] = None
+    coordinator_phone: Optional[str] = None
 
 
 class KPItemCreate(BaseModel):
@@ -101,12 +124,17 @@ class KPCreate(KPBase):
     price_per_person: Optional[float] = None
     items: list[KPItemCreate] = []
     template_id: Optional[int] = None
+    # Контакти та відправка
     client_email: Optional[str] = None  # Email клієнта
     client_phone: Optional[str] = None  # Телефон клієнта (Telegram)
     send_email: Optional[bool] = False  # Відправити email одразу після створення
     email_message: Optional[str] = None  # Додаткове повідомлення для email
     send_telegram: Optional[bool] = False  # Відправити КП в Telegram одразу після створення
     telegram_message: Optional[str] = None  # Повідомлення в Telegram
+    # Додаткові підсумки
+    equipment_total: Optional[float] = None
+    service_total: Optional[float] = None
+    transport_total: Optional[float] = None
 
 class KPItem(BaseModel):
     id: int
@@ -126,6 +154,10 @@ class KP(KPBase):
     template_id: Optional[int] = None
     client_email: Optional[str] = None
     client_phone: Optional[str] = None
+    equipment_total: Optional[float] = None
+    service_total: Optional[float] = None
+    transport_total: Optional[float] = None
+    created_by_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -147,6 +179,8 @@ class TemplateBase(BaseModel):
     description: Optional[str] = None
     preview_image_url: Optional[str] = None
     is_default: Optional[bool] = False
+    header_image_url: Optional[str] = None
+    background_image_url: Optional[str] = None
 
 
 class TemplateCreate(TemplateBase):
@@ -169,6 +203,8 @@ class TemplateUpdate(BaseModel):
     preview_image_url: Optional[str] = None
     is_default: Optional[bool] = None
     html_content: Optional[str] = None
+    header_image_url: Optional[str] = None
+    background_image_url: Optional[str] = None
 
 
 class Template(TemplateBase):
@@ -211,6 +247,109 @@ class TelegramAccount(TelegramAccountBase):
     id: int
     is_active: bool = True
     created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+############################################################
+# Menu schemas
+############################################################
+
+class MenuItemBase(BaseModel):
+    item_id: int
+    quantity: int
+
+
+class MenuItemCreate(MenuItemBase):
+    pass
+
+
+class MenuItem(MenuItemBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class MenuBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    event_format: Optional[str] = None
+    people_count: Optional[int] = None
+
+
+class MenuCreate(MenuBase):
+    items: list[MenuItemCreate] = []
+
+
+class MenuUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    event_format: Optional[str] = None
+    people_count: Optional[int] = None
+    items: Optional[list[MenuItemCreate]] = None
+
+
+class Menu(MenuBase):
+    id: int
+    created_at: Optional[datetime] = None
+    items: list[MenuItem] = []
+
+    class Config:
+        from_attributes = True
+
+
+############################################################
+# Client schemas
+############################################################
+
+class ClientBase(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    status: Optional[str] = "новий"
+    event_date: Optional[datetime] = None
+    event_format: Optional[str] = None
+    event_group: Optional[str] = None
+    event_time: Optional[str] = None
+    event_location: Optional[str] = None
+    comments: Optional[str] = None
+    kp_total_amount: Optional[float] = None
+    paid_amount: Optional[float] = None
+    unpaid_amount: Optional[float] = None
+    payment_format: Optional[str] = None
+    cash_collector: Optional[str] = None
+    payment_plan_date: Optional[datetime] = None
+
+
+class ClientCreate(ClientBase):
+    pass
+
+
+class ClientUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    status: Optional[str] = None
+    event_date: Optional[datetime] = None
+    event_format: Optional[str] = None
+    event_group: Optional[str] = None
+    event_time: Optional[str] = None
+    event_location: Optional[str] = None
+    comments: Optional[str] = None
+    kp_total_amount: Optional[float] = None
+    paid_amount: Optional[float] = None
+    unpaid_amount: Optional[float] = None
+    payment_format: Optional[str] = None
+    cash_collector: Optional[str] = None
+    payment_plan_date: Optional[datetime] = None
+
+
+class Client(ClientBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

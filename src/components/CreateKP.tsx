@@ -21,10 +21,12 @@ import {
   categoriesApi,
   kpApi,
   templatesApi,
+  menusApi,
   getImageUrl,
   type Item,
   type Category,
   type Template as ApiTemplate,
+  type Menu,
 } from "../lib/api";
 
 interface Dish {
@@ -39,6 +41,13 @@ interface Dish {
   subcategory: string;
 }
 
+interface AdditionalItem {
+  id: number;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export function CreateKP() {
   const [step, setStep] = useState(1);
   const [selectedDishes, setSelectedDishes] = useState<number[]>([]);
@@ -47,15 +56,27 @@ export function CreateKP() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [menus, setMenus] = useState<Menu[]>([]);
+  const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [clientName, setClientName] = useState("");
+  const [eventGroup, setEventGroup] = useState<"" | "delivery-boxes" | "catering" | "other">("");
+  const [eventFormat, setEventFormat] = useState("");
   const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
   const [guestCount, setGuestCount] = useState("");
+  const [eventLocation, setEventLocation] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [coordinatorName, setCoordinatorName] = useState("");
+  const [coordinatorPhone, setCoordinatorPhone] = useState("");
   const [sendEmail, setSendEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
   const [sendTelegram, setSendTelegram] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState("");
+  const [dishQuantities, setDishQuantities] = useState<Record<number, number>>({});
+  const [equipmentItems, setEquipmentItems] = useState<AdditionalItem[]>([]);
+  const [serviceItems, setServiceItems] = useState<AdditionalItem[]>([]);
+  const [transportTotal, setTransportTotal] = useState<string>("");
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -103,34 +124,42 @@ export function CreateKP() {
     loadDishes();
   }, []);
 
-  // Load templates from API
+  // Load templates and menus from API
   useEffect(() => {
-    const loadTemplates = async () => {
+    const loadTemplatesAndMenus = async () => {
       setTemplatesLoading(true);
       try {
-        const data = await templatesApi.getTemplates();
-        setTemplates(data);
+        const [templatesData, menusData] = await Promise.all([
+          templatesApi.getTemplates(),
+          menusApi.getMenus(),
+        ]);
+
+        setTemplates(templatesData);
+        setMenus(menusData);
 
         // Автовибір шаблону:
         // 1) якщо є шаблон за замовчуванням (is_default === true) – беремо його
         // 2) інакше беремо перший у списку
-        if (data.length > 0) {
-          const defaultTemplate = data.find((t) => t.is_default) || data[0];
+        if (templatesData.length > 0) {
+          const defaultTemplate =
+            templatesData.find((t) => t.is_default) || templatesData[0];
           setSelectedTemplateId(defaultTemplate.id);
         }
       } catch (error: any) {
-        console.error("Error loading templates", error);
-        toast.error("Помилка завантаження шаблонів КП");
+        console.error("Error loading templates or menus", error);
+        toast.error("Помилка завантаження шаблонів або меню");
       } finally {
         setTemplatesLoading(false);
       }
     };
 
-    loadTemplates();
+    loadTemplatesAndMenus();
   }, []);
 
 
-  const allTags = Array.from(new Set(dishes.flatMap((dish) => dish.category)));
+  const allTags: string[] = Array.from(
+    new Set<string>(dishes.map((dish) => dish.category))
+  );
 
   const filteredDishes = dishes.filter((dish) => {
     const matchesSearch =
@@ -143,9 +172,23 @@ export function CreateKP() {
   });
 
   const toggleDish = (dishId: number) => {
-    setSelectedDishes((prev) =>
-      prev.includes(dishId) ? prev.filter((id) => id !== dishId) : [...prev, dishId]
-    );
+    setSelectedDishes((prev) => {
+      const isSelected = prev.includes(dishId);
+      if (isSelected) {
+        const updated = prev.filter((id) => id !== dishId);
+        setDishQuantities((q) => {
+          const { [dishId]: _, ...rest } = q;
+          return rest;
+        });
+        return updated;
+      }
+      // За замовчуванням: 1 порція на гостя, якщо відома кількість гостей
+      setDishQuantities((q) => ({
+        ...q,
+        [dishId]: q[dishId] ?? (guestCount ? parseInt(guestCount, 10) || 1 : 1),
+      }));
+      return [...prev, dishId];
+    });
   };
 
   const toggleTag = (tag: string) => {
@@ -159,14 +202,130 @@ export function CreateKP() {
   };
 
   const getTotalPrice = () => {
-    return getSelectedDishesData().reduce((sum, dish) => sum + dish.price, 0);
+    return getSelectedDishesData().reduce((sum, dish) => {
+      const qty = dishQuantities[dish.id] ?? 1;
+      return sum + dish.price * qty;
+    }, 0);
+  };
+
+  const getTotalWeight = () => {
+    return getSelectedDishesData().reduce((sum, dish) => {
+      const qty = dishQuantities[dish.id] ?? 1;
+      return sum + (dish.weight || 0) * qty;
+    }, 0);
+  };
+
+  const calculateAdditionalTotal = (items: AdditionalItem[]) =>
+    items.reduce(
+      (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+      0
+    );
+
+  const equipmentTotal = calculateAdditionalTotal(equipmentItems);
+  const serviceTotal = calculateAdditionalTotal(serviceItems);
+
+  const foodTotalPrice = getTotalPrice();
+  const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+  const totalPrice = foodTotalPrice + equipmentTotal + serviceTotal;
+
+  const handleApplyMenu = () => {
+    if (!selectedMenuId) return;
+    const menuIdNum = parseInt(selectedMenuId, 10);
+    const menu = menus.find((m) => m.id === menuIdNum);
+    if (!menu) {
+      toast.error("Меню не знайдено");
+      return;
+    }
+
+    if (!menu.items || menu.items.length === 0) {
+      toast.error("У цьому меню немає страв");
+      return;
+    }
+
+    // Додаємо/оновлюємо кількість порцій за меню
+    setDishQuantities((prev) => {
+      const updated = { ...prev };
+      menu.items.forEach((mi) => {
+        // Переконуємось, що ця страва доступна серед активних страв
+        const exists = dishes.some((d) => d.id === mi.item_id);
+        if (!exists) return;
+        updated[mi.item_id] = (updated[mi.item_id] ?? 0) + mi.quantity;
+      });
+      return updated;
+    });
+
+    // Додаємо страви з меню до обраних
+    setSelectedDishes((prev) => {
+      const ids = new Set(prev);
+      menu.items.forEach((mi) => {
+        if (dishes.some((d) => d.id === mi.item_id)) {
+          ids.add(mi.item_id);
+        }
+      });
+      return Array.from(ids);
+    });
+
+    toast.success(`Меню "${menu.name}" додано до списку страв`);
+  };
+
+  const handleAdditionalItemChange = (
+    type: "equipment" | "service",
+    id: number,
+    field: keyof Omit<AdditionalItem, "id">,
+    value: string
+  ) => {
+    const updater =
+      type === "equipment" ? setEquipmentItems : setServiceItems;
+    updater((items) =>
+      items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              [field]:
+                field === "name"
+                  ? value
+                  : Number.isNaN(parseFloat(value))
+                  ? 0
+                  : parseFloat(value),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleAddAdditionalItem = (type: "equipment" | "service") => {
+    const updater =
+      type === "equipment" ? setEquipmentItems : setServiceItems;
+    updater((items) => [
+      ...items,
+      {
+        id: Date.now(),
+        name: "",
+        quantity: 0,
+        unitPrice: 0,
+      },
+    ]);
+  };
+
+  const handleRemoveAdditionalItem = (type: "equipment" | "service", id: number) => {
+    const updater =
+      type === "equipment" ? setEquipmentItems : setServiceItems;
+    updater((items) => items.filter((item) => item.id !== id));
   };
 
   const [creatingKP, setCreatingKP] = useState(false);
 
   const handleCreateKP = async () => {
     if (!clientName || !eventDate || !guestCount) {
-      toast.error("Будь ласка, заповніть всі дані клієнта");
+      toast.error("Будь ласка, заповніть всі обов'язкові дані клієнта та заходу");
+      return;
+    }
+    if (!eventGroup) {
+      toast.error("Оберіть групу формату заходу");
+      return;
+    }
+    if (!eventFormat) {
+      toast.error("Вкажіть формат заходу");
       return;
     }
     if (selectedDishes.length === 0) {
@@ -183,7 +342,10 @@ export function CreateKP() {
     }
 
     const peopleCountNum = parseInt(guestCount, 10) || 0;
-    const totalPrice = getTotalPrice();
+    const foodTotalPrice = getTotalPrice();
+    const transportTotalNum = parseFloat(transportTotal || "0") || 0;
+    const totalPrice =
+      foodTotalPrice + equipmentTotal + serviceTotal + transportTotalNum;
     const title =
       clientName ||
       `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
@@ -198,6 +360,14 @@ export function CreateKP() {
       const kp = await kpApi.createKP({
         title,
         people_count: peopleCountNum,
+        event_group: eventGroup || undefined,
+        client_name: clientName || undefined,
+        event_format: eventFormat || undefined,
+        event_date: eventDate ? new Date(eventDate).toISOString() : undefined,
+        event_location: eventLocation || undefined,
+        event_time: eventTime || undefined,
+        coordinator_name: coordinatorName || undefined,
+        coordinator_phone: coordinatorPhone || undefined,
         total_price: totalPrice,
         price_per_person:
           peopleCountNum > 0 ? totalPrice / peopleCountNum : undefined,
@@ -209,6 +379,9 @@ export function CreateKP() {
         client_phone: clientPhone || undefined,
         send_telegram: sendTelegram,
         telegram_message: telegramMessage || undefined,
+        equipment_total: equipmentTotal || undefined,
+        service_total: serviceTotal || undefined,
+        transport_total: transportTotalNum || undefined,
       });
 
       toast.success(
@@ -231,11 +404,24 @@ export function CreateKP() {
       setSelectedDishes([]);
       setSelectedTemplateId(null);
       setClientName("");
+      setEventGroup("");
       setEventDate("");
+      setEventFormat("");
+      setEventTime("");
       setGuestCount("");
+      setEventLocation("");
       setClientEmail("");
+      setClientPhone("");
+      setCoordinatorName("");
+      setCoordinatorPhone("");
       setSendEmail(false);
       setEmailMessage("");
+      setSendTelegram(false);
+      setTelegramMessage("");
+      setDishQuantities({});
+      setEquipmentItems([]);
+      setServiceItems([]);
+      setTransportTotal("");
     } catch (error: any) {
       console.error("Error creating KP:", error);
       toast.error(
@@ -256,10 +442,14 @@ export function CreateKP() {
       {/* Progress Steps */}
       <div className="flex items-center gap-2 md:gap-4 overflow-x-auto pb-2">
         {[
-          { num: 1, label: "Дані клієнта" },
+          { num: 1, label: "Дані клієнта та заходу" },
           { num: 2, label: "Вибір страв" },
-          { num: 3, label: "Шаблон та відправка" },
-        ].map((s, idx) => (
+          { num: 3, label: "Прорахунок обладнання" },
+          { num: 4, label: "Прорахунок обслуговування" },
+          { num: 5, label: "Конструктор" },
+          { num: 6, label: "Прев'ю КП" },
+          { num: 7, label: "Шаблон та відправка" },
+        ].map((s, idx, arr) => (
           <div key={s.num} className="flex items-center gap-2 md:gap-4">
             <div className="flex items-center gap-2">
               <div
@@ -279,7 +469,9 @@ export function CreateKP() {
                 {s.label}
               </span>
             </div>
-            {idx < 2 && <ChevronRight className="w-3 h-3 md:w-4 md:h-4 text-gray-400" />}
+            {idx < arr.length - 1 && (
+              <ChevronRight className="w-3 h-3 md:w-4 md:h-4 text-gray-400" />
+            )}
           </div>
         ))}
       </div>
@@ -288,7 +480,7 @@ export function CreateKP() {
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>Крок 1: Дані клієнта та події</CardTitle>
+            <CardTitle>Крок 1: Дані клієнта та заходу</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4 md:space-y-6">
@@ -305,6 +497,82 @@ export function CreateKP() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="event-group">Група формату</Label>
+                  <Select
+                    value={eventGroup}
+                    onValueChange={(value) => {
+                      setEventGroup(value as "delivery-boxes" | "catering" | "other");
+                      // Скидаємо детальний формат при зміні групи
+                      setEventFormat("");
+                    }}
+                  >
+                    <SelectTrigger id="event-group">
+                      <SelectValue placeholder="Оберіть групу формату" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
+                      <SelectItem value="catering">Кейтерінг</SelectItem>
+                      <SelectItem value="other">Інше</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="event-format">Формат заходу</Label>
+                  {eventGroup === "catering" && (
+                    <Select
+                      value={eventFormat}
+                      onValueChange={(value) => setEventFormat(value)}
+                    >
+                      <SelectTrigger id="event-format">
+                        <SelectValue placeholder="Оберіть формат кейтерінгу" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Доставка готових страв">
+                          Доставка готових страв
+                        </SelectItem>
+                        <SelectItem value="Доставка обідів">
+                          Доставка обідів
+                        </SelectItem>
+                        <SelectItem value="Кава-брейк">Кава-брейк</SelectItem>
+                        <SelectItem value="Фуршет">Фуршет</SelectItem>
+                        <SelectItem value="Банкет">Банкет</SelectItem>
+                        <SelectItem value="Комплексне обслуговування">
+                          Комплексне обслуговування
+                        </SelectItem>
+                        <SelectItem value="Доставка з накриттям (фуршет/банкет)">
+                          Доставка з накриттям (фуршет/банкет)
+                        </SelectItem>
+                        <SelectItem value="Бар кейтерінг">Бар кейтерінг</SelectItem>
+                        <SelectItem value="Су-від">Су-від</SelectItem>
+                        <SelectItem value="Оренда обладнання/персоналу">
+                          Оренда обладнання/персоналу
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {eventGroup === "delivery-boxes" && (
+                    <Input
+                      id="event-format"
+                      value={eventFormat || "Доставка боксів"}
+                      onChange={(e) => setEventFormat(e.target.value)}
+                      placeholder="Доставка боксів"
+                    />
+                  )}
+                  {eventGroup === "other" && (
+                    <Input
+                      id="event-format"
+                      value={eventFormat}
+                      onChange={(e) => setEventFormat(e.target.value)}
+                      placeholder="Опишіть формат (Інше)"
+                    />
+                  )}
+                  {!eventGroup && (
+                    <p className="text-xs text-gray-500">
+                      Спочатку оберіть групу формату (Доставка боксів / Кейтерінг / Інше).
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="event-date">
                     Дата події <span className="text-red-500">*</span>
                   </Label>
@@ -315,7 +583,17 @@ export function CreateKP() {
                     onChange={(e) => setEventDate(e.target.value)}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="event-time">Час події</Label>
+                  <Input
+                    id="event-time"
+                    placeholder="17:00–19:00"
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                  />
               </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="guest-count">
                   Кількість гостей <span className="text-red-500">*</span>
@@ -327,6 +605,16 @@ export function CreateKP() {
                   value={guestCount}
                   onChange={(e) => setGuestCount(e.target.value)}
                 />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="event-location">Місце проведення</Label>
+                  <Input
+                    id="event-location"
+                    placeholder="м. Київ, вул. Короленківська 4"
+                    value={eventLocation}
+                    onChange={(e) => setEventLocation(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -347,6 +635,27 @@ export function CreateKP() {
                     placeholder="+380..."
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="coordinator-name">Координатор</Label>
+                  <Input
+                    id="coordinator-name"
+                    placeholder="Ім'я координатора"
+                    value={coordinatorName}
+                    onChange={(e) => setCoordinatorName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="coordinator-phone">Телефон координатора</Label>
+                  <Input
+                    id="coordinator-phone"
+                    type="tel"
+                    placeholder="+380..."
+                    value={coordinatorPhone}
+                    onChange={(e) => setCoordinatorPhone(e.target.value)}
                   />
                 </div>
               </div>
@@ -455,6 +764,45 @@ export function CreateKP() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Ready menus selector */}
+                  {menus.length > 0 && (
+                    <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                      <div className="flex-1 space-y-1">
+                        <Label htmlFor="ready-menu">Додати готове меню</Label>
+                        <select
+                          id="ready-menu"
+                          className="w-full border rounded-md px-3 py-2 text-sm"
+                          value={selectedMenuId}
+                          onChange={(e) => setSelectedMenuId(e.target.value)}
+                        >
+                          <option value="">Оберіть меню</option>
+                          {menus.map((menu) => (
+                            <option key={menu.id} value={menu.id}>
+                              {menu.name}
+                              {menu.people_count
+                                ? ` • ${menu.people_count} гостей`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500">
+                          Після вибору меню всі його страви з кількостями будуть додані до списку нижче. 
+                          Ви зможете додатково змінити порції на наступному кроці «Конструктор».
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full md:w-auto"
+                        disabled={!selectedMenuId}
+                        onClick={handleApplyMenu}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Додати меню
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -580,19 +928,575 @@ export function CreateKP() {
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
               disabled={selectedDishes.length === 0 || loading}
             >
-              Далі: Вибір шаблону
+              Далі: Обладнання
               <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Template Selection and Send */}
+      {/* Step 3: Equipment calculation */}
       {step === 3 && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Крок 3: Вибір шаблону та відправка</CardTitle>
+              <CardTitle>Крок 3: Прорахунок обладнання</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Додайте все необхідне обладнання для заходу (столи, посуд, текстиль тощо).
+                </p>
+                <div className="space-y-3">
+                  {equipmentItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+                    >
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Найменування</Label>
+                        <Input
+                          value={item.name}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "equipment",
+                              item.id,
+                              "name",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Наприклад, коктейльний стіл у чохлі"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Кількість</Label>
+                        <Input
+                          type="number"
+                          value={item.quantity || ""}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "equipment",
+                              item.id,
+                              "quantity",
+                              e.target.value
+                            )
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Ціна за одиницю, грн</Label>
+                        <Input
+                          type="number"
+                          value={item.unitPrice || ""}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "equipment",
+                              item.id,
+                              "unitPrice",
+                              e.target.value
+                            )
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between md:col-span-4 pt-2">
+                        <span className="text-sm text-gray-600">
+                          Сума:{" "}
+                          <span className="font-semibold text-gray-900">
+                            {(item.quantity || 0) * (item.unitPrice || 0)} грн
+                          </span>
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleRemoveAdditionalItem("equipment", item.id)
+                          }
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Видалити
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAddAdditionalItem("equipment")}
+                    className="w-full md:w-auto"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Додати позицію
+                  </Button>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex justify-between">
+                  <span className="text-gray-700 font-medium">
+                    Всього за обладнання:
+                  </span>
+                  <span className="text-gray-900 font-semibold">
+                    {equipmentTotal} грн
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={() => setStep(2)}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              Назад
+            </Button>
+            <Button
+              onClick={() => setStep(4)}
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
+            >
+              Далі: Обслуговування
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Service calculation */}
+      {step === 4 && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Крок 4: Прорахунок обслуговування</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Додайте послуги обслуговування (офіціанти, логістика тощо).
+                </p>
+                <div className="space-y-3">
+                  {serviceItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+                    >
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Найменування</Label>
+                        <Input
+                          value={item.name}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "service",
+                              item.id,
+                              "name",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Наприклад, офіціант"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Кількість</Label>
+                        <Input
+                          type="number"
+                          value={item.quantity || ""}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "service",
+                              item.id,
+                              "quantity",
+                              e.target.value
+                            )
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Ціна за одиницю, грн</Label>
+                        <Input
+                          type="number"
+                          value={item.unitPrice || ""}
+                          onChange={(e) =>
+                            handleAdditionalItemChange(
+                              "service",
+                              item.id,
+                              "unitPrice",
+                              e.target.value
+                            )
+                          }
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between md:col-span-4 pt-2">
+                        <span className="text-sm text-gray-600">
+                          Сума:{" "}
+                          <span className="font-semibold text-gray-900">
+                            {(item.quantity || 0) * (item.unitPrice || 0)} грн
+                          </span>
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleRemoveAdditionalItem("service", item.id)
+                          }
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Видалити
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleAddAdditionalItem("service")}
+                    className="w-full md:w-auto"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Додати послугу
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex justify-between">
+                    <span className="text-gray-700 font-medium">
+                      Всього за обслуговування:
+                    </span>
+                    <span className="text-gray-900 font-semibold">
+                      {serviceTotal} грн
+                    </span>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between gap-4">
+                    <span className="text-gray-700 font-medium">
+                      Транспортні витрати (загальна сума), грн
+                    </span>
+                    <Input
+                      className="w-40 text-right"
+                      type="number"
+                      value={transportTotal}
+                      onChange={(e) => setTransportTotal(e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={() => setStep(3)}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              Назад
+            </Button>
+            <Button
+              onClick={() => setStep(5)}
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
+            >
+              Далі: Конструктор
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: Constructor (menu and per-person calculation) */}
+      {step === 5 && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Крок 5: Конструктор меню</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Налаштуйте кількість порцій по кожній позиції меню, щоб система розрахувала вагу та вартість.
+                </p>
+                {selectedDishes.length === 0 ? (
+                  <p className="text-gray-500">
+                    Страви не обрано. Поверніться на крок &quot;Вибір страв&quot;.
+                  </p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="py-2 pr-4 text-left">Страва</th>
+                            <th className="py-2 px-4 text-right">Вага порції</th>
+                            <th className="py-2 px-4 text-right">Ціна порції, грн</th>
+                            <th className="py-2 px-4 text-right">Кількість порцій</th>
+                            <th className="py-2 pl-4 text-right">Всього, грн</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getSelectedDishesData().map((dish) => {
+                            const qty = dishQuantities[dish.id] ?? 1;
+                            const total = qty * dish.price;
+                            return (
+                              <tr key={dish.id} className="border-b last:border-0">
+                                <td className="py-2 pr-4">{dish.name}</td>
+                                <td className="py-2 px-4 text-right">
+                                  {dish.weight > 0 ? `${dish.weight}${dish.unit}` : "-"}
+                                </td>
+                                <td className="py-2 px-4 text-right">{dish.price}</td>
+                                <td className="py-2 px-4 text-right">
+                                  <Input
+                                    type="number"
+                                    className="w-24 ml-auto"
+                                    value={qty}
+                                    onChange={(e) => {
+                                      const value = parseInt(e.target.value, 10) || 0;
+                                      setDishQuantities((prev) => ({
+                                        ...prev,
+                                        [dish.id]: value,
+                                      }));
+                                    }}
+                                  />
+                                </td>
+                                <td className="py-2 pl-4 text-right">{total}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Вартість страв (усі позиції)
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {foodTotalPrice} грн
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Орієнтовний вихід (сума ваги)
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {getTotalWeight()} {dishes[0]?.unit || "г"}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Вартість страв на 1 гостя
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {peopleCountNum > 0
+                            ? (foodTotalPrice / peopleCountNum).toFixed(2)
+                            : "-"}{" "}
+                          грн
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={() => setStep(4)}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              Назад
+            </Button>
+            <Button
+              onClick={() => setStep(6)}
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
+            >
+              Далі: Прев'ю КП
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 6: KP preview */}
+      {step === 6 && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Крок 6: Прев&apos;ю КП</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Клієнт</p>
+                    <p className="text-gray-900 font-medium">{clientName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Формат</p>
+                    <p className="text-gray-900 font-medium">
+                      {eventFormat || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Дата заходу</p>
+                    <p className="text-gray-900 font-medium">
+                      {eventDate || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Час</p>
+                    <p className="text-gray-900 font-medium">
+                      {eventTime || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Кількість гостей</p>
+                    <p className="text-gray-900 font-medium">
+                      {guestCount || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Місце проведення</p>
+                    <p className="text-gray-900 font-medium">
+                      {eventLocation || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Координатор</p>
+                    <p className="text-gray-900 font-medium">
+                      {coordinatorName || "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-gray-500">Телефон координатора</p>
+                    <p className="text-gray-900 font-medium">
+                      {coordinatorPhone || "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-4">
+                  <h4 className="text-gray-900 font-medium">Обрані страви</h4>
+                  {getSelectedDishesData().length === 0 ? (
+                    <p className="text-gray-500 text-sm">
+                      Страви не обрано.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 text-sm">
+                      {getSelectedDishesData().map((dish) => {
+                        const qty = dishQuantities[dish.id] ?? 1;
+                        return (
+                          <div
+                            key={dish.id}
+                            className="flex items-center justify-between"
+                          >
+                            <span className="text-gray-900">
+                              {dish.name}{" "}
+                              <span className="text-gray-500">
+                                × {qty} порцій
+                              </span>
+                            </span>
+                            <span className="text-gray-600">
+                              {dish.price * qty} грн
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t pt-4 space-y-2 text-sm">
+                  <h4 className="text-gray-900 font-medium">
+                    Додаткові блоки
+                  </h4>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">
+                      Обладнання
+                    </span>
+                    <span className="text-gray-900 font-medium">
+                      {equipmentTotal} грн
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">
+                      Обслуговування
+                    </span>
+                    <span className="text-gray-900 font-medium">
+                      {serviceTotal} грн
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">
+                      Транспортні витрати
+                    </span>
+                    <span className="text-gray-900 font-medium">
+                      {transportTotal || "0"} грн
+                    </span>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm text-gray-600 mb-1">
+                      Загальна вартість заходу
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {totalPrice} грн
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm text-gray-600 mb-1">
+                      На 1 гостя
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {peopleCountNum > 0
+                        ? (totalPrice / peopleCountNum).toFixed(2)
+                        : "-"}{" "}
+                      грн
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm text-gray-600 mb-1">
+                      Орієнтовний вихід на 1 гостя
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {peopleCountNum > 0
+                        ? (getTotalWeight() / peopleCountNum).toFixed(2)
+                        : "-"}{" "}
+                      {dishes[0]?.unit || "г"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={() => setStep(5)}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              Назад
+            </Button>
+            <Button
+              onClick={() => setStep(7)}
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
+            >
+              Далі: Шаблон та відправка
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 7: Template Selection and Send */}
+      {step === 7 && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Крок 7: Вибір шаблону та відправка</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">

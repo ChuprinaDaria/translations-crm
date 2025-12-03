@@ -157,6 +157,15 @@
             margin-bottom: 50px;
         }
 
+        .category-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 30px 0 15px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+
         .product-card {
             background: #f9f9f9;
             padding: 30px;
@@ -435,19 +444,23 @@
 
     </style>
 </head>
-<body>
+<body {% if background_image_src %}style="background: url('{{ background_image_src }}') center top / cover no-repeat;"{% endif %}>
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="logo">
-                <span class="logo-box">BOX</span>
-            </div>
-            <div class="logo" style="font-size: 18px; letter-spacing: 4px;">CATERING</div>
-            <div class="tagline">
-                <span>EAT TOGETHER</span>
-                <span>LOVE TOGETHER</span>
-            </div>
-            <div class="slogan">ПЕРША ДОСТАВКА ГОТОВОЇ ЇЖІ В КОРОБКАХ</div>
+            {% if header_image_src %}
+                <img src="{{ header_image_src }}" alt="Header" style="width: 100%; height: auto; border-radius: 20px;" />
+            {% else %}
+                <div class="logo">
+                    <span class="logo-box">BOX</span>
+                </div>
+                <div class="logo" style="font-size: 18px; letter-spacing: 4px;">CATERING</div>
+                <div class="tagline">
+                    <span>EAT TOGETHER</span>
+                    <span>LOVE TOGETHER</span>
+                </div>
+                <div class="slogan">ПЕРША ДОСТАВКА ГОТОВОЇ ЇЖІ В КОРОБКАХ</div>
+            {% endif %}
         </div>
 
         <!-- Main Content -->
@@ -458,11 +471,11 @@
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="info-label">Дата прорахунку:</span>
-                        <span class="info-value">{{ kp.created_at.strftime('%d.%m.%Y') }}</span>
+                        <span class="info-value">{{ created_date }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Дата заходу:</span>
-                        <span class="info-value">{{ kp.created_at.strftime('%d.%m.%Y') }}</span>
+                        <span class="info-value">{{ event_date or created_date }}</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Кількість гостей:</span>
@@ -481,31 +494,39 @@
             </div>
 
             <!-- Products -->
-            <h2 class="section-title">Продукція</h2>
+            <h2 class="section-title">Меню</h2>
             <div class="products">
-                <!-- Product 1 -->
-                 {% for item in items %}
-                    <div class="product-card">
-                        <div class="product-header">
-                            <div class="product-title">{{ item['name'] }}</div>
-                            <div class="product-price">
-                                <div class="price-amount">{{ item['price'] }} ₴</div>
-                                <div class="price-details">× {{ item['quantity'] }} = {{ item['total'] }} ₴</div>
-                                <div class="price-details">Вихід: {{ item['weight'] }} ({{ item['weight'] / kp['people_count']}}/персону)</div>
+                {% for category, cat_items in items|groupby('category_name') %}
+                    {% if category %}
+                        <div class="category-title">{{ category }}</div>
+                    {% endif %}
+                    {% for item in cat_items %}
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-title">{{ item['name'] }}</div>
+                                <div class="product-price">
+                                    <div class="price-amount">{{ item['price'] }}</div>
+                                    <div class="price-details">
+                                        × {{ item['quantity'] }} = {{ item['total'] }}
+                                    </div>
+                                    <div class="price-details">
+                                        Вихід на стіл: {{ item['weight'] }}
+                                    </div>
+                                    <div class="price-details">
+                                        Вихід на 1 гостя:
+                                        {{
+                                            (item['total_weight'] / (kp.people_count or 1))
+                                            | round(0)
+                                        }} г
+                                    </div>
+                                </div>
                             </div>
+                            {% if item['description'] %}
+                                <div class="product-description">{{ item['description'] }}</div>
+                            {% endif %}
                         </div>
-                        <div class="product-description">{{ item['description'] }}</div>
-                        <!-- <div class="product-contents">
-                            <strong>Всередині боксу:</strong>
-                            <ul>
-                                <li>Ніжний яловичий ростбіф з соусом Дор-блю, солодким виноградом і чебрецем на темному багеті</li>
-                                <li>Кошик з пряною іспанської ковбаси чорізо з крем-сиром Філадельфія, бальзамічною ікрою і каперсами</li>
-                                <li>Кошик з хрусткою запеченою пармською шинкою з крем-сиром, яблучним чатні, чебрецем і соусом зі смородини</li>
-                                <li>Фірмовий тар-тар з лосося з крем-сиром Філадельфія і м'якоттю авокадо на тості з бородинського хліба</li>
-                            </ul>
-                        </div> -->
-                    </div>
-                 {% endfor %}
+                    {% endfor %}
+                {% endfor %}
             </div>
 
             <!-- Service -->
@@ -589,6 +610,28 @@
                 <h2>Разом</h2>
                 <div class="summary-grid">
                     <div class="summary-item">
+                        <div class="summary-label">Кухня / меню</div>
+                        <div class="summary-value">{{ food_total }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Оренда обладнання</div>
+                        <div class="summary-value">
+                            {{ equipment_total or 0 }} грн
+                        </div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Обслуговування персоналом</div>
+                        <div class="summary-value">
+                            {{ service_total or 0 }} грн
+                        </div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Транспортні витрати</div>
+                        <div class="summary-value">
+                            {{ transport_total or 0 }} грн
+                        </div>
+                    </div>
+                    <div class="summary-item">
                         <div class="summary-label">Загалом захід</div>
                         <div class="summary-value">{{ kp.total_price }} грн</div>
                     </div>
@@ -596,14 +639,6 @@
                         <div class="summary-label">На 1 гостя</div>
                         <div class="summary-value">{{ kp.price_per_person }} грн</div>
                     </div>
-                    <div class="summary-item">
-                        <div class="summary-label">Вихід на 1 гостя</div>
-                        <div class="summary-value">{{ total_weight / kp.people_count }} г</div>
-                    </div>
-                    <!-- <div class="summary-item">
-                        <div class="summary-label">В т.ч. сервісне обслуговування</div>
-                        <div class="summary-value">15 650 грн</div>
-                    </div> -->
                 </div>
             </div>
         </div>

@@ -12,6 +12,8 @@ interface RegisterFormProps {
 }
 
 export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,7 +22,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [success, setSuccess] = useState(false);
 
   const validateForm = (): boolean => {
-    if (!email || !password) {
+    if (!firstName || !lastName || !email || !password) {
       setError("Заповніть всі поля");
       return false;
     }
@@ -54,7 +56,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     setLoading(true);
 
     try {
-      await authApi.register({ email, password });
+      await authApi.register({
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+      });
       setSuccess(true);
       // After 2 seconds, switch to login
       setTimeout(() => {
@@ -120,6 +127,32 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="firstName">Ім'я</Label>
+            <Input
+              id="firstName"
+              type="text"
+              placeholder="Іван"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lastName">Прізвище</Label>
+            <Input
+              id="lastName"
+              type="text"
+              placeholder="Петренко"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
