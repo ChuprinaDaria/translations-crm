@@ -200,7 +200,116 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
     )
 
 def get_kp(db: Session, kp_id: int):
-    return db.query(models.KP).filter(models.KP.id == kp_id).first()
+    return (
+        db.query(models.KP)
+        .options(
+            selectinload(models.KP.items).selectinload(models.KPItem.item),
+            selectinload(models.KP.created_by),
+        )
+        .filter(models.KP.id == kp_id)
+        .first()
+    )
+
+
+def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
+    """Оновлення існуючого КП"""
+    kp = db.query(models.KP).filter(models.KP.id == kp_id).first()
+    if not kp:
+        return None
+    
+    # Оновлюємо основні поля
+    kp.title = kp_in.title
+    kp.people_count = kp_in.people_count
+    kp.total_price = kp_in.total_price
+    kp.price_per_person = kp_in.price_per_person or (kp_in.total_price / kp_in.people_count if kp_in.people_count > 0 else None)
+    kp.template_id = kp_in.template_id
+    kp.client_name = kp_in.client_name
+    kp.event_format = kp_in.event_format
+    kp.event_group = kp_in.event_group
+    kp.event_date = kp_in.event_date
+    kp.event_location = kp_in.event_location
+    kp.event_time = kp_in.event_time
+    kp.coordinator_name = kp_in.coordinator_name
+    kp.coordinator_phone = kp_in.coordinator_phone
+    kp.client_email = kp_in.client_email
+    kp.client_phone = kp_in.client_phone
+    kp.equipment_total = kp_in.equipment_total
+    kp.service_total = kp_in.service_total
+    kp.transport_total = getattr(kp_in, "transport_total", None)
+    kp.discount_id = getattr(kp_in, "discount_id", None)
+    kp.cashback_id = getattr(kp_in, "cashback_id", None)
+    kp.use_cashback = getattr(kp_in, "use_cashback", False)
+    kp.discount_amount = getattr(kp_in, "discount_amount", None)
+    kp.cashback_amount = getattr(kp_in, "cashback_amount", None)
+    
+    # Видаляємо старі позиції
+    db.query(models.KPItem).filter(models.KPItem.kp_id == kp_id).delete()
+    
+    # Додаємо нові позиції
+    item_ids = [it.item_id for it in kp_in.items]
+    total_weight_grams = 0.0
+    
+    if item_ids:
+        existing_items = {i.id: i for i in db.query(models.Item).filter(models.Item.id.in_(item_ids)).all()}
+        for it in kp_in.items:
+            if it.item_id not in existing_items:
+                raise ValueError(f"Item id {it.item_id} not found")
+            
+            item = existing_items[it.item_id]
+            # Розраховуємо вагу в грамах
+            if item.weight:
+                item_weight = item.weight
+                unit = (item.unit or 'кг').lower()
+                # Конвертуємо в грами
+                if unit == 'кг':
+                    item_weight_grams = item_weight * 1000
+                elif unit == 'г':
+                    item_weight_grams = item_weight
+                elif unit == 'л' or unit == 'мл':
+                    # Для рідини приблизно 1л = 1000г
+                    if unit == 'л':
+                        item_weight_grams = item_weight * 1000
+                    else:
+                        item_weight_grams = item_weight
+                else:
+                    # Для інших одиниць (шт тощо) вважаємо вагу 0
+                    item_weight_grams = 0
+                
+                # Множимо на кількість
+                total_weight_grams += item_weight_grams * it.quantity
+            
+            kp_item = models.KPItem(kp_id=kp.id, item_id=it.item_id, quantity=it.quantity)
+            db.add(kp_item)
+    
+    # Розраховуємо вагу на 1 гостя
+    weight_per_person = None
+    if total_weight_grams > 0 and kp_in.people_count and kp_in.people_count > 0:
+        weight_per_person = total_weight_grams / kp_in.people_count
+    
+    # Оновлюємо вагу в KP (якщо не передано явно)
+    if kp_in.total_weight is None:
+        kp.total_weight = total_weight_grams if total_weight_grams > 0 else None
+    else:
+        kp.total_weight = kp_in.total_weight
+    
+    if kp_in.weight_per_person is None:
+        kp.weight_per_person = weight_per_person
+    else:
+        kp.weight_per_person = kp_in.weight_per_person
+    
+    db.commit()
+    db.refresh(kp)
+    
+    # Автоматично оновлюємо клієнта з даними про знижки та кешбек
+    upsert_client_from_kp(db, kp)
+    
+    # eager load items+item for immediate use
+    return (
+        db.query(models.KP)
+        .options(selectinload(models.KP.items).selectinload(models.KPItem.item))
+        .filter(models.KP.id == kp.id)
+        .first()
+    )
 
 
 def get_all_kps(db: Session):

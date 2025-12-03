@@ -2036,18 +2036,56 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           </Select>
                         </div>
                       </div>
-                      {selectedCashbackId && (
-                        <div className="flex items-center space-x-2 mt-4">
-                          <Checkbox
-                            id="use-cashback-step5"
-                            checked={useCashback}
-                            onCheckedChange={(checked) => setUseCashback(checked as boolean)}
-                          />
-                          <Label htmlFor="use-cashback-step5" className="cursor-pointer">
-                            Списати кешбек з бонусного рахунку клієнта
-                          </Label>
-                        </div>
-                      )}
+                      {selectedCashbackId && (() => {
+                        const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+                        const foodPrice = selectedDiscountId 
+                          ? (() => {
+                              const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                              const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
+                              return getTotalPrice() - discountAmount;
+                            })()
+                          : getTotalPrice();
+                        const totalBeforeCashback = foodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                        const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
+                        const selectedClient = selectedClientId ? clients.find((c) => c.id === selectedClientId) : null;
+                        const clientBalance = selectedClient?.cashback || 0;
+                        const hasEnoughBalance = clientBalance >= cashbackAmount;
+                        
+                        return (
+                          <div className="mt-4 space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="use-cashback-step5"
+                                checked={useCashback}
+                                disabled={!hasEnoughBalance && selectedClientId !== null}
+                                onCheckedChange={(checked) => {
+                                  if (checked && selectedClientId && !hasEnoughBalance) {
+                                    toast.error(`Недостатньо коштів на бонусному рахунку. Доступно: ${clientBalance.toFixed(2)} грн, потрібно: ${cashbackAmount.toFixed(2)} грн`);
+                                    return;
+                                  }
+                                  setUseCashback(checked as boolean);
+                                }}
+                              />
+                              <Label htmlFor="use-cashback-step5" className="cursor-pointer">
+                                Списати кешбек з бонусного рахунку клієнта
+                              </Label>
+                            </div>
+                            {selectedClientId && (
+                              <div className="text-sm text-gray-600">
+                                Бонусний баланс клієнта: <span className={hasEnoughBalance ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>{clientBalance.toFixed(2)} грн</span>
+                                {!hasEnoughBalance && (
+                                  <span className="text-red-600 ml-2">(недостатньо для списання)</span>
+                                )}
+                              </div>
+                            )}
+                            {!selectedClientId && (
+                              <div className="text-sm text-yellow-600">
+                                ⚠️ Оберіть клієнта зі списку для перевірки балансу
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {(selectedDiscountId && selectedCashbackId) && (
                         <p className="text-sm text-red-600 mt-2">
                           ⚠️ Не можна використовувати знижку та кешбек разом
@@ -2270,9 +2308,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           </div>
                           <div className="text-lg font-semibold text-gray-900">
                             {peopleCountNum > 0
-                              ? (getTotalWeight() / peopleCountNum).toFixed(2)
+                              ? getWeightPerPerson().toFixed(0)
                               : "-"}{" "}
-                            {dishes[0]?.unit || "г"}
+                            г
                           </div>
                         </div>
                       </div>

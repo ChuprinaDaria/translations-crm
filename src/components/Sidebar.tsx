@@ -30,7 +30,7 @@ import { Button } from "./ui/button";
 interface SidebarProps {
   activeItem: string;
   onItemClick: (item: string) => void;
-  userRole: "kp-manager" | "sales-manager" | "service-manager" | "sales-lead" | "service-lead";
+  userRole: "kp-manager" | "kp-lead" | "sales-manager" | "service-manager" | "sales-lead" | "service-lead";
   isMobile?: boolean;
   onLogout: () => void;
 }

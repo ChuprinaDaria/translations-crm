@@ -26,6 +26,7 @@ import {
 
 type UserRole =
   | "kp-manager"
+  | "kp-lead"
   | "sales-manager"
   | "service-manager"
   | "sales-lead"
@@ -107,6 +108,7 @@ function App() {
   const getRoleLabel = (role: UserRole): string => {
     const roleLabels: Record<UserRole, string> = {
       "kp-manager": "Менеджер КП",
+      "kp-lead": "Керівник КП",
       "sales-manager": "Менеджер продажів",
       "service-manager": "Менеджер сервісу",
       "sales-lead": "Керівник продажів",

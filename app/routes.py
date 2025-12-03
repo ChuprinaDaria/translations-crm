@@ -677,6 +677,63 @@ def list_kp(db: Session = Depends(get_db), user = Depends(get_current_user)):
     return crud.get_all_kps(db)
 
 
+@router.get("/kp/{kp_id}", response_model=schema.KP)
+def get_kp(kp_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Отримати один КП за ID"""
+    kp = crud.get_kp(db, kp_id)
+    if not kp:
+        raise HTTPException(status_code=404, detail="KP not found")
+    return kp
+
+
+@router.put("/kp/{kp_id}", response_model=schema.KP)
+def update_kp(
+    kp_id: int,
+    kp_in: schema.KPCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Оновити існуючий КП"""
+    kp = crud.update_kp(db, kp_id, kp_in)
+    if not kp:
+        raise HTTPException(status_code=404, detail="KP not found")
+    
+    # Якщо вказано email та потрібно відправити одразу
+    if kp_in.send_email and kp_in.client_email:
+        try:
+            pdf_bytes, pdf_filename = generate_kp_pdf_bytes(kp.id, kp_in.template_id, db)
+            send_kp_email(
+                to_email=kp_in.client_email,
+                kp_title=kp.title,
+                pdf_content=pdf_bytes,
+                pdf_filename=pdf_filename,
+                message=kp_in.email_message
+            )
+        except Exception as e:
+            print(f"Error sending email after KP update: {e}")
+    
+    # Якщо вказано відправку в Telegram
+    if kp_in.send_telegram and kp_in.client_phone:
+        try:
+            pdf_bytes, pdf_filename = generate_kp_pdf_bytes(kp.id, kp_in.template_id, db)
+            # Обираємо Telegram акаунт за замовчуванням
+            account = crud.get_first_active_telegram_account(db)
+            if not account:
+                print("No active Telegram account configured; skipping Telegram send.")
+            else:
+                send_kp_telegram(
+                    session_string=account.session_string,
+                    to_phone=kp_in.client_phone,
+                    pdf_content=pdf_bytes,
+                    pdf_filename=pdf_filename,
+                    message=kp_in.telegram_message,
+                )
+        except Exception as e:
+            print(f"Error sending Telegram after KP update: {e}")
+    
+    return kp
+
+
 @router.patch("/kp/{kp_id}/status", response_model=schema.KP)
 def update_kp_status(
     kp_id: int,

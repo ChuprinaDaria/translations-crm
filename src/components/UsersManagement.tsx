@@ -22,6 +22,7 @@ export function UsersManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [editingNames, setEditingNames] = useState<Record<number, { first_name: string; last_name: string }>>({});
 
   useEffect(() => {
     loadUsers();
@@ -123,6 +124,7 @@ export function UsersManagement() {
   const getRoleLabel = (role: string): string => {
     const roleLabels: Record<string, string> = {
       "kp-manager": "Менеджер КП",
+      "kp-lead": "Керівник КП",
       "sales-manager": "Менеджер продажів",
       "service-manager": "Менеджер сервісу",
       "sales-lead": "Керівник продажів",
@@ -135,11 +137,54 @@ export function UsersManagement() {
   const availableRoles = [
     { value: "user", label: "Користувач" },
     { value: "kp-manager", label: "Менеджер КП" },
+    { value: "kp-lead", label: "Керівник КП" },
     { value: "sales-manager", label: "Менеджер продажів" },
     { value: "service-manager", label: "Менеджер сервісу" },
     { value: "sales-lead", label: "Керівник продажів" },
     { value: "service-lead", label: "Керівник сервісу" },
   ];
+
+  const handleNameChange = async (user: User, field: "first_name" | "last_name", value: string) => {
+    // Перевірка: тільки адміністратори можуть змінювати імена
+    const currentUser = users.find(u => u.email === currentUserEmail);
+    if (!currentUser?.is_admin) {
+      toast.error("Тільки адміністратори можуть змінювати імена користувачів");
+      return;
+    }
+
+    // Оновлюємо локальний стан для миттєвого відображення
+    setEditingNames((prev) => ({
+      ...prev,
+      [user.id]: {
+        ...prev[user.id],
+        [field]: value,
+      },
+    }));
+
+    try {
+      const updateData: UserUpdate = {
+        [field]: value.trim() || undefined,
+      };
+      const updated = await usersApi.updateUser(user.id, updateData);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
+      // Очищаємо локальний стан після успішного оновлення
+      setEditingNames((prev) => {
+        const newState = { ...prev };
+        delete newState[user.id];
+        return newState;
+      });
+      toast.success(`${field === "first_name" ? "Ім'я" : "Прізвище"} оновлено`);
+    } catch (error: any) {
+      toast.error("Помилка оновлення даних користувача");
+      console.error(error);
+      // Відновлюємо оригінальні значення при помилці
+      setEditingNames((prev) => {
+        const newState = { ...prev };
+        delete newState[user.id];
+        return newState;
+      });
+    }
+  };
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -225,9 +270,88 @@ export function UsersManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {user.first_name || user.last_name
-                            ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
-                            : "-"}
+                          {isCurrentUserAdmin ? (
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                placeholder="Ім'я"
+                                value={editingNames[user.id]?.first_name !== undefined 
+                                  ? editingNames[user.id].first_name 
+                                  : (user.first_name || "")}
+                                onChange={(e) => {
+                                  setEditingNames((prev) => ({
+                                    ...prev,
+                                    [user.id]: {
+                                      ...prev[user.id],
+                                      first_name: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                onBlur={(e) => {
+                                  const newValue = e.target.value.trim();
+                                  const oldValue = user.first_name || "";
+                                  if (newValue !== oldValue) {
+                                    handleNameChange(user, "first_name", newValue);
+                                  } else {
+                                    // Очищаємо локальний стан, якщо значення не змінилося
+                                    setEditingNames((prev) => {
+                                      const newState = { ...prev };
+                                      if (newState[user.id]) {
+                                        delete newState[user.id].first_name;
+                                        if (Object.keys(newState[user.id]).length === 0) {
+                                          delete newState[user.id];
+                                        }
+                                      }
+                                      return newState;
+                                    });
+                                  }
+                                }}
+                                className="w-24 text-sm h-8"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="Прізвище"
+                                value={editingNames[user.id]?.last_name !== undefined 
+                                  ? editingNames[user.id].last_name 
+                                  : (user.last_name || "")}
+                                onChange={(e) => {
+                                  setEditingNames((prev) => ({
+                                    ...prev,
+                                    [user.id]: {
+                                      ...prev[user.id],
+                                      last_name: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                onBlur={(e) => {
+                                  const newValue = e.target.value.trim();
+                                  const oldValue = user.last_name || "";
+                                  if (newValue !== oldValue) {
+                                    handleNameChange(user, "last_name", newValue);
+                                  } else {
+                                    // Очищаємо локальний стан, якщо значення не змінилося
+                                    setEditingNames((prev) => {
+                                      const newState = { ...prev };
+                                      if (newState[user.id]) {
+                                        delete newState[user.id].last_name;
+                                        if (Object.keys(newState[user.id]).length === 0) {
+                                          delete newState[user.id];
+                                        }
+                                      }
+                                      return newState;
+                                    });
+                                  }
+                                }}
+                                className="w-24 text-sm h-8"
+                              />
+                            </div>
+                          ) : (
+                            <span>
+                              {user.first_name || user.last_name
+                                ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+                                : "-"}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {isCurrentUserAdmin ? (
