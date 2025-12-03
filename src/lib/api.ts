@@ -544,6 +544,9 @@ export interface KP {
   use_cashback?: boolean;
   discount_amount?: number;
   cashback_amount?: number;
+  discount_include_menu?: boolean;
+  discount_include_equipment?: boolean;
+  discount_include_service?: boolean;
 }
 
 export interface KPCreate {
@@ -578,6 +581,9 @@ export interface KPCreate {
   use_cashback?: boolean;
   discount_amount?: number;
   cashback_amount?: number;
+  discount_include_menu?: boolean;
+  discount_include_equipment?: boolean;
+  discount_include_service?: boolean;
 }
 
 export interface EmailSendRequest {

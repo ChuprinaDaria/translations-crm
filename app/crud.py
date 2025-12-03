@@ -128,6 +128,9 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         use_cashback=getattr(kp_in, "use_cashback", False),
         discount_amount=getattr(kp_in, "discount_amount", None),
         cashback_amount=getattr(kp_in, "cashback_amount", None),
+        discount_include_menu=getattr(kp_in, "discount_include_menu", True),
+        discount_include_equipment=getattr(kp_in, "discount_include_equipment", False),
+        discount_include_service=getattr(kp_in, "discount_include_service", False),
     )
 
     db.add(kp)
@@ -241,6 +244,9 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
     kp.use_cashback = getattr(kp_in, "use_cashback", False)
     kp.discount_amount = getattr(kp_in, "discount_amount", None)
     kp.cashback_amount = getattr(kp_in, "cashback_amount", None)
+    kp.discount_include_menu = getattr(kp_in, "discount_include_menu", True)
+    kp.discount_include_equipment = getattr(kp_in, "discount_include_equipment", False)
+    kp.discount_include_service = getattr(kp_in, "discount_include_service", False)
     
     # Видаляємо старі позиції
     db.query(models.KPItem).filter(models.KPItem.kp_id == kp_id).delete()
@@ -351,6 +357,8 @@ def get_kp_items(db: Session, kp_id: int):
         .options(
             selectinload(models.KP.items)           # load KPItem rows
             .selectinload(models.KPItem.item)       # then load Item on each KPItem
+            .selectinload(models.Item.subcategory)  # then load Subcategory on each Item
+            .selectinload(models.Subcategory.category)  # then load Category on each Subcategory
         )
         .filter(models.KP.id == kp_id)
         .first()

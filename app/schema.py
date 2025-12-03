@@ -118,11 +118,30 @@ class KPBase(BaseModel):
 class KPItemCreate(BaseModel):
     item_id: int
     quantity: int
+    event_format_id: Optional[int] = None  # Якщо страва належить до конкретного формату
+
+class EventFormatCreate(BaseModel):
+    name: str  # Назва формату (наприклад, "Welcome drink", "Фуршет")
+    event_time: Optional[str] = None  # Час (наприклад, "09:00-11:00", "13:30-14:30")
+    people_count: Optional[int] = None  # Кількість гостей для цього формату
+    order_index: Optional[int] = 0  # Порядок відображення форматів
+
+class EventFormat(BaseModel):
+    id: int
+    kp_id: int
+    name: str
+    event_time: Optional[str] = None
+    people_count: Optional[int] = None
+    order_index: int
+
+    class Config:
+        from_attributes = True
 
 class KPCreate(KPBase):
     total_price: Optional[float] = None
     price_per_person: Optional[float] = None
     items: list[KPItemCreate] = []
+    event_formats: Optional[list[EventFormatCreate]] = []  # Список форматів заходу
     template_id: Optional[int] = None
     # Контакти та відправка
     client_email: Optional[str] = None  # Email клієнта
@@ -143,6 +162,10 @@ class KPCreate(KPBase):
     use_cashback: Optional[bool] = False  # Чи списати кешбек з бонусного рахунку
     discount_amount: Optional[float] = None
     cashback_amount: Optional[float] = None
+    # Налаштування знижки: що включати в знижку
+    discount_include_menu: Optional[bool] = True  # Включити меню в знижку
+    discount_include_equipment: Optional[bool] = False  # Включити обладнання в знижку
+    discount_include_service: Optional[bool] = False  # Включити сервіс в знижку
 
 class KPItem(BaseModel):
     id: int
@@ -173,6 +196,9 @@ class KP(KPBase):
     use_cashback: Optional[bool] = False
     discount_amount: Optional[float] = None
     cashback_amount: Optional[float] = None
+    discount_include_menu: Optional[bool] = True
+    discount_include_equipment: Optional[bool] = False
+    discount_include_service: Optional[bool] = False
     
     class Config:
         from_attributes = True

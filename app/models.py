@@ -123,8 +123,13 @@ class KP(Base):
     use_cashback = Column(Boolean, default=False, nullable=False)  # Чи списати кешбек з бонусного рахунку
     discount_amount = Column(Float, nullable=True)  # Сума знижки
     cashback_amount = Column(Float, nullable=True)  # Сума кешбеку
+    # Налаштування знижки: що включати в знижку
+    discount_include_menu = Column(Boolean, default=True, nullable=False)  # Включити меню в знижку
+    discount_include_equipment = Column(Boolean, default=False, nullable=False)  # Включити обладнання в знижку
+    discount_include_service = Column(Boolean, default=False, nullable=False)  # Включити сервіс в знижку
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
+    event_formats = relationship("KPEventFormat", back_populates="kp", lazy="selectin", cascade='all, delete-orphan', order_by="KPEventFormat.order_index")
     template = relationship("Template", back_populates="kps")
     discount_benefit = relationship("Benefit", foreign_keys=[discount_id])
     cashback_benefit = relationship("Benefit", foreign_keys=[cashback_id])
@@ -169,9 +174,28 @@ class KPItem(Base):
     kp_id = Column(Integer, ForeignKey("kps.id"))
     item_id = Column(Integer, ForeignKey("items.id"))
     quantity = Column(Integer, default=1)
+    event_format_id = Column(Integer, ForeignKey("kp_event_formats.id"), nullable=True)  # Якщо страва належить до конкретного формату
 
     kp = relationship("KP", back_populates="items")
     item = relationship("Item", back_populates="kp_items", lazy="joined")
+    event_format = relationship("KPEventFormat", back_populates="items")
+
+
+class KPEventFormat(Base):
+    """
+    Формат заходу в КП. Один КП може мати кілька форматів (наприклад, Welcome drink 09:00-11:00 та Фуршет 13:30-14:30).
+    """
+    __tablename__ = "kp_event_formats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kp_id = Column(Integer, ForeignKey("kps.id"), nullable=False)
+    name = Column(String, nullable=False)  # Назва формату (наприклад, "Welcome drink", "Фуршет")
+    event_time = Column(String, nullable=True)  # Час (наприклад, "09:00-11:00", "13:30-14:30")
+    people_count = Column(Integer, nullable=True)  # Кількість гостей для цього формату
+    order_index = Column(Integer, default=0)  # Порядок відображення форматів
+
+    kp = relationship("KP", back_populates="event_formats")
+    items = relationship("KPItem", back_populates="event_format")
 
 
 class AppSetting(Base):

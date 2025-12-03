@@ -100,6 +100,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [selectedDiscountId, setSelectedDiscountId] = useState<number | null>(null);
   const [selectedCashbackId, setSelectedCashbackId] = useState<number | null>(null);
   const [useCashback, setUseCashback] = useState(false);
+  // Налаштування знижки: що включати в знижку
+  const [discountIncludeMenu, setDiscountIncludeMenu] = useState(true);
+  const [discountIncludeEquipment, setDiscountIncludeEquipment] = useState(false);
+  const [discountIncludeService, setDiscountIncludeService] = useState(false);
 
   // Функція для валідації кроку 1 (без показу помилок)
   const isStep1Valid = (): boolean => {
@@ -184,6 +188,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       serviceItems,
       transportTotal,
       selectedTemplateId,
+      selectedDiscountId,
+      selectedCashbackId,
+      useCashback,
+      discountIncludeMenu,
+      discountIncludeEquipment,
+      discountIncludeService,
     };
     localStorage.setItem('kp_form_data', JSON.stringify(formData));
   };
@@ -215,6 +225,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setServiceItems(formData.serviceItems || []);
         setTransportTotal(formData.transportTotal || "");
         setSelectedTemplateId(formData.selectedTemplateId || null);
+        setSelectedDiscountId(formData.selectedDiscountId || null);
+        setSelectedCashbackId(formData.selectedCashbackId || null);
+        setUseCashback(formData.useCashback || false);
+        setDiscountIncludeMenu(formData.discountIncludeMenu !== undefined ? formData.discountIncludeMenu : true);
+        setDiscountIncludeEquipment(formData.discountIncludeEquipment || false);
+        setDiscountIncludeService(formData.discountIncludeService || false);
       } catch (error) {
         console.error("Помилка завантаження даних з localStorage:", error);
       }
@@ -254,6 +270,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     serviceItems,
     transportTotal,
     selectedTemplateId,
+    selectedDiscountId,
+    selectedCashbackId,
+    useCashback,
+    discountIncludeMenu,
+    discountIncludeEquipment,
+    discountIncludeService,
   ]);
 
   // Load dishes from API
@@ -349,6 +371,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setSelectedDiscountId(kp.discount_id || null);
         setSelectedCashbackId(kp.cashback_id || null);
         setUseCashback(kp.use_cashback || false);
+        setDiscountIncludeMenu(kp.discount_include_menu !== undefined ? kp.discount_include_menu : true);
+        setDiscountIncludeEquipment(kp.discount_include_equipment || false);
+        setDiscountIncludeService(kp.discount_include_service || false);
 
         // Завантажуємо страви
         if (kp.items && kp.items.length > 0) {
@@ -512,6 +537,27 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const serviceTotal = calculateAdditionalTotal(serviceItems);
 
   const foodTotalPrice = getTotalPrice();
+
+  // Функція для розрахунку знижки з урахуванням вибраних опцій
+  const calculateDiscountAmount = () => {
+    if (!selectedDiscountId) return 0;
+    
+    const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+    if (!discountBenefit) return 0;
+    
+    let discountBase = 0;
+    if (discountIncludeMenu) {
+      discountBase += foodTotalPrice;
+    }
+    if (discountIncludeEquipment) {
+      discountBase += equipmentTotal;
+    }
+    if (discountIncludeService) {
+      discountBase += serviceTotal;
+    }
+    
+    return (discountBase * discountBenefit.value) / 100;
+  };
   const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
   const totalPrice = foodTotalPrice + equipmentTotal + serviceTotal;
 
@@ -633,20 +679,32 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     const foodTotalPrice = getTotalPrice();
     const transportTotalNum = parseFloat(transportTotal || "0") || 0;
     
-    // Розрахунок знижки (тільки на меню/їжу, не на обладнання, обслуговування та транспорт)
-    let discountAmount = 0;
+    // Розрахунок знижки з урахуванням вибраних опцій
+    let discountAmount = calculateDiscountAmount();
+    
+    // Розраховуємо фінальні ціни з урахуванням знижки
     let finalFoodPrice = foodTotalPrice;
+    let finalEquipmentTotal = equipmentTotal;
+    let finalServiceTotal = serviceTotal;
+    
     if (selectedDiscountId) {
       const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
       if (discountBenefit) {
-        discountAmount = (foodTotalPrice * discountBenefit.value) / 100;
-        finalFoodPrice = foodTotalPrice - discountAmount;
+        if (discountIncludeMenu) {
+          finalFoodPrice = foodTotalPrice - (foodTotalPrice * discountBenefit.value) / 100;
+        }
+        if (discountIncludeEquipment) {
+          finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
+        }
+        if (discountIncludeService) {
+          finalServiceTotal = serviceTotal - (serviceTotal * discountBenefit.value) / 100;
+        }
       }
     }
     
-    // Розрахунок кешбеку (від загальної суми)
+    // Розрахунок кешбеку (від загальної суми після знижки)
     let cashbackAmount = 0;
-    const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + transportTotalNum;
+    const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalNum;
     if (selectedCashbackId) {
       const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
       if (cashbackBenefit) {
@@ -688,8 +746,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         client_phone: clientPhone || undefined,
         send_telegram: sendTelegram,
         telegram_message: telegramMessage || undefined,
-        equipment_total: equipmentTotal || undefined,
-        service_total: serviceTotal || undefined,
+        equipment_total: finalEquipmentTotal || undefined,
+        service_total: finalServiceTotal || undefined,
         transport_total: transportTotalNum || undefined,
         total_weight: getTotalWeight() > 0 ? getTotalWeight() : undefined,
         weight_per_person: getWeightPerPerson() > 0 ? getWeightPerPerson() : undefined,
@@ -698,6 +756,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         use_cashback: useCashback,
         discount_amount: discountAmount > 0 ? discountAmount : undefined,
         cashback_amount: cashbackAmount > 0 ? cashbackAmount : undefined,
+        discount_include_menu: discountIncludeMenu,
+        discount_include_equipment: discountIncludeEquipment,
+        discount_include_service: discountIncludeService,
       };
 
       let kp;
@@ -1943,14 +2004,39 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </table>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-sm text-gray-600 mb-1">
                           Вартість страв (усі позиції)
                         </div>
-                        <div className="text-lg font-semibold text-gray-900">
-                          {foodTotalPrice} грн
-                        </div>
+                        {selectedDiscountId ? (() => {
+                          const discountAmount = calculateDiscountAmount();
+                          // Розраховуємо знижку тільки на меню для відображення в цьому блоці
+                          const menuDiscountAmount = discountIncludeMenu 
+                            ? (() => {
+                                const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                                return discountBenefit ? (foodTotalPrice * discountBenefit.value) / 100 : 0;
+                              })()
+                            : 0;
+                          const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                          return (
+                            <>
+                              <div className="text-xs text-gray-500 line-through mb-1">
+                                {foodTotalPrice.toLocaleString()} грн
+                              </div>
+                              <div className="text-xs text-[#FF5A00] mb-1">
+                                Знижка: -{menuDiscountAmount.toLocaleString()} грн
+                              </div>
+                              <div className="text-lg font-semibold text-gray-900">
+                                {finalFoodPrice.toLocaleString()} грн
+                              </div>
+                            </>
+                          );
+                        })() : (
+                          <div className="text-lg font-semibold text-gray-900">
+                            {foodTotalPrice.toLocaleString()} грн
+                          </div>
+                        )}
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-sm text-gray-600 mb-1">
@@ -1959,9 +2045,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         <div className="text-lg font-semibold text-gray-900">
                           {getTotalWeight().toFixed(0)} г
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          На 1 гостя: {getWeightPerPerson().toFixed(0)} г
-                        </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-sm text-gray-600 mb-1">
@@ -1969,9 +2052,29 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         </div>
                         <div className="text-lg font-semibold text-gray-900">
                           {peopleCountNum > 0
-                            ? (foodTotalPrice / peopleCountNum).toFixed(2)
+                            ? (selectedDiscountId ? (() => {
+                                const menuDiscountAmount = discountIncludeMenu 
+                                  ? (() => {
+                                      const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                                      return discountBenefit ? (foodTotalPrice * discountBenefit.value) / 100 : 0;
+                                    })()
+                                  : 0;
+                                const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                                return (finalFoodPrice / peopleCountNum).toFixed(2);
+                              })() : (foodTotalPrice / peopleCountNum).toFixed(2))
                             : "-"}{" "}
                           грн
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Орієнтовний вихід на 1 гостя
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {peopleCountNum > 0
+                            ? getWeightPerPerson().toFixed(0)
+                            : "-"}{" "}
+                          г
                         </div>
                       </div>
                     </div>
@@ -2007,6 +2110,43 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 ))}
                             </SelectContent>
                           </Select>
+                          {selectedDiscountId && (
+                            <div className="mt-3 space-y-2 pt-2 border-t">
+                              <Label className="text-sm text-gray-700">Включити в знижку:</Label>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id="discount-include-menu"
+                                    checked={discountIncludeMenu}
+                                    onCheckedChange={(checked) => setDiscountIncludeMenu(checked as boolean)}
+                                  />
+                                  <Label htmlFor="discount-include-menu" className="cursor-pointer text-sm">
+                                    Меню
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id="discount-include-equipment"
+                                    checked={discountIncludeEquipment}
+                                    onCheckedChange={(checked) => setDiscountIncludeEquipment(checked as boolean)}
+                                  />
+                                  <Label htmlFor="discount-include-equipment" className="cursor-pointer text-sm">
+                                    Обладнання
+                                  </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id="discount-include-service"
+                                    checked={discountIncludeService}
+                                    onCheckedChange={(checked) => setDiscountIncludeService(checked as boolean)}
+                                  />
+                                  <Label htmlFor="discount-include-service" className="cursor-pointer text-sm">
+                                    Сервіс
+                                  </Label>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cashback-select-step5">Кешбек</Label>
@@ -2038,14 +2178,26 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </div>
                       {selectedCashbackId && (() => {
                         const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
-                        const foodPrice = selectedDiscountId 
-                          ? (() => {
+                        const discountAmount = calculateDiscountAmount();
+                        const foodPrice = discountIncludeMenu && selectedDiscountId
+                          ? foodTotalPrice - (() => {
                               const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                              const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
-                              return getTotalPrice() - discountAmount;
+                              return discountBenefit ? (foodTotalPrice * discountBenefit.value) / 100 : 0;
                             })()
-                          : getTotalPrice();
-                        const totalBeforeCashback = foodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                          : foodTotalPrice;
+                        const equipmentPrice = discountIncludeEquipment && selectedDiscountId
+                          ? equipmentTotal - (() => {
+                              const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                              return discountBenefit ? (equipmentTotal * discountBenefit.value) / 100 : 0;
+                            })()
+                          : equipmentTotal;
+                        const servicePrice = discountIncludeService && selectedDiscountId
+                          ? serviceTotal - (() => {
+                              const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                              return discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0;
+                            })()
+                          : serviceTotal;
+                        const totalBeforeCashback = foodPrice + equipmentPrice + servicePrice + (parseFloat(transportTotal || "0") || 0);
                         const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
                         const selectedClient = selectedClientId ? clients.find((c) => c.id === selectedClientId) : null;
                         const clientBalance = selectedClient?.cashback || 0;
@@ -2205,31 +2357,107 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   )}
                 </div>
 
-                <div className="border-t pt-4 space-y-2 text-sm">
+                <div className="border-t pt-4 space-y-4 text-sm">
                   <h4 className="text-gray-900 font-medium">
                     Додаткові блоки
                   </h4>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">
-                      Обладнання
-                    </span>
-                    <span className="text-gray-900 font-medium">
-                      {equipmentTotal} грн
-                    </span>
+                  
+                  {/* Обладнання */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-gray-700 font-medium">
+                        Обладнання
+                      </span>
+                      <span className="text-gray-900 font-semibold">
+                        {(() => {
+                          if (selectedDiscountId && discountIncludeEquipment) {
+                            const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                            const discountAmount = discountBenefit ? (equipmentTotal * discountBenefit.value) / 100 : 0;
+                            const finalEquipmentPrice = equipmentTotal - discountAmount;
+                            return (
+                              <>
+                                <span className="text-xs text-gray-500 line-through mr-2">
+                                  {equipmentTotal.toLocaleString()}
+                                </span>
+                                {finalEquipmentPrice.toLocaleString()} грн
+                              </>
+                            );
+                          }
+                          return `${equipmentTotal.toLocaleString()} грн`;
+                        })()}
+                      </span>
+                    </div>
+                    {equipmentItems.length > 0 ? (
+                      <div className="ml-4 space-y-1 text-xs text-gray-600">
+                        {equipmentItems.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between">
+                            <span>
+                              {item.name} × {item.quantity}
+                            </span>
+                            <span>
+                              {(item.quantity * item.unitPrice).toLocaleString()} грн
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ml-4 text-xs text-gray-400 italic">
+                        Позиції не додані
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-700">
-                      Обслуговування
-                    </span>
-                    <span className="text-gray-900 font-medium">
-                      {serviceTotal} грн
-                    </span>
+
+                  {/* Обслуговування */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-gray-700 font-medium">
+                        Обслуговування
+                      </span>
+                      <span className="text-gray-900 font-semibold">
+                        {(() => {
+                          if (selectedDiscountId && discountIncludeService) {
+                            const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                            const discountAmount = discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0;
+                            const finalServicePrice = serviceTotal - discountAmount;
+                            return (
+                              <>
+                                <span className="text-xs text-gray-500 line-through mr-2">
+                                  {serviceTotal.toLocaleString()}
+                                </span>
+                                {finalServicePrice.toLocaleString()} грн
+                              </>
+                            );
+                          }
+                          return `${serviceTotal.toLocaleString()} грн`;
+                        })()}
+                      </span>
+                    </div>
+                    {serviceItems.length > 0 ? (
+                      <div className="ml-4 space-y-1 text-xs text-gray-600">
+                        {serviceItems.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between">
+                            <span>
+                              {item.name} × {item.quantity}
+                            </span>
+                            <span>
+                              {(item.quantity * item.unitPrice).toLocaleString()} грн
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ml-4 text-xs text-gray-400 italic">
+                        Позиції не додані
+                      </div>
+                    )}
                   </div>
+
+                  {/* Транспортні витрати */}
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-700">
+                    <span className="text-gray-700 font-medium">
                       Транспортні витрати
                     </span>
-                    <span className="text-gray-900 font-medium">
+                    <span className="text-gray-900 font-semibold">
                       {transportTotal || "0"} грн
                     </span>
                   </div>
@@ -2237,16 +2465,28 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
                 {/* Розрахунок фінальної суми з урахуванням знижок та кешбеку */}
                 {(() => {
-                  const foodPrice = getTotalPrice();
-                  const discountAmount = selectedDiscountId
-                    ? (() => {
-                        const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                        return discountBenefit ? (foodPrice * discountBenefit.value) / 100 : 0;
-                      })()
-                    : 0;
-                  const finalFoodPrice = foodPrice - discountAmount;
+                  const discountAmount = calculateDiscountAmount();
+                  const discountBenefit = selectedDiscountId ? benefits.find((b) => b.id === selectedDiscountId) : null;
+                  
+                  // Розраховуємо фінальні ціни з урахуванням знижки
+                  let finalFoodPrice = foodTotalPrice;
+                  let finalEquipmentTotal = equipmentTotal;
+                  let finalServiceTotal = serviceTotal;
+                  
+                  if (discountBenefit) {
+                    if (discountIncludeMenu) {
+                      finalFoodPrice = foodTotalPrice - (foodTotalPrice * discountBenefit.value) / 100;
+                    }
+                    if (discountIncludeEquipment) {
+                      finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
+                    }
+                    if (discountIncludeService) {
+                      finalServiceTotal = serviceTotal - (serviceTotal * discountBenefit.value) / 100;
+                    }
+                  }
+                  
                   const transportTotalNum = parseFloat(transportTotal || "0") || 0;
-                  const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + transportTotalNum;
+                  const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalNum;
                   const cashbackAmount = selectedCashbackId
                     ? (() => {
                         const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
@@ -2260,10 +2500,17 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     <div className="border-t pt-4 space-y-4">
                       {(selectedDiscountId || selectedCashbackId) && (
                         <div className="space-y-2 text-sm">
-                          {selectedDiscountId && (
-                            <div className="flex justify-between text-[#FF5A00]">
-                              <span>Знижка:</span>
-                              <span>-{discountAmount.toLocaleString()} грн</span>
+                          {selectedDiscountId && discountAmount > 0 && (
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[#FF5A00]">
+                                <span>Знижка:</span>
+                                <span>-{discountAmount.toLocaleString()} грн</span>
+                              </div>
+                              <div className="text-xs text-gray-500 ml-4">
+                                {discountIncludeMenu && `Меню: -${((foodTotalPrice * (discountBenefit?.value || 0)) / 100).toLocaleString()} грн`}
+                                {discountIncludeEquipment && ` | Обладнання: -${((equipmentTotal * (discountBenefit?.value || 0)) / 100).toLocaleString()} грн`}
+                                {discountIncludeService && ` | Сервіс: -${((serviceTotal * (discountBenefit?.value || 0)) / 100).toLocaleString()} грн`}
+                              </div>
                             </div>
                           )}
                           {selectedCashbackId && (
@@ -2447,31 +2694,55 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <span className="text-gray-900">{getTotalPrice().toLocaleString()} грн</span>
                         </div>
                         {selectedDiscountId && (() => {
+                          const discountAmount = calculateDiscountAmount();
                           const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                          const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
+                          const menuDiscountAmount = discountIncludeMenu 
+                            ? (discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0)
+                            : 0;
                           return (
                             <>
                               <div className="flex justify-between text-sm text-[#FF5A00]">
                                 <span>Знижка ({discountBenefit?.value}%):</span>
                                 <span>-{discountAmount.toLocaleString()} грн</span>
                               </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Сума меню зі знижкою:</span>
-                                <span className="text-gray-900">{(getTotalPrice() - discountAmount).toLocaleString()} грн</span>
-                              </div>
+                              {discountAmount > 0 && (
+                                <div className="text-xs text-gray-500 ml-4">
+                                  {discountIncludeMenu && `Меню: -${menuDiscountAmount.toLocaleString()} грн`}
+                                  {discountIncludeEquipment && ` | Обладнання: -${(discountBenefit ? (equipmentTotal * discountBenefit.value) / 100 : 0).toLocaleString()} грн`}
+                                  {discountIncludeService && ` | Сервіс: -${(discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0).toLocaleString()} грн`}
+                                </div>
+                              )}
+                              {discountIncludeMenu && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600">Сума меню зі знижкою:</span>
+                                  <span className="text-gray-900">{(getTotalPrice() - menuDiscountAmount).toLocaleString()} грн</span>
+                                </div>
+                              )}
                             </>
                           );
                         })()}
                         {selectedCashbackId && (() => {
                           const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
-                          const foodPrice = selectedDiscountId 
-                            ? (() => {
-                                const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                                const discountAmount = discountBenefit ? (getTotalPrice() * discountBenefit.value) / 100 : 0;
-                                return getTotalPrice() - discountAmount;
-                              })()
-                            : getTotalPrice();
-                          const totalBeforeCashback = foodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                          const discountBenefit = selectedDiscountId ? benefits.find((b) => b.id === selectedDiscountId) : null;
+                          
+                          // Розраховуємо фінальні ціни з урахуванням знижки
+                          let finalFoodPrice = getTotalPrice();
+                          let finalEquipmentTotal = equipmentTotal;
+                          let finalServiceTotal = serviceTotal;
+                          
+                          if (discountBenefit) {
+                            if (discountIncludeMenu) {
+                              finalFoodPrice = getTotalPrice() - (getTotalPrice() * discountBenefit.value) / 100;
+                            }
+                            if (discountIncludeEquipment) {
+                              finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
+                            }
+                            if (discountIncludeService) {
+                              finalServiceTotal = serviceTotal - (serviceTotal * discountBenefit.value) / 100;
+                            }
+                          }
+                          
+                          const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + (parseFloat(transportTotal || "0") || 0);
                           const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
                           return (
                             <>
@@ -2492,15 +2763,27 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <span className="text-gray-900">Загальна сума:</span>
                           <span className="text-gray-900">
                             {(() => {
-                              const foodPrice = getTotalPrice();
-                              const discountAmount = selectedDiscountId
-                                ? (() => {
-                                    const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                                    return discountBenefit ? (foodPrice * discountBenefit.value) / 100 : 0;
-                                  })()
-                                : 0;
-                              const finalFoodPrice = foodPrice - discountAmount;
-                              const totalBeforeCashback = finalFoodPrice + equipmentTotal + serviceTotal + (parseFloat(transportTotal || "0") || 0);
+                              const discountAmount = calculateDiscountAmount();
+                              const discountBenefit = selectedDiscountId ? benefits.find((b) => b.id === selectedDiscountId) : null;
+                              
+                              // Розраховуємо фінальні ціни з урахуванням знижки
+                              let finalFoodPrice = getTotalPrice();
+                              let finalEquipmentTotal = equipmentTotal;
+                              let finalServiceTotal = serviceTotal;
+                              
+                              if (discountBenefit) {
+                                if (discountIncludeMenu) {
+                                  finalFoodPrice = getTotalPrice() - (getTotalPrice() * discountBenefit.value) / 100;
+                                }
+                                if (discountIncludeEquipment) {
+                                  finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
+                                }
+                                if (discountIncludeService) {
+                                  finalServiceTotal = serviceTotal - (serviceTotal * discountBenefit.value) / 100;
+                                }
+                              }
+                              
+                              const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + (parseFloat(transportTotal || "0") || 0);
                               const cashbackAmount = selectedCashbackId
                                 ? (() => {
                                     const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
