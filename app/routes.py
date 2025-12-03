@@ -169,6 +169,7 @@ def generate_template_preview(html_content: str, filename: str) -> str:
             'kp': {
                 'id': 1,
                 'title': 'Тестова КП - Дитяче свято',
+                'client_name': 'Тестовий клієнт',
                 'client_email': 'test@example.com',
                 'client_phone': '+380501234567',
                 'people_count': 50,
@@ -177,6 +178,18 @@ def generate_template_preview(html_content: str, filename: str) -> str:
                 'price_per_person': 149.0,
                 'template_id': 1,
                 'created_at': None,
+                'event_date': None,
+                'event_format': 'Дитяче свято',
+                'event_group': 'catering',
+                'event_location': 'Київ',
+                'event_time': '14:00',
+                'coordinator_name': 'Іван Іванов',
+                'coordinator_phone': '+380501234567',
+                'equipment_total': 500.0,
+                'service_total': 300.0,
+                'transport_total': 200.0,
+                'total_weight': 11250.0,  # в грамах
+                'weight_per_person': 225.0,  # в грамах
             },
             'items': [
                 {
@@ -215,12 +228,19 @@ def generate_template_preview(html_content: str, filename: str) -> str:
                 },
             ],
             'total_items': 2,
-            'total_weight': '11.25 кг',
-            'total_price': '7450.00 грн',
+            'food_total': '7450.00 грн',
+            'equipment_total': 500.0,
+            'service_total': 300.0,
+            'transport_total': 200.0,
+            'total_weight': '11250 г',
+            'total_weight_grams': 11250.0,
+            'weight_per_person': 225.0,
             'company_name': 'Дзиґа Кейтерінґ',
-            'created_date': '28.11.2025',
-            'event_date': '01.12.2025',
+            'created_date': '03.12.2025',
+            'event_date': '15.12.2025',
             'logo_src': None,
+            'header_image_src': None,
+            'background_image_src': None,
         }
         
         # Рендеримо HTML через Jinja2
@@ -228,8 +248,8 @@ def generate_template_preview(html_content: str, filename: str) -> str:
         template = Template(html_content)
         rendered_html = template.render(**test_data)
         
-        # Генеруємо PDF з HTML
-        pdf_bytes = HTML(string=rendered_html).write_pdf(zoom=0.75)
+        # Генеруємо PDF з HTML з правильним base_url
+        pdf_bytes = HTML(string=rendered_html, base_url=str(BASE_DIR)).write_pdf(zoom=0.75)
         
         # Конвертуємо першу сторінку PDF у зображення
         images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
@@ -433,16 +453,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         raise HTTPException(404, "KP not found")
 
     # Get KPItems and join with Item data
-    kp_items = crud.get_kp_items(db, kp_id)
+    kp_with_items = crud.get_kp_items(db, kp_id)
+    if not kp_with_items:
+        raise HTTPException(404, "KP not found")
 
     # Prepare items data with actual Item information
     items_data: list[dict] = []
     total_quantity = 0
     total_weight = 0.0
 
-    for kp_item in kp_items.items:
-        # kp_item.id — це ID запису kp_items, нам потрібен item_id
-        item = crud.get_item(db, kp_item.item_id)
+    for kp_item in kp_with_items.items:
+        # kp_item.item вже завантажений через selectinload в get_kp_items
+        item = kp_item.item
         if not item:
             # Якщо страву видалили з меню після створення КП — просто пропускаємо її
             continue
@@ -577,6 +599,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     service_total = getattr(kp, "service_total", None) or 0
     transport_total = getattr(kp, "transport_total", None) or 0
     
+    # Налаштування теми шаблону (з дефолтами)
+    primary_color = "#FF5A00"
+    secondary_color = "#1a1a2e"
+    text_color = "#333333"
+    font_family = "Segoe UI, Tahoma, Geneva, Verdana, sans-serif"
+
+    if selected_template:
+        primary_color = getattr(selected_template, "primary_color", None) or primary_color
+        secondary_color = getattr(selected_template, "secondary_color", None) or secondary_color
+        text_color = getattr(selected_template, "text_color", None) or text_color
+        font_family = getattr(selected_template, "font_family", None) or font_family
+
     html_content = template.render(
         kp=kp,
         items=items_data,
@@ -592,13 +626,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         logo_src=logo_src,
         header_image_src=header_image_src,
         background_image_src=background_image_src,
+        primary_color=primary_color,
+        secondary_color=secondary_color,
+        text_color=text_color,
+        font_family=font_family,
         company_name=company_name,
         created_date=created_date,
         event_date=event_date,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
-    pdf_bytes = HTML(string=html_content, base_url=os.getcwd()).write_pdf(zoom=1)
+    # Використовуємо BASE_DIR як base_url, щоб WeasyPrint міг знайти зображення та інші ресурси
+    pdf_bytes = HTML(string=html_content, base_url=str(BASE_DIR)).write_pdf(zoom=1)
     filename = f"{kp.title}.pdf"
     
     return pdf_bytes, filename
@@ -1249,6 +1288,11 @@ async def create_template(
     header_image_url: str = Form(None),
     background_image: UploadFile = File(None),
     background_image_url: str = Form(None),
+    # Налаштування теми (за замовчуванням — брендовані значення)
+    primary_color: str = Form("#FF5A00"),
+    secondary_color: str = Form("#1a1a2e"),
+    text_color: str = Form("#333333"),
+    font_family: str = Form("Segoe UI, Tahoma, Geneva, Verdana, sans-serif"),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1273,12 +1317,20 @@ async def create_template(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error writing template file: {e}")
     else:
-        # Якщо HTML не передали, все одно створюємо порожній шаблон,
-        # щоб його можна було відредагувати пізніше з фронта
+        # Якщо HTML не передали, копіюємо вміст дефолтного шаблону,
+        # щоб PDF не був порожнім і шаблон можна було відредагувати пізніше з фронта
         try:
+            default_template_path = UPLOADS_DIR / "commercial-offer.html"
+            default_html = ""
+            if default_template_path.exists():
+                with default_template_path.open("r", encoding="utf-8") as df:
+                    default_html = df.read()
+            else:
+                default_html = "<!-- KP template is empty. Please edit this template in the web UI. -->"
+
             with template_path.open("w", encoding="utf-8") as f:
-                f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
-            print(f"✓ Empty template file created: {template_path}")
+                f.write(default_html)
+            print(f"✓ Empty template file created from default: {template_path}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error creating empty template file: {e}")
     
@@ -1344,6 +1396,10 @@ async def create_template(
         html_content=html_content,
         header_image_url=final_header_url,
         background_image_url=final_background_url,
+        primary_color=primary_color or None,
+        secondary_color=secondary_color or None,
+        text_color=text_color or None,
+        font_family=font_family or None,
     )
     
     return crud.create_template(db, template_data)
@@ -1362,6 +1418,10 @@ async def update_template(
     header_image_url: str = Form(None),
     background_image: UploadFile = File(None),
     background_image_url: str = Form(None),
+    primary_color: str = Form(None),
+    secondary_color: str = Form(None),
+    text_color: str = Form(None),
+    font_family: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1461,6 +1521,10 @@ async def update_template(
         html_content=html_content,
         header_image_url=final_header_url,
         background_image_url=final_background_url,
+        primary_color=primary_color,
+        secondary_color=secondary_color,
+        text_color=text_color,
+        font_family=font_family,
     )
     
     updated = crud.update_template(db, template_id, template_data)

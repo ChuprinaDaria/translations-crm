@@ -500,16 +500,39 @@ export const subcategoriesApi = {
 };
 
 // KP (Commercial Proposal) Types
+
+// Формат заходу в КП (бекендова модель KPEventFormat)
+export interface KPEventFormat {
+  id: number;
+  kp_id: number;
+  name: string;
+  event_time?: string | null;
+  people_count?: number | null;
+  order_index: number;
+}
+
+// Формат заходу при створенні КП
+export interface KPEventFormatCreate {
+  name: string;
+  event_time?: string;
+  people_count?: number;
+  order_index?: number;
+}
+
 export interface KPItem {
   id: number;
   kp_id: number;
   item_id: number;
   quantity: number;
+  // Опціональний зв'язок з конкретним форматом заходу
+  event_format_id?: number | null;
 }
 
 export interface KPItemCreate {
   item_id: number;
   quantity: number;
+  // Використовуємо як індекс формату заходу в масиві event_formats при створенні КП
+  event_format_id?: number;
 }
 
 export interface KP {
@@ -539,6 +562,8 @@ export interface KP {
   weight_per_person?: number; // Вага на 1 гостя в грамах
   created_by_id?: number;
   status?: string;
+  // Формати заходу, пов'язані з КП
+  event_formats?: KPEventFormat[];
   discount_id?: number;
   cashback_id?: number;
   use_cashback?: boolean;
@@ -584,6 +609,8 @@ export interface KPCreate {
   discount_include_menu?: boolean;
   discount_include_equipment?: boolean;
   discount_include_service?: boolean;
+  // Список форматів заходу (для KPEventFormat)
+  event_formats?: KPEventFormatCreate[];
 }
 
 export interface EmailSendRequest {
@@ -684,6 +711,11 @@ export interface Template {
   header_image_url?: string;
   background_image_url?: string;
   is_default: boolean;
+   // Налаштування теми
+   primary_color?: string | null;
+   secondary_color?: string | null;
+   text_color?: string | null;
+   font_family?: string | null;
   created_at?: string;
   updated_at?: string;
   /**
@@ -702,6 +734,10 @@ export interface TemplateCreate {
   html_content?: string; // HTML шаблону (ctrl+V)
   header_image?: File; // Шапка
   background_image?: File; // Фонове зображення
+  primary_color?: string;
+  secondary_color?: string;
+  text_color?: string;
+  font_family?: string;
 }
 
 export interface TemplateUpdate {
@@ -716,6 +752,10 @@ export interface TemplateUpdate {
   background_image?: File;
   header_image_url?: string;
   background_image_url?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  text_color?: string;
+  font_family?: string;
 }
 
 // Branding / Settings
@@ -774,6 +814,10 @@ export const templatesApi = {
     if (data.html_content) formData.append('html_content', data.html_content);
     if (data.header_image) formData.append('header_image', data.header_image);
     if (data.background_image) formData.append('background_image', data.background_image);
+    if (data.primary_color) formData.append('primary_color', data.primary_color);
+    if (data.secondary_color) formData.append('secondary_color', data.secondary_color);
+    if (data.text_color) formData.append('text_color', data.text_color);
+    if (data.font_family) formData.append('font_family', data.font_family);
     
     return apiFetchMultipart<Template>('/templates', formData, 'POST');
   },
@@ -792,6 +836,10 @@ export const templatesApi = {
     if (data.background_image) formData.append('background_image', data.background_image);
     if (data.header_image_url !== undefined) formData.append('header_image_url', data.header_image_url || '');
     if (data.background_image_url !== undefined) formData.append('background_image_url', data.background_image_url || '');
+    if (data.primary_color !== undefined) formData.append('primary_color', data.primary_color || '');
+    if (data.secondary_color !== undefined) formData.append('secondary_color', data.secondary_color || '');
+    if (data.text_color !== undefined) formData.append('text_color', data.text_color || '');
+    if (data.font_family !== undefined) formData.append('font_family', data.font_family || '');
     
     return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
   },

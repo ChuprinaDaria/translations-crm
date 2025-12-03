@@ -136,6 +136,22 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
     db.add(kp)
     db.flush()  # get kp.id
 
+    # Створюємо формати заходу (KPEventFormat), якщо вони передані
+    event_format_id_map: dict[int, int] = {}
+    if getattr(kp_in, "event_formats", None):
+        for idx, ef_in in enumerate(kp_in.event_formats or []):
+            db_event_format = models.KPEventFormat(
+                kp_id=kp.id,
+                name=ef_in.name,
+                event_time=ef_in.event_time,
+                people_count=ef_in.people_count,
+                order_index=ef_in.order_index if ef_in.order_index is not None else idx,
+            )
+            db.add(db_event_format)
+            db.flush()
+            # Використовуємо індекс у списку як ключ для подальшого мапінгу елементів меню
+            event_format_id_map[idx] = db_event_format.id
+
     # validate item ids and create KPItem rows
     item_ids = [it.item_id for it in kp_in.items]
     total_weight_grams = 0.0
@@ -169,7 +185,19 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
                 # Множимо на кількість
                 total_weight_grams += item_weight_grams * it.quantity
             
-            kp_item = models.KPItem(kp_id=kp.id, item_id=it.item_id, quantity=it.quantity)
+            # Визначаємо формат заходу для цього елементу (якщо задано event_format_id)
+            db_event_format_id = None
+            if getattr(it, "event_format_id", None) is not None:
+                idx = it.event_format_id
+                if isinstance(idx, int):
+                    db_event_format_id = event_format_id_map.get(idx)
+
+            kp_item = models.KPItem(
+                kp_id=kp.id,
+                item_id=it.item_id,
+                quantity=it.quantity,
+                event_format_id=db_event_format_id,
+            )
             db.add(kp_item)
     
     # Розраховуємо вагу на 1 гостя
@@ -207,6 +235,7 @@ def get_kp(db: Session, kp_id: int):
         db.query(models.KP)
         .options(
             selectinload(models.KP.items).selectinload(models.KPItem.item),
+            selectinload(models.KP.event_formats).selectinload(models.KPEventFormat.items),
             selectinload(models.KP.created_by),
         )
         .filter(models.KP.id == kp_id)
@@ -248,8 +277,24 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
     kp.discount_include_equipment = getattr(kp_in, "discount_include_equipment", False)
     kp.discount_include_service = getattr(kp_in, "discount_include_service", False)
     
-    # Видаляємо старі позиції
+    # Спочатку видаляємо старі формати та позиції
     db.query(models.KPItem).filter(models.KPItem.kp_id == kp_id).delete()
+    db.query(models.KPEventFormat).filter(models.KPEventFormat.kp_id == kp_id).delete()
+    
+    # Створюємо нові формати заходу
+    event_format_id_map: dict[int, int] = {}
+    if getattr(kp_in, "event_formats", None):
+        for idx, ef_in in enumerate(kp_in.event_formats or []):
+            db_event_format = models.KPEventFormat(
+                kp_id=kp.id,
+                name=ef_in.name,
+                event_time=ef_in.event_time,
+                people_count=ef_in.people_count,
+                order_index=ef_in.order_index if ef_in.order_index is not None else idx,
+            )
+            db.add(db_event_format)
+            db.flush()
+            event_format_id_map[idx] = db_event_format.id
     
     # Додаємо нові позиції
     item_ids = [it.item_id for it in kp_in.items]
@@ -284,7 +329,18 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
                 # Множимо на кількість
                 total_weight_grams += item_weight_grams * it.quantity
             
-            kp_item = models.KPItem(kp_id=kp.id, item_id=it.item_id, quantity=it.quantity)
+            db_event_format_id = None
+            if getattr(it, "event_format_id", None) is not None:
+                idx = it.event_format_id
+                if isinstance(idx, int):
+                    db_event_format_id = event_format_id_map.get(idx)
+
+            kp_item = models.KPItem(
+                kp_id=kp.id,
+                item_id=it.item_id,
+                quantity=it.quantity,
+                event_format_id=db_event_format_id,
+            )
             db.add(kp_item)
     
     # Розраховуємо вагу на 1 гостя
@@ -324,6 +380,7 @@ def get_all_kps(db: Session):
         db.query(models.KP)
         .options(
             selectinload(models.KP.items).selectinload(models.KPItem.item),
+            selectinload(models.KP.event_formats),
             selectinload(models.KP.created_by),
         )
         .all()
@@ -390,6 +447,12 @@ def create_template(db: Session, template_in: schemas.TemplateCreate):
         filename=template_in.filename,
         description=template_in.description,
         preview_image_url=template_in.preview_image_url,
+        header_image_url=template_in.header_image_url,
+        background_image_url=template_in.background_image_url,
+        primary_color=template_in.primary_color,
+        secondary_color=template_in.secondary_color,
+        text_color=template_in.text_color,
+        font_family=template_in.font_family,
         is_default=template_in.is_default or False
     )
     db.add(db_template)

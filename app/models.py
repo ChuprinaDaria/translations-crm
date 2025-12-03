@@ -73,6 +73,11 @@ class Template(Base):
     preview_image_url = Column(String, nullable=True)  # URL прев'ю зображення шаблону
     header_image_url = Column(String, nullable=True)  # Зображення шапки (hero)
     background_image_url = Column(String, nullable=True)  # Фонове зображення сторінки
+    # Налаштування теми шаблону (для нетехнічних користувачів)
+    primary_color = Column(String, nullable=True)    # Основний колір (кнопки, заголовки)
+    secondary_color = Column(String, nullable=True)  # Другорядний колір / фони блоків
+    text_color = Column(String, nullable=True)       # Основний колір тексту
+    font_family = Column(String, nullable=True)      # Назва шрифту (CSS font-family)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

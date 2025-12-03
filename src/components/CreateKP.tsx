@@ -52,6 +52,14 @@ interface AdditionalItem {
   unitPrice: number;
 }
 
+// Формат заходу в UI (локальний стан)
+interface UIEventFormat {
+  id: number; // локальний ID (індекс)
+  name: string;
+  eventTime: string;
+  peopleCount: string;
+}
+
 interface CreateKPProps {
   kpId?: number | null;
   onClose?: () => void;
@@ -86,6 +94,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [equipmentItems, setEquipmentItems] = useState<AdditionalItem[]>([]);
   const [serviceItems, setServiceItems] = useState<AdditionalItem[]>([]);
   const [transportTotal, setTransportTotal] = useState<string>("");
+  // Кілька форматів заходу (Welcome drink, Фуршет тощо)
+  const [eventFormats, setEventFormats] = useState<UIEventFormat[]>([]);
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -194,6 +204,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       discountIncludeMenu,
       discountIncludeEquipment,
       discountIncludeService,
+      eventFormats,
     };
     localStorage.setItem('kp_form_data', JSON.stringify(formData));
   };
@@ -231,6 +242,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setDiscountIncludeMenu(formData.discountIncludeMenu !== undefined ? formData.discountIncludeMenu : true);
         setDiscountIncludeEquipment(formData.discountIncludeEquipment || false);
         setDiscountIncludeService(formData.discountIncludeService || false);
+        setEventFormats(formData.eventFormats || []);
       } catch (error) {
         console.error("Помилка завантаження даних з localStorage:", error);
       }
@@ -276,6 +288,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     discountIncludeMenu,
     discountIncludeEquipment,
     discountIncludeService,
+    eventFormats,
   ]);
 
   // Load dishes from API
@@ -720,6 +733,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     const itemsPayload = getSelectedDishesData().map((dish) => ({
       item_id: dish.id,
       quantity: dishQuantities[dish.id] || 1,
+      // Поки що не розподіляємо страви по форматах, тому event_format_id не задаємо
     }));
 
     setCreatingKP(true);
@@ -759,6 +773,15 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         discount_include_menu: discountIncludeMenu,
         discount_include_equipment: discountIncludeEquipment,
         discount_include_service: discountIncludeService,
+        event_formats:
+          eventFormats.length > 0
+            ? eventFormats.map((f, index) => ({
+                name: f.name || `Формат ${index + 1}`,
+                event_time: f.eventTime || undefined,
+                people_count: f.peopleCount ? parseInt(f.peopleCount, 10) || undefined : undefined,
+                order_index: index,
+              }))
+            : undefined,
       };
 
       let kp;
@@ -1102,6 +1125,111 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     onChange={(e) => setEventTime(e.target.value)}
                   />
               </div>
+              </div>
+              
+              {/* Декілька форматів заходу */}
+              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      Формати заходу (опційно)
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Ви можете додати кілька форматів (наприклад, Welcome drink, Фуршет) зі своїм часом та кількістю гостей.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEventFormats((prev) => [
+                        ...prev,
+                        {
+                          id: prev.length,
+                          name: eventFormat || `Формат ${prev.length + 1}`,
+                          eventTime: eventTime || "",
+                          peopleCount: guestCount || "",
+                        },
+                      ]);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Додати формат
+                  </Button>
+                </div>
+
+                {eventFormats.length > 0 && (
+                  <div className="space-y-2">
+                    {eventFormats.map((format) => (
+                      <div
+                        key={format.id}
+                        className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end p-3 bg-white rounded-lg border"
+                      >
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">Назва формату</Label>
+                          <Input
+                            value={format.name}
+                            onChange={(e) =>
+                              setEventFormats((prev) =>
+                                prev.map((f) =>
+                                  f.id === format.id ? { ...f, name: e.target.value } : f
+                                )
+                              )
+                            }
+                            placeholder="Welcome drink / Фуршет"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">Час</Label>
+                          <Input
+                            value={format.eventTime}
+                            onChange={(e) =>
+                              setEventFormats((prev) =>
+                                prev.map((f) =>
+                                  f.id === format.id ? { ...f, eventTime: e.target.value } : f
+                                )
+                              )
+                            }
+                            placeholder="09:00–11:00"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">К-сть гостей</Label>
+                          <Input
+                            type="number"
+                            value={format.peopleCount}
+                            onChange={(e) =>
+                              setEventFormats((prev) =>
+                                prev.map((f) =>
+                                  f.id === format.id ? { ...f, peopleCount: e.target.value } : f
+                                )
+                              )
+                            }
+                            placeholder={guestCount || "50"}
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setEventFormats((prev) =>
+                                prev.filter((f) => f.id !== format.id).map((f, idx) => ({
+                                  ...f,
+                                  id: idx,
+                                }))
+                              )
+                            }
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">

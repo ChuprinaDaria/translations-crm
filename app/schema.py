@@ -180,6 +180,8 @@ class KP(KPBase):
     id: int
     created_at: Optional[datetime]
     items: list[KPItem] = []
+    # Список форматів заходу, якщо вони задані
+    event_formats: Optional[list[EventFormat]] = []
     total_price: Optional[float] = None
     price_per_person: Optional[float] = None
     template_id: Optional[int] = None
@@ -222,6 +224,11 @@ class TemplateBase(BaseModel):
     is_default: Optional[bool] = False
     header_image_url: Optional[str] = None
     background_image_url: Optional[str] = None
+    # Налаштування теми шаблону
+    primary_color: Optional[str] = None      # Основний колір (акценти, заголовки)
+    secondary_color: Optional[str] = None    # Другорядний колір (фони блоків)
+    text_color: Optional[str] = None         # Основний колір тексту
+    font_family: Optional[str] = None        # CSS font-family для основного тексту
 
 
 class TemplateCreate(TemplateBase):
@@ -246,6 +253,10 @@ class TemplateUpdate(BaseModel):
     html_content: Optional[str] = None
     header_image_url: Optional[str] = None
     background_image_url: Optional[str] = None
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    text_color: Optional[str] = None
+    font_family: Optional[str] = None
 
 
 class Template(TemplateBase):

@@ -29,6 +29,10 @@ export function KPTemplates() {
     filename: "",
     is_default: false,
     html_content: "",
+    primary_color: "#FF5A00",
+    secondary_color: "#1a1a2e",
+    text_color: "#333333",
+    font_family: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
   });
   const [headerFile, setHeaderFile] = useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
@@ -66,6 +70,10 @@ export function KPTemplates() {
       filename: "",
       is_default: false,
       html_content: "",
+      primary_color: "#FF5A00",
+      secondary_color: "#1a1a2e",
+      text_color: "#333333",
+      font_family: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
     });
     setHeaderFile(null);
     setBackgroundFile(null);
@@ -94,6 +102,10 @@ export function KPTemplates() {
           html_content: formData.html_content,
           header_image: headerFile || undefined,
           background_image: backgroundFile || undefined,
+          primary_color: formData.primary_color,
+          secondary_color: formData.secondary_color,
+          text_color: formData.text_color,
+          font_family: formData.font_family,
         });
         setTemplates((prev) =>
           prev.map((t) => (t.id === updated.id ? updated : t))
@@ -108,6 +120,10 @@ export function KPTemplates() {
           html_content: formData.html_content,
           header_image: headerFile || undefined,
           background_image: backgroundFile || undefined,
+          primary_color: formData.primary_color,
+          secondary_color: formData.secondary_color,
+          text_color: formData.text_color,
+          font_family: formData.font_family,
         });
         setTemplates((prev) => [...prev, created]);
         toast.success("Шаблон створено");
@@ -136,6 +152,10 @@ export function KPTemplates() {
         filename: fullTemplate.filename,
         is_default: fullTemplate.is_default,
         html_content: fullTemplate.html_content || "",
+        primary_color: fullTemplate.primary_color || "#FF5A00",
+        secondary_color: fullTemplate.secondary_color || "#1a1a2e",
+        text_color: fullTemplate.text_color || "#333333",
+        font_family: fullTemplate.font_family || "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
       });
       setIsAddDialogOpen(true);
     } catch (error) {
@@ -204,6 +224,71 @@ export function KPTemplates() {
                     setFormData((prev) => ({ ...prev, description: e.target.value }))
                   }
                 />
+              </div>
+
+              {/* Налаштування дизайну (шрифти та кольори) */}
+              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                <p className="text-sm font-medium text-gray-900">
+                  Оформлення шаблону (для нетехнічних користувачів)
+                </p>
+                <p className="text-xs text-gray-500">
+                  Оберіть базові кольори та шрифт. Вони автоматично застосуються до заголовків, тексту та основних елементів у PDF.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-600">Основний колір (акценти)</Label>
+                    <input
+                      type="color"
+                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
+                      value={formData.primary_color}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-600">Фон/другорядний колір</Label>
+                    <input
+                      type="color"
+                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
+                      value={formData.secondary_color}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-600">Колір тексту</Label>
+                    <input
+                      type="color"
+                      className="h-9 w-full rounded border border-gray-200 cursor-pointer"
+                      value={formData.text_color}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, text_color: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-600">Шрифт</Label>
+                    <select
+                      className="h-9 w-full rounded border border-gray-200 text-sm px-2"
+                      value={formData.font_family}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, font_family: e.target.value }))
+                      }
+                    >
+                      <option value="Segoe UI, Tahoma, Geneva, Verdana, sans-serif">
+                        Системний (Segoe UI)
+                      </option>
+                      <option value="Roboto, Arial, sans-serif">Roboto / Arial</option>
+                      <option value="Montserrat, Arial, sans-serif">Montserrat</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="'Playfair Display', 'Times New Roman', serif">
+                        Playfair Display
+                      </option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
