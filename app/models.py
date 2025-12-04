@@ -355,54 +355,56 @@ class ClientQuestionnaire(Base):
     
     # СЕРВІС
     event_date = Column(Date, nullable=True)  # Дата заходу
-    location = Column(String, nullable=True)  # Точна локація
-    contact_person = Column(String, nullable=True)  # Контакт замовника
-    contact_phone = Column(String, nullable=True)
-    on_site_contact = Column(String, nullable=True)  # Хто буде головним на локації
-    on_site_phone = Column(String, nullable=True)
+    location = Column(String(500), nullable=True)  # Точна локація
+    contact_person = Column(String(200), nullable=True)  # Контакт замовника
+    contact_phone = Column(String(50), nullable=True)
+    on_site_contact = Column(String(200), nullable=True)  # Хто буде головним на локації
+    on_site_phone = Column(String(50), nullable=True)
     
-    arrival_time = Column(String, nullable=True)  # Час заїзду на локацію
-    event_start_time = Column(String, nullable=True)  # Час початку заходу
-    event_end_time = Column(String, nullable=True)  # Час кінця заходу
+    arrival_time = Column(Text, nullable=True)  # Час заїзду на локацію
+    event_start_time = Column(String(50), nullable=True)  # Час початку заходу
+    event_end_time = Column(String(50), nullable=True)  # Час кінця заходу
     
     service_type_timing = Column(Text, nullable=True)  # Таймінги всіх видач
     additional_services_timing = Column(Text, nullable=True)  # Таймінги додаткових видач
     equipment_notes = Column(Text, nullable=True)  # Коментарі щодо обладнання
     
-    payment_method = Column(String, nullable=True)  # Спосіб оплати (Предоплата/Залишок)
+    payment_method = Column(String(200), nullable=True)  # Спосіб оплати (Предоплата/Залишок)
     
-    textile_color = Column(String, nullable=True)  # Колір текстилю
-    banquet_line_color = Column(String, nullable=True)  # Колір оформлення лінії
+    textile_color = Column(String(100), nullable=True)  # Колір текстилю
+    banquet_line_color = Column(String(200), nullable=True)  # Колір оформлення лінії
     
     # ЗАЇЗД
-    venue_complexity = Column(String, nullable=True)  # Складність заїзду
-    floor_number = Column(String, nullable=True)  # На якому поверсі
+    venue_complexity = Column(String(200), nullable=True)  # Складність заїзду
+    floor_number = Column(String(100), nullable=True)  # На якому поверсі
     elevator_available = Column(Boolean, default=False)  # Чи є ліфт
-    technical_room = Column(String, nullable=True)  # Чи є технічне приміщення
-    kitchen_available = Column(String, nullable=True)  # Чи є кухня
-    venue_photos = Column(Boolean, default=False)  # Фото локації
-    arrival_photos = Column(Boolean, default=False)  # Фото заїзду
+    technical_room = Column(String(200), nullable=True)  # Чи є технічне приміщення
+    kitchen_available = Column(String(200), nullable=True)  # Чи є кухня
+    venue_photos = Column(Boolean, default=False)  # Фото локації (чи є)
+    arrival_photos = Column(Boolean, default=False)  # Фото заїзду (чи є)
+    venue_photos_urls = Column(JSON, nullable=True)  # URL фото локації (список)
+    arrival_photos_urls = Column(JSON, nullable=True)  # URL фото заїзду (список)
     
     # КУХНЯ
-    dish_serving = Column(String, nullable=True)  # Посуд для подачі страв
-    hot_snacks_serving = Column(String, nullable=True)  # Подача гарячих закусок
-    salad_serving = Column(String, nullable=True)  # Подання салатів
-    product_allergy = Column(String, nullable=True)  # Чи є алергія на продукти
+    dish_serving = Column(String(200), nullable=True)  # Посуд для подачі страв
+    hot_snacks_serving = Column(String(200), nullable=True)  # Подача гарячих закусок
+    salad_serving = Column(String(200), nullable=True)  # Подання салатів
+    product_allergy = Column(String(200), nullable=True)  # Чи є алергія на продукти
     vegetarians = Column(Boolean, default=False)  # Чи є вегетаріанці
     
-    hot_snacks_prep = Column(String, nullable=True)  # Приготування гарячих закусок
+    hot_snacks_prep = Column(String(200), nullable=True)  # Приготування гарячих закусок
     menu_notes = Column(Text, nullable=True)  # Коментарі до позицій меню
     client_order_notes = Column(Text, nullable=True)  # Їжа від замовника
     client_drinks_notes = Column(Text, nullable=True)  # Напої від замовника
     
     # КОНТЕНТ
-    photo_allowed = Column(String, nullable=True)  # Чи можна фотозйомка
-    video_allowed = Column(String, nullable=True)  # Чи можна відеозйомка
-    branded_products = Column(String, nullable=True)  # Чи можна брендовану продукцію
+    photo_allowed = Column(String(200), nullable=True)  # Чи можна фотозйомка
+    video_allowed = Column(String(200), nullable=True)  # Чи можна відеозйомка
+    branded_products = Column(String(200), nullable=True)  # Чи можна брендовану продукцію
     
     # ЗАМОВНИК
-    client_company_name = Column(String, nullable=True)  # Назва компанії
-    client_activity_type = Column(String, nullable=True)  # Вид діяльності
+    client_company_name = Column(String(300), nullable=True)  # Назва компанії
+    client_activity_type = Column(String(300), nullable=True)  # Вид діяльності
     
     # КОМЕНТАРІ
     special_notes = Column(Text, nullable=True)  # Спеціальні примітки
