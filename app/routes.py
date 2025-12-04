@@ -2449,7 +2449,7 @@ def create_questionnaire(
     
     # Якщо manager_id не вказано, використовуємо поточного користувача
     if not new_questionnaire.manager_id:
-        new_questionnaire.manager_id = user.id
+        new_questionnaire.manager_id = int(user.get("sub"))
     
     db.add(new_questionnaire)
     db.commit()
