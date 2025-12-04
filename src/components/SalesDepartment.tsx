@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { clientsApi, type Client, type ClientQuestionnaire, type ClientQuestionnaireUpdate } from "../lib/api";
+import { clientsApi, type Client, type ClientQuestionnaire, type ClientQuestionnaireUpdate, type ClientCreate } from "../lib/api";
 import { toast } from "sonner";
 import { ClientDetailsDialog } from "./ClientDetailsDialog";
 
@@ -44,6 +44,13 @@ export function SalesDepartment() {
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedClientForDetails, setSelectedClientForDetails] = useState<Client | null>(null);
   const [formData, setFormData] = useState<ClientQuestionnaireUpdate>({});
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [newClientData, setNewClientData] = useState<ClientCreate>({
+    name: "",
+    phone: "",
+    email: "",
+    company_name: "",
+  });
 
   useEffect(() => {
     loadClients();
@@ -94,12 +101,70 @@ export function SalesDepartment() {
     }
   };
 
-  const handleSave = async () => {
-    if (!selectedClient) return;
+  const handleCreateNew = () => {
+    setIsCreatingNew(true);
+    setSelectedClient(null);
+    setQuestionnaire(null);
+    setFormData({
+      // Додаємо дефолтні значення для нової анкети
+      event_date: new Date().toISOString().split('T')[0],
+    });
+    setNewClientData({
+      name: "",
+      phone: "",
+      email: "",
+      company_name: "",
+    });
+    setIsDialogOpen(true);
+  };
 
+  // Синхронізуємо дані клієнта з полями анкети при створенні нового клієнта
+  useEffect(() => {
+    if (isCreatingNew) {
+      // Автоматично заповнюємо деякі поля анкети з даних клієнта
+      setFormData((prev) => ({
+        ...prev,
+        contact_person: newClientData.name || prev.contact_person,
+        contact_phone: newClientData.phone || prev.contact_phone,
+        location: prev.location,
+      }));
+    }
+  }, [newClientData.name, newClientData.phone, isCreatingNew]);
+
+  const handleSave = async () => {
     try {
       setIsSaving(true);
-      const saved = await clientsApi.createOrUpdateQuestionnaire(selectedClient.id, formData);
+
+      let clientId = selectedClient?.id;
+
+      // Якщо це новий клієнт - спочатку створюємо його
+      if (isCreatingNew) {
+        if (!newClientData.name || !newClientData.phone) {
+          toast.error("Заповніть обов'язкові поля: ім'я та телефон");
+          setIsSaving(false);
+          return;
+        }
+
+        try {
+          const createdClient = await clientsApi.createClient(newClientData);
+          clientId = createdClient.id;
+          setSelectedClient(createdClient);
+          setIsCreatingNew(false);
+          toast.success("Клієнта створено!");
+          // Оновлюємо список клієнтів
+          loadClients();
+        } catch (error: any) {
+          toast.error("Помилка створення клієнта");
+          console.error(error);
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      if (!clientId) return;
+
+      // Зберігаємо анкету
+      const saved = await clientsApi.createOrUpdateQuestionnaire(clientId, formData);
       setQuestionnaire(saved);
       toast.success("Анкету збережено!");
     } catch (error: any) {
@@ -136,6 +201,10 @@ export function SalesDepartment() {
                 className="pl-10"
               />
             </div>
+            <Button onClick={handleCreateNew} className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Створити нову анкету
+            </Button>
           </div>
 
           {/* Список клієнтів */}
@@ -201,16 +270,71 @@ export function SalesDepartment() {
       </Card>
 
       {/* Діалог з анкетою */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        setIsDialogOpen(open);
+        if (!open) {
+          setIsCreatingNew(false);
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Анкета клієнта: {selectedClient?.name}
+              {isCreatingNew ? "Нова анкета клієнта" : `Анкета клієнта: ${selectedClient?.name}`}
             </DialogTitle>
             <DialogDescription>
-              Заповніть або оновіть анкету клієнта для відділу продажів
+              {isCreatingNew 
+                ? "Створіть нового клієнта та заповніть анкету" 
+                : "Заповніть або оновіть анкету клієнта для відділу продажів"}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Форма даних клієнта для нового клієнта */}
+          {isCreatingNew && (
+            <div className="space-y-4 p-4 bg-orange-50 border border-orange-200 rounded-lg mb-4">
+              <h3 className="font-semibold text-orange-900">Дані клієнта</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="client-name">Ім'я клієнта *</Label>
+                  <Input
+                    id="client-name"
+                    value={newClientData.name}
+                    onChange={(e) => setNewClientData({ ...newClientData, name: e.target.value })}
+                    placeholder="Введіть ім'я"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="client-phone">Телефон *</Label>
+                  <Input
+                    id="client-phone"
+                    value={newClientData.phone}
+                    onChange={(e) => setNewClientData({ ...newClientData, phone: e.target.value })}
+                    placeholder="+380..."
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="client-email">Email</Label>
+                  <Input
+                    id="client-email"
+                    type="email"
+                    value={newClientData.email || ""}
+                    onChange={(e) => setNewClientData({ ...newClientData, email: e.target.value })}
+                    placeholder="email@example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="client-company">Компанія</Label>
+                  <Input
+                    id="client-company"
+                    value={newClientData.company_name || ""}
+                    onChange={(e) => setNewClientData({ ...newClientData, company_name: e.target.value })}
+                    placeholder="Назва компанії"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-6 py-4">
             {/* СЕРВІС */}
