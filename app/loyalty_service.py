@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from . import models
+import models
 
 # Рівні лояльності
 LOYALTY_TIERS = {

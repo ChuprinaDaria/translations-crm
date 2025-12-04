@@ -19,7 +19,7 @@ from decimal import Decimal
 from email_service import send_kp_email
 from telegram_service import send_kp_telegram
 from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
-from . import loyalty_service
+import loyalty_service
 
 
 router = APIRouter()
