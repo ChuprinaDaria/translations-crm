@@ -183,6 +183,7 @@ export interface ClientQuestionnaire {
   service_type_timing?: string;
   additional_services_timing?: string;
   equipment_notes?: string;
+  selected_equipment_ids?: number[];
   payment_method?: string;
   textile_color?: string;
   banquet_line_color?: string;

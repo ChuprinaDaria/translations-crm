@@ -369,6 +369,7 @@ class ClientQuestionnaire(Base):
     service_type_timing = Column(Text, nullable=True)  # Таймінги всіх видач
     additional_services_timing = Column(Text, nullable=True)  # Таймінги додаткових видач
     equipment_notes = Column(Text, nullable=True)  # Коментарі щодо обладнання
+    selected_equipment_ids = Column(JSON, nullable=True)  # ID вибраного обладнання для автоматичного додавання в КП
     
     payment_method = Column(String(200), nullable=True)  # Спосіб оплати (Предоплата/Залишок)
     

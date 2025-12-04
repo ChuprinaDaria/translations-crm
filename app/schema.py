@@ -510,6 +510,7 @@ class ClientQuestionnaireBase(BaseModel):
     service_type_timing: Optional[str] = None
     additional_services_timing: Optional[str] = None
     equipment_notes: Optional[str] = None
+    selected_equipment_ids: Optional[List[int]] = None  # ID вибраного обладнання
     payment_method: Optional[str] = None
     textile_color: Optional[str] = None
     banquet_line_color: Optional[str] = None
