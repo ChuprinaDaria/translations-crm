@@ -169,6 +169,7 @@ export interface ClientUpdate {
 export interface ClientQuestionnaire {
   id: number;
   client_id: number;
+  manager_id?: number;
   // СЕРВІС
   event_date?: string;
   location?: string;
@@ -193,6 +194,8 @@ export interface ClientQuestionnaire {
   kitchen_available?: string;
   venue_photos?: boolean;
   arrival_photos?: boolean;
+  venue_photos_urls?: string[];
+  arrival_photos_urls?: string[];
   // КУХНЯ
   dish_serving?: string;
   hot_snacks_serving?: string;
@@ -214,6 +217,10 @@ export interface ClientQuestionnaire {
   special_notes?: string;
   created_at?: string;
   updated_at?: string;
+  // Додаткові поля для відображення
+  client_name?: string;
+  client_phone?: string;
+  client_company?: string;
 }
 
 export interface ClientQuestionnaireUpdate {
@@ -239,6 +246,8 @@ export interface ClientQuestionnaireUpdate {
   kitchen_available?: string;
   venue_photos?: boolean;
   arrival_photos?: boolean;
+  venue_photos_urls?: string[];
+  arrival_photos_urls?: string[];
   dish_serving?: string;
   hot_snacks_serving?: string;
   salad_serving?: string;
@@ -254,6 +263,11 @@ export interface ClientQuestionnaireUpdate {
   client_company_name?: string;
   client_activity_type?: string;
   special_notes?: string;
+}
+
+export interface ClientQuestionnaireCreate extends ClientQuestionnaireUpdate {
+  client_id: number;
+  manager_id?: number;
 }
 
 // Menus types
@@ -1138,6 +1152,49 @@ export const clientsApi = {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+
+  async searchByPhone(phone: string): Promise<{ found: boolean; client: Client | null }> {
+    return apiFetch<{ found: boolean; client: Client | null }>(`/clients/search-by-phone/${encodeURIComponent(phone)}`);
+  },
+};
+
+// Questionnaires API
+export const questionnairesApi = {
+  async getAll(skip?: number, limit?: number, managerId?: number): Promise<{ total: number; questionnaires: ClientQuestionnaire[] }> {
+    const params = new URLSearchParams();
+    if (skip !== undefined) params.append("skip", skip.toString());
+    if (limit !== undefined) params.append("limit", limit.toString());
+    if (managerId !== undefined) params.append("manager_id", managerId.toString());
+    return apiFetch<{ total: number; questionnaires: ClientQuestionnaire[] }>(`/questionnaires?${params.toString()}`);
+  },
+
+  async getById(id: number): Promise<ClientQuestionnaire> {
+    return apiFetch<ClientQuestionnaire>(`/questionnaires/${id}`);
+  },
+
+  async create(data: ClientQuestionnaireCreate): Promise<ClientQuestionnaire> {
+    return apiFetch<ClientQuestionnaire>("/questionnaires", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: number, data: ClientQuestionnaireUpdate): Promise<ClientQuestionnaire> {
+    return apiFetch<ClientQuestionnaire>(`/questionnaires/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: number): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>(`/questionnaires/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  async getClientQuestionnaires(clientId: number): Promise<{ total: number; questionnaires: ClientQuestionnaire[] }> {
+    return apiFetch<{ total: number; questionnaires: ClientQuestionnaire[] }>(`/clients/${clientId}/questionnaires`);
   },
 };
 

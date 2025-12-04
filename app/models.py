@@ -342,7 +342,7 @@ class Client(Base):
     
     # Відносини
     kps = relationship("KP", back_populates="client")
-    questionnaire = relationship("ClientQuestionnaire", back_populates="client", uselist=False)
+    questionnaires = relationship("ClientQuestionnaire", back_populates="client", cascade="all, delete-orphan")
     cashback_transactions = relationship("CashbackTransaction", back_populates="client")
 
 
@@ -351,7 +351,8 @@ class ClientQuestionnaire(Base):
     __tablename__ = "client_questionnaires"
     
     id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), unique=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Менеджер, який створив анкету
     
     # СЕРВІС
     event_date = Column(Date, nullable=True)  # Дата заходу
@@ -413,7 +414,8 @@ class ClientQuestionnaire(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Відносини
-    client = relationship("Client", back_populates="questionnaire")
+    client = relationship("Client", back_populates="questionnaires")
+    manager = relationship("User", foreign_keys=[manager_id])
 
 
 class CashbackTransaction(Base):

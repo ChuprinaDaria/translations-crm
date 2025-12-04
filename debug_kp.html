@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Комерційна пропозиція</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            color: #333333;
+            background-color: #ffffff;
+            line-height: 1.6;
+            font-size: 10pt;
+        }
+        
+        .container {
+            max-width: 100%;
+        }
+        
+        /* Шапка документу */
+        .header {
+            text-align: center;
+            margin-bottom: 10mm;
+            padding: 10mm 0;
+            
+            border-bottom: 3pt solid #FF5A00;
+            
+        }
+        
+        
+        
+        .company-name {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #FF5A00;
+            margin-bottom: 3mm;
+        }
+        
+        .kp-title {
+            font-size: 16pt;
+            font-weight: 600;
+            margin-bottom: 2mm;
+        }
+        
+        /* Інформація про клієнта */
+        .client-info {
+            background-color: #f9f9f9;
+            padding: 5mm;
+            border-radius: 2mm;
+            margin-bottom: 8mm;
+            border-left: 3pt solid #FF5A00;
+        }
+        
+        .client-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .client-info td {
+            padding: 2mm 0;
+            font-size: 10pt;
+        }
+        
+        .client-info td:first-child {
+            font-weight: 600;
+            width: 40%;
+            color: #666;
+        }
+        
+        /* Таблиця меню */
+        .menu-section {
+            margin-bottom: 8mm;
+        }
+        
+        .section-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #FF5A00;
+            margin-bottom: 4mm;
+            padding-bottom: 2mm;
+            border-bottom: 2pt solid #FF5A00;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            margin-bottom: 5mm;
+        }
+        
+        .items-table thead {
+            background-color: #FF5A00;
+            color: white;
+        }
+        
+        .items-table th {
+            padding: 3mm;
+            text-align: left;
+            font-size: 9pt;
+            font-weight: 600;
+        }
+        
+        .items-table td {
+            padding: 3mm;
+            border-bottom: 1pt solid #e0e0e0;
+            font-size: 9pt;
+            vertical-align: top;
+        }
+        
+        .items-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .item-photo {
+            width: 40pt;
+            height: 40pt;
+            object-fit: cover;
+            border-radius: 2mm;
+            border: 1pt solid #ddd;
+        }
+        
+        .item-name {
+            font-weight: 600;
+            margin-bottom: 1mm;
+        }
+        
+        .item-description {
+            font-size: 8pt;
+            color: #666;
+        }
+        
+        .category-badge {
+            display: inline-block;
+            background-color: #f0f0f0;
+            padding: 1mm 2mm;
+            border-radius: 1mm;
+            font-size: 7pt;
+            color: #666;
+            margin-top: 1mm;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        /* Підсумки */
+        .summary-section {
+            margin-top: 8mm;
+            background-color: #f9f9f9;
+            padding: 5mm;
+            border-radius: 2mm;
+        }
+        
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4mm;
+        }
+        
+        .summary-table td {
+            padding: 2mm 0;
+            font-size: 10pt;
+        }
+        
+        .summary-table td:first-child {
+            font-weight: 600;
+            color: #666;
+            width: 60%;
+        }
+        
+        .summary-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        .total-row {
+            border-top: 2pt solid #FF5A00;
+            padding-top: 3mm;
+        }
+        
+        .total-row td {
+            font-size: 12pt;
+            color: #FF5A00;
+            padding-top: 3mm;
+        }
+        
+        .notes-section {
+            margin-top: 5mm;
+            padding: 3mm;
+            background-color: #fff9e6;
+            border-left: 3pt solid #ffd700;
+            border-radius: 2mm;
+        }
+        
+        .notes-title {
+            font-weight: 600;
+            margin-bottom: 2mm;
+            color: #FF5A00;
+        }
+        
+        .notes-content {
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+        
+        /* Футер */
+        .footer {
+            margin-top: 10mm;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            padding-top: 5mm;
+            border-top: 1pt solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Шапка -->
+        <div class="header">
+            
+            <div class="company-name">BOX Catering</div>
+            <div class="kp-title">Корпоративний захід</div>
+        </div>
+        
+        <!-- Інформація про клієнта -->
+        <div class="client-info">
+            <table>
+                <tr>
+                    <td>Клієнт:</td>
+                    <td>ТОВ "Тестова компанія"</td>
+                </tr>
+                
+                <tr>
+                    <td>Контакт:</td>
+                    <td>+380 50 123 45 67</td>
+                </tr>
+                
+                <tr>
+                    <td>Дата створення:</td>
+                    <td>04.12.2025</td>
+                </tr>
+                
+                <tr>
+                    <td>Дата заходу:</td>
+                    <td>25.12.2024</td>
+                </tr>
+                
+                
+                <tr>
+                    <td>Кількість гостей:</td>
+                    <td>50 осіб</td>
+                </tr>
+                
+            </table>
+        </div>
+        
+        <!-- Меню -->
+        
+        <div class="menu-section">
+            <div class="section-title">Меню</div>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">#</th>
+                        <th style="width: 8%;">Фото</th>
+                        <th style="width: 35%;">Назва</th>
+                        <th style="width: 12%;" class="text-right">Ціна</th>
+                        <th style="width: 8%;" class="text-center">К-сть</th>
+                        <th style="width: 12%;" class="text-right">Вага</th>
+                        <th style="width: 15%;" class="text-right">Сума</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td class="text-center">1</td>
+                        <td>
+                            
+                            —
+                            
+                        </td>
+                        <td>
+                            <div class="item-name">Салат Цезар</div>
+                            
+                            <div class="item-description">Курка, листя салату, помідори черрі, пармезан</div>
+                            
+                            
+                            <div class="category-badge">Салати / Теплі салати</div>
+                            
+                        </td>
+                        <td class="text-right">250.00 грн</td>
+                        <td class="text-center">10</td>
+                        <td class="text-right">0.30 кг</td>
+                        <td class="text-right">2500.00 грн</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class="text-center">2</td>
+                        <td>
+                            
+                            —
+                            
+                        </td>
+                        <td>
+                            <div class="item-name">Борщ український</div>
+                            
+                            <div class="item-description">Класичний рецепт з яловичиною та сметаною</div>
+                            
+                            
+                            <div class="category-badge">Перші страви / Гарячі супи</div>
+                            
+                        </td>
+                        <td class="text-right">180.00 грн</td>
+                        <td class="text-center">15</td>
+                        <td class="text-right">0.35 кг</td>
+                        <td class="text-right">2700.00 грн</td>
+                    </tr>
+                    
+                    <tr>
+                        <td class="text-center">3</td>
+                        <td>
+                            
+                            —
+                            
+                        </td>
+                        <td>
+                            <div class="item-name">Котлета по-київськи</div>
+                            
+                            <div class="item-description">Куряча грудка з вершковим маслом та часником</div>
+                            
+                            
+                            <div class="category-badge">Гарячі страви / М'ясні страви</div>
+                            
+                        </td>
+                        <td class="text-right">320.00 грн</td>
+                        <td class="text-center">20</td>
+                        <td class="text-right">0.25 кг</td>
+                        <td class="text-right">6400.00 грн</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+        
+        
+        <!-- Підсумки -->
+        <div class="summary-section">
+            <div class="section-title">Підсумок</div>
+            <table class="summary-table">
+                <tr>
+                    <td>Страви:</td>
+                    <td>11600.00 грн</td>
+                </tr>
+                
+                <tr>
+                    <td>Обладнання:</td>
+                    <td>2500.00 грн</td>
+                </tr>
+                
+                
+                <tr>
+                    <td>Обслуговування:</td>
+                    <td>4000.00 грн</td>
+                </tr>
+                
+                
+                <tr>
+                    <td>Доставка:</td>
+                    <td>1500.00 грн</td>
+                </tr>
+                
+                <tr>
+                    <td>Загальна вага:</td>
+                    <td>13.25 кг</td>
+                </tr>
+                
+                <tr>
+                    <td>Вага на людину:</td>
+                    <td>265 г</td>
+                </tr>
+                
+                <tr>
+                    <td>Всього позицій:</td>
+                    <td>3</td>
+                </tr>
+            </table>
+            
+            
+            <div class="notes-section">
+                <div class="notes-title">Примітки:</div>
+                <div class="notes-content">Прохання врахувати алергію на горіхи у трьох гостей</div>
+            </div>
+            
+        </div>
+        
+        <!-- Футер -->
+        <div class="footer">
+            <p>Дякуємо за довіру! BOX Catering</p>
+            <p>Документ згенеровано автоматично</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -2304,14 +2304,177 @@ def get_questionnaire(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
+    """Отримати останню анкету клієнта (для зворотньої сумісності)"""
     questionnaire = db.query(models.ClientQuestionnaire).filter(
         models.ClientQuestionnaire.client_id == client_id
+    ).order_by(models.ClientQuestionnaire.created_at.desc()).first()
+    
+    if not questionnaire:
+        raise HTTPException(404, "Questionnaire not found")
+    
+    return questionnaire
+
+
+@router.get("/clients/{client_id}/questionnaires")
+def get_client_questionnaires(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати всі анкети клієнта"""
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    questionnaires = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.client_id == client_id
+    ).order_by(models.ClientQuestionnaire.created_at.desc()).all()
+    
+    return {"questionnaires": questionnaires, "total": len(questionnaires)}
+
+
+@router.get("/questionnaires")
+def get_all_questionnaires(
+    skip: int = 0,
+    limit: int = 100,
+    manager_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати всі анкети з фільтрацією"""
+    query = db.query(models.ClientQuestionnaire)
+    
+    if manager_id:
+        query = query.filter(models.ClientQuestionnaire.manager_id == manager_id)
+    
+    total = query.count()
+    questionnaires = query.order_by(
+        models.ClientQuestionnaire.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    # Додаємо інформацію про клієнта
+    result = []
+    for q in questionnaires:
+        client = db.query(models.Client).filter(models.Client.id == q.client_id).first()
+        q_dict = {
+            **q.__dict__,
+            "client_name": client.name if client else None,
+            "client_phone": client.phone if client else None,
+            "client_company": client.company_name if client else None,
+        }
+        result.append(q_dict)
+    
+    return {"questionnaires": result, "total": total}
+
+
+@router.get("/questionnaires/{questionnaire_id}")
+def get_questionnaire_by_id(
+    questionnaire_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати анкету за ID"""
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.id == questionnaire_id
     ).first()
     
     if not questionnaire:
         raise HTTPException(404, "Questionnaire not found")
     
     return questionnaire
+
+
+@router.put("/questionnaires/{questionnaire_id}")
+def update_questionnaire_by_id(
+    questionnaire_id: int,
+    questionnaire_update: schema.ClientQuestionnaireUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Оновити анкету за ID"""
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.id == questionnaire_id
+    ).first()
+    
+    if not questionnaire:
+        raise HTTPException(404, "Questionnaire not found")
+    
+    for key, value in questionnaire_update.dict(exclude_unset=True).items():
+        setattr(questionnaire, key, value)
+    
+    questionnaire.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(questionnaire)
+    
+    return questionnaire
+
+
+@router.delete("/questionnaires/{questionnaire_id}")
+def delete_questionnaire(
+    questionnaire_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Видалити анкету"""
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.id == questionnaire_id
+    ).first()
+    
+    if not questionnaire:
+        raise HTTPException(404, "Questionnaire not found")
+    
+    db.delete(questionnaire)
+    db.commit()
+    
+    return {"message": "Questionnaire deleted successfully"}
+
+
+@router.post("/questionnaires")
+def create_questionnaire(
+    questionnaire_data: schema.ClientQuestionnaireCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Створити нову анкету"""
+    # Перевірка чи існує клієнт
+    client = db.query(models.Client).filter(models.Client.id == questionnaire_data.client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    # Створюємо анкету
+    new_questionnaire = models.ClientQuestionnaire(
+        **questionnaire_data.dict(exclude_unset=True)
+    )
+    
+    # Якщо manager_id не вказано, використовуємо поточного користувача
+    if not new_questionnaire.manager_id:
+        new_questionnaire.manager_id = user.id
+    
+    db.add(new_questionnaire)
+    db.commit()
+    db.refresh(new_questionnaire)
+    
+    return new_questionnaire
+
+
+@router.get("/clients/search-by-phone/{phone}")
+def search_client_by_phone(
+    phone: str,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Пошук клієнта по номеру телефону"""
+    # Очищаємо номер телефону від пробілів і спецсимволів для пошуку
+    cleaned_phone = ''.join(filter(str.isdigit, phone))
+    
+    # Шукаємо клієнта
+    clients = db.query(models.Client).all()
+    for client in clients:
+        client_phone_cleaned = ''.join(filter(str.isdigit, client.phone))
+        if client_phone_cleaned == cleaned_phone:
+            return {"found": True, "client": client}
+    
+    return {"found": False, "client": None}
 
 
 # ==================== KP з КЛІЄНТОМ ====================

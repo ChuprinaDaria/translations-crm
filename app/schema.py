@@ -522,6 +522,8 @@ class ClientQuestionnaireBase(BaseModel):
     kitchen_available: Optional[str] = None
     venue_photos: Optional[bool] = False
     arrival_photos: Optional[bool] = False
+    venue_photos_urls: Optional[List[str]] = None  # URL фото локації
+    arrival_photos_urls: Optional[List[str]] = None  # URL фото заїзду
     
     # КУХНЯ
     dish_serving: Optional[str] = None
@@ -549,6 +551,7 @@ class ClientQuestionnaireBase(BaseModel):
 
 class ClientQuestionnaireCreate(ClientQuestionnaireBase):
     client_id: int
+    manager_id: Optional[int] = None
 
 
 class ClientQuestionnaireUpdate(BaseModel):
@@ -574,6 +577,8 @@ class ClientQuestionnaireUpdate(BaseModel):
     kitchen_available: Optional[str] = None
     venue_photos: Optional[bool] = None
     arrival_photos: Optional[bool] = None
+    venue_photos_urls: Optional[List[str]] = None
+    arrival_photos_urls: Optional[List[str]] = None
     dish_serving: Optional[str] = None
     hot_snacks_serving: Optional[str] = None
     salad_serving: Optional[str] = None
@@ -594,6 +599,7 @@ class ClientQuestionnaireUpdate(BaseModel):
 class ClientQuestionnaire(ClientQuestionnaireBase):
     id: int
     client_id: int
+    manager_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
