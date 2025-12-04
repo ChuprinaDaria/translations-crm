@@ -122,10 +122,10 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           label: "Анкета",
           icon: <ClipboardList className="w-5 h-5" />,
           tooltip: "Анкета клієнта для відділу продажів",
-          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead"],
+          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
         },
       ],
-      roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead"],
+      roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
     },
     {
       title: "Сервіс",

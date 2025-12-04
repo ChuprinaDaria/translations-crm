@@ -448,7 +448,7 @@ class ClientBase(BaseModel):
     cashback_balance: Optional[float] = 0
     cashback_earned_total: Optional[float] = 0
     cashback_used_total: Optional[float] = 0
-    cashback_expires_at: Optional[str] = None
+    cashback_expires_at: Optional[datetime] = None
     loyalty_tier: Optional[str] = "silver"
     cashback_rate: Optional[float] = 3.0
     is_custom_rate: Optional[bool] = False
@@ -473,7 +473,7 @@ class ClientUpdate(BaseModel):
     cashback_balance: Optional[float] = None
     cashback_earned_total: Optional[float] = None
     cashback_used_total: Optional[float] = None
-    cashback_expires_at: Optional[str] = None
+    cashback_expires_at: Optional[datetime] = None
     loyalty_tier: Optional[str] = None
     cashback_rate: Optional[float] = None
     is_custom_rate: Optional[bool] = None
