@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +13,13 @@ const sampleKPData = {
     title: "Комерційна пропозиція №123",
     client_name: 'ТОВ "Приклад"',
     client_contact: "+380 50 123 45 67",
+    client_phone: "+380 68 393 57 24",
+    client_email: "client@example.com",
+    event_format: "Комплексне обслуговування",
+    coordinator_name: "Катерина",
+    coordinator_phone: "093 968 99 36",
+    event_location: "м. Київ, Лаврська 27",
+    event_time: "09:00-18:00",
     people_count: 50,
     notes: "Прохання врахувати алергію на горіхи",
   },
@@ -112,18 +119,70 @@ export function TemplatePreview({
     }, 1000); // 1 секунда затримки
 
     return () => clearTimeout(timer);
-  }, [design]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    design?.name,
+    design?.primary_color,
+    design?.text_color,
+    design?.secondary_color,
+    design?.font_family,
+    design?.logo_image,
+    design?.header_image,
+    design?.background_image,
+    JSON.stringify(design?.menu_sections), // Для правильної реакції на зміни масиву
+    design?.show_item_photo,
+    design?.show_item_weight,
+    design?.show_item_quantity,
+    design?.show_item_price,
+    design?.show_item_total,
+    design?.show_item_description,
+    design?.menu_title,
+    design?.summary_title,
+    design?.footer_text,
+    design?.page_orientation,
+  ]);
+
+  // Конвертуємо File в base64 data URL
+  const fileToDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Підготовка design з конвертованими зображеннями
+  const prepareDesignWithImages = async (designData: any) => {
+    const preparedDesign = { ...designData };
+    
+    // Конвертуємо File об'єкти в base64
+    if (designData.logo_image instanceof File) {
+      preparedDesign.logo_image = await fileToDataURL(designData.logo_image);
+    }
+    if (designData.header_image instanceof File) {
+      preparedDesign.header_image = await fileToDataURL(designData.header_image);
+    }
+    if (designData.background_image instanceof File) {
+      preparedDesign.background_image = await fileToDataURL(designData.background_image);
+    }
+    
+    return preparedDesign;
+  };
 
   const generatePreview = async () => {
     if (!design) return; // Не генеруємо якщо немає design
     
     setIsGenerating(true);
     try {
+      // Підготовка design з конвертованими зображеннями
+      const preparedDesign = await prepareDesignWithImages(design);
+      
       const response = await fetch("/api/templates/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          design,
+          design: preparedDesign,
           sample_data: sampleKPData,
         }),
       });

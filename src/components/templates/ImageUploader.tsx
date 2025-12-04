@@ -66,7 +66,7 @@ export function ImageUploader({
   };
 
   return (
-    <div className="mb-6">
+    <div className="mb-6 max-w-full w-full">
       <label className="block text-sm font-medium text-gray-900 mb-2">
         {label}
       </label>
@@ -82,7 +82,7 @@ export function ImageUploader({
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        className={`relative border-2 border-dashed rounded-lg transition-all ${
+        className={`relative border-2 border-dashed rounded-lg transition-all max-w-full overflow-hidden ${
           isDragging
             ? "border-orange-500 bg-orange-50"
             : "border-gray-300 hover:border-gray-400"
@@ -90,12 +90,13 @@ export function ImageUploader({
       >
         {preview ? (
           /* Показуємо завантажене */
-          <div className="p-4">
-            <div className="relative rounded-lg overflow-hidden mb-3">
+          <div className="p-4 max-w-full">
+            <div className="relative rounded-lg overflow-hidden mb-3 w-full" style={{ maxWidth: '100%' }}>
               <img
                 src={preview}
                 alt="Preview"
                 className="w-full h-40 object-cover"
+                style={{ maxWidth: '100%', height: '160px', display: 'block' }}
               />
               {/* Overlay з кнопками при hover */}
               <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">

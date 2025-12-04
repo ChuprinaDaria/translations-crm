@@ -31,6 +31,7 @@ import {
 } from "./ui/select";
 import { clientsApi, kpApi, type Client, type ClientUpdate, type KP } from "../lib/api";
 import { toast } from "sonner";
+import { LoyaltyBadge } from "./LoyaltyBadge";
 
 export function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -213,9 +214,25 @@ export function Clients() {
                     <TableRow key={client.id}>
                       <TableCell className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm text-gray-900">
-                            {client.name}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 font-medium">
+                                {client.name}
+                              </div>
+                              {client.company_name && (
+                                <div className="text-xs text-gray-500">
+                                  {client.company_name}
+                                </div>
+                              )}
+                            </div>
+                            {(client as any).loyalty_tier && (
+                              <LoyaltyBadge 
+                                tier={(client as any).loyalty_tier || "silver"} 
+                                cashbackRate={(client as any).cashback_rate || 3}
+                                size="sm"
+                              />
+                            )}
                           </div>
                           {client.comments && (
                             <div className="text-xs text-gray-500 line-clamp-2">
@@ -271,12 +288,14 @@ export function Clients() {
                               <span>{client.discount}</span>
                             </div>
                           )}
-                          {client.cashback && client.cashback > 0 && (
+                          {((client as any).cashback_balance && (client as any).cashback_balance > 0) || (client.cashback && client.cashback > 0) ? (
                             <div className="flex items-center gap-1 text-green-600">
                               <Gift className="w-3 h-3" />
-                              <span>{client.cashback.toLocaleString()} грн</span>
+                              <span>
+                                {((client as any).cashback_balance || client.cashback || 0).toLocaleString()} грн
+                              </span>
                             </div>
-                          )}
+                          ) : null}
                           {!client.discount && (!client.cashback || client.cashback === 0) && (
                             <span className="text-gray-400">—</span>
                           )}

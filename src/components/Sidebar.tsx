@@ -115,38 +115,17 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
       roles: ["kp-manager", "sales-lead"],
     },
     {
-      title: "Продажі",
+      title: "Відділ Продажів",
       items: [
         {
           id: "client-questionnaires",
-          label: "Анкети клієнтів",
+          label: "Анкета",
           icon: <ClipboardList className="w-5 h-5" />,
-          tooltip: "Анкети та форми клієнтів",
-          roles: ["sales-manager", "sales-lead"],
-        },
-        {
-          id: "my-kp",
-          label: "Мої КП",
-          icon: <FileText className="w-5 h-5" />,
-          tooltip: "КП призначені вам",
-          roles: ["sales-manager", "sales-lead"],
-        },
-        {
-          id: "sent-to-service",
-          label: "Відправлені у сервіс",
-          icon: <Send className="w-5 h-5" />,
-          tooltip: "КП відправлені в сервісний відділ",
-          roles: ["sales-manager", "sales-lead"],
-        },
-        {
-          id: "procurement-excel",
-          label: "Excel для закупівлі",
-          icon: <FileSpreadsheet className="w-5 h-5" />,
-          tooltip: "Експорт даних для закупівлі",
-          roles: ["sales-manager", "sales-lead"],
+          tooltip: "Анкета клієнта для відділу продажів",
+          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead"],
         },
       ],
-      roles: ["sales-manager", "sales-lead"],
+      roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead"],
     },
     {
       title: "Сервіс",

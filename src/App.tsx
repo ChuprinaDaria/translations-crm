@@ -14,6 +14,7 @@ import { Clients } from "./components/Clients";
 import { EventsCalendar } from "./components/EventsCalendar";
 import { UsersManagement } from "./components/UsersManagement";
 import { BenefitsManagement } from "./components/BenefitsManagement";
+import { SalesDepartment } from "./components/SalesDepartment";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -144,8 +145,8 @@ function App() {
         { label: "Архів КП" },
       ],
       "client-questionnaires": [
-        { label: "Продажі", href: "#" },
-        { label: "Анкети клієнтів" },
+        { label: "Відділ Продажів", href: "#" },
+        { label: "Анкета" },
       ],
       "my-kp": [
         { label: "Продажі", href: "#" },
@@ -230,18 +231,7 @@ function App() {
           setActiveItem("create-kp");
         }} />;
       case "client-questionnaires":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Анкети клієнтів
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Форми та анкети клієнтів будуть тут
-              </p>
-            </div>
-          </div>
-        );
+        return <SalesDepartment />;
       case "my-kp":
         return (
           <div className="space-y-6">

@@ -1145,7 +1145,7 @@ export function MenuManagement() {
                         </p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1 border rounded-lg">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-1 border rounded-lg">
                         {filteredMenuItems.map((item) => {
                           const isSelected = isMenuItemSelected(item.id);
                           const quantity = getMenuItemQuantity(item.id);

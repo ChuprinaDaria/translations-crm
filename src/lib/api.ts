@@ -108,13 +108,30 @@ export interface UserUpdate {
 export interface Client {
   id: number;
   name: string;
-  phone?: string;
+  company_name?: string;
+  phone: string;
   email?: string;
+  total_orders?: number;
+  lifetime_spent?: number;
+  current_year_spent?: number;
+  cashback_balance?: number;
+  cashback_earned_total?: number;
+  cashback_used_total?: number;
+  cashback_expires_at?: string;
+  loyalty_tier?: string;
+  cashback_rate?: number;
+  is_custom_rate?: boolean;
+  yearly_photographer_used?: boolean;
+  yearly_robot_used?: boolean;
+  bonus_year?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Старі поля для сумісності
+  total_spent?: number;
   status?: string;
   event_date?: string;
   event_format?: string;
-  event_group?: string;
-  event_time?: string;
   event_location?: string;
   comments?: string;
   kp_total_amount?: number;
@@ -125,29 +142,118 @@ export interface Client {
   payment_plan_date?: string;
   discount?: string;
   cashback?: number;
-  created_at?: string;
-  updated_at?: string;
+}
+
+export interface ClientCreate {
+  name: string;
+  company_name?: string;
+  phone: string;
+  email?: string;
+  total_orders?: number;
+  total_spent?: number;
+  cashback_balance?: number;
+  notes?: string;
 }
 
 export interface ClientUpdate {
   name?: string;
+  company_name?: string;
   phone?: string;
   email?: string;
-  status?: string;
+  total_orders?: number;
+  total_spent?: number;
+  cashback_balance?: number;
+  notes?: string;
+}
+
+export interface ClientQuestionnaire {
+  id: number;
+  client_id: number;
+  // СЕРВІС
   event_date?: string;
-  event_format?: string;
-  event_group?: string;
-  event_time?: string;
-  event_location?: string;
-  comments?: string;
-  kp_total_amount?: number;
-  paid_amount?: number;
-  unpaid_amount?: number;
-  payment_format?: string;
-  cash_collector?: string;
-  payment_plan_date?: string;
-  discount?: string;
-  cashback?: number;
+  location?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  on_site_contact?: string;
+  on_site_phone?: string;
+  arrival_time?: string;
+  event_start_time?: string;
+  event_end_time?: string;
+  service_type_timing?: string;
+  additional_services_timing?: string;
+  equipment_notes?: string;
+  payment_method?: string;
+  textile_color?: string;
+  banquet_line_color?: string;
+  // ЗАЇЗД
+  venue_complexity?: string;
+  floor_number?: string;
+  elevator_available?: boolean;
+  technical_room?: string;
+  kitchen_available?: string;
+  venue_photos?: boolean;
+  arrival_photos?: boolean;
+  // КУХНЯ
+  dish_serving?: string;
+  hot_snacks_serving?: string;
+  salad_serving?: string;
+  product_allergy?: string;
+  vegetarians?: boolean;
+  hot_snacks_prep?: string;
+  menu_notes?: string;
+  client_order_notes?: string;
+  client_drinks_notes?: string;
+  // КОНТЕНТ
+  photo_allowed?: string;
+  video_allowed?: string;
+  branded_products?: string;
+  // ЗАМОВНИК
+  client_company_name?: string;
+  client_activity_type?: string;
+  // КОМЕНТАРІ
+  special_notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ClientQuestionnaireUpdate {
+  event_date?: string;
+  location?: string;
+  contact_person?: string;
+  contact_phone?: string;
+  on_site_contact?: string;
+  on_site_phone?: string;
+  arrival_time?: string;
+  event_start_time?: string;
+  event_end_time?: string;
+  service_type_timing?: string;
+  additional_services_timing?: string;
+  equipment_notes?: string;
+  payment_method?: string;
+  textile_color?: string;
+  banquet_line_color?: string;
+  venue_complexity?: string;
+  floor_number?: string;
+  elevator_available?: boolean;
+  technical_room?: string;
+  kitchen_available?: string;
+  venue_photos?: boolean;
+  arrival_photos?: boolean;
+  dish_serving?: string;
+  hot_snacks_serving?: string;
+  salad_serving?: string;
+  product_allergy?: string;
+  vegetarians?: boolean;
+  hot_snacks_prep?: string;
+  menu_notes?: string;
+  client_order_notes?: string;
+  client_drinks_notes?: string;
+  photo_allowed?: string;
+  video_allowed?: string;
+  branded_products?: string;
+  client_company_name?: string;
+  client_activity_type?: string;
+  special_notes?: string;
 }
 
 // Menus types
@@ -997,17 +1103,39 @@ export const usersApi = {
 
 // Clients API
 export const clientsApi = {
-  async getClients(): Promise<Client[]> {
-    return apiFetch<Client[]>("/clients");
+  async getClients(skip?: number, limit?: number, search?: string): Promise<{ total: number; clients: Client[] }> {
+    const params = new URLSearchParams();
+    if (skip !== undefined) params.append("skip", skip.toString());
+    if (limit !== undefined) params.append("limit", limit.toString());
+    if (search) params.append("search", search);
+    return apiFetch<{ total: number; clients: Client[] }>(`/clients?${params.toString()}`);
   },
 
-  async getClient(id: number): Promise<Client> {
-    return apiFetch<Client>(`/clients/${id}`);
+  async getClient(id: number): Promise<{ client: Client; kps: KP[]; questionnaire?: ClientQuestionnaire }> {
+    return apiFetch<{ client: Client; kps: KP[]; questionnaire?: ClientQuestionnaire }>(`/clients/${id}`);
+  },
+
+  async createClient(data: ClientCreate): Promise<Client> {
+    return apiFetch<Client>("/clients", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 
   async updateClient(id: number, data: ClientUpdate): Promise<Client> {
     return apiFetch<Client>(`/clients/${id}`, {
       method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getQuestionnaire(clientId: number): Promise<ClientQuestionnaire> {
+    return apiFetch<ClientQuestionnaire>(`/clients/${clientId}/questionnaire`);
+  },
+
+  async createOrUpdateQuestionnaire(clientId: number, data: ClientQuestionnaireUpdate): Promise<ClientQuestionnaire> {
+    return apiFetch<ClientQuestionnaire>(`/clients/${clientId}/questionnaire`, {
+      method: "POST",
       body: JSON.stringify(data),
     });
   },

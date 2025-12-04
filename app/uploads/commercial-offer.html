@@ -297,48 +297,79 @@
             </div>
         </div>
         
-        <!-- Інформація про клієнта -->
+        <!-- Інформація про захід / клієнта (таблиця як в Excel) -->
         <div class="client-info">
             <table>
                 <tr>
-                    <td>Клієнт:</td>
+                    <td>Формат</td>
+                    <td>{{ kp.event_format or '—' }}</td>
+                </tr>
+                <tr>
+                    <td>Замовник:</td>
                     <td>{{ kp.client_name or '—' }}</td>
                 </tr>
-                {% if kp.client_contact %}
                 <tr>
-                    <td>Контакт:</td>
-                    <td>{{ kp.client_contact }}</td>
+                    <td>телефон:</td>
+                    <td>
+                        {% if kp.client_phone %}
+                            {{ kp.client_phone }}
+                        {% elif kp.client_contact %}
+                            {{ kp.client_contact }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                 </tr>
-                {% endif %}
                 <tr>
-                    <td>Дата створення:</td>
-                    <td>{{ created_date }}</td>
+                    <td>email:</td>
+                    <td>{{ kp.client_email or '—' }}</td>
                 </tr>
-                {% if event_date %}
                 <tr>
-                    <td>Дата заходу:</td>
-                    <td>{{ event_date }}</td>
+                    <td>Координатор:</td>
+                    <td>{{ kp.coordinator_name or '—' }}</td>
                 </tr>
-                {% endif %}
-                {% if kp.people_count %}
                 <tr>
-                    <td>Кількість гостей:</td>
-                    <td>{{ kp.people_count }} осіб</td>
+                    <td>Координатор тел.:</td>
+                    <td>{{ kp.coordinator_phone or '—' }}</td>
                 </tr>
-                {% endif %}
+                <tr>
+                    <td>Дата проведення:</td>
+                    <td>{{ event_date or (kp.event_date | default('', true)) or '—' }}</td>
+                </tr>
+                <tr>
+                    <td>Місце проведення:</td>
+                    <td>{{ kp.event_location or '—' }}</td>
+                </tr>
+                <tr>
+                    <td>Час:</td>
+                    <td>{{ kp.event_time or '—' }}</td>
+                </tr>
+                <tr>
+                    <td>Кількість осіб:</td>
+                    <td>{{ kp.people_count or 0 }}</td>
+                </tr>
             </table>
         </div>
         
-        <!-- Меню -->
-        {% if items %}
+        <!-- Меню по форматах (Welcome drink, Фуршет тощо) -->
+        {% if formats %}
+        {% for fmt in formats %}
         <div class="menu-section">
-            <div class="section-title">{{ template_config.menu_title if template_config and template_config.menu_title else "Меню" }}</div>
+            <div class="section-title">
+                {% if fmt.name %}{{ fmt.name }}{% else %}{{ template_config.menu_title if template_config and template_config.menu_title else "Меню" }}{% endif %}
+                {% if fmt.event_time %} {{ fmt.event_time }}{% endif %}
+            </div>
+            {% if fmt.people_count %}
+            <div style="font-size: 10pt; margin-bottom: 4mm;">
+                Меню із розрахунку на {{ fmt.people_count }} осіб
+            </div>
+            {% endif %}
             
             {% for section in menu_sections %}
-            {% set section_items = items | selectattr('category_name', 'equalto', section) | list %}
-            {% if section_items %}
+            {% set section_items = fmt.items | selectattr('category_name', 'equalto', section) | list %}
             <div class="category-title">{{ section }}</div>
             
+            {% if section_items %}
             <table class="items-table">
                 <thead>
                     <tr>
@@ -399,11 +430,86 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% else %}
+            <div class="empty-section" style="padding: 20px; text-align: center; color: #999; font-style: italic;">
+                Немає страв у цій секції
+            </div>
             {% endif %}
             {% endfor %}
+            
+            <!-- Підсумки по формату (сума, знижка, сума на особу) -->
+            <div class="summary-section" style="margin-top: 6mm; font-size: 10pt;">
+                <table style="width: 60%; margin-left: auto; border-collapse: collapse;">
+                    <tr>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">Всього:</td>
+                        <td style="text-align: right; padding: 2px 4px;">{{ fmt.food_total_formatted }}</td>
+                        {% if fmt.price_per_person_formatted %}
+                        <td style="text-align: right; padding: 2px 4px; white-space: nowrap;">{{ fmt.price_per_person_formatted }}</td>
+                        {% endif %}
+                    </tr>
+                    {% if template_config.show_discount_block and fmt.discount_percent %}
+                    <tr>
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030;">
+                            Знижка {{ fmt.discount_percent|round(2) }}%:
+                        </td>
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030;">
+                            {{ fmt.discount_amount_formatted }}
+                        </td>
+                        {% if fmt.price_per_person_after_discount_formatted %}
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030; white-space: nowrap;">
+                            {{ fmt.price_per_person_after_discount_formatted }}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    <tr>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">З урахуванням знижки:</td>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">
+                            {{ fmt.total_after_discount_formatted }}
+                        </td>
+                        {% if fmt.price_per_person_after_discount_formatted %}
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px; white-space: nowrap;">
+                            {{ fmt.price_per_person_after_discount_formatted }}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
         </div>
+        {% endfor %}
         {% endif %}
         
+        <!-- Блок "Обладнання та сервіс" -->
+        {% if (not template_config or template_config.show_equipment_block or template_config.show_service_block or template_config.show_transport_block) and (equipment_total or service_total or transport_total) %}
+        <div class="summary-section">
+            <div class="section-title">Обладнання та сервіс</div>
+            <table class="summary-table">
+                {% if (not template_config or template_config.show_equipment_block) and equipment_total %}
+                <tr>
+                    <td>Оренда обладнання / посуду:</td>
+                    <td>{{ equipment_total }}</td>
+                </tr>
+                {% endif %}
+                {% if (not template_config or template_config.show_service_block) and service_total %}
+                <tr>
+                    <td>Обслуговування / персонал:</td>
+                    <td>{{ service_total }}</td>
+                </tr>
+                {% endif %}
+                {% if (not template_config or template_config.show_transport_block) and transport_total %}
+                <tr>
+                    <td>Транспорт / доставка:</td>
+                    <td>{{ transport_total }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td style="font-weight: 600;">Всього до сплати (меню + обладнання + сервіс + доставка):</td>
+                    <td style="font-weight: 600;">{{ grand_total_formatted }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+
         <!-- Підсумки -->
         <div class="summary-section">
             <div class="section-title">{{ template_config.summary_title if template_config and template_config.summary_title else "Підсумок" }}</div>
@@ -412,24 +518,6 @@
                     <td>Страви:</td>
                     <td>{{ food_total }}</td>
                 </tr>
-                {% if (not template_config or template_config.show_equipment_block) and equipment_total and equipment_total != '0 грн' and equipment_total != '0.00 грн' %}
-                <tr>
-                    <td>Обладнання:</td>
-                    <td>{{ equipment_total }}</td>
-                </tr>
-                {% endif %}
-                {% if (not template_config or template_config.show_service_block) and service_total and service_total != '0 грн' and service_total != '0.00 грн' %}
-                <tr>
-                    <td>Обслуговування:</td>
-                    <td>{{ service_total }}</td>
-                </tr>
-                {% endif %}
-                {% if (not template_config or template_config.show_transport_block) and transport_total and transport_total != '0 грн' and transport_total != '0.00 грн' %}
-                <tr>
-                    <td>Доставка:</td>
-                    <td>{{ transport_total }}</td>
-                </tr>
-                {% endif %}
                 {% if (not template_config or template_config.show_weight_summary) %}
                 <tr>
                     <td>Загальна вага:</td>
@@ -446,6 +534,20 @@
                     <td>Всього позицій:</td>
                     <td>{{ total_items }}</td>
                 </tr>
+                <tr>
+                    <td style="padding-top: 8px; font-weight: 600;">Всього до сплати:</td>
+                    <td style="padding-top: 8px; font-weight: 600;">{{ grand_total_formatted }}</td>
+                </tr>
+                {% if fop_percent and fop_extra_formatted %}
+                <tr>
+                    <td>До оплати через ФОП 3-ї категорії (+{{ fop_percent|round(2) }}%):</td>
+                    <td>{{ fop_extra_formatted }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 700; color: #c53030;">Разом до оплати:</td>
+                    <td style="font-weight: 700; color: #c53030;">{{ grand_total_with_fop_formatted }}</td>
+                </tr>
+                {% endif %}
             </table>
             
             {% if kp.notes %}

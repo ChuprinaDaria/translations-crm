@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, Fil
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from db import SessionLocal
 from datetime import datetime, timedelta
@@ -14,9 +15,11 @@ import shutil
 import uuid
 from pathlib import Path
 import pyotp
+from decimal import Decimal
 from email_service import send_kp_email
 from telegram_service import send_kp_telegram
 from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
+from . import loyalty_service
 
 
 router = APIRouter()
@@ -448,21 +451,46 @@ def generate_kp_pdf_bytes(kp_id: int, template_id: int = None, db: Session = Non
 
 def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session = None) -> tuple[bytes, str]:
     """Внутрішня функція для генерації PDF"""
-    kp = crud.get_kp(db, kp_id)
+    # Отримуємо КП разом з позиціями та пов'язаними сутностями
+    kp = crud.get_kp_items(db, kp_id)
     if not kp:
         raise HTTPException(404, "KP not found")
-
-    # Get KPItems and join with Item data
-    kp_with_items = crud.get_kp_items(db, kp_id)
-    if not kp_with_items:
-        raise HTTPException(404, "KP not found")
-
-    # Prepare items data with actual Item information
+    
+    # Дані по стравах (плоский список для старих шаблонів та загальних підрахунків)
     items_data: list[dict] = []
     total_quantity = 0
     total_weight = 0.0
 
-    for kp_item in kp_with_items.items:
+    # Підготовка структур для форматів меню (Welcome drink, Фуршет, тощо)
+    formats_map: dict[Any, dict] = {}
+    for event_format in getattr(kp, "event_formats", []) or []:
+        people = event_format.people_count or kp.people_count or 0
+        formats_map[event_format.id] = {
+            "id": event_format.id,
+            "name": event_format.name,
+            "event_time": event_format.event_time,
+            "people_count": people,
+            "order_index": event_format.order_index or 0,
+            "items": [],
+            "food_total_raw": 0.0,
+            "weight_total_raw": 0.0,
+        }
+    
+    # Основний (дефолтний) формат, якщо у КП немає KPEventFormat або частина страв без прив'язки
+    default_format_key = None
+    if not formats_map:
+        formats_map[default_format_key] = {
+            "id": None,
+            "name": getattr(kp, "event_format", None) or "Меню",
+            "event_time": getattr(kp, "event_time", None),
+            "people_count": kp.people_count or 0,
+            "order_index": 0,
+            "items": [],
+            "food_total_raw": 0.0,
+            "weight_total_raw": 0.0,
+        }
+    
+    for kp_item in kp.items:
         # kp_item.item вже завантажений через selectinload в get_kp_items
         item = kp_item.item
         if not item:
@@ -489,7 +517,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         price_str = f"{item.price:.2f} грн" if item.price else "-"
         total_str = f"{(item.price or 0) * kp_item.quantity:.2f} грн"
         
-        items_data.append({
+        item_dict = {
             'name': item.name,
             'price': price_str,
             'quantity': kp_item.quantity,
@@ -504,11 +532,38 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'photo_src': photo_src,  # Повний file:// шлях для використання в <img src="...">
             'category_name': item.subcategory.category.name if getattr(item, "subcategory", None) and getattr(item.subcategory, "category", None) else None,
             'subcategory_name': item.subcategory.name if getattr(item, "subcategory", None) else None,
+            # Формат (Welcome drink / Фуршет / тощо)
+            'format_id': kp_item.event_format_id,
+            'format_name': kp_item.event_format.name if getattr(kp_item, "event_format", None) else None,
+            'format_time': kp_item.event_format.event_time if getattr(kp_item, "event_format", None) else None,
+            'format_people_count': kp_item.event_format.people_count if getattr(kp_item, "event_format", None) and kp_item.event_format.people_count else None,
             # Зберігаємо також числові значення для підрахунків
             'price_raw': item.price or 0,
             'total_raw': (item.price or 0) * kp_item.quantity,
-        })
+        }
+        items_data.append(item_dict)
         total_quantity += kp_item.quantity
+        
+        # Додаємо позицію до відповідного формату меню
+        fmt_key = kp_item.event_format_id if kp_item.event_format_id in formats_map else default_format_key
+        # Якщо формат ще не ініціалізовано (наприклад, страва прив'язана до формату, якого немає в kp.event_formats)
+        if fmt_key not in formats_map:
+            people = kp_item.event_format.people_count if getattr(kp_item, "event_format", None) and kp_item.event_format.people_count else kp.people_count or 0
+            formats_map[fmt_key] = {
+                "id": fmt_key,
+                "name": kp_item.event_format.name if getattr(kp_item, "event_format", None) else "Меню",
+                "event_time": kp_item.event_format.event_time if getattr(kp_item, "event_format", None) else None,
+                "people_count": people,
+                "order_index": getattr(kp_item.event_format, "order_index", 0) if getattr(kp_item, "event_format", None) else 0,
+                "items": [],
+                "food_total_raw": 0.0,
+                "weight_total_raw": 0.0,
+            }
+        
+        fmt = formats_map[fmt_key]
+        fmt["items"].append(item_dict)
+        fmt["food_total_raw"] += item_dict["total_raw"]
+        fmt["weight_total_raw"] += item_weight
 
     # Визначаємо який шаблон використовувати
     selected_template = None
@@ -573,7 +628,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         except Exception:
             event_date = ""
     
-    # Форматуємо ціни та вагу
+    # Форматуємо ціни та вагу (загальні по КП)
     food_total_raw = sum(item["total_raw"] for item in items_data)
     formatted_food_total = f"{food_total_raw:.2f} грн"
     
@@ -598,6 +653,75 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     equipment_total = getattr(kp, "equipment_total", None) or 0
     service_total = getattr(kp, "service_total", None) or 0
     transport_total = getattr(kp, "transport_total", None) or 0
+    
+    # Знижка по КП (як відсоток), якщо налаштована
+    discount_percent: float | None = None
+    if getattr(kp, "discount_benefit", None) and kp.discount_benefit.type == "discount":
+        discount_percent = kp.discount_benefit.value
+    
+    # Підсумки по кожному формату меню
+    formats: list[dict] = []
+    for fmt in formats_map.values():
+        people = fmt["people_count"] or kp.people_count or 0
+        food_total_fmt = fmt["food_total_raw"]
+        fmt["food_total"] = food_total_fmt
+        fmt["food_total_formatted"] = f"{food_total_fmt:.2f} грн"
+        fmt["price_per_person"] = (
+            (food_total_fmt / people) if people else None
+        )
+        fmt["price_per_person_formatted"] = (
+            f"{fmt['price_per_person']:.2f} грн/люд" if fmt["price_per_person"] is not None else None
+        )
+        
+        # Знижка по формату, якщо увімкнено блок знижки
+        if discount_percent:
+            discount_amount = food_total_fmt * discount_percent / 100.0
+            total_after_discount = food_total_fmt - discount_amount
+            fmt["discount_percent"] = discount_percent
+            fmt["discount_amount"] = discount_amount
+            fmt["discount_amount_formatted"] = f"{discount_amount:.2f} грн"
+            fmt["total_after_discount"] = total_after_discount
+            fmt["total_after_discount_formatted"] = f"{total_after_discount:.2f} грн"
+            fmt["price_per_person_after_discount"] = (
+                (total_after_discount / people) if people else None
+            )
+            fmt["price_per_person_after_discount_formatted"] = (
+                f"{fmt['price_per_person_after_discount']:.2f} грн/люд"
+                if fmt["price_per_person_after_discount"] is not None
+                else None
+            )
+        else:
+            fmt["discount_percent"] = None
+            fmt["discount_amount"] = None
+            fmt["discount_amount_formatted"] = None
+            fmt["total_after_discount"] = None
+            fmt["total_after_discount_formatted"] = None
+            fmt["price_per_person_after_discount"] = None
+            fmt["price_per_person_after_discount_formatted"] = None
+        
+        formats.append(fmt)
+    
+    # Сортуємо формати за порядком
+    formats = sorted(formats, key=lambda f: f.get("order_index", 0))
+
+    # Загальний підсумок по меню з урахуванням знижки (якщо є)
+    total_menu_after_discount = 0.0
+    for fmt in formats:
+        if discount_percent and fmt.get("total_after_discount") is not None:
+            total_menu_after_discount += fmt["total_after_discount"]
+        else:
+            total_menu_after_discount += fmt["food_total"]
+
+    # Загальна сума до оплати (меню + обладнання + сервіс + доставка)
+    grand_total = total_menu_after_discount + equipment_total + service_total + transport_total
+    fop_percent = 7.0  # Комісія ФОП 3-ї категорії
+    fop_extra = grand_total * fop_percent / 100.0
+    grand_total_with_fop = grand_total + fop_extra
+
+    # Форматовані рядки для шаблону
+    grand_total_formatted = f"{grand_total:.2f} грн"
+    fop_extra_formatted = f"{fop_extra:.2f} грн" if fop_extra else None
+    grand_total_with_fop_formatted = f"{grand_total_with_fop:.2f} грн"
     
     # Налаштування теми шаблону (з дефолтами)
     primary_color = "#FF5A00"
@@ -670,11 +794,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     html_content = template.render(
         kp=kp,
         items=items_data,
+        formats=formats,
         # Підсумки по кухні та додаткових блоках
         food_total=formatted_food_total,
-        equipment_total=equipment_total,
-        service_total=service_total,
-        transport_total=transport_total,
+        equipment_total=f"{equipment_total:.2f} грн" if equipment_total else None,
+        service_total=f"{service_total:.2f} грн" if service_total else None,
+        transport_total=f"{transport_total:.2f} грн" if transport_total else None,
         total_weight=formatted_total_weight,
         total_weight_grams=total_weight_grams_value,
         weight_per_person=calculated_weight_per_person,
@@ -692,6 +817,14 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         # Конфігурація та секції шаблону
         template_config=template_config_obj,
         menu_sections=menu_sections,
+        # Загальні фінансові підсумки
+        grand_total=grand_total,
+        grand_total_formatted=grand_total_formatted,
+        fop_percent=fop_percent,
+        fop_extra=fop_extra,
+        fop_extra_formatted=fop_extra_formatted,
+        grand_total_with_fop=grand_total_with_fop,
+        grand_total_with_fop_formatted=grand_total_with_fop_formatted,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -721,14 +854,69 @@ def generate_kp_pdf(kp_id: int, template_id: int = None, db: Session = Depends(g
 @router.post("/kp", response_model=schema.KP)
 def create_kp(kp_in: schema.KPCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
     try:
+        # Валідація клієнта
+        client = None
+        if kp_in.client_id:
+            client = db.query(models.Client).filter(models.Client.id == kp_in.client_id).first()
+            if not client:
+                raise HTTPException(404, "Client not found")
+        
         created_by_id = int(user.get("sub")) if user and user.get("sub") else None
-        kp = crud.create_kp(db, kp_in, created_by_id=created_by_id)
+        
+        # Створення КП (без cashback_to_use, бо це не поле моделі)
+        kp_data = kp_in.dict(exclude={"cashback_to_use"})
+        
+        # Розрахунок сум якщо не вказано
+        if not kp_data.get("total_amount"):
+            menu_total = Decimal(str(kp_data.get("menu_total", 0) or 0))
+            equipment_total = Decimal(str(kp_data.get("equipment_total", 0) or 0))
+            service_total = Decimal(str(kp_data.get("service_total", 0) or 0))
+            transport_total = Decimal(str(kp_data.get("transport_total", 0) or 0))
+            kp_data["total_amount"] = float(menu_total + equipment_total + service_total + transport_total)
+            kp_data["final_amount"] = kp_data["total_amount"]
+        
+        kp = crud.create_kp(db, schema.KPCreate(**kp_data), created_by_id=created_by_id)
+        
+        # Оновити total_amount та final_amount в БД
+        if kp_data.get("total_amount"):
+            kp.total_amount = kp_data["total_amount"]
+            kp.final_amount = kp_data["final_amount"]
+            db.commit()
+            db.refresh(kp)
+        
         # Автоматично створюємо / оновлюємо клієнта на основі даних КП
         try:
             crud.upsert_client_from_kp(db, kp)
+            # Оновити client_id якщо він був переданий
+            if kp_in.client_id:
+                kp.client_id = kp_in.client_id
+                db.commit()
+                db.refresh(kp)
+                # Оновити client об'єкт
+                client = db.query(models.Client).filter(models.Client.id == kp_in.client_id).first()
         except Exception as e:
             # Не ламаємо створення КП, якщо щось пішло не так з клієнтом
             print(f"Error upserting client from KP: {e}")
+        
+        # Використання кешбеку (якщо клієнт хоче)
+        if client and kp_in.cashback_to_use and kp_in.cashback_to_use > 0:
+            try:
+                cashback_to_use_decimal = Decimal(str(kp_in.cashback_to_use))
+                loyalty_service.apply_cashback_to_kp(db, kp, cashback_to_use_decimal)
+                db.refresh(kp)
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+        
+        # Нарахування кешбеку (якщо КП підтверджено)
+        if client and kp.status == "confirmed":
+            try:
+                # Переконатися що client об'єкт пов'язаний з KP
+                if not kp.client:
+                    kp.client = client
+                loyalty_service.earn_cashback_from_kp(db, kp)
+                db.refresh(kp)
+            except Exception as e:
+                print(f"Error earning cashback from KP: {e}")
         
         # Якщо вказано email та потрібно відправити одразу
         if kp_in.send_email and kp_in.client_email:
@@ -1774,20 +1962,93 @@ def generate_template_preview(
         service_total = parse_amount(sample_data.get('service_total', 0))
         transport_total = parse_amount(sample_data.get('transport_total', 0))
         
+        # Отримуємо зображення з design (можуть бути base64 data URLs)
+        logo_src = design.get('logo_image') or None
+        header_image_src = design.get('header_image') or None
+        background_image_src = design.get('background_image') or None
+        
+        # Готуємо формати для прев'ю (для простоти – один формат на основі sample_data.kp)
+        sample_kp = sample_data.get('kp', {})
+        preview_people = sample_kp.get('people_count', 0)
+        preview_format_name = sample_kp.get('event_format', 'Меню')
+        preview_event_time = sample_kp.get('event_time')
+        
+        formats = [{
+            "id": None,
+            "name": preview_format_name,
+            "event_time": preview_event_time,
+            "people_count": preview_people,
+            "order_index": 0,
+            "items": sample_data.get('items', []),
+            "food_total_raw": food_total_raw,
+            "food_total": food_total_raw,
+            "food_total_formatted": sample_data.get('food_total', '0 грн'),
+            "price_per_person": (food_total_raw / preview_people) if preview_people else None,
+        }]
+        
+        if formats[0]["price_per_person"] is not None:
+            formats[0]["price_per_person_formatted"] = f"{formats[0]['price_per_person']:.2f} грн/люд"
+        else:
+            formats[0]["price_per_person_formatted"] = None
+        
+        # Для прев'ю можемо змоделювати знижку, якщо в design вказано show_discount_block
+        discount_percent = None
+        if design.get('show_discount_block'):
+            discount_percent = 5.0
+        
+        if discount_percent:
+            discount_amount = food_total_raw * discount_percent / 100.0
+            total_after_discount = food_total_raw - discount_amount
+            formats[0]["discount_percent"] = discount_percent
+            formats[0]["discount_amount"] = discount_amount
+            formats[0]["discount_amount_formatted"] = f"{discount_amount:.2f} грн"
+            formats[0]["total_after_discount"] = total_after_discount
+            formats[0]["total_after_discount_formatted"] = f"{total_after_discount:.2f} грн"
+            if preview_people:
+                price_after = total_after_discount / preview_people
+                formats[0]["price_per_person_after_discount"] = price_after
+                formats[0]["price_per_person_after_discount_formatted"] = f"{price_after:.2f} грн/люд"
+            else:
+                formats[0]["price_per_person_after_discount"] = None
+                formats[0]["price_per_person_after_discount_formatted"] = None
+        else:
+            formats[0]["discount_percent"] = None
+            formats[0]["discount_amount"] = None
+            formats[0]["discount_amount_formatted"] = None
+            formats[0]["total_after_discount"] = None
+            formats[0]["total_after_discount_formatted"] = None
+            formats[0]["price_per_person_after_discount"] = None
+            formats[0]["price_per_person_after_discount_formatted"] = None
+
+        # Загальний підсумок та FOP 7% для прев'ю
+        total_menu_after_discount = (
+            formats[0]["total_after_discount"]
+            if discount_percent and formats[0].get("total_after_discount") is not None
+            else formats[0]["food_total"]
+        )
+        grand_total = total_menu_after_discount + equipment_total + service_total + transport_total
+        fop_percent = 7.0
+        fop_extra = grand_total * fop_percent / 100.0
+        grand_total_with_fop = grand_total + fop_extra
+        grand_total_formatted = f"{grand_total:.2f} грн"
+        fop_extra_formatted = f"{fop_extra:.2f} грн" if fop_extra else None
+        grand_total_with_fop_formatted = f"{grand_total_with_fop:.2f} грн"
+        
         html_content = template.render(
-            kp=sample_data.get('kp', {}),
+            kp=sample_kp,
             items=sample_data.get('items', []),
+            formats=formats,
             food_total=sample_data.get('food_total', '0 грн'),
             food_total_raw=food_total_raw,
-            equipment_total=equipment_total,
-            service_total=service_total,
-            transport_total=transport_total,
+            equipment_total=f"{equipment_total:.2f} грн" if equipment_total else None,
+            service_total=f"{service_total:.2f} грн" if service_total else None,
+            transport_total=f"{transport_total:.2f} грн" if transport_total else None,
             total_weight=sample_data.get('total_weight', '0 кг'),
             weight_per_person=sample_data.get('weight_per_person', '0 г'),
             total_items=sample_data.get('total_items', 0),
-            logo_src=None,
-            header_image_src=None,
-            background_image_src=None,
+            logo_src=logo_src,
+            header_image_src=header_image_src,
+            background_image_src=background_image_src,
             primary_color=design.get('primary_color', '#FF5A00'),
             secondary_color=design.get('secondary_color', '#ffffff'),
             text_color=design.get('text_color', '#333333'),
@@ -1795,8 +2056,16 @@ def generate_template_preview(
             company_name=sample_data.get('company_name', 'Назва компанії'),
             created_date=sample_data.get('created_date', ''),
             event_date=sample_data.get('event_date', ''),
-            template=template_config_obj,  # В HTML шаблоні використовується 'template'
+            template=template_config_obj,
+            template_config=template_config_obj,
             menu_sections=menu_sections,
+            grand_total=grand_total,
+            grand_total_formatted=grand_total_formatted,
+            fop_percent=fop_percent,
+            fop_extra=fop_extra,
+            fop_extra_formatted=fop_extra_formatted,
+            grand_total_with_fop=grand_total_with_fop,
+            grand_total_with_fop_formatted=grand_total_with_fop_formatted,
         )
         
         # Генеруємо PDF
@@ -1850,4 +2119,297 @@ async def upload_template_image(
     
     # Повертаємо URL
     return {"url": f"/uploads/templates/{filename}"}
+
+
+# ==================== CLIENTS ====================
+
+@router.get("/clients")
+def get_clients(
+    skip: int = 0, 
+    limit: int = 20,
+    search: str = None,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    query = db.query(models.Client)
+    
+    if search:
+        query = query.filter(
+            or_(
+                models.Client.name.ilike(f"%{search}%"),
+                models.Client.company_name.ilike(f"%{search}%"),
+                models.Client.phone.ilike(f"%{search}%"),
+                models.Client.email.ilike(f"%{search}%")
+            )
+        )
+    
+    total = query.count()
+    clients = query.offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "clients": clients
+    }
+
+
+@router.get("/clients/{client_id}")
+def get_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    # Завантаж КП клієнта
+    kps = db.query(models.KP).filter(models.KP.client_id == client_id).all()
+    
+    # Завантаж анкету
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.client_id == client_id
+    ).first()
+    
+    return {
+        "client": client,
+        "kps": kps,
+        "questionnaire": questionnaire
+    }
+
+
+@router.post("/clients")
+def create_client(
+    client: schema.ClientCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # Перевірка чи існує клієнт з таким телефоном
+    existing = db.query(models.Client).filter(models.Client.phone == client.phone).first()
+    if existing:
+        raise HTTPException(400, "Client with this phone already exists")
+    
+    new_client = models.Client(**client.dict())
+    db.add(new_client)
+    db.commit()
+    db.refresh(new_client)
+    
+    return new_client
+
+
+@router.put("/clients/{client_id}")
+def update_client(
+    client_id: int,
+    client: schema.ClientUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not db_client:
+        raise HTTPException(404, "Client not found")
+    
+    for key, value in client.dict(exclude_unset=True).items():
+        setattr(db_client, key, value)
+    
+    db_client.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_client)
+    
+    return db_client
+
+
+# ==================== QUESTIONNAIRE ====================
+
+@router.post("/clients/{client_id}/questionnaire")
+def create_or_update_questionnaire(
+    client_id: int,
+    questionnaire: schema.ClientQuestionnaireUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    # Перевірка чи існує клієнт
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    # Перевірка чи існує анкета
+    existing = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.client_id == client_id
+    ).first()
+    
+    if existing:
+        # Оновлення
+        for key, value in questionnaire.dict(exclude_unset=True).items():
+            setattr(existing, key, value)
+        existing.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        # Створення
+        new_questionnaire = models.ClientQuestionnaire(
+            client_id=client_id,
+            **questionnaire.dict(exclude_unset=True)
+        )
+        db.add(new_questionnaire)
+        db.commit()
+        db.refresh(new_questionnaire)
+        return new_questionnaire
+
+
+@router.get("/clients/{client_id}/questionnaire")
+def get_questionnaire(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.client_id == client_id
+    ).first()
+    
+    if not questionnaire:
+        raise HTTPException(404, "Questionnaire not found")
+    
+    return questionnaire
+
+
+# ==================== KP з КЛІЄНТОМ ====================
+
+# Оновити створення КП - додати client_id (це буде в існуючому endpoint)
+# Але додамо окремий endpoint для оновлення статистики клієнта
+@router.post("/clients/{client_id}/update-stats")
+def update_client_stats(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Оновлює статистику клієнта після створення КП"""
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    # Підрахунок замовлень та витрат
+    kps = db.query(models.KP).filter(models.KP.client_id == client_id).all()
+    client.total_orders = len(kps)
+    client.total_spent = sum(kp.total_price or 0 for kp in kps)
+    
+    # Підрахунок кешбеку
+    total_cashback = sum(kp.cashback_earned or 0 for kp in kps) - sum(kp.cashback_used or 0 for kp in kps)
+    client.cashback_balance = total_cashback
+    
+    client.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(client)
+    
+    return client
+
+
+# ==================== ІНФОРМАЦІЯ ПРО КЛІЄНТА ====================
+
+@router.get("/clients/{client_id}/loyalty")
+def get_client_loyalty_info(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    # Інфо про рівень
+    tier_info = loyalty_service.LOYALTY_TIERS.get(client.loyalty_tier or "silver", loyalty_service.LOYALTY_TIERS["silver"])
+    
+    # Скільки залишилось до наступного рівня
+    next_tier = None
+    amount_to_next = None
+    
+    if client.loyalty_tier == "silver":
+        next_tier = "gold"
+        amount_to_next = 150000 - float(client.lifetime_spent or 0)
+    elif client.loyalty_tier == "gold":
+        next_tier = "platinum"
+        amount_to_next = 300000 - float(client.lifetime_spent or 0)
+    elif client.loyalty_tier == "platinum":
+        next_tier = "diamond"
+        amount_to_next = 600000 - float(client.lifetime_spent or 0)
+    
+    # Історія транзакцій
+    transactions = db.query(models.CashbackTransaction).filter(
+        models.CashbackTransaction.client_id == client_id
+    ).order_by(models.CashbackTransaction.created_at.desc()).limit(20).all()
+    
+    return {
+        "client": client,
+        "tier": {
+            "name": client.loyalty_tier or "silver",
+            "cashback_rate": float(client.cashback_rate or 3.0),
+            "benefits": tier_info.get("benefits", []),
+            "is_custom": client.is_custom_rate or False
+        },
+        "next_tier": {
+            "name": next_tier,
+            "amount_needed": amount_to_next
+        } if next_tier else None,
+        "cashback": {
+            "balance": float(client.cashback_balance or 0),
+            "expires_at": client.cashback_expires_at.isoformat() if client.cashback_expires_at else None,
+            "earned_total": float(client.cashback_earned_total or 0),
+            "used_total": float(client.cashback_used_total or 0)
+        },
+        "diamond_bonuses": {
+            "photographer_available": not (client.yearly_photographer_used or False),
+            "robot_available": not (client.yearly_robot_used or False),
+            "year": client.bonus_year or datetime.now().year
+        } if client.loyalty_tier == "diamond" else None,
+        "transactions": transactions
+    }
+
+
+# ==================== ВСТАНОВЛЕННЯ ІНДИВІДУАЛЬНИХ УМОВ ====================
+
+@router.put("/clients/{client_id}/custom-cashback")
+def set_custom_cashback_rate(
+    client_id: int,
+    custom_rate: float = Body(..., ge=0, le=20),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Тільки для відділу продажів - встановити індивідуальний % кешбеку"""
+    
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    client.cashback_rate = Decimal(str(custom_rate))
+    client.is_custom_rate = True
+    client.loyalty_tier = "custom"
+    
+    db.commit()
+    db.refresh(client)
+    
+    return {"message": f"Встановлено індивідуальний кешбек {custom_rate}% для клієнта", "client": client}
+
+
+# ==================== ВИКОРИСТАННЯ DIAMOND БОНУСІВ ====================
+
+@router.post("/clients/{client_id}/use-diamond-bonus")
+def use_diamond_bonus_endpoint(
+    client_id: int,
+    bonus_type: str = Body(...),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Використання річного бонусу для Diamond клієнтів"""
+    
+    if bonus_type not in ["photographer", "robot"]:
+        raise HTTPException(400, "bonus_type має бути 'photographer' або 'robot'")
+    
+    client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not client:
+        raise HTTPException(404, "Client not found")
+    
+    try:
+        loyalty_service.use_diamond_bonus(db, client, bonus_type)
+        return {"message": f"Бонус '{bonus_type}' активовано"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 

@@ -58,7 +58,24 @@ interface UIEventFormat {
   name: string;
   eventTime: string;
   peopleCount: string;
+  // Група формату (для візуальної структури КП): доставка боксів / кейтерінг / інше
+  group?: "" | "delivery-boxes" | "catering" | "other";
 }
+
+// Популярні формати заходів для підказок у випадаючому списку
+const EVENT_FORMAT_OPTIONS: string[] = [
+  "Доставка готових страв",
+  "Доставка обідів",
+  "Кава-брейк",
+  "Welcome drink",
+  "Фуршет",
+  "Банкет",
+  "Комплексне обслуговування",
+  "Доставка з накриттям (фуршет/банкет)",
+  "Бар кейтерінг",
+  "Су-від",
+  "Оренда обладнання/персоналу",
+];
 
 interface CreateKPProps {
   kpId?: number | null;
@@ -571,6 +588,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     
     return (discountBase * discountBenefit.value) / 100;
   };
+  // Кількість гостей для розрахунків (загальне поле «Кількість гостей» в КП)
+  // Формати заходу можуть дублювати тих самих гостей, тому тут НЕ сумуємо їх.
   const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
   const totalPrice = foodTotalPrice + equipmentTotal + serviceTotal;
 
@@ -688,8 +707,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       return;
     }
 
-    const peopleCountNum = parseInt(guestCount, 10) || 0;
-    const foodTotalPrice = getTotalPrice();
+  const peopleCountNumForPayload = parseInt(guestCount, 10) || 0;
+  const foodTotalPrice = getTotalPrice();
     const transportTotalNum = parseFloat(transportTotal || "0") || 0;
     
     // Розрахунок знижки з урахуванням вибраних опцій
@@ -740,10 +759,15 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     try {
       const kpData = {
         title,
-        people_count: peopleCountNum,
+        people_count: peopleCountNumForPayload,
+        // Основна група / формат для шапки КП: беремо з полів форми (як і раніше),
+        // а формати заходу нижче використовуємо лише для деталізації меню в PDF.
         event_group: eventGroup || undefined,
         client_name: clientName || undefined,
-        event_format: eventFormat || undefined,
+        event_format:
+          eventFormat ||
+          eventFormats[0]?.name ||
+          undefined,
         event_date: eventDate ? new Date(eventDate).toISOString() : undefined,
         event_location: eventLocation || undefined,
         event_time: eventTime || undefined,
@@ -751,7 +775,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         coordinator_phone: coordinatorPhone || undefined,
         total_price: totalPrice,
         price_per_person:
-          peopleCountNum > 0 ? totalPrice / peopleCountNum : undefined,
+          peopleCountNumForPayload > 0
+            ? totalPrice / peopleCountNumForPayload
+            : undefined,
         items: itemsPayload,
         template_id: selectedTemplateId || undefined,
         client_email: clientEmail || undefined,
@@ -1030,80 +1056,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="event-group">Група формату</Label>
-                  <Select
-                    value={eventGroup}
-                    onValueChange={(value) => {
-                      setEventGroup(value as "delivery-boxes" | "catering" | "other");
-                      // Скидаємо детальний формат при зміні групи
-                      setEventFormat("");
-                    }}
-                  >
-                    <SelectTrigger id="event-group">
-                      <SelectValue placeholder="Оберіть групу формату" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
-                      <SelectItem value="catering">Кейтерінг</SelectItem>
-                      <SelectItem value="other">Інше</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="event-format">Формат заходу</Label>
-                  {eventGroup === "catering" && (
-                    <Select
-                      value={eventFormat}
-                      onValueChange={(value) => setEventFormat(value)}
-                    >
-                      <SelectTrigger id="event-format">
-                        <SelectValue placeholder="Оберіть формат кейтерінгу" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Доставка готових страв">
-                          Доставка готових страв
-                        </SelectItem>
-                        <SelectItem value="Доставка обідів">
-                          Доставка обідів
-                        </SelectItem>
-                        <SelectItem value="Кава-брейк">Кава-брейк</SelectItem>
-                        <SelectItem value="Фуршет">Фуршет</SelectItem>
-                        <SelectItem value="Банкет">Банкет</SelectItem>
-                        <SelectItem value="Комплексне обслуговування">
-                          Комплексне обслуговування
-                        </SelectItem>
-                        <SelectItem value="Доставка з накриттям (фуршет/банкет)">
-                          Доставка з накриттям (фуршет/банкет)
-                        </SelectItem>
-                        <SelectItem value="Бар кейтерінг">Бар кейтерінг</SelectItem>
-                        <SelectItem value="Су-від">Су-від</SelectItem>
-                        <SelectItem value="Оренда обладнання/персоналу">
-                          Оренда обладнання/персоналу
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {eventGroup === "delivery-boxes" && (
-                    <Input
-                      id="event-format"
-                      value={eventFormat || "Доставка боксів"}
-                      onChange={(e) => setEventFormat(e.target.value)}
-                      placeholder="Доставка боксів"
-                    />
-                  )}
-                  {eventGroup === "other" && (
-                    <Input
-                      id="event-format"
-                      value={eventFormat}
-                      onChange={(e) => setEventFormat(e.target.value)}
-                      placeholder="Опишіть формат (Інше)"
-                    />
-                  )}
-                  {!eventGroup && (
-                    <p className="text-xs text-gray-500">
-                      Спочатку оберіть групу формату (Доставка боксів / Кейтерінг / Інше).
-                    </p>
-                  )}
+                  {/* Старий блок з групою/форматом прибрано, залишаємо лише багатоформатний редактор нижче */}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="event-date">
@@ -1150,6 +1103,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           name: eventFormat || `Формат ${prev.length + 1}`,
                           eventTime: eventTime || "",
                           peopleCount: guestCount || "",
+                          group: eventGroup || "",
                         },
                       ]);
                     }}
@@ -1164,12 +1118,13 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     {eventFormats.map((format) => (
                       <div
                         key={format.id}
-                        className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end p-3 bg-white rounded-lg border"
+                        className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end p-3 bg-white rounded-lg border"
                       >
                         <div className="space-y-1">
                           <Label className="text-xs text-gray-600">Назва формату</Label>
                           <Input
                             value={format.name}
+                            list="event-format-options"
                             onChange={(e) =>
                               setEventFormats((prev) =>
                                 prev.map((f) =>
@@ -1209,6 +1164,28 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             placeholder={guestCount || "50"}
                           />
                         </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-600">Група формату</Label>
+                          <Select
+                            value={format.group || ""}
+                            onValueChange={(value) =>
+                              setEventFormats((prev) =>
+                                prev.map((f) =>
+                                  f.id === format.id ? { ...f, group: value as UIEventFormat["group"] } : f
+                                )
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="—" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
+                              <SelectItem value="catering">Кейтерінг</SelectItem>
+                              <SelectItem value="other">Інше</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="flex justify-end">
                           <Button
                             type="button"
@@ -1228,22 +1205,17 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         </div>
                       </div>
                     ))}
+                    {/* Datalist з популярними форматами для підказки */}
+                    <datalist id="event-format-options">
+                      {EVENT_FORMAT_OPTIONS.map((option) => (
+                        <option key={option} value={option} />
+                      ))}
+                    </datalist>
                   </div>
                 )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="guest-count">
-                  Кількість гостей <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="guest-count"
-                  type="number"
-                  placeholder="50"
-                  value={guestCount}
-                  onChange={(e) => setGuestCount(e.target.value)}
-                />
-                </div>
+                {/* Поле "Кількість гостей" під форматами прибрали — кількість рахуємо з сумарних гостей у форматах */}
                 <div className="space-y-2">
                   <Label htmlFor="event-location">Місце проведення</Label>
                   <Input
@@ -1492,7 +1464,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto p-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[500px] overflow-y-auto p-1">
                       {filteredDishes.map((dish) => {
                         const isSelected = selectedDishes.includes(dish.id);
                         return (

@@ -1,9 +1,19 @@
 # DB Models
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text, Numeric, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from datetime import datetime, date
+from enum import Enum
 from db import Base
+
+
+class LoyaltyTier(str, Enum):
+    SILVER = "silver"
+    GOLD = "gold"
+    PLATINUM = "platinum"
+    DIAMOND = "diamond"
+    CUSTOM = "custom"  # Для індивідуальних умов
 
 
 class Category(Base):
@@ -126,6 +136,7 @@ class KP(Base):
     total_price = Column(Float)
     price_per_person = Column(Float)
     # Загальні дані про клієнта та подію
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)  # Зв'язок з клієнтом
     client_name = Column(String, nullable=True, index=True)
     event_format = Column(String, nullable=True)
     event_group = Column(String, nullable=True)  # Доставка боксів / Кейтерінг / Інше
@@ -146,14 +157,15 @@ class KP(Base):
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     client_email = Column(String, nullable=True, index=True)  # Email клієнта
     client_phone = Column(String, nullable=True, index=True)  # Телефон клієнта (Telegram / Viber etc.)
-    # Підсумки за додатковими блоками
-    equipment_total = Column(Float, nullable=True)
-    service_total = Column(Float, nullable=True)
-    transport_total = Column(Float, nullable=True)
+    # Фінансові деталі
+    menu_total = Column(Numeric(10, 2), default=0)  # Сума тільки меню (кухня)
+    equipment_total = Column(Numeric(10, 2), default=0)
+    service_total = Column(Numeric(10, 2), default=0)
+    transport_total = Column(Numeric(10, 2), default=0)
     # Орієнтовний вихід (сума ваги)
     total_weight = Column(Float, nullable=True)  # Загальна вага в грамах
     weight_per_person = Column(Float, nullable=True)  # Вага на 1 гостя в грамах
-    # Знижки та кешбек
+    # Знижки та кешбек (стара система через benefits)
     discount_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
     cashback_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
     use_cashback = Column(Boolean, default=False, nullable=False)  # Чи списати кешбек з бонусного рахунку
@@ -163,10 +175,25 @@ class KP(Base):
     discount_include_menu = Column(Boolean, default=True, nullable=False)  # Включити меню в знижку
     discount_include_equipment = Column(Boolean, default=False, nullable=False)  # Включити обладнання в знижку
     discount_include_service = Column(Boolean, default=False, nullable=False)  # Включити сервіс в знижку
+    
+    # Історія знижок для цього КП (нова система)
+    discount_type = Column(String, nullable=True)  # "percentage" | "fixed"
+    discount_value = Column(Numeric(10, 2), default=0)  # 10% або 500 грн
+    discount_reason = Column(String, nullable=True)  # "Постійний клієнт", "Акція"
+    
+    # Кешбек для цього КП (нова система)
+    cashback_earned = Column(Numeric(10, 2), default=0)  # Нарахований кешбек
+    cashback_used = Column(Numeric(10, 2), default=0)  # Використаний кешбек
+    cashback_rate_applied = Column(Numeric(5, 2), nullable=True)  # Який % був застосований
+    
+    # Загальна сума
+    total_amount = Column(Numeric(10, 2), default=0)
+    final_amount = Column(Numeric(10, 2), default=0)  # Після знижок та кешбеку
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
     event_formats = relationship("KPEventFormat", back_populates="kp", lazy="selectin", cascade='all, delete-orphan', order_by="KPEventFormat.order_index")
     template = relationship("Template", back_populates="kps")
+    client = relationship("Client", back_populates="kps")
     discount_benefit = relationship("Benefit", foreign_keys=[discount_id])
     cashback_benefit = relationship("Benefit", foreign_keys=[cashback_id])
 
@@ -279,38 +306,129 @@ class MenuItem(Base):
 
 
 class Client(Base):
-    """
-    Клієнт, зведені дані по заходу та оплаті.
-    Частково автоматично підтягується з КП, частково редагується вручну.
-    """
-
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)
-    phone = Column(String, nullable=True, index=True)
-    email = Column(String, nullable=True, index=True)
+    name = Column(String, nullable=False)  # Ім'я контакту
+    company_name = Column(String, nullable=True)  # Назва компанії
+    phone = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=True)
+    
+    # Накопичувальні дані
+    total_orders = Column(Integer, default=0)  # Загальна к-ть замовлень
+    lifetime_spent = Column(Numeric(10, 2), default=0)  # Загальна сума за весь час
+    current_year_spent = Column(Numeric(10, 2), default=0)  # Сума за поточний рік
+    
+    # Кешбек
+    cashback_balance = Column(Numeric(10, 2), default=0)  # Поточний кешбек
+    cashback_earned_total = Column(Numeric(10, 2), default=0)  # Всього нараховано
+    cashback_used_total = Column(Numeric(10, 2), default=0)  # Всього використано
+    cashback_expires_at = Column(Date, nullable=True)  # Дата згоряння (31.12)
+    
+    # Рівень лояльності
+    loyalty_tier = Column(String, default="silver")  # silver/gold/platinum/diamond/custom
+    cashback_rate = Column(Numeric(5, 2), default=3.0)  # % кешбеку (може бути кастомний)
+    is_custom_rate = Column(Boolean, default=False)  # Чи індивідуальні умови
+    
+    # Бонуси Diamond (використані/доступні)
+    yearly_photographer_used = Column(Boolean, default=False)
+    yearly_robot_used = Column(Boolean, default=False)
+    bonus_year = Column(Integer, default=lambda: datetime.now().year)  # Рік для бонусів
+    
+    # Мета дані
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    notes = Column(Text, nullable=True)  # Коментарі менеджера
+    
+    # Відносини
+    kps = relationship("KP", back_populates="client")
+    questionnaire = relationship("ClientQuestionnaire", back_populates="client", uselist=False)
+    cashback_transactions = relationship("CashbackTransaction", back_populates="client")
 
-    status = Column(String, default="новий", index=True)  # новий / в роботі / закритий тощо
 
-    # Дані останнього (актуального) заходу
-    event_date = Column(DateTime(timezone=True), nullable=True)
-    event_format = Column(String, nullable=True)
-    event_group = Column(String, nullable=True)
-    event_time = Column(String, nullable=True)
-    event_location = Column(String, nullable=True)
-    comments = Column(String, nullable=True)
-
-    # Фінансові дані по останньому КП
-    kp_total_amount = Column(Float, nullable=True)
-    paid_amount = Column(Float, nullable=True)
-    unpaid_amount = Column(Float, nullable=True)
-    payment_format = Column(String, nullable=True)  # ФОП / юрособа / інше
-    cash_collector = Column(String, nullable=True)  # Хто забирав готівку
-    payment_plan_date = Column(DateTime(timezone=True), nullable=True)
-    # Знижки та кешбек
-    discount = Column(String, nullable=True)  # Текст про знижки до КП (напр. "5% до КП #123")
-    cashback = Column(Float, default=0, nullable=False)  # Сума всіх кешбеків з усіх КП
+class ClientQuestionnaire(Base):
+    """Анкета клієнта для відділу продажів"""
+    __tablename__ = "client_questionnaires"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), unique=True)
+    
+    # СЕРВІС
+    event_date = Column(Date, nullable=True)  # Дата заходу
+    location = Column(String, nullable=True)  # Точна локація
+    contact_person = Column(String, nullable=True)  # Контакт замовника
+    contact_phone = Column(String, nullable=True)
+    on_site_contact = Column(String, nullable=True)  # Хто буде головним на локації
+    on_site_phone = Column(String, nullable=True)
+    
+    arrival_time = Column(String, nullable=True)  # Час заїзду на локацію
+    event_start_time = Column(String, nullable=True)  # Час початку заходу
+    event_end_time = Column(String, nullable=True)  # Час кінця заходу
+    
+    service_type_timing = Column(Text, nullable=True)  # Таймінги всіх видач
+    additional_services_timing = Column(Text, nullable=True)  # Таймінги додаткових видач
+    equipment_notes = Column(Text, nullable=True)  # Коментарі щодо обладнання
+    
+    payment_method = Column(String, nullable=True)  # Спосіб оплати (Предоплата/Залишок)
+    
+    textile_color = Column(String, nullable=True)  # Колір текстилю
+    banquet_line_color = Column(String, nullable=True)  # Колір оформлення лінії
+    
+    # ЗАЇЗД
+    venue_complexity = Column(String, nullable=True)  # Складність заїзду
+    floor_number = Column(String, nullable=True)  # На якому поверсі
+    elevator_available = Column(Boolean, default=False)  # Чи є ліфт
+    technical_room = Column(String, nullable=True)  # Чи є технічне приміщення
+    kitchen_available = Column(String, nullable=True)  # Чи є кухня
+    venue_photos = Column(Boolean, default=False)  # Фото локації
+    arrival_photos = Column(Boolean, default=False)  # Фото заїзду
+    
+    # КУХНЯ
+    dish_serving = Column(String, nullable=True)  # Посуд для подачі страв
+    hot_snacks_serving = Column(String, nullable=True)  # Подача гарячих закусок
+    salad_serving = Column(String, nullable=True)  # Подання салатів
+    product_allergy = Column(String, nullable=True)  # Чи є алергія на продукти
+    vegetarians = Column(Boolean, default=False)  # Чи є вегетаріанці
+    
+    hot_snacks_prep = Column(String, nullable=True)  # Приготування гарячих закусок
+    menu_notes = Column(Text, nullable=True)  # Коментарі до позицій меню
+    client_order_notes = Column(Text, nullable=True)  # Їжа від замовника
+    client_drinks_notes = Column(Text, nullable=True)  # Напої від замовника
+    
+    # КОНТЕНТ
+    photo_allowed = Column(String, nullable=True)  # Чи можна фотозйомка
+    video_allowed = Column(String, nullable=True)  # Чи можна відеозйомка
+    branded_products = Column(String, nullable=True)  # Чи можна брендовану продукцію
+    
+    # ЗАМОВНИК
+    client_company_name = Column(String, nullable=True)  # Назва компанії
+    client_activity_type = Column(String, nullable=True)  # Вид діяльності
+    
+    # КОМЕНТАРІ
+    special_notes = Column(Text, nullable=True)  # Спеціальні примітки
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Відносини
+    client = relationship("Client", back_populates="questionnaire")
+
+
+class CashbackTransaction(Base):
+    """Історія операцій з кешбеком"""
+    __tablename__ = "cashback_transactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    kp_id = Column(Integer, ForeignKey("kps.id"), nullable=True)
+    
+    transaction_type = Column(String, nullable=False)  # "earned" | "used" | "expired"
+    amount = Column(Numeric(10, 2), nullable=False)  # Сума (може бути негативна при використанні)
+    balance_after = Column(Numeric(10, 2), nullable=False)  # Баланс після операції
+    
+    description = Column(String, nullable=True)  # "Нараховано за КП #123", "Використано в КП #124"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Відносини
+    client = relationship("Client", back_populates="cashback_transactions")
+    kp = relationship("KP")

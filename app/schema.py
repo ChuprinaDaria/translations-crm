@@ -150,10 +150,13 @@ class KPCreate(KPBase):
     email_message: Optional[str] = None  # Додаткове повідомлення для email
     send_telegram: Optional[bool] = False  # Відправити КП в Telegram одразу після створення
     telegram_message: Optional[str] = None  # Повідомлення в Telegram
-    # Додаткові підсумки
+    # Фінансові деталі
+    menu_total: Optional[float] = 0
     equipment_total: Optional[float] = None
     service_total: Optional[float] = None
     transport_total: Optional[float] = None
+    total_amount: Optional[float] = 0
+    final_amount: Optional[float] = 0
     total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
     weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
     # Знижки та кешбек
@@ -166,6 +169,15 @@ class KPCreate(KPBase):
     discount_include_menu: Optional[bool] = True  # Включити меню в знижку
     discount_include_equipment: Optional[bool] = False  # Включити обладнання в знижку
     discount_include_service: Optional[bool] = False  # Включити сервіс в знижку
+    # Нові поля для знижок та кешбеку
+    client_id: Optional[int] = None
+    discount_type: Optional[str] = None  # "percentage" | "fixed"
+    discount_value: Optional[float] = 0
+    discount_reason: Optional[str] = None
+    cashback_earned: Optional[float] = 0
+    cashback_used: Optional[float] = 0
+    cashback_rate_applied: Optional[float] = None
+    cashback_to_use: Optional[float] = None  # Сума кешбеку для використання при створенні КП
 
 class KPItem(BaseModel):
     id: int
@@ -187,9 +199,12 @@ class KP(KPBase):
     template_id: Optional[int] = None
     client_email: Optional[str] = None
     client_phone: Optional[str] = None
+    menu_total: Optional[float] = 0
     equipment_total: Optional[float] = None
     service_total: Optional[float] = None
     transport_total: Optional[float] = None
+    total_amount: Optional[float] = 0
+    final_amount: Optional[float] = 0
     total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
     weight_per_person: Optional[float] = None  # Вага на 1 гостя в грамах
     created_by_id: Optional[int] = None
@@ -201,6 +216,16 @@ class KP(KPBase):
     discount_include_menu: Optional[bool] = True
     discount_include_equipment: Optional[bool] = False
     discount_include_service: Optional[bool] = False
+    # Нові поля для знижок та кешбеку
+    client_id: Optional[int] = None
+    discount_type: Optional[str] = None  # "percentage" | "fixed"
+    discount_value: Optional[float] = 0
+    discount_reason: Optional[str] = None
+    cashback_earned: Optional[float] = 0
+    cashback_used: Optional[float] = 0
+    cashback_rate_applied: Optional[float] = None
+    cashback_to_use: Optional[float] = None  # Сума кешбеку для використання при створенні КП
+    cashback_rate_applied: Optional[float] = None
     
     class Config:
         from_attributes = True
@@ -414,23 +439,23 @@ class Menu(MenuBase):
 
 class ClientBase(BaseModel):
     name: str
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    status: Optional[str] = "новий"
-    event_date: Optional[datetime] = None
-    event_format: Optional[str] = None
-    event_group: Optional[str] = None
-    event_time: Optional[str] = None
-    event_location: Optional[str] = None
-    comments: Optional[str] = None
-    kp_total_amount: Optional[float] = None
-    paid_amount: Optional[float] = None
-    unpaid_amount: Optional[float] = None
-    payment_format: Optional[str] = None
-    cash_collector: Optional[str] = None
-    payment_plan_date: Optional[datetime] = None
-    discount: Optional[str] = None
-    cashback: Optional[float] = None
+    company_name: Optional[str] = None
+    phone: str
+    email: Optional[str] = None
+    total_orders: Optional[int] = 0
+    lifetime_spent: Optional[float] = 0
+    current_year_spent: Optional[float] = 0
+    cashback_balance: Optional[float] = 0
+    cashback_earned_total: Optional[float] = 0
+    cashback_used_total: Optional[float] = 0
+    cashback_expires_at: Optional[str] = None
+    loyalty_tier: Optional[str] = "silver"
+    cashback_rate: Optional[float] = 3.0
+    is_custom_rate: Optional[bool] = False
+    yearly_photographer_used: Optional[bool] = False
+    yearly_robot_used: Optional[bool] = False
+    bonus_year: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class ClientCreate(ClientBase):
@@ -439,27 +464,136 @@ class ClientCreate(ClientBase):
 
 class ClientUpdate(BaseModel):
     name: Optional[str] = None
+    company_name: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    status: Optional[str] = None
-    event_date: Optional[datetime] = None
-    event_format: Optional[str] = None
-    event_group: Optional[str] = None
-    event_time: Optional[str] = None
-    event_location: Optional[str] = None
-    comments: Optional[str] = None
-    kp_total_amount: Optional[float] = None
-    paid_amount: Optional[float] = None
-    unpaid_amount: Optional[float] = None
-    payment_format: Optional[str] = None
-    cash_collector: Optional[str] = None
-    payment_plan_date: Optional[datetime] = None
-    discount: Optional[str] = None
-    cashback: Optional[float] = None
+    email: Optional[str] = None
+    total_orders: Optional[int] = None
+    lifetime_spent: Optional[float] = None
+    current_year_spent: Optional[float] = None
+    cashback_balance: Optional[float] = None
+    cashback_earned_total: Optional[float] = None
+    cashback_used_total: Optional[float] = None
+    cashback_expires_at: Optional[str] = None
+    loyalty_tier: Optional[str] = None
+    cashback_rate: Optional[float] = None
+    is_custom_rate: Optional[bool] = None
+    yearly_photographer_used: Optional[bool] = None
+    yearly_robot_used: Optional[bool] = None
+    bonus_year: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class Client(ClientBase):
     id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+############################################################
+# Client Questionnaire schemas
+############################################################
+
+class ClientQuestionnaireBase(BaseModel):
+    # СЕРВІС
+    event_date: Optional[str] = None  # Date as string for API
+    location: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    on_site_contact: Optional[str] = None
+    on_site_phone: Optional[str] = None
+    arrival_time: Optional[str] = None
+    event_start_time: Optional[str] = None
+    event_end_time: Optional[str] = None
+    service_type_timing: Optional[str] = None
+    additional_services_timing: Optional[str] = None
+    equipment_notes: Optional[str] = None
+    payment_method: Optional[str] = None
+    textile_color: Optional[str] = None
+    banquet_line_color: Optional[str] = None
+    
+    # ЗАЇЗД
+    venue_complexity: Optional[str] = None
+    floor_number: Optional[str] = None
+    elevator_available: Optional[bool] = False
+    technical_room: Optional[str] = None
+    kitchen_available: Optional[str] = None
+    venue_photos: Optional[bool] = False
+    arrival_photos: Optional[bool] = False
+    
+    # КУХНЯ
+    dish_serving: Optional[str] = None
+    hot_snacks_serving: Optional[str] = None
+    salad_serving: Optional[str] = None
+    product_allergy: Optional[str] = None
+    vegetarians: Optional[bool] = False
+    hot_snacks_prep: Optional[str] = None
+    menu_notes: Optional[str] = None
+    client_order_notes: Optional[str] = None
+    client_drinks_notes: Optional[str] = None
+    
+    # КОНТЕНТ
+    photo_allowed: Optional[str] = None
+    video_allowed: Optional[str] = None
+    branded_products: Optional[str] = None
+    
+    # ЗАМОВНИК
+    client_company_name: Optional[str] = None
+    client_activity_type: Optional[str] = None
+    
+    # КОМЕНТАРІ
+    special_notes: Optional[str] = None
+
+
+class ClientQuestionnaireCreate(ClientQuestionnaireBase):
+    client_id: int
+
+
+class ClientQuestionnaireUpdate(BaseModel):
+    event_date: Optional[str] = None
+    location: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    on_site_contact: Optional[str] = None
+    on_site_phone: Optional[str] = None
+    arrival_time: Optional[str] = None
+    event_start_time: Optional[str] = None
+    event_end_time: Optional[str] = None
+    service_type_timing: Optional[str] = None
+    additional_services_timing: Optional[str] = None
+    equipment_notes: Optional[str] = None
+    payment_method: Optional[str] = None
+    textile_color: Optional[str] = None
+    banquet_line_color: Optional[str] = None
+    venue_complexity: Optional[str] = None
+    floor_number: Optional[str] = None
+    elevator_available: Optional[bool] = None
+    technical_room: Optional[str] = None
+    kitchen_available: Optional[str] = None
+    venue_photos: Optional[bool] = None
+    arrival_photos: Optional[bool] = None
+    dish_serving: Optional[str] = None
+    hot_snacks_serving: Optional[str] = None
+    salad_serving: Optional[str] = None
+    product_allergy: Optional[str] = None
+    vegetarians: Optional[bool] = None
+    hot_snacks_prep: Optional[str] = None
+    menu_notes: Optional[str] = None
+    client_order_notes: Optional[str] = None
+    client_drinks_notes: Optional[str] = None
+    photo_allowed: Optional[str] = None
+    video_allowed: Optional[str] = None
+    branded_products: Optional[str] = None
+    client_company_name: Optional[str] = None
+    client_activity_type: Optional[str] = None
+    special_notes: Optional[str] = None
+
+
+class ClientQuestionnaire(ClientQuestionnaireBase):
+    id: int
+    client_id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -492,6 +626,31 @@ class Benefit(BenefitBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+############################################################
+# Cashback Transaction schemas
+############################################################
+
+class CashbackTransactionBase(BaseModel):
+    client_id: int
+    kp_id: Optional[int] = None
+    transaction_type: str  # "earned" | "used" | "expired"
+    amount: float
+    balance_after: float
+    description: Optional[str] = None
+
+
+class CashbackTransactionCreate(CashbackTransactionBase):
+    pass
+
+
+class CashbackTransaction(CashbackTransactionBase):
+    id: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

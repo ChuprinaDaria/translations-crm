@@ -108,6 +108,7 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         price_per_person=price_per_person,
         template_id=kp_in.template_id,
         # Загальні дані про клієнта та захід
+        client_id=getattr(kp_in, "client_id", None),
         client_name=kp_in.client_name,
         event_format=kp_in.event_format,
         event_group=kp_in.event_group,
