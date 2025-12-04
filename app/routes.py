@@ -1610,15 +1610,36 @@ async def create_template(
         
         # Зберігаємо файл
         final_preview_url = save_template_preview(preview_image)
-    elif html_content and not preview_image:
-        # Автоматично генеруємо прев'ю з HTML, якщо не завантажено файл прев'ю
-        # (незалежно від того, чи передано preview_image_url)
-        print(f"Generating automatic preview for template: {filename}")
-        auto_preview = generate_template_preview(html_content, filename)
-        if auto_preview:
-            final_preview_url = auto_preview
+    else:
+        # Якщо окремий файл прев'ю не завантажено – намагаємось
+        # автоматично згенерувати прев'ю з HTML шаблону.
+        # Раніше це працювало лише коли html_content приходив у запиті,
+        # через що для шаблонів, створених з UI без явного HTML,
+        # прев'ю взагалі не генерувалось.
+        html_for_preview = None
+
+        if html_content:
+            # Якщо HTML передано в цьому запиті – використовуємо його напряму.
+            html_for_preview = html_content
         else:
-            print(f"⚠ Warning: Failed to generate preview for template {filename}")
+            # Інакше читаємо HTML з файлу, який ми щойно створили / скопіювали вище.
+            try:
+                if template_path.exists():
+                    with template_path.open("r", encoding="utf-8") as f:
+                        html_for_preview = f.read()
+            except Exception as e:
+                # Не падаємо, просто логуємо попередження
+                print(f"⚠ Warning: failed to read template file for preview '{template_path}': {e}")
+
+        if html_for_preview:
+            # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
+            # (незалежно від того, чи передано preview_image_url)
+            print(f"Generating automatic preview for template: {filename}")
+            auto_preview = generate_template_preview(html_for_preview, filename)
+            if auto_preview:
+                final_preview_url = auto_preview
+            else:
+                print(f"⚠ Warning: Failed to generate preview for template {filename}")
 
     # Обробка зображень шапки та фону
     final_header_url = header_image_url
@@ -1706,9 +1727,8 @@ async def update_template(
     
     # Обробка прев'ю:
     # 1) Якщо завантажено новий файл прев'ю — використовуємо його.
-    # 2) Якщо прев'ю не завантажено, але оновлено HTML — автоматично
-    #    регенеруємо прев'ю з нового HTML, щоб картинка в списку шаблонів
-    #    завжди відповідала актуальному вигляду КП.
+    # 2) Якщо прев'ю не завантажено, намагаємось автоматично
+    #    згенерувати його з актуального HTML (або з html_content, або з файлу).
     final_preview_url = current_template.preview_image_url
     
     if preview_image:
@@ -1721,20 +1741,35 @@ async def update_template(
             delete_old_preview(current_template.preview_image_url)
         # Зберігаємо новий файл
         final_preview_url = save_template_preview(preview_image)
-    elif html_content:
-        # Якщо HTML оновлено, а власноручне прев'ю не завантажено —
-        # автоматично перегенеровуємо прев'ю з нового HTML
-        print(f"Regenerating automatic preview for template: {final_filename}")
-        # Видаляємо старе прев'ю
-        if current_template.preview_image_url:
-            delete_old_preview(current_template.preview_image_url)
-        # Генеруємо нове
-        auto_preview = generate_template_preview(html_content, final_filename)
-        if auto_preview:
-            final_preview_url = auto_preview
-            print(f"✓ Preview regenerated successfully: {auto_preview}")
+    else:
+        # Прагнемо мати прев'ю навіть якщо html_content не передали напряму.
+        html_for_preview = None
+
+        if html_content:
+            # Якщо HTML оновлено в цьому запиті — використовуємо його.
+            html_for_preview = html_content
         else:
-            print(f"⚠ Warning: Failed to regenerate preview for template {final_filename}")
+            # Інакше читаємо HTML з фактичного файлу шаблону.
+            try:
+                if template_path.exists():
+                    with template_path.open("r", encoding="utf-8") as f:
+                        html_for_preview = f.read()
+            except Exception as e:
+                print(f"⚠ Warning: failed to read template file for preview '{template_path}': {e}")
+
+        if html_for_preview:
+            # Автоматично (пере)генеруємо прев'ю з актуального HTML.
+            print(f"Regenerating automatic preview for template: {final_filename}")
+            # Видаляємо старе прев'ю
+            if current_template.preview_image_url:
+                delete_old_preview(current_template.preview_image_url)
+            # Генеруємо нове
+            auto_preview = generate_template_preview(html_for_preview, final_filename)
+            if auto_preview:
+                final_preview_url = auto_preview
+                print(f"✓ Preview regenerated successfully: {auto_preview}")
+            else:
+                print(f"⚠ Warning: Failed to regenerate preview for template {final_filename}")
     
     # Обробка зображень шапки та фону
     final_header_url = current_template.header_image_url
@@ -2169,11 +2204,13 @@ async def upload_template_image(
 @router.get("/clients")
 def get_clients(
     skip: int = 0, 
-    limit: int = 20,
+    limit: int = 100,
     search: str = None,
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
+    # Сортуємо клієнтів за датою створення (нові зверху),
+    # щоб щойно створені клієнти завжди потрапляли в першу сторінку.
     query = db.query(models.Client)
     
     if search:
@@ -2185,6 +2222,8 @@ def get_clients(
                 models.Client.email.ilike(f"%{search}%")
             )
         )
+    
+    query = query.order_by(models.Client.created_at.desc())
     
     total = query.count()
     clients = query.offset(skip).limit(limit).all()

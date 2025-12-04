@@ -96,10 +96,15 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
   const loadEquipment = async () => {
     try {
       const data = await itemsApi.getItems(0, 1000);
+      // API повертає масив Item[], а не об'єкт з полем items,
+      // тому працюємо напряму з масивом.
+      const itemsArray = Array.isArray(data) ? data : (data as any)?.items || [];
+
       // Фільтруємо тільки обладнання
-      const equipment = data.items.filter((item: Item) => 
-        item.type === 'equipment' || item.category_name?.toLowerCase().includes('обладнання')
+      const equipment = itemsArray.filter((item: Item) => 
+        (item as any).type === 'equipment' || (item as any).category_name?.toLowerCase().includes('обладнання')
       );
+
       setAllEquipment(equipment);
     } catch (error) {
       console.error("Error loading equipment:", error);

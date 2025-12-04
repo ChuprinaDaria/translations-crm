@@ -48,7 +48,9 @@ export function Clients() {
     const loadClients = async () => {
       try {
         const data = await clientsApi.getClients();
-        setClients(data.clients || []);
+        // Бекенд може повертати як { total, clients: [...] }, так і просто масив клієнтів.
+        const list = Array.isArray(data) ? data : (data as any).clients || [];
+        setClients(list);
       } catch (error: any) {
         console.error("Error loading clients:", error);
         toast.error("Помилка завантаження клієнтів");

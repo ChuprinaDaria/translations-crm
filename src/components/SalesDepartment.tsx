@@ -37,7 +37,9 @@ export function SalesDepartment() {
     try {
       setIsLoading(true);
       const data = await clientsApi.getClients(0, 100, searchQuery);
-      setClients(data?.clients || []);
+      // Бекенд може повертати як { total, clients: [...] }, так і просто масив клієнтів.
+      const list = Array.isArray(data) ? data : (data as any).clients || [];
+      setClients(list);
     } catch (error: any) {
       toast.error("Помилка завантаження клієнтів");
       console.error(error);
