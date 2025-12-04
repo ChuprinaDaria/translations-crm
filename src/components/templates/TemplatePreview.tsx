@@ -159,15 +159,13 @@ export function TemplatePreview({
   }, [pdfUrl]);
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="bg-gray-50 px-4 py-3 border-b">
-        <h3 className="text-sm font-semibold text-gray-700">Preview</h3>
-        <p className="text-xs text-gray-500">Попередній перегляд PDF</p>
-      </div>
+    <div className="w-full">
+      <div className="mb-2 text-sm text-gray-600">Preview</div>
+      <p className="text-xs text-gray-500 mb-4">Попередній перегляд PDF</p>
 
-      <div className="flex-1 relative bg-gray-100 overflow-auto">
+      <div className="relative">
         {isGenerating && (
-          <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+          <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-lg">
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
               <span className="text-sm text-gray-600">Оновлення preview...</span>
@@ -176,23 +174,27 @@ export function TemplatePreview({
         )}
 
         {pdfUrl ? (
-          <div className="w-full h-full flex items-start justify-center py-4">
-            <div className="w-[900px] max-w-full h-[calc(100vh-180px)] bg-white shadow-lg border">
+          <div className="max-w-4xl mx-auto">
+            {/* PDF iframe на всю ширину і висоту */}
+            <div className="bg-white rounded-lg shadow-lg" style={{ minHeight: '800px' }}>
               <iframe
                 src={pdfUrl}
-                className="w-full h-full border-0"
-                title="Template Preview"
+                className="w-full rounded-lg"
+                style={{ height: '1000px' }}
+                title="PDF Preview"
               />
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-sm text-gray-500">Налаштуйте шаблон →</p>
-              <p className="text-xs text-gray-400 mt-2">
-                Preview з'явиться автоматично
-              </p>
+          <div className="bg-white rounded-lg shadow-lg" style={{ minHeight: '800px' }}>
+            <div className="h-[600px] flex items-center justify-center text-gray-400">
+              <div className="text-center">
+                <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-sm text-gray-500">Налаштуйте шаблон праворуч →</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  Preview з'явиться автоматично
+                </p>
+              </div>
             </div>
           </div>
         )}

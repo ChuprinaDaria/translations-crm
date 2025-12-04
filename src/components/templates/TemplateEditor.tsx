@@ -4,13 +4,10 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { ColorPicker } from "./ColorPicker";
 import { ImageUploader } from "./ImageUploader";
 import { TemplatePreview } from "./TemplatePreview";
 import { DraggableSectionList } from "./DraggableSectionList";
-import { SwitchRow } from "./SwitchRow";
 import type { Template as ApiTemplate } from "../../lib/api";
 
 interface TemplateEditorProps {
@@ -19,9 +16,319 @@ interface TemplateEditorProps {
   onClose: () => void;
 }
 
+type TemplateDesign = {
+  name: string;
+  description: string;
+  is_default: boolean;
+  primary_color: string;
+  secondary_color: string;
+  text_color: string;
+  font_family: string;
+  logo_image: File | string | null;
+  header_image: File | string | null;
+  background_image: File | string | null;
+  show_item_photo: boolean;
+  show_item_weight: boolean;
+  show_item_quantity: boolean;
+  show_item_price: boolean;
+  show_item_total: boolean;
+  show_item_description: boolean;
+  menu_sections: string[];
+  show_weight_summary: boolean;
+  show_weight_per_person: boolean;
+  show_equipment_block: boolean;
+  show_service_block: boolean;
+  show_transport_block: boolean;
+  show_discount_block: boolean;
+  menu_title: string;
+  summary_title: string;
+  footer_text: string;
+  page_orientation: string;
+  items_per_page: number;
+};
+
+// Компонент DesignTab
+function DesignTab({
+  design,
+  setDesign,
+}: {
+  design: TemplateDesign;
+  setDesign: (d: TemplateDesign) => void;
+}) {
+  return (
+    <div className="p-6 space-y-8">
+      {/* Назва шаблону */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Назва шаблону <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={design.name}
+          onChange={(e) => setDesign({ ...design, name: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          placeholder="Наприклад: Корпоративний шаблон"
+        />
+      </div>
+
+      {/* Опис */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Опис
+        </label>
+        <textarea
+          value={design.description}
+          onChange={(e) => setDesign({ ...design, description: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+          rows={2}
+          placeholder="Короткий опис призначення шаблону"
+        />
+      </div>
+
+      {/* Кольорова палітра */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Кольорова палітра</h3>
+        <div className="space-y-4">
+          <ColorPicker
+            label="Основний колір (акценти, заголовки)"
+            value={design.primary_color}
+            onChange={(color) => setDesign({ ...design, primary_color: color })}
+            presets={["#FF5A00", "#2563EB", "#10B981", "#8B5CF6", "#F59E0B"]}
+          />
+          <ColorPicker
+            label="Колір тексту"
+            value={design.text_color}
+            onChange={(color) => setDesign({ ...design, text_color: color })}
+            presets={["#1A1A1A", "#374151", "#6B7280", "#000000"]}
+          />
+          <ColorPicker
+            label="Колір фону"
+            value={design.secondary_color}
+            onChange={(color) => setDesign({ ...design, secondary_color: color })}
+            presets={["#FFFFFF", "#F9FAFB", "#FEF3F2", "#FFFBEB"]}
+          />
+        </div>
+      </div>
+
+      {/* Шрифт */}
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Шрифт
+        </label>
+        <select
+          value={design.font_family}
+          onChange={(e) => setDesign({ ...design, font_family: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        >
+          <option value="Inter, sans-serif">Inter (сучасний)</option>
+          <option value="Roboto, Arial, sans-serif">Roboto (класичний)</option>
+          <option value="'Playfair Display', serif">Playfair Display (елегантний)</option>
+          <option value="'Open Sans', sans-serif">Open Sans (універсальний)</option>
+        </select>
+      </div>
+
+      {/* Зображення */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Зображення</h3>
+
+        <ImageUploader
+          label="Логотип компанії (лівий верхній кут)"
+          currentImage={design.logo_image}
+          onUpload={(file) => setDesign({ ...design, logo_image: file })}
+          onRemove={() => setDesign({ ...design, logo_image: null })}
+          helperText="Співвідношення 16:9 • Максимум 2MB"
+          aspectRatio="16:9"
+          maxSize="2MB"
+        />
+
+        <ImageUploader
+          label="Зображення шапки (опціонально)"
+          currentImage={design.header_image}
+          onUpload={(file) => setDesign({ ...design, header_image: file })}
+          onRemove={() => setDesign({ ...design, header_image: null })}
+          helperText="Широка картинка шапки • Максимум 2MB"
+          aspectRatio="21:9"
+          maxSize="2MB"
+        />
+
+        <ImageUploader
+          label="Фонове зображення (опціонально)"
+          currentImage={design.background_image}
+          onUpload={(file) => setDesign({ ...design, background_image: file })}
+          onRemove={() => setDesign({ ...design, background_image: null })}
+          helperText="Буде розміщено як watermark • Максимум 2MB"
+          aspectRatio="free"
+          maxSize="2MB"
+        />
+      </div>
+    </div>
+  );
+}
+
+// Компонент ContentTab
+function ContentTab({
+  design,
+  setDesign,
+}: {
+  design: TemplateDesign;
+  setDesign: (d: TemplateDesign) => void;
+}) {
+  return (
+    <div className="p-6 space-y-6">
+      {/* Назви секцій */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Заголовки</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium block mb-1">Заголовок секції меню</label>
+            <Input
+              type="text"
+              value={design.menu_title}
+              onChange={(e) => setDesign({ ...design, menu_title: e.target.value })}
+              placeholder="Меню"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium block mb-1">Заголовок підсумку</label>
+            <Input
+              type="text"
+              value={design.summary_title}
+              onChange={(e) => setDesign({ ...design, summary_title: e.target.value })}
+              placeholder="Підсумок"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Секції меню */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Секції меню</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Страви будуть згруповані за цими категоріями в PDF
+        </p>
+
+        <DraggableSectionList
+          sections={design.menu_sections}
+          onChange={(newSections) => setDesign({ ...design, menu_sections: newSections })}
+        />
+      </div>
+
+      {/* Футер */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Текст внизу PDF</h3>
+        <Textarea
+          value={design.footer_text}
+          onChange={(e) => setDesign({ ...design, footer_text: e.target.value })}
+          className="resize-none"
+          rows={3}
+          placeholder="Дякуємо за вибір нашої компанії!&#10;Контакти: +380..."
+        />
+      </div>
+    </div>
+  );
+}
+
+// Компонент StructureTab
+function StructureTab({
+  design,
+  setDesign,
+}: {
+  design: TemplateDesign;
+  setDesign: (d: TemplateDesign) => void;
+}) {
+  return (
+    <div className="p-6 space-y-6">
+      {/* Колонки таблиці */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Колонки таблиці меню</h3>
+        <div className="space-y-2">
+          {[
+            { key: "show_item_photo", label: "Показувати фото" },
+            { key: "show_item_weight", label: "Показувати вагу" },
+            { key: "show_item_quantity", label: "Показувати кількість" },
+            { key: "show_item_price", label: "Показувати ціну" },
+            { key: "show_item_total", label: "Показувати суму" },
+            { key: "show_item_description", label: "Показувати опис" },
+          ].map((item) => (
+            <label key={item.key} className="flex items-center gap-2 cursor-pointer py-1">
+              <input
+                type="checkbox"
+                checked={design[item.key as keyof TemplateDesign] as boolean}
+                onChange={(e) =>
+                  setDesign({ ...design, [item.key]: e.target.checked })
+                }
+                className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+              />
+              <span className="text-sm">{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Підсумкові блоки */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Показувати в підсумку</h3>
+        <div className="space-y-2">
+          {[
+            { key: "show_weight_summary", label: "Загальна вага" },
+            { key: "show_weight_per_person", label: "Вага на персону" },
+            { key: "show_equipment_block", label: "Оренда обладнання" },
+            { key: "show_service_block", label: "Обслуговування" },
+            { key: "show_transport_block", label: "Доставка" },
+            { key: "show_discount_block", label: "Знижка" },
+          ].map((item) => (
+            <label key={item.key} className="flex items-center gap-2 cursor-pointer py-1">
+              <input
+                type="checkbox"
+                checked={design[item.key as keyof TemplateDesign] as boolean}
+                onChange={(e) =>
+                  setDesign({ ...design, [item.key]: e.target.checked })
+                }
+                className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+              />
+              <span className="text-sm">{item.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Орієнтація */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Орієнтація сторінки</h3>
+        <div className="flex gap-3">
+          <label className="flex-1 cursor-pointer">
+            <input
+              type="radio"
+              name="orientation"
+              value="portrait"
+              checked={design.page_orientation === "portrait"}
+              onChange={(e) => setDesign({ ...design, page_orientation: e.target.value })}
+              className="mr-2"
+            />
+            <span className="text-sm">Книжкова</span>
+          </label>
+          <label className="flex-1 cursor-pointer">
+            <input
+              type="radio"
+              name="orientation"
+              value="landscape"
+              checked={design.page_orientation === "landscape"}
+              onChange={(e) => setDesign({ ...design, page_orientation: e.target.value })}
+              className="mr-2"
+            />
+            <span className="text-sm">Альбомна</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
+  const [activeTab, setActiveTab] = useState<"design" | "content" | "structure">("design");
+  const [formData, setFormData] = useState<TemplateDesign>({
     name: template?.name || "",
     description: template?.description || "",
     is_default: template?.is_default || false,
@@ -151,328 +458,71 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         </Button>
       </div>
 
-      {/* Split Screen */}
+      {/* Main content: Preview + Sidebar */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Preview (ліворуч, займає максимум простору) */}
-        <div className="flex-1 min-w-[720px] border-r bg-gray-100">
+        {/* Preview (ліворуч) - 65% ширини */}
+        <div className="flex-1 bg-gray-100 p-6 overflow-auto">
           <TemplatePreview
             design={formData}
             templateName={formData.name}
           />
         </div>
 
-        {/* Settings Panel (праворуч, фіксована ширина) */}
-        <div className="w-full max-w-md flex flex-col">
-          <Tabs defaultValue="design" className="flex-1 flex flex-col">
-            <TabsList className="w-full justify-start px-4 border-b rounded-none">
-              <TabsTrigger value="design" className="gap-2">
-                <Palette className="w-4 h-4" />
+        {/* Sidebar (праворуч) - фіксована ширина 450px */}
+        <div className="w-[450px] border-l bg-white flex flex-col">
+          {/* Tabs */}
+          <div className="border-b px-6 pt-4">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab("design")}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
+                  activeTab === "design"
+                    ? "bg-white text-orange-600 border-t-2 border-orange-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <Palette className="w-4 h-4 inline mr-2" />
                 Дизайн
-              </TabsTrigger>
-              <TabsTrigger value="content" className="gap-2">
-                <FileText className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setActiveTab("content")}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
+                  activeTab === "content"
+                    ? "bg-white text-orange-600 border-t-2 border-orange-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <FileText className="w-4 h-4 inline mr-2" />
                 Контент
-              </TabsTrigger>
-              <TabsTrigger value="structure" className="gap-2">
-                <Settings className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setActiveTab("structure")}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
+                  activeTab === "structure"
+                    ? "bg-white text-orange-600 border-t-2 border-orange-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <Settings className="w-4 h-4 inline mr-2" />
                 Структура
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="flex-1 overflow-y-auto">
-              {/* Tab 1: Дизайн */}
-              <TabsContent value="design" className="p-6 space-y-6 m-0">
-                {/* Назва та опис */}
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">
-                      Назва шаблону <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Наприклад: Корпоративний шаблон"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Опис</Label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={2}
-                      placeholder="Короткий опис призначення шаблону"
-                    />
-                  </div>
-                </div>
-
-                {/* Кольорова схема */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Кольорова палітра</h3>
-                  <div className="space-y-4">
-                    <ColorPicker
-                      label="Основний колір (акценти, заголовки)"
-                      value={formData.primary_color}
-                      onChange={(color) => setFormData({ ...formData, primary_color: color })}
-                      presets={["#FF5A00", "#2563EB", "#10B981", "#8B5CF6", "#F59E0B"]}
-                    />
-                    <ColorPicker
-                      label="Колір тексту"
-                      value={formData.text_color}
-                      onChange={(color) => setFormData({ ...formData, text_color: color })}
-                      presets={["#1A1A1A", "#374151", "#6B7280", "#111827"]}
-                    />
-                    <ColorPicker
-                      label="Колір фону"
-                      value={formData.secondary_color}
-                      onChange={(color) => setFormData({ ...formData, secondary_color: color })}
-                      presets={["#FFFFFF", "#F9FAFB", "#FEF3F2", "#FFFBEB"]}
-                    />
-                  </div>
-                </div>
-
-                {/* Шрифт */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Шрифт</h3>
-                  <Select
-                    value={formData.font_family}
-                    onValueChange={(value) => setFormData({ ...formData, font_family: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Inter, sans-serif">Inter (сучасний)</SelectItem>
-                      <SelectItem value="Roboto, Arial, sans-serif">Roboto (класичний)</SelectItem>
-                      <SelectItem value="'Playfair Display', serif">Playfair Display (елегантний)</SelectItem>
-                      <SelectItem value="'Open Sans', sans-serif">Open Sans (універсальний)</SelectItem>
-                      <SelectItem value="'Montserrat', sans-serif">Montserrat</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Зображення */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-1">Зображення</h3>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Спочатку завантаж логотип, а нижче — широку картинку шапки PDF (банер над меню).
-                  </p>
-                  <ImageUploader
-                    label="Логотип компанії (лівий верхній кут)"
-                    currentImage={template?.header_image_url || formData.logo_image}
-                    onUpload={(file) => setFormData({ ...formData, logo_image: file })}
-                    onRemove={() => setFormData({ ...formData, logo_image: null })}
-                    aspectRatio="16:9"
-                    maxSize="2MB"
-                  />
-                  <ImageUploader
-                    label="Зображення шапки сторінки (банер)"
-                    currentImage={template?.header_image_url || formData.header_image}
-                    onUpload={(file) => setFormData({ ...formData, header_image: file })}
-                    onRemove={() => setFormData({ ...formData, header_image: null })}
-                    aspectRatio="21:9"
-                    maxSize="5MB"
-                  />
-                  <ImageUploader
-                    label="Фонове зображення (опціонально)"
-                    currentImage={template?.background_image_url || formData.background_image}
-                    onUpload={(file) => setFormData({ ...formData, background_image: file })}
-                    onRemove={() => setFormData({ ...formData, background_image: null })}
-                    aspectRatio="free"
-                    maxSize="5MB"
-                  />
-                </div>
-              </TabsContent>
-
-              {/* Tab 2: Контент */}
-              <TabsContent value="content" className="p-6 space-y-6 m-0">
-                {/* Назви секцій */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Заголовки</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium block mb-1">Заголовок секції меню</label>
-                      <Input
-                        type="text"
-                        value={formData.menu_title}
-                        onChange={(e) => setFormData({ ...formData, menu_title: e.target.value })}
-                        placeholder="Меню"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium block mb-1">Заголовок підсумку</label>
-                      <Input
-                        type="text"
-                        value={formData.summary_title}
-                        onChange={(e) => setFormData({ ...formData, summary_title: e.target.value })}
-                        placeholder="Підсумок"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Секції меню (редагування списку) */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Секції меню</h3>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Страви будуть згруповані за цими категоріями в PDF
-                  </p>
-
-                  <DraggableSectionList
-                    sections={formData.menu_sections}
-                    onChange={(newSections) => setFormData({ ...formData, menu_sections: newSections })}
-                  />
-                </div>
-
-                {/* Футер */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Текст внизу PDF</h3>
-                  <Textarea
-                    value={formData.footer_text}
-                    onChange={(e) => setFormData({ ...formData, footer_text: e.target.value })}
-                    className="resize-none"
-                    rows={3}
-                    placeholder="Дякуємо за вибір нашої компанії!&#10;Контакти: +380..."
-                  />
-                </div>
-              </TabsContent>
-
-              {/* Tab 3: Структура */}
-              <TabsContent value="structure" className="p-6 space-y-6 m-0">
-                {/* Секції меню */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">Секції меню</h3>
-                  <p className="text-xs text-gray-500 mb-4">
-                    Страви будуть згруповані за цими категоріями
-                  </p>
-                  <div className="space-y-2">
-                    {formData.menu_sections.map((section, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <Input
-                          value={section}
-                          onChange={(e) => {
-                            const newSections = [...formData.menu_sections];
-                            newSections[idx] = e.target.value;
-                            setFormData({ ...formData, menu_sections: newSections });
-                          }}
-                          className="flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newSections = formData.menu_sections.filter((_, i) => i !== idx);
-                            setFormData({ ...formData, menu_sections: newSections });
-                          }}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setFormData({
-                          ...formData,
-                          menu_sections: [...formData.menu_sections, "Нова секція"],
-                        });
-                      }}
-                      className="w-full"
-                    >
-                      + Додати секцію
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Підсумкові блоки */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Показувати в підсумку</h3>
-                  <div className="space-y-2">
-                    {[
-                      { key: "show_weight_summary", label: "Загальна вага" },
-                      { key: "show_weight_per_person", label: "Вага на персону" },
-                      { key: "show_equipment_block", label: "Оренда обладнання" },
-                      { key: "show_service_block", label: "Обслуговування" },
-                      { key: "show_transport_block", label: "Доставка" },
-                      { key: "show_discount_block", label: "Знижка" },
-                    ].map((item) => (
-                      <label key={item.key} className="flex items-center gap-2 cursor-pointer py-1">
-                        <input
-                          type="checkbox"
-                          checked={formData[item.key as keyof typeof formData] as boolean}
-                          onChange={(e) =>
-                            setFormData({ ...formData, [item.key]: e.target.checked })
-                          }
-                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                        />
-                        <span className="text-sm">{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Орієнтація */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3">Орієнтація сторінки</h3>
-                  <div className="flex gap-3">
-                    <label className="flex-1 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="orientation"
-                        value="portrait"
-                        checked={formData.page_orientation === "portrait"}
-                        onChange={(e) =>
-                          setFormData({ ...formData, page_orientation: e.target.value as "portrait" | "landscape" })
-                        }
-                        className="peer sr-only"
-                      />
-                      <div className="border-2 rounded-lg p-4 text-center peer-checked:border-orange-500 peer-checked:bg-orange-50">
-                        <div className="w-12 h-16 bg-gray-200 mx-auto mb-2 rounded"></div>
-                        <span className="text-sm font-medium">Портретна</span>
-                      </div>
-                    </label>
-                    <label className="flex-1 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="orientation"
-                        value="landscape"
-                        checked={formData.page_orientation === "landscape"}
-                        onChange={(e) =>
-                          setFormData({ ...formData, page_orientation: e.target.value as "portrait" | "landscape" })
-                        }
-                        className="peer sr-only"
-                      />
-                      <div className="border-2 rounded-lg p-4 text-center peer-checked:border-orange-500 peer-checked:bg-orange-50">
-                        <div className="w-16 h-12 bg-gray-200 mx-auto mb-2 rounded"></div>
-                        <span className="text-sm font-medium">Альбомна</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* За замовчуванням */}
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="is-default"
-                    checked={formData.is_default}
-                    onChange={(e) => setFormData({ ...formData, is_default: e.target.checked })}
-                    className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                  />
-                  <Label htmlFor="is-default" className="text-sm font-medium cursor-pointer">
-                    Зробити шаблоном за замовчуванням
-                  </Label>
-                </div>
-              </TabsContent>
+              </button>
             </div>
-          </Tabs>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === "design" && (
+              <DesignTab design={formData} setDesign={setFormData} />
+            )}
+            {activeTab === "content" && (
+              <ContentTab design={formData} setDesign={setFormData} />
+            )}
+            {activeTab === "structure" && (
+              <StructureTab design={formData} setDesign={setFormData} />
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
