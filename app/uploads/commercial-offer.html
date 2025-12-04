@@ -21,10 +21,22 @@
             background-color: {{ secondary_color or '#ffffff' }};
             line-height: 1.6;
             font-size: 10pt;
+            {% if background_image_src %}
+            background-image: url('{{ background_image_src }}');
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: 50%;
+            background-attachment: fixed;
+            {% endif %}
         }
         
         .container {
             max-width: 100%;
+            {% if background_image_src %}
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 5mm;
+            {% endif %}
         }
         
         /* Шапка документу */
@@ -285,9 +297,6 @@
         <div class="header">
             <div class="header-content">
                 <div class="logo-section">
-                    {% if logo_src %}
-                    <img src="{{ logo_src }}" alt="Логотип" class="logo">
-                    {% endif %}
                     <div class="company-name">{{ company_name or 'Назва компанії' }}</div>
                 </div>
                 <div class="info-section">
@@ -565,6 +574,11 @@
             {% else %}
             <p>Дякуємо за довіру! {{ company_name or '' }}</p>
             <p>Документ згенеровано автоматично</p>
+            {% endif %}
+            {% if logo_src %}
+            <div style="margin-top: 5mm;">
+                <img src="{{ logo_src }}" alt="Логотип" class="logo">
+            </div>
             {% endif %}
         </div>
     </div>
