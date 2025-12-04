@@ -19,6 +19,7 @@ export function ImageUploader({
   aspectRatio = "free",
   maxSize = "5MB",
 }: ImageUploaderProps) {
+  const inputId = `image-upload-${label.replace(/\s+/g, "-").toLowerCase()}-${Math.random().toString(36).substr(2, 9)}`;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(
     typeof currentImage === "string" ? currentImage : null
@@ -90,9 +91,8 @@ export function ImageUploader({
         ) : (
           /* Показуємо зону drop */
           <label
-            htmlFor={fileInputRef.current?.id}
+            htmlFor={inputId}
             className="cursor-pointer flex flex-col items-center gap-2"
-            onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="w-10 h-10 text-gray-400" />
             <span className="text-sm text-gray-600">
@@ -106,6 +106,7 @@ export function ImageUploader({
         )}
 
         <input
+          id={inputId}
           ref={fileInputRef}
           type="file"
           accept="image/*"

@@ -16,10 +16,12 @@ import {
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
 import { templatesApi, type Template as ApiTemplate, getImageUrl } from "../lib/api";
+import { TemplateEditor } from "./templates/TemplateEditor";
 
 export function KPTemplates() {
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ApiTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -217,43 +219,53 @@ export function KPTemplates() {
     try {
       const fullTemplate = await templatesApi.getTemplate(template.id);
       setEditingTemplate(fullTemplate);
-      setFormData({
-        name: fullTemplate.name,
-        description: fullTemplate.description || "",
-        filename: fullTemplate.filename,
-        is_default: fullTemplate.is_default,
-        primary_color: fullTemplate.primary_color || "#FF5A00",
-        secondary_color: fullTemplate.secondary_color || "#1a1a2e",
-        text_color: fullTemplate.text_color || "#333333",
-        font_family: fullTemplate.font_family || "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
-        show_item_photo: fullTemplate.show_item_photo ?? true,
-        show_item_weight: fullTemplate.show_item_weight ?? true,
-        show_item_quantity: fullTemplate.show_item_quantity ?? true,
-        show_item_price: fullTemplate.show_item_price ?? true,
-        show_item_total: fullTemplate.show_item_total ?? true,
-        show_item_description: fullTemplate.show_item_description ?? false,
-        show_weight_summary: fullTemplate.show_weight_summary ?? true,
-        show_weight_per_person: fullTemplate.show_weight_per_person ?? true,
-        show_discount_block: fullTemplate.show_discount_block ?? false,
-        show_equipment_block: fullTemplate.show_equipment_block ?? true,
-        show_service_block: fullTemplate.show_service_block ?? true,
-        show_transport_block: fullTemplate.show_transport_block ?? true,
-        menu_sections: fullTemplate.menu_sections || ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"],
-        menu_title: fullTemplate.menu_title || "Меню",
-        summary_title: fullTemplate.summary_title || "Підсумок",
-        footer_text: fullTemplate.footer_text || "",
-        page_orientation: fullTemplate.page_orientation || "portrait",
-        items_per_page: fullTemplate.items_per_page || 20,
-      });
-      // Встановлюємо preview для існуючих зображень
-      setHeaderPreview(fullTemplate.header_image_url ? getImageUrl(fullTemplate.header_image_url) : null);
-      setBackgroundPreview(fullTemplate.background_image_url ? getImageUrl(fullTemplate.background_image_url) : null);
-      setHeaderFile(null);
-      setBackgroundFile(null);
-      setIsAddDialogOpen(true);
+      setIsEditorOpen(true);
     } catch (error) {
       console.error(error);
       toast.error("Не вдалося завантажити шаблон");
+    }
+  };
+
+  const handleOpenNewEditor = () => {
+    setEditingTemplate(null);
+    setIsEditorOpen(true);
+  };
+
+  const handleSaveTemplate = async (templateData: any) => {
+    try {
+      // Автоматично генеруємо filename з назви шаблону
+      const autoFilename = templateData.name
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9\-]+/g, "") + ".html";
+
+      const dataToSave = {
+        ...templateData,
+        filename: autoFilename,
+      };
+
+      if (editingTemplate) {
+        const updated = await templatesApi.updateTemplate(editingTemplate.id, dataToSave);
+        setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        toast.success("Шаблон оновлено");
+      } else {
+        const created = await templatesApi.createTemplate(dataToSave);
+        setTemplates((prev) => [...prev, created]);
+        toast.success("Шаблон створено");
+      }
+
+      setIsEditorOpen(false);
+      setEditingTemplate(null);
+      loadTemplates();
+    } catch (error: any) {
+      console.error(error);
+      const message =
+        error?.detail ||
+        error?.message ||
+        "Сталася помилка при збереженні шаблону";
+      toast.error(typeof message === "string" ? message : "Сталася помилка при збереженні шаблону");
+      throw error;
     }
   };
 
@@ -284,12 +296,13 @@ export function KPTemplates() {
             setIsAddDialogOpen(true);
           }
         }}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto">
-              <Plus className="w-4 h-4 mr-2" />
-              Додати шаблон
-            </Button>
-          </DialogTrigger>
+          <Button
+            onClick={handleOpenNewEditor}
+            className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Додати шаблон
+          </Button>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -803,7 +816,7 @@ export function KPTemplates() {
               Створіть перший шаблон для швидкого формування КП
             </p>
             <Button
-              onClick={() => setIsAddDialogOpen(true)}
+              onClick={handleOpenNewEditor}
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -816,6 +829,18 @@ export function KPTemplates() {
       <div className="text-sm text-gray-600">
         Всього шаблонів: {templates.length}
       </div>
+
+      {/* Візуальний редактор шаблонів */}
+      {isEditorOpen && (
+        <TemplateEditor
+          template={editingTemplate}
+          onSave={handleSaveTemplate}
+          onClose={() => {
+            setIsEditorOpen(false);
+            setEditingTemplate(null);
+          }}
+        />
+      )}
     </div>
   );
 }

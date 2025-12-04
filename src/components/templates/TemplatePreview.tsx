@@ -105,6 +105,8 @@ export function TemplatePreview({
 
   // Debounced генерація preview
   useEffect(() => {
+    if (!design) return; // Не генеруємо якщо немає design
+    
     const timer = setTimeout(() => {
       generatePreview();
     }, 1000); // 1 секунда затримки
@@ -113,8 +115,8 @@ export function TemplatePreview({
   }, [design]);
 
   const generatePreview = async () => {
-    if (!design?.name) return; // Не генеруємо preview без назви
-
+    if (!design) return; // Не генеруємо якщо немає design
+    
     setIsGenerating(true);
     try {
       const response = await fetch("/api/templates/preview", {

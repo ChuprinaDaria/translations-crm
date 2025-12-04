@@ -711,11 +711,34 @@ export interface Template {
   header_image_url?: string;
   background_image_url?: string;
   is_default: boolean;
-   // Налаштування теми
-   primary_color?: string | null;
-   secondary_color?: string | null;
-   text_color?: string | null;
-   font_family?: string | null;
+  // Налаштування теми
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  text_color?: string | null;
+  font_family?: string | null;
+  // Налаштування відображення колонок
+  show_item_photo?: boolean;
+  show_item_weight?: boolean;
+  show_item_quantity?: boolean;
+  show_item_price?: boolean;
+  show_item_total?: boolean;
+  show_item_description?: boolean;
+  // Налаштування підсумкових блоків
+  show_weight_summary?: boolean;
+  show_weight_per_person?: boolean;
+  show_discount_block?: boolean;
+  show_equipment_block?: boolean;
+  show_service_block?: boolean;
+  show_transport_block?: boolean;
+  // Секції меню
+  menu_sections?: string[];
+  // Текстові налаштування
+  menu_title?: string;
+  summary_title?: string;
+  footer_text?: string;
+  // Layout
+  page_orientation?: string;
+  items_per_page?: number;
   created_at?: string;
   updated_at?: string;
   /**
@@ -734,10 +757,30 @@ export interface TemplateCreate {
   html_content?: string; // HTML шаблону (ctrl+V)
   header_image?: File; // Шапка
   background_image?: File; // Фонове зображення
+  logo_image?: File; // Логотип
   primary_color?: string;
   secondary_color?: string;
   text_color?: string;
   font_family?: string;
+  // Налаштування відображення
+  show_item_photo?: boolean;
+  show_item_weight?: boolean;
+  show_item_quantity?: boolean;
+  show_item_price?: boolean;
+  show_item_total?: boolean;
+  show_item_description?: boolean;
+  show_weight_summary?: boolean;
+  show_weight_per_person?: boolean;
+  show_discount_block?: boolean;
+  show_equipment_block?: boolean;
+  show_service_block?: boolean;
+  show_transport_block?: boolean;
+  menu_sections?: string[];
+  menu_title?: string;
+  summary_title?: string;
+  footer_text?: string;
+  page_orientation?: string;
+  items_per_page?: number;
 }
 
 export interface TemplateUpdate {
@@ -750,12 +793,32 @@ export interface TemplateUpdate {
   html_content?: string; // Оновлений HTML шаблону
   header_image?: File;
   background_image?: File;
+  logo_image?: File;
   header_image_url?: string;
   background_image_url?: string;
   primary_color?: string;
   secondary_color?: string;
   text_color?: string;
   font_family?: string;
+  // Налаштування відображення
+  show_item_photo?: boolean;
+  show_item_weight?: boolean;
+  show_item_quantity?: boolean;
+  show_item_price?: boolean;
+  show_item_total?: boolean;
+  show_item_description?: boolean;
+  show_weight_summary?: boolean;
+  show_weight_per_person?: boolean;
+  show_discount_block?: boolean;
+  show_equipment_block?: boolean;
+  show_service_block?: boolean;
+  show_transport_block?: boolean;
+  menu_sections?: string[];
+  menu_title?: string;
+  summary_title?: string;
+  footer_text?: string;
+  page_orientation?: string;
+  items_per_page?: number;
 }
 
 // Branding / Settings

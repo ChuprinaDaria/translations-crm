@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, Form, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -1711,7 +1711,7 @@ def delete_benefit(
 
 @router.post("/templates/preview")
 def generate_template_preview(
-    request: dict,
+    request: dict = Body(...),
     db: Session = Depends(get_db),
 ):
     """
@@ -1760,13 +1760,28 @@ def generate_template_preview(
         ])
         
         # Рендеримо HTML
+        # Конвертуємо суми з рядків в числа
+        def parse_amount(value):
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                return float(value.replace(' грн', '').replace(' ', '').replace(',', '.')) if 'грн' in value else 0.0
+            return 0.0
+        
+        food_total_str = sample_data.get('food_total', '0 грн')
+        food_total_raw = parse_amount(food_total_str)
+        equipment_total = parse_amount(sample_data.get('equipment_total', 0))
+        service_total = parse_amount(sample_data.get('service_total', 0))
+        transport_total = parse_amount(sample_data.get('transport_total', 0))
+        
         html_content = template.render(
             kp=sample_data.get('kp', {}),
             items=sample_data.get('items', []),
             food_total=sample_data.get('food_total', '0 грн'),
-            equipment_total=sample_data.get('equipment_total', '0 грн'),
-            service_total=sample_data.get('service_total', '0 грн'),
-            transport_total=sample_data.get('transport_total', '0 грн'),
+            food_total_raw=food_total_raw,
+            equipment_total=equipment_total,
+            service_total=service_total,
+            transport_total=transport_total,
             total_weight=sample_data.get('total_weight', '0 кг'),
             weight_per_person=sample_data.get('weight_per_person', '0 г'),
             total_items=sample_data.get('total_items', 0),
@@ -1780,7 +1795,7 @@ def generate_template_preview(
             company_name=sample_data.get('company_name', 'Назва компанії'),
             created_date=sample_data.get('created_date', ''),
             event_date=sample_data.get('event_date', ''),
-            template_config=template_config_obj,
+            template=template_config_obj,  # В HTML шаблоні використовується 'template'
             menu_sections=menu_sections,
         )
         
