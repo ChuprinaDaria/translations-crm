@@ -424,6 +424,9 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
 
       // 3. Збереження через callback
       await onSave(templateData);
+      
+      // 4. Показуємо успішне повідомлення та закриваємо редактор
+      console.log("Template saved successfully!");
 
     } catch (error) {
       console.error("Error saving template:", error);
@@ -435,8 +438,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      {/* Header */}
-      <div className="h-16 border-b flex items-center justify-between px-6">
+      {/* Header - sticky з тінню */}
+      <div className="sticky top-0 z-20 h-16 border-b bg-white shadow-md flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -451,10 +454,11 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         <Button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-orange-600 hover:bg-orange-700"
+          size="lg"
+          className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-6 py-3 shadow-lg"
         >
-          <Save className="w-4 h-4 mr-2" />
-          {isSaving ? "Збереження..." : "Зберегти"}
+          <Save className="w-5 h-5 mr-2" />
+          {isSaving ? "Збереження..." : "Зберегти шаблон"}
         </Button>
       </div>
 
