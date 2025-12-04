@@ -6,6 +6,7 @@ import { Badge } from "./ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
@@ -43,12 +44,13 @@ export function EventsCalendar() {
   const loadEvents = async () => {
     setLoading(true);
     try {
-      const [clients, kps] = await Promise.all([
+      const [clientsData, kps] = await Promise.all([
         clientsApi.getClients(),
         kpApi.getKPs(),
       ]);
 
       const eventsList: Event[] = [];
+      const clients = clientsData.clients || [];
 
       // Додаємо події з клієнтів
       clients.forEach((client) => {
@@ -436,6 +438,9 @@ export function EventsCalendar() {
                 <X className="w-4 h-4" />
               </Button>
             </DialogTitle>
+            <DialogDescription>
+              Перегляд детальної інформації про подію
+            </DialogDescription>
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-4">

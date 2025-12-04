@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -47,7 +48,7 @@ export function Clients() {
     const loadClients = async () => {
       try {
         const data = await clientsApi.getClients();
-        setClients(data);
+        setClients(data.clients || []);
       } catch (error: any) {
         console.error("Error loading clients:", error);
         toast.error("Помилка завантаження клієнтів");
@@ -327,6 +328,9 @@ export function Clients() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Редагування клієнта</DialogTitle>
+            <DialogDescription>
+              Оновіть інформацію про клієнта
+            </DialogDescription>
           </DialogHeader>
           {editingClient && (
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">

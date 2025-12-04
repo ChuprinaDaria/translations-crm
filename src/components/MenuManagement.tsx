@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -1351,6 +1352,9 @@ export function MenuManagement() {
             <DialogTitle>
               {editingItem ? 'Редагувати страву' : 'Нова страва'}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? 'Оновіть інформацію про страву' : 'Додайте нову страву до меню'}
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={editingItem ? handleUpdateItem : handleCreateItem} className="space-y-4">
@@ -1567,6 +1571,9 @@ export function MenuManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Нова категорія</DialogTitle>
+            <DialogDescription>
+              Створіть нову категорію для страв
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleCreateCategory} className="space-y-4">
@@ -1638,6 +1645,9 @@ export function MenuManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Нова підкатегорія</DialogTitle>
+            <DialogDescription>
+              Створіть нову підкатегорію для страв
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleCreateSubcategory} className="space-y-4">

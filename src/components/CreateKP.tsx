@@ -352,7 +352,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     const loadClients = async () => {
       try {
         const clientsData = await clientsApi.getClients();
-        setClients(clientsData);
+        setClients(clientsData.clients || []);
       } catch (error: any) {
         console.error("Помилка завантаження клієнтів:", error);
       }

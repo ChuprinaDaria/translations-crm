@@ -1910,9 +1910,22 @@ def generate_template_preview(
         sample_data = request.get("sample_data", {})
         
         # Завантажуємо шаблон HTML
-        template_dir = UPLOADS_DIR
-        env = Environment(loader=FileSystemLoader(str(template_dir)))
-        template = env.get_template("commercial-offer.html")
+        # Спочатку перевіряємо, чи є html_content в design
+        html_content = design.get("html_content")
+        if html_content:
+            # Використовуємо HTML контент напряму
+            from jinja2 import Template
+            template = Template(html_content)
+        else:
+            # Використовуємо файл з UPLOADS_DIR
+            template_dir = UPLOADS_DIR
+            env = Environment(loader=FileSystemLoader(str(template_dir)))
+            template_filename = design.get("filename", "commercial-offer.html")
+            try:
+                template = env.get_template(template_filename)
+            except Exception as e:
+                # Якщо файл не знайдено, використовуємо дефолтний
+                template = env.get_template("commercial-offer.html")
         
         # Підготовка конфігурації шаблону
         template_config = {
@@ -1962,10 +1975,34 @@ def generate_template_preview(
         service_total = parse_amount(sample_data.get('service_total', 0))
         transport_total = parse_amount(sample_data.get('transport_total', 0))
         
-        # Отримуємо зображення з design (можуть бути base64 data URLs)
+        # Отримуємо зображення з design (можуть бути base64 data URLs або file:// шляхи)
         logo_src = design.get('logo_image') or None
         header_image_src = design.get('header_image') or None
         background_image_src = design.get('background_image') or None
+        
+        # Перевіряємо, чи це base64 data URL, і якщо так, залишаємо як є (WeasyPrint підтримує)
+        # Якщо це file:// шлях, також залишаємо як є
+        # Якщо це відносний шлях, конвертуємо в абсолютний
+        def process_image_src(src):
+            if not src:
+                return None
+            if isinstance(src, str):
+                # Якщо це вже data URL або file:// URL, залишаємо як є
+                if src.startswith('data:') or src.startswith('file://'):
+                    return src
+                # Якщо це відносний шлях, конвертуємо в абсолютний file:// URL
+                if not src.startswith('/') and not src.startswith('http'):
+                    try:
+                        img_path = (BASE_DIR / src).resolve()
+                        if img_path.exists():
+                            return f"file://{img_path}"
+                    except Exception:
+                        pass
+            return src
+        
+        logo_src = process_image_src(logo_src)
+        header_image_src = process_image_src(header_image_src)
+        background_image_src = process_image_src(background_image_src)
         
         # Готуємо формати для прев'ю (для простоти – один формат на основі sample_data.kp)
         sample_kp = sample_data.get('kp', {})
@@ -2080,10 +2117,15 @@ def generate_template_preview(
         )
         
     except Exception as e:
-        print(f"Error generating template preview: {e}")
         import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error generating preview: {str(e)}")
+        error_traceback = traceback.format_exc()
+        print(f"Error generating template preview: {e}")
+        print(f"Traceback: {error_traceback}")
+        # Повертаємо детальну інформацію про помилку для дебагу
+        error_detail = f"Error generating preview: {str(e)}"
+        if hasattr(e, '__cause__') and e.__cause__:
+            error_detail += f" | Cause: {str(e.__cause__)}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.post("/templates/upload-image")

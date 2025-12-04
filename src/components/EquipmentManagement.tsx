@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -692,6 +693,9 @@ export function EquipmentManagement() {
             <DialogTitle>
               {editingItem ? 'Редагувати обладнання' : 'Нове обладнання'}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? 'Оновіть інформацію про обладнання' : 'Додайте нове обладнання до бази'}
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={editingItem ? handleUpdateItem : handleCreateItem} className="space-y-4">
@@ -886,6 +890,9 @@ export function EquipmentManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Нова підкатегорія</DialogTitle>
+            <DialogDescription>
+              Створіть нову підкатегорію для обладнання
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleCreateSubcategory} className="space-y-4">

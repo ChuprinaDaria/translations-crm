@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -67,14 +67,19 @@ export function ClientDetailsDialog({ client, isOpen, onClose, onEdit }: ClientD
                 <p className="text-sm text-gray-500 font-normal">{client.company_name}</p>
               )}
             </div>
-            {onEdit && (
-              <Button variant="outline" size="sm" onClick={onEdit}>
-                <Edit className="w-4 h-4 mr-2" />
-                Редагувати
-              </Button>
-            )}
           </DialogTitle>
+          <DialogDescription>
+            Детальна інформація про клієнта та його замовлення
+          </DialogDescription>
         </DialogHeader>
+        {onEdit && (
+          <div className="mb-4">
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Edit className="w-4 h-4 mr-2" />
+              Редагувати
+            </Button>
+          </div>
+        )}
         
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

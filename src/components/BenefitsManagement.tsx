@@ -16,6 +16,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -263,6 +264,9 @@ export function BenefitsManagement() {
             <DialogTitle>
               {editingBenefit ? "Редагувати бенфіт" : "Новий бенфіт"}
             </DialogTitle>
+            <DialogDescription>
+              {editingBenefit ? "Оновіть інформацію про бенфіт" : "Створіть новий бенфіт для системи лояльності"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">

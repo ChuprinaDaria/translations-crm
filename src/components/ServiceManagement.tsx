@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -692,6 +693,9 @@ export function ServiceManagement() {
             <DialogTitle>
               {editingItem ? 'Редагувати послугу' : 'Нова послуга'}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? 'Оновіть інформацію про послугу' : 'Додайте нову послугу до бази'}
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={editingItem ? handleUpdateItem : handleCreateItem} className="space-y-4">
@@ -886,6 +890,9 @@ export function ServiceManagement() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Нова підкатегорія</DialogTitle>
+            <DialogDescription>
+              Створіть нову підкатегорію для послуг
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleCreateSubcategory} className="space-y-4">

@@ -24,6 +24,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -205,6 +206,9 @@ export function SalesDepartment() {
             <DialogTitle>
               Анкета клієнта: {selectedClient?.name}
             </DialogTitle>
+            <DialogDescription>
+              Заповніть або оновіть анкету клієнта для відділу продажів
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
