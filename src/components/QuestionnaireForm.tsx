@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Save, Loader2, Upload, X, Image as ImageIcon, Check, Plus } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Upload, X, Image as ImageIcon, Check, Plus, ZoomIn } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -20,6 +20,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "./ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 
 interface QuestionnaireFormProps {
   questionnaireId?: number;
@@ -48,12 +61,26 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
   // Фото
   const [venuePhotos, setVenuePhotos] = useState<string[]>([]);
   const [arrivalPhotos, setArrivalPhotos] = useState<string[]>([]);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   // Обладнання
   const [allEquipment, setAllEquipment] = useState<Item[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<Item[]>([]);
   const [equipmentOpen, setEquipmentOpen] = useState(false);
   const [customEquipmentNote, setCustomEquipmentNote] = useState("");
+
+  // Обладнання для кухні
+  const [dishServingEquipment, setDishServingEquipment] = useState<Item[]>([]);
+  const [dishServingOpen, setDishServingOpen] = useState(false);
+  const [customDishServing, setCustomDishServing] = useState("");
+
+  const [hotSnacksEquipment, setHotSnacksEquipment] = useState<Item[]>([]);
+  const [hotSnacksOpen, setHotSnacksOpen] = useState(false);
+  const [customHotSnacks, setCustomHotSnacks] = useState("");
+
+  const [saladEquipment, setSaladEquipment] = useState<Item[]>([]);
+  const [saladOpen, setSaladOpen] = useState(false);
+  const [customSalad, setCustomSalad] = useState("");
 
   useEffect(() => {
     if (questionnaireId) {
@@ -119,7 +146,7 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         const selected = allEquipment.filter(eq => ids.includes(eq.id));
         setSelectedEquipment(selected);
         
-        // Витягуємо кастомний коментар (все після останнього обладнання)
+        // Витягуємо кастомний коментар
         if (data.equipment_notes) {
           const equipmentNames = selected.map(eq => eq.name);
           const parts = data.equipment_notes.split(';').map(p => p.trim());
@@ -127,8 +154,52 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
           setCustomEquipmentNote(custom);
         }
       } else if (data.equipment_notes) {
-        // Старий формат - просто текст
         setCustomEquipmentNote(data.equipment_notes);
+      }
+
+      // Парсимо посуд для подачі
+      if ((data as any).dish_serving_equipment_ids && allEquipment.length > 0) {
+        const ids = (data as any).dish_serving_equipment_ids;
+        const selected = allEquipment.filter(eq => ids.includes(eq.id));
+        setDishServingEquipment(selected);
+        if (data.dish_serving) {
+          const names = selected.map(eq => eq.name);
+          const parts = data.dish_serving.split(';').map(p => p.trim());
+          const custom = parts.filter(p => !names.includes(p)).join('; ');
+          setCustomDishServing(custom);
+        }
+      } else if (data.dish_serving) {
+        setCustomDishServing(data.dish_serving);
+      }
+
+      // Парсимо гарячі закуски
+      if ((data as any).hot_snacks_equipment_ids && allEquipment.length > 0) {
+        const ids = (data as any).hot_snacks_equipment_ids;
+        const selected = allEquipment.filter(eq => ids.includes(eq.id));
+        setHotSnacksEquipment(selected);
+        if (data.hot_snacks_serving) {
+          const names = selected.map(eq => eq.name);
+          const parts = data.hot_snacks_serving.split(';').map(p => p.trim());
+          const custom = parts.filter(p => !names.includes(p)).join('; ');
+          setCustomHotSnacks(custom);
+        }
+      } else if (data.hot_snacks_serving) {
+        setCustomHotSnacks(data.hot_snacks_serving);
+      }
+
+      // Парсимо салати
+      if ((data as any).salad_equipment_ids && allEquipment.length > 0) {
+        const ids = (data as any).salad_equipment_ids;
+        const selected = allEquipment.filter(eq => ids.includes(eq.id));
+        setSaladEquipment(selected);
+        if (data.salad_serving) {
+          const names = selected.map(eq => eq.name);
+          const parts = data.salad_serving.split(';').map(p => p.trim());
+          const custom = parts.filter(p => !names.includes(p)).join('; ');
+          setCustomSalad(custom);
+        }
+      } else if (data.salad_serving) {
+        setCustomSalad(data.salad_serving);
       }
       
       setIsCreatingNew(false);
@@ -165,6 +236,21 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         customEquipmentNote
       ].filter(Boolean).join('; ');
 
+      const dishServingText = [
+        ...dishServingEquipment.map(eq => eq.name),
+        customDishServing
+      ].filter(Boolean).join('; ');
+
+      const hotSnacksText = [
+        ...hotSnacksEquipment.map(eq => eq.name),
+        customHotSnacks
+      ].filter(Boolean).join('; ');
+
+      const saladText = [
+        ...saladEquipment.map(eq => eq.name),
+        customSalad
+      ].filter(Boolean).join('; ');
+
       // Додаємо URL фото та обладнання
       const questionnaireData = {
         ...formData,
@@ -172,6 +258,12 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         arrival_photos_urls: arrivalPhotos,
         equipment_notes: equipmentText,
         selected_equipment_ids: selectedEquipment.map(eq => eq.id), // Зберігаємо ID для подальшого використання в КП
+        dish_serving: dishServingText,
+        dish_serving_equipment_ids: dishServingEquipment.map(eq => eq.id),
+        hot_snacks_serving: hotSnacksText,
+        hot_snacks_equipment_ids: hotSnacksEquipment.map(eq => eq.id),
+        salad_serving: saladText,
+        salad_equipment_ids: saladEquipment.map(eq => eq.id),
       };
 
       if (questionnaireId) {
@@ -386,21 +478,79 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
             </div>
             <div className="space-y-1">
               <Label className="text-sm">Час початку заходу</Label>
-              <Input
-                value={formData.event_start_time || ""}
-                onChange={(e) => updateField("event_start_time", e.target.value)}
-                placeholder="10:00"
-                className="h-9"
-              />
+              <div className="flex gap-2">
+                <Select
+                  value={formData.event_start_time?.split(':')[0] || ""}
+                  onValueChange={(hour) => {
+                    const minute = formData.event_start_time?.split(':')[1] || "00";
+                    updateField("event_start_time", `${hour}:${minute}`);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-9">
+                    <SelectValue placeholder="ГГ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')).map(hour => (
+                      <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="flex items-center">:</span>
+                <Select
+                  value={formData.event_start_time?.split(':')[1] || ""}
+                  onValueChange={(minute) => {
+                    const hour = formData.event_start_time?.split(':')[0] || "10";
+                    updateField("event_start_time", `${hour}:${minute}`);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-9">
+                    <SelectValue placeholder="ХХ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['00', '15', '30', '45'].map(minute => (
+                      <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1">
               <Label className="text-sm">Час кінця заходу</Label>
-              <Input
-                value={formData.event_end_time || ""}
-                onChange={(e) => updateField("event_end_time", e.target.value)}
-                placeholder="18:00"
-                className="h-9"
-              />
+              <div className="flex gap-2">
+                <Select
+                  value={formData.event_end_time?.split(':')[0] || ""}
+                  onValueChange={(hour) => {
+                    const minute = formData.event_end_time?.split(':')[1] || "00";
+                    updateField("event_end_time", `${hour}:${minute}`);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-9">
+                    <SelectValue placeholder="ГГ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')).map(hour => (
+                      <SelectItem key={hour} value={hour}>{hour}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="flex items-center">:</span>
+                <Select
+                  value={formData.event_end_time?.split(':')[1] || ""}
+                  onValueChange={(minute) => {
+                    const hour = formData.event_end_time?.split(':')[0] || "18";
+                    updateField("event_end_time", `${hour}:${minute}`);
+                  }}
+                >
+                  <SelectTrigger className="w-20 h-9">
+                    <SelectValue placeholder="ХХ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['00', '15', '30', '45'].map(minute => (
+                      <SelectItem key={minute} value={minute}>{minute}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label className="text-sm">Таймінги всіх видач</Label>
@@ -585,23 +735,43 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
               <div className="flex flex-wrap gap-2">
                 {venuePhotos.map((photo, idx) => (
                   <div key={idx} className="relative group">
-                    <img src={photo} alt={`Venue ${idx + 1}`} className="w-20 h-20 object-cover rounded border" />
+                    <div 
+                      className="w-24 h-24 relative overflow-hidden rounded border border-gray-300 cursor-pointer hover:border-orange-500 transition"
+                      onClick={() => setViewingPhoto(photo)}
+                    >
+                      <img 
+                        src={photo} 
+                        alt={`Venue ${idx + 1}`} 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition flex items-center justify-center">
+                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                      </div>
+                    </div>
                     <button
-                      onClick={() => removePhoto(idx, 'venue')}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePhoto(idx, 'venue');
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition z-10"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-orange-500 transition">
+                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition gap-1">
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'venue')}
+                    onChange={(e) => {
+                      Array.from(e.target.files || []).forEach(file => handlePhotoUpload(file, 'venue'));
+                      e.target.value = '';
+                    }}
                   />
                   <Upload className="w-6 h-6 text-gray-400" />
+                  <span className="text-xs text-gray-500">Додати</span>
                 </label>
               </div>
             </div>
@@ -618,23 +788,43 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
               <div className="flex flex-wrap gap-2">
                 {arrivalPhotos.map((photo, idx) => (
                   <div key={idx} className="relative group">
-                    <img src={photo} alt={`Arrival ${idx + 1}`} className="w-20 h-20 object-cover rounded border" />
+                    <div 
+                      className="w-24 h-24 relative overflow-hidden rounded border border-gray-300 cursor-pointer hover:border-orange-500 transition"
+                      onClick={() => setViewingPhoto(photo)}
+                    >
+                      <img 
+                        src={photo} 
+                        alt={`Arrival ${idx + 1}`} 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition flex items-center justify-center">
+                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                      </div>
+                    </div>
                     <button
-                      onClick={() => removePhoto(idx, 'arrival')}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePhoto(idx, 'arrival');
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition z-10"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-orange-500 transition">
+                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition gap-1">
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0], 'arrival')}
+                    onChange={(e) => {
+                      Array.from(e.target.files || []).forEach(file => handlePhotoUpload(file, 'arrival'));
+                      e.target.value = '';
+                    }}
                   />
                   <Upload className="w-6 h-6 text-gray-400" />
+                  <span className="text-xs text-gray-500">Додати</span>
                 </label>
               </div>
             </div>
@@ -649,29 +839,205 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-sm">Посуд для подачі страв</Label>
-              <Input
-                value={formData.dish_serving || ""}
-                onChange={(e) => updateField("dish_serving", e.target.value)}
-                className="h-9"
-              />
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-semibold">Посуд для подачі страв</Label>
+              <Popover open={dishServingOpen} onOpenChange={setDishServingOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-auto min-h-[2.5rem]"
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {dishServingEquipment.length > 0 ? (
+                        dishServingEquipment.map((item) => (
+                          <span
+                            key={item.id}
+                            className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs"
+                          >
+                            {item.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500">Виберіть посуд...</span>
+                      )}
+                    </div>
+                    <Plus className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Пошук посуду..." />
+                    <CommandEmpty>Посуд не знайдено</CommandEmpty>
+                    <CommandGroup className="max-h-64 overflow-auto">
+                      {allEquipment.map((item) => {
+                        const isSelected = dishServingEquipment.some((eq) => eq.id === item.id);
+                        return (
+                          <CommandItem
+                            key={item.id}
+                            onSelect={() => {
+                              if (isSelected) {
+                                setDishServingEquipment(dishServingEquipment.filter((eq) => eq.id !== item.id));
+                              } else {
+                                setDishServingEquipment([...dishServingEquipment, item]);
+                              }
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">{item.name}</div>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {dishServingEquipment.length > 0 && (
+                <Input
+                  value={customDishServing}
+                  onChange={(e) => setCustomDishServing(e.target.value)}
+                  placeholder="Додатковий коментар..."
+                  className="h-9 text-sm"
+                />
+              )}
             </div>
-            <div className="space-y-1">
-              <Label className="text-sm">Подача гарячих закусок</Label>
-              <Input
-                value={formData.hot_snacks_serving || ""}
-                onChange={(e) => updateField("hot_snacks_serving", e.target.value)}
-                className="h-9"
-              />
+
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-semibold">Подача гарячих закусок</Label>
+              <Popover open={hotSnacksOpen} onOpenChange={setHotSnacksOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-auto min-h-[2.5rem]"
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {hotSnacksEquipment.length > 0 ? (
+                        hotSnacksEquipment.map((item) => (
+                          <span
+                            key={item.id}
+                            className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs"
+                          >
+                            {item.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500">Виберіть посуд...</span>
+                      )}
+                    </div>
+                    <Plus className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Пошук посуду..." />
+                    <CommandEmpty>Посуд не знайдено</CommandEmpty>
+                    <CommandGroup className="max-h-64 overflow-auto">
+                      {allEquipment.map((item) => {
+                        const isSelected = hotSnacksEquipment.some((eq) => eq.id === item.id);
+                        return (
+                          <CommandItem
+                            key={item.id}
+                            onSelect={() => {
+                              if (isSelected) {
+                                setHotSnacksEquipment(hotSnacksEquipment.filter((eq) => eq.id !== item.id));
+                              } else {
+                                setHotSnacksEquipment([...hotSnacksEquipment, item]);
+                              }
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">{item.name}</div>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {hotSnacksEquipment.length > 0 && (
+                <Input
+                  value={customHotSnacks}
+                  onChange={(e) => setCustomHotSnacks(e.target.value)}
+                  placeholder="Додатковий коментар..."
+                  className="h-9 text-sm"
+                />
+              )}
             </div>
-            <div className="space-y-1">
-              <Label className="text-sm">Подання салатів</Label>
-              <Input
-                value={formData.salad_serving || ""}
-                onChange={(e) => updateField("salad_serving", e.target.value)}
-                className="h-9"
-              />
+
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-semibold">Подання салатів</Label>
+              <Popover open={saladOpen} onOpenChange={setSaladOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-auto min-h-[2.5rem]"
+                  >
+                    <div className="flex flex-wrap gap-1">
+                      {saladEquipment.length > 0 ? (
+                        saladEquipment.map((item) => (
+                          <span
+                            key={item.id}
+                            className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs"
+                          >
+                            {item.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500">Виберіть посуд...</span>
+                      )}
+                    </div>
+                    <Plus className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Пошук посуду..." />
+                    <CommandEmpty>Посуд не знайдено</CommandEmpty>
+                    <CommandGroup className="max-h-64 overflow-auto">
+                      {allEquipment.map((item) => {
+                        const isSelected = saladEquipment.some((eq) => eq.id === item.id);
+                        return (
+                          <CommandItem
+                            key={item.id}
+                            onSelect={() => {
+                              if (isSelected) {
+                                setSaladEquipment(saladEquipment.filter((eq) => eq.id !== item.id));
+                              } else {
+                                setSaladEquipment([...saladEquipment, item]);
+                              }
+                            }}
+                          >
+                            <Check
+                              className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium">{item.name}</div>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {saladEquipment.length > 0 && (
+                <Input
+                  value={customSalad}
+                  onChange={(e) => setCustomSalad(e.target.value)}
+                  placeholder="Додатковий коментар..."
+                  className="h-9 text-sm"
+                />
+              )}
             </div>
             <div className="space-y-1">
               <Label className="text-sm">Чи є алергія на продукти</Label>
@@ -821,6 +1187,22 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
           )}
         </Button>
       </div>
+
+      {/* Модалка для перегляду фото */}
+      <Dialog open={!!viewingPhoto} onOpenChange={() => setViewingPhoto(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+          <DialogHeader>
+            <DialogTitle>Перегляд фото</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-4">
+            <img 
+              src={viewingPhoto || ""} 
+              alt="Full size" 
+              className="max-w-full max-h-[75vh] object-contain rounded"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

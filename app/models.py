@@ -389,8 +389,11 @@ class ClientQuestionnaire(Base):
     
     # КУХНЯ
     dish_serving = Column(String(200), nullable=True)  # Посуд для подачі страв
+    dish_serving_equipment_ids = Column(JSON, nullable=True)  # ID обладнання для подачі страв
     hot_snacks_serving = Column(String(200), nullable=True)  # Подача гарячих закусок
+    hot_snacks_equipment_ids = Column(JSON, nullable=True)  # ID обладнання для гарячих закусок
     salad_serving = Column(String(200), nullable=True)  # Подання салатів
+    salad_equipment_ids = Column(JSON, nullable=True)  # ID обладнання для салатів
     product_allergy = Column(String(200), nullable=True)  # Чи є алергія на продукти
     vegetarians = Column(Boolean, default=False)  # Чи є вегетаріанці
     
