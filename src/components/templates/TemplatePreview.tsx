@@ -176,11 +176,15 @@ export function TemplatePreview({
         )}
 
         {pdfUrl ? (
-          <iframe
-            src={pdfUrl}
-            className="w-full h-full border-0"
-            title="Template Preview"
-          />
+          <div className="w-full h-full flex items-start justify-center py-4">
+            <div className="w-[900px] max-w-full h-[calc(100vh-180px)] bg-white shadow-lg border">
+              <iframe
+                src={pdfUrl}
+                className="w-full h-full border-0"
+                title="Template Preview"
+              />
+            </div>
+          </div>
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">

@@ -153,16 +153,16 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
 
       {/* Split Screen */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Preview (ліворуч 60%) */}
-        <div className="w-3/5 border-r">
+        {/* Preview (ліворуч, займає максимум простору) */}
+        <div className="flex-1 min-w-[720px] border-r bg-gray-100">
           <TemplatePreview
             design={formData}
             templateName={formData.name}
           />
         </div>
 
-        {/* Settings Panel (праворуч 40%) */}
-        <div className="w-2/5 flex flex-col">
+        {/* Settings Panel (праворуч, фіксована ширина) */}
+        <div className="w-full max-w-md flex flex-col">
           <Tabs defaultValue="design" className="flex-1 flex flex-col">
             <TabsList className="w-full justify-start px-4 border-b rounded-none">
               <TabsTrigger value="design" className="gap-2">
@@ -252,9 +252,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
 
                 {/* Зображення */}
                 <div>
-                  <h3 className="text-sm font-semibold mb-3">Зображення</h3>
+                  <h3 className="text-sm font-semibold mb-1">Зображення</h3>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Спочатку завантаж логотип, а нижче — широку картинку шапки PDF (банер над меню).
+                  </p>
                   <ImageUploader
-                    label="Логотип компанії"
+                    label="Логотип компанії (лівий верхній кут)"
                     currentImage={template?.header_image_url || formData.logo_image}
                     onUpload={(file) => setFormData({ ...formData, logo_image: file })}
                     onRemove={() => setFormData({ ...formData, logo_image: null })}
@@ -262,7 +265,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
                     maxSize="2MB"
                   />
                   <ImageUploader
-                    label="Зображення шапки (опціонально)"
+                    label="Зображення шапки сторінки (банер)"
                     currentImage={template?.header_image_url || formData.header_image}
                     onUpload={(file) => setFormData({ ...formData, header_image: file })}
                     onRemove={() => setFormData({ ...formData, header_image: null })}
