@@ -53,10 +53,11 @@ export function SalesDepartment() {
     try {
       setIsLoading(true);
       const data = await clientsApi.getClients(0, 100, searchQuery);
-      setClients(data.clients);
+      setClients(data?.clients || []);
     } catch (error: any) {
       toast.error("Помилка завантаження клієнтів");
       console.error(error);
+      setClients([]); // Встановлюємо порожній масив при помилці
     } finally {
       setIsLoading(false);
     }
@@ -156,7 +157,7 @@ export function SalesDepartment() {
                       <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" />
                     </TableCell>
                   </TableRow>
-                ) : clients.length === 0 ? (
+                ) : !clients || clients.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                       Клієнти не знайдено

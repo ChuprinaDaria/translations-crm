@@ -366,7 +366,7 @@
             {% endif %}
             
             {% for section in menu_sections %}
-            {% set section_items = fmt.items | selectattr('category_name', 'equalto', section) | list %}
+            {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
             <div class="category-title">{{ section }}</div>
             
             {% if section_items %}
