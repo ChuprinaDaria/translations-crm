@@ -66,7 +66,13 @@ export function AllQuestionnaires({ onEdit }: AllQuestionnairesProps) {
   const handleDownloadPDF = async (questionnaireId: number) => {
     try {
       toast.info("Генерація PDF...");
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/questionnaires/${questionnaireId}/pdf`, {
+      
+      // Використовуємо API_BASE_URL з конфігурації
+      const API_BASE = window.location.origin.includes('localhost') 
+        ? 'http://localhost:8000/api' 
+        : '/api';
+      
+      const response = await fetch(`${API_BASE}/questionnaires/${questionnaireId}/pdf`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
