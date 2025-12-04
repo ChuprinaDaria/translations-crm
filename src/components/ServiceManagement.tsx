@@ -42,14 +42,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import { Textarea } from "./ui/textarea";
 import { Switch } from "./ui/switch";
 
@@ -454,7 +446,7 @@ export function ServiceManagement() {
             </CardContent>
           </Card>
 
-          {/* Items Table */}
+          {/* Items Grid */}
           {loading ? (
             <Card>
               <CardContent className="p-12 text-center">
@@ -482,166 +474,88 @@ export function ServiceManagement() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                {/* Mobile layout */}
-                <div className="md:hidden divide-y">
-                  {filteredItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-2 p-3"
-                    >
-                      <div className="w-full flex justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredItems.map((item) => (
+                <Card
+                  key={item.id}
+                  className="hover:shadow-md transition-shadow h-full"
+                >
+                  <CardContent className="p-4 flex flex-col h-full">
+                    <div className="flex gap-3 mb-3">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0">
                         {item.photo_url ? (
                           <img
                             src={getImageUrl(item.photo_url) || ""}
                             alt={item.name}
-                            className="w-20 h-20 object-cover rounded border border-gray-200"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         ) : (
-                          <div className="w-20 h-20 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[10px] leading-tight text-gray-400 text-center px-2">
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
                             Нема фото
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 space-y-2 pt-1">
-                        <div>
-                          <div className="text-gray-900 font-medium leading-snug line-clamp-2">
-                            {item.name}
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {item.subcategory?.category?.name}
-                            {item.subcategory?.name
-                              ? ` • ${item.subcategory.name}`
-                              : ""}
-                          </div>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <div className="text-[#FF5A00] font-semibold text-sm">
-                            {item.price} грн
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge variant={item.active ? "default" : "secondary"}>
-                            {item.active ? "Активне" : "Неактивне"}
-                          </Badge>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEditItem(item)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => {
-                                setItemToDelete(item);
-                                setIsDeleteItemDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate mb-1">
+                          {item.name}
+                        </h3>
+                        {item.description && (
+                          <p className="text-sm text-gray-500 line-clamp-2">
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.subcategory?.category?.name}
+                          {item.subcategory?.name
+                            ? ` • ${item.subcategory.name}`
+                            : ""}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                {/* Desktop layout */}
-                <div className="hidden md:block">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">Фото</TableHead>
-                          <TableHead>Обслуговування</TableHead>
-                          <TableHead className="whitespace-nowrap">Ціна</TableHead>
-                          <TableHead className="whitespace-nowrap">Статус</TableHead>
-                          <TableHead className="w-[90px] text-right whitespace-nowrap">Дії</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              {item.photo_url ? (
-                                <img
-                                  src={getImageUrl(item.photo_url) || ""}
-                                  alt={item.name}
-                                  className="w-12 h-12 object-cover rounded border border-gray-200"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-12 h-12 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[8px] leading-tight text-gray-400 text-center px-1">
-                                  Нема фото
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="text-gray-900 font-medium leading-snug max-w-xs line-clamp-2">
-                                {item.name}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {item.subcategory?.category?.name}
-                                {item.subcategory?.name
-                                  ? ` • ${item.subcategory.name}`
-                                  : ""}
-                              </div>
-                              {item.description && (
-                                <div className="hidden xl:block text-xs text-gray-500 max-w-xs truncate">
-                                  {item.description}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="text-[#FF5A00] font-medium">
-                                {item.price} грн
-                              </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <Badge variant={item.active ? "default" : "secondary"}>
-                                {item.active ? "Активне" : "Неактивне"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditItem(item)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setItemToDelete(item);
-                                    setIsDeleteItemDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="flex items-center justify-between mb-3 text-sm">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {item.price} грн
+                        </div>
+                      </div>
+                      <Badge
+                        variant={item.active ? "default" : "secondary"}
+                        className={
+                          item.active ? "bg-green-100 text-green-800" : ""
+                        }
+                      >
+                        {item.active ? "Активне" : "Неактивне"}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-auto flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 flex items-center justify-center gap-1 text-sm"
+                        onClick={() => handleEditItem(item)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                        <span>Редагувати</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-3 py-2 text-sm border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => {
+                          setItemToDelete(item);
+                          setIsDeleteItemDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 

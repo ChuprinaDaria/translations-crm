@@ -46,14 +46,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
 import { Textarea } from "./ui/textarea";
 import { Switch } from "./ui/switch";
 
@@ -661,7 +653,7 @@ export function MenuManagement() {
             </CardContent>
           </Card>
 
-          {/* Items Table */}
+          {/* Items Grid */}
           {loading ? (
             <Card>
               <CardContent className="p-12 text-center">
@@ -689,177 +681,91 @@ export function MenuManagement() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="p-0">
-                {/* Mobile layout: компактні картки без горизонтального скролу */}
-                <div className="md:hidden divide-y">
-                  {filteredItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-2 p-3"
-                    >
-                      {/* Фото */}
-                      <div className="w-full flex justify-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredItems.map((item) => (
+                <Card
+                  key={item.id}
+                  className="hover:shadow-md transition-shadow h-full"
+                >
+                  <CardContent className="p-4 flex flex-col h-full">
+                    <div className="flex gap-3 mb-3">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0">
                         {item.photo_url ? (
                           <img
                             src={getImageUrl(item.photo_url) || ""}
                             alt={item.name}
-                            className="w-20 h-20 object-cover rounded border border-gray-200"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         ) : (
-                          <div className="w-20 h-20 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[10px] leading-tight text-gray-400 text-center px-2">
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
                             Нема фото
                           </div>
                         )}
                       </div>
-
-                      {/* Контент */}
-                      <div className="flex-1 space-y-2 pt-1">
-                        <div>
-                          <div className="text-gray-900 font-medium leading-snug line-clamp-2">
-                            {item.name}
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {item.subcategory?.category?.name}
-                            {item.subcategory?.name
-                              ? ` • ${item.subcategory.name}`
-                              : ""}
-                          </div>
-                        </div>
-
-                        <div className="flex items-baseline justify-between gap-2">
-                          <div className="text-[#FF5A00] font-semibold text-sm">
-                            {item.price} грн
-                          </div>
-                          <div className="text-[11px] text-gray-500">
-                            {item.weight ? `${item.weight}${item.unit}` : "-"}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge variant={item.active ? "default" : "secondary"}>
-                            {item.active ? "В меню" : "Неактивна"}
-                          </Badge>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEditItem(item)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => {
-                                setItemToDelete(item);
-                                setIsDeleteItemDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate mb-1">
+                          {item.name}
+                        </h3>
+                        {item.description && (
+                          <p className="text-sm text-gray-500 line-clamp-2">
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.subcategory?.category?.name}
+                          {item.subcategory?.name
+                            ? ` • ${item.subcategory.name}`
+                            : ""}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                {/* Desktop / tablet layout: таблиця */}
-                <div className="hidden md:block">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">Фото</TableHead>
-                          <TableHead>Страва</TableHead>
-                          <TableHead className="whitespace-nowrap">Ціна / вага</TableHead>
-                          <TableHead className="whitespace-nowrap">Статус</TableHead>
-                          <TableHead className="w-[90px] text-right whitespace-nowrap">Дії</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              {item.photo_url ? (
-                                <img
-                                  src={getImageUrl(item.photo_url) || ""}
-                                  alt={item.name}
-                                  className="w-12 h-12 object-cover rounded border border-gray-200"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-12 h-12 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-[8px] leading-tight text-gray-400 text-center px-1">
-                                  Нема фото
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="text-gray-900 font-medium leading-snug max-w-xs line-clamp-2">
-                                {item.name}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {item.subcategory?.category?.name}
-                                {item.subcategory?.name
-                                  ? ` • ${item.subcategory.name}`
-                                  : ""}
-                              </div>
-                              {item.description && (
-                                <div className="hidden xl:block text-xs text-gray-500 max-w-xs truncate">
-                                  {item.description}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="text-[#FF5A00] font-medium">
-                                {item.price} грн
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {item.weight ? `${item.weight}${item.unit}` : "-"}
-                              </div>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <Badge variant={item.active ? "default" : "secondary"}>
-                                {item.active ? "В меню" : "Неактивна"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="align-top">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditItem(item)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setItemToDelete(item);
-                                    setIsDeleteItemDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="flex items-center justify-between mb-3 text-sm">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {item.price} грн
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {item.weight ? `${item.weight}${item.unit}` : "-"}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={item.active ? "default" : "secondary"}
+                        className={
+                          item.active ? "bg-green-100 text-green-800" : ""
+                        }
+                      >
+                        {item.active ? "В меню" : "Неактивна"}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-auto flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 flex items-center justify-center gap-1 text-sm"
+                        onClick={() => handleEditItem(item)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                        <span>Редагувати</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-3 py-2 text-sm border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => {
+                          setItemToDelete(item);
+                          setIsDeleteItemDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 
@@ -1107,292 +1013,17 @@ export function MenuManagement() {
             </div>
           )}
 
-          {/* Форма створення / редагування меню */}
-          <Dialog
-            open={isMenuFormOpen}
-            onOpenChange={(open) => {
-              setIsMenuFormOpen(open);
-              if (!open) {
-                resetMenuForm();
-              }
-            }}
-          >
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {selectedMenu ? "Редагувати меню" : "Нове меню"}
-                </DialogTitle>
-              </DialogHeader>
-
-              <form
-                onSubmit={handleSaveMenu}
-                className="space-y-4"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="menu-name">Назва меню *</Label>
-                    <Input
-                      id="menu-name"
-                      value={menuForm.name}
-                      onChange={(e) =>
-                        setMenuForm((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      placeholder="Наприклад, Фуршет 55 осіб"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="menu-format">Формат</Label>
-                    <Input
-                      id="menu-format"
-                      value={menuForm.event_format}
-                      onChange={(e) =>
-                        setMenuForm((prev) => ({
-                          ...prev,
-                          event_format: e.target.value,
-                        }))
-                      }
-                      placeholder="Фуршет, Банкет, Кава-брейк..."
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="menu-people">Кількість гостей</Label>
-                    <Input
-                      id="menu-people"
-                      type="number"
-                      min={1}
-                      value={menuForm.people_count}
-                      onChange={(e) =>
-                        setMenuForm((prev) => ({
-                          ...prev,
-                          people_count: e.target.value,
-                        }))
-                      }
-                      placeholder="Наприклад, 55"
-                    />
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <Label htmlFor="menu-description">Опис</Label>
-                    <Textarea
-                      id="menu-description"
-                      value={menuForm.description}
-                      onChange={(e) =>
-                        setMenuForm((prev) => ({
-                          ...prev,
-                          description: e.target.value,
-                        }))
-                      }
-                      rows={3}
-                      placeholder="Короткий опис меню для команди"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      Виберіть страви для меню
-                    </h3>
-                  </div>
-
-                  {/* Пошук */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      placeholder="Пошук страв..."
-                      value={menuFormSearchQuery}
-                      onChange={(e) => setMenuFormSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-
-                  {/* Фільтри по категоріях */}
-                  {allMenuCategories.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      <span className="text-sm text-gray-600 py-1">Категорії:</span>
-                      {allMenuCategories.map((category) => (
-                        <Badge
-                          key={category}
-                          variant={menuFormSelectedCategories.includes(category) ? "default" : "outline"}
-                          className={`cursor-pointer ${
-                            menuFormSelectedCategories.includes(category)
-                              ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                              : "hover:bg-gray-100"
-                          }`}
-                          onClick={() => toggleMenuCategory(category)}
-                        >
-                          {category}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Сітка страв */}
-                  {filteredMenuItems.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-                      <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500">
-                        Не знайдено страв за вашим запитом
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1 border rounded-lg">
-                      {filteredMenuItems.map((item) => {
-                        const isSelected = isMenuItemSelected(item.id);
-                        const quantity = getMenuItemQuantity(item.id);
-                        return (
-                          <div
-                            key={item.id}
-                            onClick={() => toggleMenuItem(item.id, 1)}
-                            className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
-                              isSelected
-                                ? "border-[#FF5A00] bg-[#FF5A00]/5"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex gap-2">
-                              <div className="w-12 h-12 rounded-md overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
-                                {item.photo_url ? (
-                                  <img
-                                    src={getImageUrl(item.photo_url) || ""}
-                                    alt={item.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).style.display = "none";
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-[8px] text-gray-400 text-center px-1">
-                                    Нема фото
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <h4 className="text-sm font-medium text-gray-900 truncate">
-                                    {item.name}
-                                  </h4>
-                                  <div className="flex items-center gap-2">
-                                    {isSelected && (
-                                      <span className="text-xs text-[#FF5A00] font-medium">
-                                        ×{quantity}
-                                      </span>
-                                    )}
-                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                                      isSelected
-                                        ? "border-[#FF5A00] bg-[#FF5A00]"
-                                        : "border-gray-300"
-                                    }`}>
-                                      {isSelected && (
-                                        <span className="text-white text-xs">✓</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                {item.description && (
-                                  <p className="text-xs text-gray-600 line-clamp-1 mb-1">
-                                    {item.description}
-                                  </p>
-                                )}
-                                <div className="flex items-center justify-between">
-                                  <div className="text-xs text-gray-600">
-                                    {item.weight ? `${item.weight}${item.unit}` : '-'}
-                                  </div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {item.price} грн
-                                  </div>
-                                </div>
-                                {item.subcategory && (
-                                  <Badge variant="outline" className="mt-1 text-xs">
-                                    {item.subcategory.name}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Вибрані страви */}
-                  {menuForm.items.length > 0 && (
-                    <div className="space-y-2 border-t pt-4">
-                      <h4 className="text-sm font-medium text-gray-900">
-                        Вибрані страви ({menuForm.items.length})
-                      </h4>
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                        {menuForm.items.map((mi, index) => {
-                          const item = items.find((it) => it.id === mi.item_id);
-                          if (!item) return null;
-                          return (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between gap-3 p-2 border rounded-lg bg-gray-50"
-                            >
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {item.photo_url && (
-                                  <img
-                                    src={getImageUrl(item.photo_url) || ""}
-                                    alt={item.name}
-                                    className="w-12 h-12 rounded object-cover border border-gray-200"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).style.display = "none";
-                                    }}
-                                  />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 truncate">
-                                    {item.name}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {item.price} грн × {mi.quantity} = {(item.price * mi.quantity).toFixed(2)} грн
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  value={mi.quantity}
-                                  onChange={(e) => {
-                                    const newQuantity = parseInt(e.target.value) || 1;
-                                    updateMenuFormItem(index, "quantity", newQuantity.toString());
-                                  }}
-                                  className="w-20"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeMenuFormItem(index)}
-                                  className="h-8 w-8"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="text-sm text-gray-600 pt-2 border-t">
-                        Загальна вартість:{" "}
-                        <span className="font-medium text-gray-900">
-                          {menuForm.items.reduce((sum, mi) => {
-                            const item = items.find((it) => it.id === mi.item_id);
-                            return sum + (item?.price || 0) * mi.quantity;
-                          }, 0).toFixed(2)} грн
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <DialogFooter>
+          {/* Форма створення / редагування меню (inline, без модалки) */}
+          {isMenuFormOpen && (
+            <Card>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {selectedMenu ? "Редагувати меню" : "Нове меню"}
+                  </h3>
                   <Button
-                    type="button"
                     variant="outline"
+                    size="sm"
                     onClick={() => {
                       setIsMenuFormOpen(false);
                       resetMenuForm();
@@ -1400,26 +1031,305 @@ export function MenuManagement() {
                   >
                     Скасувати
                   </Button>
-                  <Button
-                    type="submit"
-                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Збереження...
-                      </>
-                    ) : selectedMenu ? (
-                      "Зберегти меню"
-                    ) : (
-                      "Створити меню"
+                </div>
+
+                <form
+                  onSubmit={handleSaveMenu}
+                  className="space-y-4"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="menu-name">Назва меню *</Label>
+                      <Input
+                        id="menu-name"
+                        value={menuForm.name}
+                        onChange={(e) =>
+                          setMenuForm((prev) => ({ ...prev, name: e.target.value }))
+                        }
+                        placeholder="Наприклад, Фуршет 55 осіб"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="menu-format">Формат</Label>
+                      <Input
+                        id="menu-format"
+                        value={menuForm.event_format}
+                        onChange={(e) =>
+                          setMenuForm((prev) => ({
+                            ...prev,
+                            event_format: e.target.value,
+                          }))
+                        }
+                        placeholder="Фуршет, Банкет, Кава-брейк..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="menu-people">Кількість гостей</Label>
+                      <Input
+                        id="menu-people"
+                        type="number"
+                        min={1}
+                        value={menuForm.people_count}
+                        onChange={(e) =>
+                          setMenuForm((prev) => ({
+                            ...prev,
+                            people_count: e.target.value,
+                          }))
+                        }
+                        placeholder="Наприклад, 55"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label htmlFor="menu-description">Опис</Label>
+                      <Textarea
+                        id="menu-description"
+                        value={menuForm.description}
+                        onChange={(e) =>
+                          setMenuForm((prev) => ({
+                            ...prev,
+                            description: e.target.value,
+                          }))
+                        }
+                        rows={3}
+                        placeholder="Короткий опис меню для команди"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-gray-900">
+                        Виберіть страви для меню
+                      </h4>
+                    </div>
+
+                    {/* Пошук */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Пошук страв..."
+                        value={menuFormSearchQuery}
+                        onChange={(e) => setMenuFormSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+
+                    {/* Фільтри по категоріях */}
+                    {allMenuCategories.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        <span className="text-sm text-gray-600 py-1">Категорії:</span>
+                        {allMenuCategories.map((category) => (
+                          <Badge
+                            key={category}
+                            variant={menuFormSelectedCategories.includes(category) ? "default" : "outline"}
+                            className={`cursor-pointer ${
+                              menuFormSelectedCategories.includes(category)
+                                ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                                : "hover:bg-gray-100"
+                            }`}
+                            onClick={() => toggleMenuCategory(category)}
+                          >
+                            {category}
+                          </Badge>
+                        ))}
+                      </div>
                     )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+
+                    {/* Сітка страв */}
+                    {filteredMenuItems.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                        <Search className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">
+                          Не знайдено страв за вашим запитом
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1 border rounded-lg">
+                        {filteredMenuItems.map((item) => {
+                          const isSelected = isMenuItemSelected(item.id);
+                          const quantity = getMenuItemQuantity(item.id);
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => toggleMenuItem(item.id, 1)}
+                              className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                                isSelected
+                                  ? "border-[#FF5A00] bg-[#FF5A00]/5"
+                                  : "border-gray-200 hover:border-gray-300"
+                              }`}
+                            >
+                              <div className="flex gap-2">
+                                <div className="w-12 h-12 rounded-md overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
+                                  {item.photo_url ? (
+                                    <img
+                                      src={getImageUrl(item.photo_url) || ""}
+                                      alt={item.name}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = "none";
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="text-[8px] text-gray-400 text-center px-1">
+                                      Нема фото
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <h5 className="text-sm font-medium text-gray-900 truncate">
+                                      {item.name}
+                                    </h5>
+                                    <div className="flex items-center gap-2">
+                                      {isSelected && (
+                                        <span className="text-xs text-[#FF5A00] font-medium">
+                                          ×{quantity}
+                                        </span>
+                                      )}
+                                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                        isSelected
+                                          ? "border-[#FF5A00] bg-[#FF5A00]"
+                                          : "border-gray-300"
+                                      }`}>
+                                        {isSelected && (
+                                          <span className="text-white text-xs">✓</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {item.description && (
+                                    <p className="text-xs text-gray-600 line-clamp-1 mb-1">
+                                      {item.description}
+                                    </p>
+                                  )}
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-600">
+                                      {item.weight ? `${item.weight}${item.unit}` : '-'}
+                                    </div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {item.price} грн
+                                    </div>
+                                  </div>
+                                  {item.subcategory && (
+                                    <Badge variant="outline" className="mt-1 text-xs">
+                                      {item.subcategory.name}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Вибрані страви */}
+                    {menuForm.items.length > 0 && (
+                      <div className="space-y-2 border-t pt-4">
+                        <h5 className="text-sm font-medium text-gray-900">
+                          Вибрані страви ({menuForm.items.length})
+                        </h5>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                          {menuForm.items.map((mi, index) => {
+                            const item = items.find((it) => it.id === mi.item_id);
+                            if (!item) return null;
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between gap-3 p-2 border rounded-lg bg-gray-50"
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {item.photo_url && (
+                                    <img
+                                      src={getImageUrl(item.photo_url) || ""}
+                                      alt={item.name}
+                                      className="w-12 h-12 rounded object-cover border border-gray-200"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = "none";
+                                      }}
+                                    />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate">
+                                      {item.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {item.price} грн × {mi.quantity} = {(item.price * mi.quantity).toFixed(2)} грн
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    value={mi.quantity}
+                                    onChange={(e) => {
+                                      const newQuantity = parseInt(e.target.value) || 1;
+                                      updateMenuFormItem(index, "quantity", newQuantity.toString());
+                                    }}
+                                    className="w-20"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeMenuFormItem(index)}
+                                    className="h-8 w-8"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="text-sm text-gray-600 pt-2 border-t">
+                          Загальна вартість:{" "}
+                          <span className="font-medium text-gray-900">
+                            {menuForm.items.reduce((sum, mi) => {
+                              const item = items.find((it) => it.id === mi.item_id);
+                              return sum + (item?.price || 0) * mi.quantity;
+                            }, 0).toFixed(2)} грн
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setIsMenuFormOpen(false);
+                        resetMenuForm();
+                      }}
+                    >
+                      Скасувати
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Збереження...
+                        </>
+                      ) : selectedMenu ? (
+                        "Зберегти меню"
+                      ) : (
+                        "Створити меню"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

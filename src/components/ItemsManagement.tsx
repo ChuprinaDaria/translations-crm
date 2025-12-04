@@ -14,14 +14,6 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -253,95 +245,97 @@ export function ItemsManagement() {
               />
             </div>
 
-            {/* Items Table */}
-            <div className="border rounded-lg overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[80px]">Фото</TableHead>
-                    <TableHead className="min-w-[150px]">Назва</TableHead>
-                    <TableHead className="min-w-[200px] hidden lg:table-cell">Опис</TableHead>
-                    <TableHead className="min-w-[100px]">Ціна</TableHead>
-                    <TableHead className="min-w-[80px]">Вага</TableHead>
-                    <TableHead className="min-w-[120px] hidden md:table-cell">Категорія</TableHead>
-                    <TableHead className="min-w-[80px]">Статус</TableHead>
-                    <TableHead className="text-right min-w-[100px]">Дії</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                        {searchQuery ? "Товари не знайдено" : "Додайте перший товар"}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredItems.map((item) => (
-                      <TableRow key={item.id} className="hover:bg-gray-50">
-                        <TableCell>
-                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                            {item.photo_url ? (
-                              <ImageWithFallback
-                                src={item.photo_url}
-                                alt={item.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                              </div>
-                            )}
+            {/* Items Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredItems.length === 0 ? (
+                <div className="col-span-full text-center py-8 text-gray-500 border rounded-lg">
+                  {searchQuery ? "Товари не знайдено" : "Додайте перший товар"}
+                </div>
+              ) : (
+                filteredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col h-full"
+                  >
+                    {/* Верхня частина: фото + назва + опис */}
+                    <div className="flex gap-3 mb-3">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0">
+                        {item.photo_url ? (
+                          <ImageWithFallback
+                            src={item.photo_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                            Нема фото
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-gray-900">{item.name}</div>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <div className="text-gray-600 max-w-[300px] truncate text-sm">
-                            {item.description || "—"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-gray-900">{item.price} грн</TableCell>
-                        <TableCell className="text-gray-600 text-sm">
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate mb-1">
+                          {item.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 line-clamp-2">
+                          {item.description || "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Нижня частина: ціна, вага, категорія + статус */}
+                    <div className="flex items-center justify-between mb-3 text-sm">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {item.price} грн
+                        </div>
+                        <div className="text-sm text-gray-500">
                           {item.weight ? `${item.weight}${item.unit}` : "—"}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <div className="text-sm">
-                            <div className="text-gray-900">{item.subcategory?.name}</div>
-                            <div className="text-gray-500 text-xs">{item.subcategory?.category?.name}</div>
+                          {item.subcategory?.category?.name && (
+                            <>
+                              {" "}
+                              • {item.subcategory.category.name}
+                            </>
+                          )}
+                        </div>
+                        {item.subcategory?.name && (
+                          <div className="text-xs text-gray-500">
+                            {item.subcategory.name}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={item.active ? "default" : "secondary"} className={item.active ? "bg-green-100 text-green-800" : ""}>
-                            {item.active ? "Активний" : "Неактивний"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEditDialog(item)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setDeleteItemId(item.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                        )}
+                      </div>
+
+                      <Badge
+                        variant={item.active ? "default" : "secondary"}
+                        className={
+                          item.active ? "bg-green-100 text-green-800" : ""
+                        }
+                      >
+                        {item.active ? "Активний" : "Неактивний"}
+                      </Badge>
+                    </div>
+
+                    {/* Кнопки дій */}
+                    <div className="mt-auto flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 flex items-center justify-center gap-1 text-sm"
+                        onClick={() => openEditDialog(item)}
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span>Редагувати</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="px-3 py-2 text-sm border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => setDeleteItemId(item.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Pagination */}
