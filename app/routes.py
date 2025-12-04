@@ -2387,15 +2387,19 @@ def get_all_questionnaires(
         models.ClientQuestionnaire.created_at.desc()
     ).offset(skip).limit(limit).all()
     
-    # Додаємо інформацію про клієнта
+    # Додаємо інформацію про клієнта та менеджера
     result = []
     for q in questionnaires:
         client = db.query(models.Client).filter(models.Client.id == q.client_id).first()
+        manager = db.query(models.User).filter(models.User.id == q.manager_id).first() if q.manager_id else None
+        
         q_dict = {
             **q.__dict__,
             "client_name": client.name if client else None,
             "client_phone": client.phone if client else None,
             "client_company": client.company_name if client else None,
+            "manager_name": manager.name if manager else None,
+            "manager_email": manager.email if manager else None,
         }
         result.append(q_dict)
     
@@ -2490,6 +2494,125 @@ def create_questionnaire(
     db.refresh(new_questionnaire)
     
     return new_questionnaire
+
+
+@router.get("/questionnaires/{questionnaire_id}/pdf")
+def generate_questionnaire_pdf(
+    questionnaire_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Генерувати PDF анкети"""
+    from io import BytesIO
+    from weasyprint import HTML
+    from jinja2 import Template
+    
+    questionnaire = db.query(models.ClientQuestionnaire).filter(
+        models.ClientQuestionnaire.id == questionnaire_id
+    ).first()
+    
+    if not questionnaire:
+        raise HTTPException(404, "Questionnaire not found")
+    
+    # Отримуємо клієнта та менеджера
+    client = db.query(models.Client).filter(models.Client.id == questionnaire.client_id).first()
+    manager = db.query(models.User).filter(models.User.id == questionnaire.manager_id).first() if questionnaire.manager_id else None
+    
+    # Простий HTML шаблон для анкети
+    html_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page { size: A4; margin: 2cm; }
+            body { font-family: Arial, sans-serif; font-size: 10pt; }
+            h1 { color: #FF5A00; font-size: 20pt; margin-bottom: 5mm; }
+            h2 { color: #FF5A00; font-size: 14pt; margin-top: 8mm; margin-bottom: 3mm; background: #FFF3E0; padding: 3mm; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
+            td { padding: 3mm; vertical-align: top; border-bottom: 1pt solid #eee; }
+            td:first-child { font-weight: bold; width: 40%; color: #555; }
+            .value { color: #000; }
+        </style>
+    </head>
+    <body>
+        <h1>Анкета клієнта №{{ questionnaire.id }}</h1>
+        
+        {% if client %}
+        <table>
+            <tr><td>Клієнт:</td><td class="value">{{ client.name }}</td></tr>
+            <tr><td>Телефон:</td><td class="value">{{ client.phone }}</td></tr>
+            {% if client.company_name %}<tr><td>Компанія:</td><td class="value">{{ client.company_name }}</td></tr>{% endif %}
+        </table>
+        {% endif %}
+        
+        {% if manager %}
+        <table>
+            <tr><td>Менеджер:</td><td class="value">{{ manager.name }}</td></tr>
+        </table>
+        {% endif %}
+        
+        <h2>Сервіс</h2>
+        <table>
+            {% if questionnaire.event_date %}<tr><td>Дата заходу:</td><td class="value">{{ questionnaire.event_date }}</td></tr>{% endif %}
+            {% if questionnaire.location %}<tr><td>Точна локація:</td><td class="value">{{ questionnaire.location }}</td></tr>{% endif %}
+            {% if questionnaire.contact_person %}<tr><td>Контакт замовника:</td><td class="value">{{ questionnaire.contact_person }}</td></tr>{% endif %}
+            {% if questionnaire.contact_phone %}<tr><td>Телефон контакту:</td><td class="value">{{ questionnaire.contact_phone }}</td></tr>{% endif %}
+            {% if questionnaire.on_site_contact %}<tr><td>Хто буде головним на локації:</td><td class="value">{{ questionnaire.on_site_contact }}</td></tr>{% endif %}
+            {% if questionnaire.arrival_time %}<tr><td>Час заїзду:</td><td class="value">{{ questionnaire.arrival_time }}</td></tr>{% endif %}
+            {% if questionnaire.event_start_time %}<tr><td>Час початку:</td><td class="value">{{ questionnaire.event_start_time }}</td></tr>{% endif %}
+            {% if questionnaire.event_end_time %}<tr><td>Час кінця:</td><td class="value">{{ questionnaire.event_end_time }}</td></tr>{% endif %}
+            {% if questionnaire.equipment_notes %}<tr><td>Обладнання:</td><td class="value">{{ questionnaire.equipment_notes }}</td></tr>{% endif %}
+            {% if questionnaire.payment_method %}<tr><td>Спосіб оплати:</td><td class="value">{{ questionnaire.payment_method }}</td></tr>{% endif %}
+            {% if questionnaire.textile_color %}<tr><td>Колір текстилю:</td><td class="value">{{ questionnaire.textile_color }}</td></tr>{% endif %}
+        </table>
+        
+        <h2>Заїзд</h2>
+        <table>
+            {% if questionnaire.venue_complexity %}<tr><td>Складність заїзду:</td><td class="value">{{ questionnaire.venue_complexity }}</td></tr>{% endif %}
+            {% if questionnaire.floor_number %}<tr><td>Поверх:</td><td class="value">{{ questionnaire.floor_number }}</td></tr>{% endif %}
+            <tr><td>Ліфт:</td><td class="value">{% if questionnaire.elevator_available %}Є{% else %}Немає{% endif %}</td></tr>
+            {% if questionnaire.technical_room %}<tr><td>Технічне приміщення:</td><td class="value">{{ questionnaire.technical_room }}</td></tr>{% endif %}
+            {% if questionnaire.kitchen_available %}<tr><td>Кухня:</td><td class="value">{{ questionnaire.kitchen_available }}</td></tr>{% endif %}
+        </table>
+        
+        <h2>Кухня</h2>
+        <table>
+            {% if questionnaire.dish_serving %}<tr><td>Посуд для подачі:</td><td class="value">{{ questionnaire.dish_serving }}</td></tr>{% endif %}
+            {% if questionnaire.hot_snacks_serving %}<tr><td>Подача гарячих закусок:</td><td class="value">{{ questionnaire.hot_snacks_serving }}</td></tr>{% endif %}
+            {% if questionnaire.salad_serving %}<tr><td>Подання салатів:</td><td class="value">{{ questionnaire.salad_serving }}</td></tr>{% endif %}
+            {% if questionnaire.menu_notes %}<tr><td>Коментарі до меню:</td><td class="value">{{ questionnaire.menu_notes }}</td></tr>{% endif %}
+        </table>
+        
+        {% if questionnaire.special_notes %}
+        <h2>Коментарі</h2>
+        <table>
+            <tr><td colspan="2" class="value">{{ questionnaire.special_notes }}</td></tr>
+        </table>
+        {% endif %}
+        
+        <p style="margin-top: 10mm; text-align: right; color: #999; font-size: 8pt;">
+            Створено: {{ questionnaire.created_at.strftime('%d.%m.%Y %H:%M') if questionnaire.created_at else '' }}
+        </p>
+    </body>
+    </html>
+    """
+    
+    template = Template(html_template)
+    html_content = template.render(
+        questionnaire=questionnaire,
+        client=client,
+        manager=manager
+    )
+    
+    # Генеруємо PDF
+    pdf_bytes = HTML(string=html_content).write_pdf()
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={'Content-Disposition': f'attachment; filename="anketa-{questionnaire_id}.pdf"'}
+    )
 
 
 @router.get("/clients/search-by-phone/{phone}")
