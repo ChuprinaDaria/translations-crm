@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { questionnairesApi, type ClientQuestionnaire } from "../lib/api";
+import { questionnairesApi, tokenManager, type ClientQuestionnaire } from "../lib/api";
 import { toast } from "sonner";
 
 interface QuestionnaireWithExtras extends ClientQuestionnaire {
@@ -72,10 +72,14 @@ export function AllQuestionnaires({ onEdit }: AllQuestionnairesProps) {
         ? 'http://localhost:8000/api' 
         : '/api';
       
+      const token = tokenManager.getToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${API_BASE}/questionnaires/${questionnaireId}/pdf`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers,
       });
       
       if (!response.ok) {

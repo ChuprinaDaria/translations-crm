@@ -352,7 +352,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     const loadClients = async () => {
       try {
         const clientsData = await clientsApi.getClients();
-        setClients(clientsData.clients || []);
+        // Бекенд може повертати як { total, clients: [...] }, так і просто масив клієнтів.
+        const list = Array.isArray(clientsData) ? clientsData : (clientsData as any).clients || [];
+        setClients(list);
       } catch (error: any) {
         console.error("Помилка завантаження клієнтів:", error);
       }
