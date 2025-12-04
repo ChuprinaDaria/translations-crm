@@ -2189,9 +2189,43 @@ def get_clients(
     total = query.count()
     clients = query.offset(skip).limit(limit).all()
     
+    # Додаємо questionnaire_id до кожного клієнта
+    clients_with_questionnaires = []
+    for client in clients:
+        # Знаходимо останню анкету клієнта
+        latest_questionnaire = db.query(models.ClientQuestionnaire).filter(
+            models.ClientQuestionnaire.client_id == client.id
+        ).order_by(models.ClientQuestionnaire.created_at.desc()).first()
+        
+        client_dict = {
+            "id": client.id,
+            "name": client.name,
+            "company_name": client.company_name,
+            "phone": client.phone,
+            "email": client.email,
+            "total_orders": client.total_orders,
+            "lifetime_spent": client.lifetime_spent,
+            "current_year_spent": client.current_year_spent,
+            "cashback_balance": client.cashback_balance,
+            "cashback_earned_total": client.cashback_earned_total,
+            "cashback_used_total": client.cashback_used_total,
+            "cashback_expires_at": client.cashback_expires_at,
+            "loyalty_tier": client.loyalty_tier,
+            "cashback_rate": client.cashback_rate,
+            "is_custom_rate": client.is_custom_rate,
+            "yearly_photographer_used": client.yearly_photographer_used,
+            "yearly_robot_used": client.yearly_robot_used,
+            "bonus_year": client.bonus_year,
+            "notes": client.notes,
+            "created_at": client.created_at,
+            "updated_at": client.updated_at,
+            "questionnaire_id": latest_questionnaire.id if latest_questionnaire else None
+        }
+        clients_with_questionnaires.append(client_dict)
+    
     return {
         "total": total,
-        "clients": clients
+        "clients": clients_with_questionnaires
     }
 
 

@@ -124,6 +124,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           tooltip: "Анкета клієнта для відділу продажів",
           roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
         },
+        {
+          id: "all-questionnaires",
+          label: "Всі анкети",
+          icon: <FileText className="w-5 h-5" />,
+          tooltip: "Список всіх анкет клієнтів",
+          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
+        },
       ],
       roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
     },

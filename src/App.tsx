@@ -15,6 +15,7 @@ import { EventsCalendar } from "./components/EventsCalendar";
 import { UsersManagement } from "./components/UsersManagement";
 import { BenefitsManagement } from "./components/BenefitsManagement";
 import { SalesDepartment } from "./components/SalesDepartment";
+import { AllQuestionnaires } from "./components/AllQuestionnaires";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -148,6 +149,10 @@ function App() {
         { label: "Відділ Продажів", href: "#" },
         { label: "Анкета" },
       ],
+      "all-questionnaires": [
+        { label: "Відділ Продажів", href: "#" },
+        { label: "Всі анкети" },
+      ],
       "my-kp": [
         { label: "Продажі", href: "#" },
         { label: "Мої КП" },
@@ -232,6 +237,11 @@ function App() {
         }} />;
       case "client-questionnaires":
         return <SalesDepartment />;
+      case "all-questionnaires":
+        return <AllQuestionnaires onEdit={(questionnaireId) => {
+          // TODO: Відкрити форму редагування анкети
+          setActiveItem("client-questionnaires");
+        }} />;
       case "my-kp":
         return (
           <div className="space-y-6">

@@ -487,6 +487,7 @@ class Client(ClientBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    questionnaire_id: Optional[int] = None  # ID останньої анкети для швидкого доступу
 
     class Config:
         from_attributes = True
