@@ -41,16 +41,23 @@
         
         /* Шапка документу */
         .header {
+            margin-bottom: 10mm;
+        }
+
+        .header-image {
+            width: 100%;
+            height: auto;
+            max-height: 80mm;
+            object-fit: cover;
+            border-radius: 3mm;
+            margin-bottom: 5mm;
+        }
+
+        .header-content-wrapper {
             display: table;
             width: 100%;
-            margin-bottom: 10mm;
             padding-bottom: 5mm;
-            {% if header_image_src %}
-            background: url('{{ header_image_src }}') center / cover no-repeat;
-            color: white;
-            padding: 20mm 10mm;
-            border-radius: 3mm;
-            {% else %}
+            {% if not header_image_src %}
             border-bottom: 3pt solid {{ primary_color or '#FF5A00' }};
             {% endif %}
         }
@@ -295,13 +302,18 @@
     <div class="container">
         <!-- Шапка -->
         <div class="header">
-            <div class="header-content">
-                <div class="logo-section">
-                    <div class="company-name">{{ company_name or 'Назва компанії' }}</div>
-                </div>
-                <div class="info-section">
-                    <div class="kp-title">{{ kp.title or 'Комерційна пропозиція' }}</div>
-                    <div class="creation-date">{{ created_date }}</div>
+            {% if header_image_src %}
+            <img src="{{ header_image_src }}" alt="Header" class="header-image">
+            {% endif %}
+            <div class="header-content-wrapper">
+                <div class="header-content">
+                    <div class="logo-section">
+                        <div class="company-name">{{ company_name or 'Назва компанії' }}</div>
+                    </div>
+                    <div class="info-section">
+                        <div class="kp-title">{{ kp.title or 'Комерційна пропозиція' }}</div>
+                        <div class="creation-date">{{ created_date }}</div>
+                    </div>
                 </div>
             </div>
         </div>

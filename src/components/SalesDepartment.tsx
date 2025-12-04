@@ -80,7 +80,12 @@ export function SalesDepartment() {
   const handleBackFromForm = () => {
     setShowQuestionnaireForm(false);
     setEditingQuestionnaireId(undefined);
-    loadClients();
+    // Очищаємо пошук щоб показати всіх клієнтів включно з новоствореним
+    setSearchQuery("");
+    // Затримка щоб форма закрилась і потім оновився список
+    setTimeout(() => {
+      loadClients();
+    }, 100);
   };
 
   // Якщо показуємо форму анкети
