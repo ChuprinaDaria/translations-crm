@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, FileText, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, FileText, Edit, Trash2, Eye, Upload } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -32,9 +32,34 @@ export function KPTemplates() {
     secondary_color: "#1a1a2e",
     text_color: "#333333",
     font_family: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
+    // Налаштування відображення колонок
+    show_item_photo: true,
+    show_item_weight: true,
+    show_item_quantity: true,
+    show_item_price: true,
+    show_item_total: true,
+    show_item_description: false,
+    // Налаштування підсумкових блоків
+    show_weight_summary: true,
+    show_weight_per_person: true,
+    show_discount_block: false,
+    show_equipment_block: true,
+    show_service_block: true,
+    show_transport_block: true,
+    // Секції меню
+    menu_sections: ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"],
+    // Текстові налаштування
+    menu_title: "Меню",
+    summary_title: "Підсумок",
+    footer_text: "",
+    // Layout
+    page_orientation: "portrait",
+    items_per_page: 20,
   });
   const [headerFile, setHeaderFile] = useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [headerPreview, setHeaderPreview] = useState<string | null>(null);
+  const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
 
   const loadTemplates = async () => {
     setIsLoading(true);
@@ -62,6 +87,27 @@ export function KPTemplates() {
     return slug ? `${slug}.html` : "";
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'header' | 'background') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === 'header') {
+      setHeaderFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setHeaderPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setBackgroundFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBackgroundPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -72,9 +118,29 @@ export function KPTemplates() {
       secondary_color: "#1a1a2e",
       text_color: "#333333",
       font_family: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
+      show_item_photo: true,
+      show_item_weight: true,
+      show_item_quantity: true,
+      show_item_price: true,
+      show_item_total: true,
+      show_item_description: false,
+      show_weight_summary: true,
+      show_weight_per_person: true,
+      show_discount_block: false,
+      show_equipment_block: true,
+      show_service_block: true,
+      show_transport_block: true,
+      menu_sections: ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"],
+      menu_title: "Меню",
+      summary_title: "Підсумок",
+      footer_text: "",
+      page_orientation: "portrait",
+      items_per_page: 20,
     });
     setHeaderFile(null);
     setBackgroundFile(null);
+    setHeaderPreview(null);
+    setBackgroundPreview(null);
     setEditingTemplate(null);
     setIsAddDialogOpen(false);
   };
@@ -89,38 +155,47 @@ export function KPTemplates() {
     const autoFilename = autoFilenameFromName(formData.name);
 
     try {
+      const templateData = {
+        name: formData.name,
+        description: formData.description,
+        filename: autoFilename,
+        is_default: formData.is_default,
+        header_image: headerFile || undefined,
+        background_image: backgroundFile || undefined,
+        primary_color: formData.primary_color,
+        secondary_color: formData.secondary_color,
+        text_color: formData.text_color,
+        font_family: formData.font_family,
+        // Налаштування відображення
+        show_item_photo: formData.show_item_photo,
+        show_item_weight: formData.show_item_weight,
+        show_item_quantity: formData.show_item_quantity,
+        show_item_price: formData.show_item_price,
+        show_item_total: formData.show_item_total,
+        show_item_description: formData.show_item_description,
+        show_weight_summary: formData.show_weight_summary,
+        show_weight_per_person: formData.show_weight_per_person,
+        show_discount_block: formData.show_discount_block,
+        show_equipment_block: formData.show_equipment_block,
+        show_service_block: formData.show_service_block,
+        show_transport_block: formData.show_transport_block,
+        // Секції та текст
+        menu_sections: formData.menu_sections,
+        menu_title: formData.menu_title,
+        summary_title: formData.summary_title,
+        footer_text: formData.footer_text,
+        page_orientation: formData.page_orientation,
+        items_per_page: formData.items_per_page,
+      };
+      
       if (editingTemplate) {
-        const updated = await templatesApi.updateTemplate(editingTemplate.id, {
-          name: formData.name,
-          description: formData.description,
-          filename: autoFilename,
-          is_default: formData.is_default,
-          // html_content тепер опціональний - бекенд скопіює дефолтний шаблон при створенні
-          header_image: headerFile || undefined,
-          background_image: backgroundFile || undefined,
-          primary_color: formData.primary_color,
-          secondary_color: formData.secondary_color,
-          text_color: formData.text_color,
-          font_family: formData.font_family,
-        });
+        const updated = await templatesApi.updateTemplate(editingTemplate.id, templateData);
         setTemplates((prev) =>
           prev.map((t) => (t.id === updated.id ? updated : t))
         );
         toast.success("Шаблон оновлено");
       } else {
-        const created = await templatesApi.createTemplate({
-          name: formData.name,
-          description: formData.description,
-          filename: autoFilename,
-          is_default: formData.is_default,
-          // html_content не передаємо - бекенд створить на основі commercial-offer.html
-          header_image: headerFile || undefined,
-          background_image: backgroundFile || undefined,
-          primary_color: formData.primary_color,
-          secondary_color: formData.secondary_color,
-          text_color: formData.text_color,
-          font_family: formData.font_family,
-        });
+        const created = await templatesApi.createTemplate(templateData);
         setTemplates((prev) => [...prev, created]);
         toast.success("Шаблон створено");
       }
@@ -151,7 +226,30 @@ export function KPTemplates() {
         secondary_color: fullTemplate.secondary_color || "#1a1a2e",
         text_color: fullTemplate.text_color || "#333333",
         font_family: fullTemplate.font_family || "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
+        show_item_photo: fullTemplate.show_item_photo ?? true,
+        show_item_weight: fullTemplate.show_item_weight ?? true,
+        show_item_quantity: fullTemplate.show_item_quantity ?? true,
+        show_item_price: fullTemplate.show_item_price ?? true,
+        show_item_total: fullTemplate.show_item_total ?? true,
+        show_item_description: fullTemplate.show_item_description ?? false,
+        show_weight_summary: fullTemplate.show_weight_summary ?? true,
+        show_weight_per_person: fullTemplate.show_weight_per_person ?? true,
+        show_discount_block: fullTemplate.show_discount_block ?? false,
+        show_equipment_block: fullTemplate.show_equipment_block ?? true,
+        show_service_block: fullTemplate.show_service_block ?? true,
+        show_transport_block: fullTemplate.show_transport_block ?? true,
+        menu_sections: fullTemplate.menu_sections || ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"],
+        menu_title: fullTemplate.menu_title || "Меню",
+        summary_title: fullTemplate.summary_title || "Підсумок",
+        footer_text: fullTemplate.footer_text || "",
+        page_orientation: fullTemplate.page_orientation || "portrait",
+        items_per_page: fullTemplate.items_per_page || 20,
       });
+      // Встановлюємо preview для існуючих зображень
+      setHeaderPreview(fullTemplate.header_image_url ? getImageUrl(fullTemplate.header_image_url) : null);
+      setBackgroundPreview(fullTemplate.background_image_url ? getImageUrl(fullTemplate.background_image_url) : null);
+      setHeaderFile(null);
+      setBackgroundFile(null);
       setIsAddDialogOpen(true);
     } catch (error) {
       console.error(error);
@@ -179,14 +277,20 @@ export function KPTemplates() {
             Керуйте шаблонами комерційних пропозицій для швидкого створення
           </p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            resetForm();
+          } else {
+            setIsAddDialogOpen(true);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Додати шаблон
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingTemplate ? "Редагувати шаблон" : "Створити новий шаблон"}
@@ -195,196 +299,413 @@ export function KPTemplates() {
                 {editingTemplate ? "Змініть налаштування шаблону КП" : "Налаштуйте новий шаблон для комерційних пропозицій"}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="template-name">
-                  Назва шаблону <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="template-name"
-                  placeholder="Наприклад: Корпоративний шаблон"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="template-description">Опис шаблону</Label>
-                <Textarea
-                  id="template-description"
-                  placeholder="Короткий опис призначення шаблону..."
-                  rows={2}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, description: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Налаштування дизайну (шрифти та кольори) */}
-              <div className="space-y-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+            <div className="space-y-6">
+              {/* Назва та опис */}
+              <div className="space-y-4">
                 <div>
-                  <p className="text-base font-semibold text-gray-900 mb-1">
-                    Оформлення шаблону
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    Оберіть базові кольори та шрифт. Вони автоматично застосуються до PDF.
-                  </p>
+                  <Label className="text-sm font-medium mb-2 block">
+                    Назва шаблону <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Назва шаблону"
+                  />
                 </div>
-                
+
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Опис шаблону</Label>
+                  <Textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                    rows={3}
+                    placeholder="Короткий опис шаблону"
+                  />
+                </div>
+              </div>
+
+              {/* Оформлення - сітка 2x2 */}
+              <div>
+                <h3 className="text-sm font-medium mb-3">Оформлення шаблону</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Оберіть базові кольори та шрифт. Вони автоматично застосуються до PDF.
+                </p>
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Основний колір</Label>
-                    <div className="flex items-center gap-2">
+                  {/* Основний колір */}
+                  <div>
+                    <Label className="text-xs font-medium mb-2 block">Основний колір</Label>
+                    <div className="relative">
                       <input
                         type="color"
-                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
                         value={formData.primary_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
-                        }
+                        onChange={(e) => setFormData((prev) => ({ ...prev, primary_color: e.target.value }))}
+                        className="w-full h-12 rounded-lg border cursor-pointer"
                       />
-                      <Input
-                        type="text"
-                        className="flex-1 h-10 text-sm font-mono"
-                        value={formData.primary_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, primary_color: e.target.value }))
-                        }
-                      />
+                      <div className="absolute inset-0 pointer-events-none rounded-lg border-2 border-gray-300"></div>
                     </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Фон</Label>
-                    <div className="flex items-center gap-2">
+
+                  {/* Фон */}
+                  <div>
+                    <Label className="text-xs font-medium mb-2 block">Фон</Label>
+                    <div className="relative">
                       <input
                         type="color"
-                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
                         value={formData.secondary_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
-                        }
+                        onChange={(e) => setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))}
+                        className="w-full h-12 rounded-lg border cursor-pointer"
                       />
-                      <Input
-                        type="text"
-                        className="flex-1 h-10 text-sm font-mono"
-                        value={formData.secondary_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, secondary_color: e.target.value }))
-                        }
-                      />
+                      <div className="absolute inset-0 pointer-events-none rounded-lg border-2 border-gray-300"></div>
                     </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Текст</Label>
-                    <div className="flex items-center gap-2">
+
+                  {/* Текст */}
+                  <div>
+                    <Label className="text-xs font-medium mb-2 block">Текст</Label>
+                    <div className="relative">
                       <input
                         type="color"
-                        className="h-10 w-16 rounded border-2 border-gray-300 cursor-pointer hover:border-gray-400 transition-colors"
                         value={formData.text_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, text_color: e.target.value }))
-                        }
+                        onChange={(e) => setFormData((prev) => ({ ...prev, text_color: e.target.value }))}
+                        className="w-full h-12 rounded-lg border cursor-pointer"
                       />
-                      <Input
-                        type="text"
-                        className="flex-1 h-10 text-sm font-mono"
-                        value={formData.text_color}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, text_color: e.target.value }))
-                        }
-                      />
+                      <div className="absolute inset-0 pointer-events-none rounded-lg border-2 border-gray-300"></div>
                     </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Шрифт</Label>
+
+                  {/* Шрифт */}
+                  <div>
+                    <Label className="text-xs font-medium mb-2 block">Шрифт</Label>
                     <select
-                      className="h-10 w-full rounded border-2 border-gray-300 text-sm px-3 hover:border-gray-400 transition-colors focus:ring-2 focus:ring-[#FF5A00] focus:border-[#FF5A00]"
                       value={formData.font_family}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, font_family: e.target.value }))
-                      }
+                      onChange={(e) => setFormData((prev) => ({ ...prev, font_family: e.target.value }))}
+                      className="w-full h-12 px-3 border rounded-lg focus:ring-2 focus:ring-orange-500"
                     >
-                      <option value="Segoe UI, Tahoma, Geneva, Verdana, sans-serif">
-                        Segoe UI
-                      </option>
+                      <option value="Segoe UI, Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
                       <option value="Roboto, Arial, sans-serif">Roboto</option>
                       <option value="Montserrat, Arial, sans-serif">Montserrat</option>
                       <option value="'Times New Roman', serif">Times New Roman</option>
-                      <option value="'Playfair Display', 'Times New Roman', serif">
-                        Playfair Display
-                      </option>
+                      <option value="'Playfair Display', 'Times New Roman', serif">Playfair Display</option>
                     </select>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="header-image" className="text-sm font-medium">Зображення шапки</Label>
-                  <Input
-                    id="header-image"
-                    type="file"
-                    accept="image/*"
-                    className="cursor-pointer"
-                    onChange={(e) =>
-                      setHeaderFile(e.target.files && e.target.files[0]
-                        ? e.target.files[0]
-                        : null)
-                    }
-                  />
-                  {editingTemplate && editingTemplate.header_image_url && (
-                    <p className="text-xs text-gray-500">Поточне: {editingTemplate.header_image_url.split('/').pop()}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="background-image" className="text-sm font-medium">Фонове зображення</Label>
-                  <Input
-                    id="background-image"
-                    type="file"
-                    accept="image/*"
-                    className="cursor-pointer"
-                    onChange={(e) =>
-                      setBackgroundFile(e.target.files && e.target.files[0]
-                        ? e.target.files[0]
-                        : null)
-                    }
-                  />
-                  {editingTemplate && editingTemplate.background_image_url && (
-                    <p className="text-xs text-gray-500">Поточне: {editingTemplate.background_image_url.split('/').pop()}</p>
-                  )}
+              {/* Зображення - сітка 1x2 на desktop, stack на мобілці */}
+              <div>
+                <h3 className="text-sm font-medium mb-3">Зображення</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Зображення шапки */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium block">Зображення шапки</Label>
+                    <div className="border-2 border-dashed rounded-lg p-4 hover:border-orange-500 transition-colors">
+                      <input
+                        type="file"
+                        id="header-upload"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, 'header')}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="header-upload"
+                        className="cursor-pointer flex flex-col items-center gap-2"
+                      >
+                        {headerPreview ? (
+                          <div className="w-full">
+                            <img
+                              src={headerPreview}
+                              alt="Header preview"
+                              className="w-full h-24 object-cover rounded mb-2"
+                            />
+                            <p className="text-xs text-gray-500 truncate">
+                              {headerFile?.name || editingTemplate?.header_image_url?.split('/').pop() || 'Завантажено'}
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-8 h-8 text-gray-400" />
+                            <span className="text-sm text-gray-600">Завантажити</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Фонове зображення */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium block">Фонове зображення</Label>
+                    <div className="border-2 border-dashed rounded-lg p-4 hover:border-orange-500 transition-colors">
+                      <input
+                        type="file"
+                        id="background-upload"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, 'background')}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="background-upload"
+                        className="cursor-pointer flex flex-col items-center gap-2"
+                      >
+                        {backgroundPreview ? (
+                          <div className="w-full">
+                            <img
+                              src={backgroundPreview}
+                              alt="Background preview"
+                              className="w-full h-24 object-cover rounded mb-2"
+                            />
+                            <p className="text-xs text-gray-500 truncate">
+                              {backgroundFile?.name || editingTemplate?.background_image_url?.split('/').pop() || 'Завантажено'}
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Upload className="w-8 h-8 text-gray-400" />
+                            <span className="text-sm text-gray-600">Завантажити</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              {/* Налаштування відображення колонок */}
+              <div>
+                <h3 className="text-sm font-medium mb-3">Колонки таблиці меню</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Оберіть які колонки показувати в таблиці страв у PDF
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_photo}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_photo: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Фото страви</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_weight}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_weight: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Вага</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_quantity}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_quantity: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Кількість</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_price}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_price: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Ціна</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_total}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_total: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Сума</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_item_description}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_item_description: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Опис страви</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Підсумкові блоки */}
+              <div>
+                <h3 className="text-sm font-medium mb-3">Показувати в підсумку</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Оберіть які блоки відображати в підсумковій секції
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_weight_summary}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_weight_summary: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Загальна вага</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_weight_per_person}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_weight_per_person: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Вага на персону</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_equipment_block}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_equipment_block: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Оренда обладнання</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_service_block}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_service_block: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Обслуговування</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.show_transport_block}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, show_transport_block: e.target.checked }))}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm">Доставка</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Секції меню */}
+              <div>
+                <h3 className="text-sm font-medium mb-3">Секції меню</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Страви будуть згруповані за цими категоріями у PDF
+                </p>
+                <div className="space-y-2">
+                  {formData.menu_sections.map((section, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        type="text"
+                        value={section}
+                        onChange={(e) => {
+                          const newSections = [...formData.menu_sections];
+                          newSections[idx] = e.target.value;
+                          setFormData({ ...formData, menu_sections: newSections });
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newSections = formData.menu_sections.filter((_, i) => i !== idx);
+                          setFormData({ ...formData, menu_sections: newSections });
+                        }}
+                        className="px-3 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFormData({
+                        ...formData,
+                        menu_sections: [...formData.menu_sections, "Нова секція"]
+                      });
+                    }}
+                    className="text-orange-600 hover:bg-orange-50"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Додати секцію
+                  </Button>
+                </div>
+              </div>
+
+              {/* Тексти */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Заголовок меню</Label>
+                  <Input
+                    type="text"
+                    value={formData.menu_title}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, menu_title: e.target.value }))}
+                    placeholder="Меню"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Заголовок підсумку</Label>
+                  <Input
+                    type="text"
+                    value={formData.summary_title}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, summary_title: e.target.value }))}
+                    placeholder="Підсумок"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Текст внизу PDF (футер)</Label>
+                  <Textarea
+                    value={formData.footer_text}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, footer_text: e.target.value }))}
+                    className="resize-none"
+                    rows={3}
+                    placeholder="Наприклад: контакти, умови оплати, тощо"
+                  />
+                </div>
+              </div>
+
+              {/* Налаштування за замовчуванням */}
+              <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
-                  id="is-default"
+                  id="default-template"
                   checked={formData.is_default}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, is_default: e.target.checked }))
-                  }
-                  className="w-5 h-5 text-[#FF5A00] border-gray-300 rounded focus:ring-[#FF5A00] cursor-pointer"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, is_default: e.target.checked }))}
+                  className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                 />
-                <Label htmlFor="is-default" className="text-sm font-medium text-gray-800 cursor-pointer">
+                <Label htmlFor="default-template" className="text-sm font-medium cursor-pointer">
                   Зробити шаблоном за замовчуванням
                 </Label>
               </div>
+            </div>
 
-              <div className="flex gap-3 pt-6 border-t">
-                <Button
-                  onClick={handleSubmit}
-                  className="flex-1 h-11 bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white font-medium"
-                >
-                  {editingTemplate ? "Зберегти зміни" : "Створити шаблон"}
-                </Button>
-                <Button onClick={resetForm} variant="outline" className="flex-1 h-11 font-medium">
-                  Скасувати
-                </Button>
-              </div>
+            {/* Кнопки */}
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 border-t">
+              <Button
+                onClick={resetForm}
+                variant="outline"
+                className="flex-1 sm:flex-none px-6 py-2"
+              >
+                Скасувати
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                className="flex-1 sm:flex-none px-6 py-2 bg-orange-600 text-white hover:bg-orange-700"
+              >
+                {editingTemplate ? "Зберегти зміни" : "Створити шаблон"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

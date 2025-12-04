@@ -605,11 +605,67 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     text_color = "#333333"
     font_family = "Segoe UI, Tahoma, Geneva, Verdana, sans-serif"
 
+    # Конфігурація відображення шаблону
+    template_config = {
+        'show_item_photo': True,
+        'show_item_weight': True,
+        'show_item_quantity': True,
+        'show_item_price': True,
+        'show_item_total': True,
+        'show_item_description': False,
+        'show_weight_summary': True,
+        'show_weight_per_person': True,
+        'show_discount_block': False,
+        'show_equipment_block': True,
+        'show_service_block': True,
+        'show_transport_block': True,
+        'menu_title': "Меню",
+        'summary_title': "Підсумок",
+        'footer_text': None,
+        'page_orientation': 'portrait',
+    }
+    
+    # Секції меню (категорії)
+    menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
         secondary_color = getattr(selected_template, "secondary_color", None) or secondary_color
         text_color = getattr(selected_template, "text_color", None) or text_color
         font_family = getattr(selected_template, "font_family", None) or font_family
+        
+        # Оновлюємо конфігурацію з налаштувань шаблону
+        template_config.update({
+            'show_item_photo': getattr(selected_template, 'show_item_photo', True),
+            'show_item_weight': getattr(selected_template, 'show_item_weight', True),
+            'show_item_quantity': getattr(selected_template, 'show_item_quantity', True),
+            'show_item_price': getattr(selected_template, 'show_item_price', True),
+            'show_item_total': getattr(selected_template, 'show_item_total', True),
+            'show_item_description': getattr(selected_template, 'show_item_description', False),
+            'show_weight_summary': getattr(selected_template, 'show_weight_summary', True),
+            'show_weight_per_person': getattr(selected_template, 'show_weight_per_person', True),
+            'show_discount_block': getattr(selected_template, 'show_discount_block', False),
+            'show_equipment_block': getattr(selected_template, 'show_equipment_block', True),
+            'show_service_block': getattr(selected_template, 'show_service_block', True),
+            'show_transport_block': getattr(selected_template, 'show_transport_block', True),
+            'menu_title': getattr(selected_template, 'menu_title', None) or "Меню",
+            'summary_title': getattr(selected_template, 'summary_title', None) or "Підсумок",
+            'footer_text': getattr(selected_template, 'footer_text', None),
+            'page_orientation': getattr(selected_template, 'page_orientation', None) or 'portrait',
+        })
+        
+        # Отримуємо секції меню з шаблону
+        template_menu_sections = getattr(selected_template, 'menu_sections', None)
+        if template_menu_sections:
+            menu_sections = template_menu_sections
+
+    # Конвертуємо dict в простий об'єкт для доступу через крапку в Jinja2
+    class TemplateConfig:
+        def __init__(self, config_dict):
+            for key, value in config_dict.items():
+                setattr(self, key, value)
+    
+    template_config_obj = TemplateConfig(template_config)
 
     html_content = template.render(
         kp=kp,
@@ -633,6 +689,9 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         company_name=company_name,
         created_date=created_date,
         event_date=event_date,
+        # Конфігурація та секції шаблону
+        template_config=template_config_obj,
+        menu_sections=menu_sections,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -1644,3 +1703,136 @@ def delete_benefit(
     if not deleted:
         raise HTTPException(status_code=404, detail="Benefit not found")
     return {"status": "success"}
+
+
+# ============================================================
+# Template Preview and Image Upload Endpoints
+# ============================================================
+
+@router.post("/templates/preview")
+def generate_template_preview(
+    request: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Генерує PDF preview шаблону з тестовими даними.
+    """
+    try:
+        design = request.get("design", {})
+        sample_data = request.get("sample_data", {})
+        
+        # Завантажуємо шаблон HTML
+        template_dir = UPLOADS_DIR
+        env = Environment(loader=FileSystemLoader(str(template_dir)))
+        template = env.get_template("commercial-offer.html")
+        
+        # Підготовка конфігурації шаблону
+        template_config = {
+            'show_item_photo': design.get('show_item_photo', True),
+            'show_item_weight': design.get('show_item_weight', True),
+            'show_item_quantity': design.get('show_item_quantity', True),
+            'show_item_price': design.get('show_item_price', True),
+            'show_item_total': design.get('show_item_total', True),
+            'show_item_description': design.get('show_item_description', False),
+            'show_weight_summary': design.get('show_weight_summary', True),
+            'show_weight_per_person': design.get('show_weight_per_person', True),
+            'show_equipment_block': design.get('show_equipment_block', True),
+            'show_service_block': design.get('show_service_block', True),
+            'show_transport_block': design.get('show_transport_block', True),
+            'menu_title': design.get('menu_title', 'Меню'),
+            'summary_title': design.get('summary_title', 'Підсумок'),
+            'footer_text': design.get('footer_text'),
+            'page_orientation': design.get('page_orientation', 'portrait'),
+        }
+        
+        # Конфігурація як об'єкт
+        class TemplateConfig:
+            def __init__(self, config_dict):
+                for key, value in config_dict.items():
+                    setattr(self, key, value)
+        
+        template_config_obj = TemplateConfig(template_config)
+        
+        # Секції меню
+        menu_sections = design.get('menu_sections', [
+            "Холодні закуски", "Салати", "Гарячі страви", 
+            "Гарнір", "Десерти", "Напої"
+        ])
+        
+        # Рендеримо HTML
+        html_content = template.render(
+            kp=sample_data.get('kp', {}),
+            items=sample_data.get('items', []),
+            food_total=sample_data.get('food_total', '0 грн'),
+            equipment_total=sample_data.get('equipment_total', '0 грн'),
+            service_total=sample_data.get('service_total', '0 грн'),
+            transport_total=sample_data.get('transport_total', '0 грн'),
+            total_weight=sample_data.get('total_weight', '0 кг'),
+            weight_per_person=sample_data.get('weight_per_person', '0 г'),
+            total_items=sample_data.get('total_items', 0),
+            logo_src=None,
+            header_image_src=None,
+            background_image_src=None,
+            primary_color=design.get('primary_color', '#FF5A00'),
+            secondary_color=design.get('secondary_color', '#ffffff'),
+            text_color=design.get('text_color', '#333333'),
+            font_family=design.get('font_family', 'Arial, sans-serif'),
+            company_name=sample_data.get('company_name', 'Назва компанії'),
+            created_date=sample_data.get('created_date', ''),
+            event_date=sample_data.get('event_date', ''),
+            template_config=template_config_obj,
+            menu_sections=menu_sections,
+        )
+        
+        # Генеруємо PDF
+        pdf_bytes = HTML(string=html_content, base_url=str(BASE_DIR)).write_pdf(zoom=1)
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "inline; filename=template-preview.pdf"
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error generating template preview: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generating preview: {str(e)}")
+
+
+@router.post("/templates/upload-image")
+async def upload_template_image(
+    file: UploadFile = File(...),
+    image_type: str = Form(...),  # 'logo' | 'header' | 'background'
+    current_user = Depends(get_current_user_db),
+):
+    """
+    Завантажити зображення для шаблону.
+    """
+    # Валідація типу файлу
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Only images allowed")
+    
+    # Валідація розміру (5MB)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+    
+    # Створюємо директорію якщо не існує
+    templates_dir = UPLOADS_DIR / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Генеруємо унікальне ім'я файлу
+    file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{image_type}_{current_user.id}_{int(datetime.now().timestamp())}.{file_extension}"
+    filepath = templates_dir / filename
+    
+    # Зберігаємо файл
+    with open(filepath, "wb") as f:
+        f.write(content)
+    
+    # Повертаємо URL
+    return {"url": f"/uploads/templates/{filename}"}
+

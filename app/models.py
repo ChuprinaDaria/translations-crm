@@ -1,6 +1,6 @@
 # DB Models
 
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db import Base
@@ -81,6 +81,37 @@ class Template(Base):
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Налаштування відображення колонок у таблиці меню
+    show_item_photo = Column(Boolean, default=True)
+    show_item_weight = Column(Boolean, default=True)
+    show_item_quantity = Column(Boolean, default=True)
+    show_item_price = Column(Boolean, default=True)
+    show_item_total = Column(Boolean, default=True)
+    show_item_description = Column(Boolean, default=False)
+    
+    # Налаштування підсумкових блоків
+    show_weight_summary = Column(Boolean, default=True)
+    show_weight_per_person = Column(Boolean, default=True)
+    show_discount_block = Column(Boolean, default=False)
+    show_equipment_block = Column(Boolean, default=True)
+    show_service_block = Column(Boolean, default=True)
+    show_transport_block = Column(Boolean, default=True)
+    
+    # Секції меню (JSON масив категорій)
+    menu_sections = Column(JSON, default=lambda: [
+        "Холодні закуски", "Салати", "Гарячі страви", 
+        "Гарнір", "Десерти", "Напої"
+    ])
+    
+    # Текстові налаштування
+    menu_title = Column(String, default="Меню")
+    summary_title = Column(String, default="Підсумок")
+    footer_text = Column(Text, nullable=True)
+    
+    # Layout налаштування
+    page_orientation = Column(String, default="portrait")  # portrait або landscape
+    items_per_page = Column(Integer, default=20)
 
     kps = relationship("KP", back_populates="template")
 

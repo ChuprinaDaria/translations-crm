@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 # Category schemas (define first)
@@ -229,6 +229,34 @@ class TemplateBase(BaseModel):
     secondary_color: Optional[str] = None    # Другорядний колір (фони блоків)
     text_color: Optional[str] = None         # Основний колір тексту
     font_family: Optional[str] = None        # CSS font-family для основного тексту
+    
+    # Налаштування відображення колонок у таблиці меню
+    show_item_photo: Optional[bool] = True
+    show_item_weight: Optional[bool] = True
+    show_item_quantity: Optional[bool] = True
+    show_item_price: Optional[bool] = True
+    show_item_total: Optional[bool] = True
+    show_item_description: Optional[bool] = False
+    
+    # Налаштування підсумкових блоків
+    show_weight_summary: Optional[bool] = True
+    show_weight_per_person: Optional[bool] = True
+    show_discount_block: Optional[bool] = False
+    show_equipment_block: Optional[bool] = True
+    show_service_block: Optional[bool] = True
+    show_transport_block: Optional[bool] = True
+    
+    # Секції меню (масив категорій)
+    menu_sections: Optional[List[str]] = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+    
+    # Текстові налаштування
+    menu_title: Optional[str] = "Меню"
+    summary_title: Optional[str] = "Підсумок"
+    footer_text: Optional[str] = None
+    
+    # Layout налаштування
+    page_orientation: Optional[str] = "portrait"  # portrait або landscape
+    items_per_page: Optional[int] = 20
 
 
 class TemplateCreate(TemplateBase):
@@ -257,6 +285,34 @@ class TemplateUpdate(BaseModel):
     secondary_color: Optional[str] = None
     text_color: Optional[str] = None
     font_family: Optional[str] = None
+    
+    # Налаштування відображення колонок
+    show_item_photo: Optional[bool] = None
+    show_item_weight: Optional[bool] = None
+    show_item_quantity: Optional[bool] = None
+    show_item_price: Optional[bool] = None
+    show_item_total: Optional[bool] = None
+    show_item_description: Optional[bool] = None
+    
+    # Налаштування підсумкових блоків
+    show_weight_summary: Optional[bool] = None
+    show_weight_per_person: Optional[bool] = None
+    show_discount_block: Optional[bool] = None
+    show_equipment_block: Optional[bool] = None
+    show_service_block: Optional[bool] = None
+    show_transport_block: Optional[bool] = None
+    
+    # Секції меню
+    menu_sections: Optional[List[str]] = None
+    
+    # Текстові налаштування
+    menu_title: Optional[str] = None
+    summary_title: Optional[str] = None
+    footer_text: Optional[str] = None
+    
+    # Layout
+    page_orientation: Optional[str] = None
+    items_per_page: Optional[int] = None
 
 
 class Template(TemplateBase):
