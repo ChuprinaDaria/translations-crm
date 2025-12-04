@@ -82,6 +82,10 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
   const [saladOpen, setSaladOpen] = useState(false);
   const [customSalad, setCustomSalad] = useState("");
 
+  // Складність заїзду - слайдер
+  const [venueComplexityLevel, setVenueComplexityLevel] = useState(1); // 1-5
+  const [venueComplexityComment, setVenueComplexityComment] = useState("");
+
   useEffect(() => {
     if (questionnaireId) {
       loadQuestionnaire();
@@ -251,6 +255,12 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         customSalad
       ].filter(Boolean).join('; ');
 
+      // Формуємо текст складності заїзду
+      const complexityLabels = ['Легко', 'Нескладно', 'Помірно', 'Складно', 'Дуже складно'];
+      const venueComplexityText = venueComplexityComment 
+        ? `${complexityLabels[venueComplexityLevel - 1]}: ${venueComplexityComment}`
+        : complexityLabels[venueComplexityLevel - 1];
+
       // Додаємо URL фото та обладнання
       const questionnaireData = {
         ...formData,
@@ -264,6 +274,7 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         hot_snacks_equipment_ids: hotSnacksEquipment.map(eq => eq.id),
         salad_serving: saladText,
         salad_equipment_ids: saladEquipment.map(eq => eq.id),
+        venue_complexity: venueComplexityText,
       };
 
       if (questionnaireId) {
@@ -683,13 +694,50 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-sm">Складність заїзду</Label>
-              <Input
-                value={formData.venue_complexity || ""}
-                onChange={(e) => updateField("venue_complexity", e.target.value)}
-                className="h-9"
-              />
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-semibold">Складність заїзду</Label>
+              <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    value={venueComplexityLevel}
+                    onChange={(e) => setVenueComplexityLevel(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, 
+                        #10b981 0%, 
+                        #84cc16 25%, 
+                        #eab308 50%, 
+                        #f97316 75%, 
+                        #ef4444 100%)`
+                    }}
+                  />
+                  <div className="flex justify-between text-xs text-gray-600 mt-1">
+                    <span>Легко</span>
+                    <span>Помірно</span>
+                    <span>Складно</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded text-sm font-medium ${
+                    venueComplexityLevel === 1 ? 'bg-green-100 text-green-800' :
+                    venueComplexityLevel === 2 ? 'bg-lime-100 text-lime-800' :
+                    venueComplexityLevel === 3 ? 'bg-yellow-100 text-yellow-800' :
+                    venueComplexityLevel === 4 ? 'bg-orange-100 text-orange-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    Рівень {venueComplexityLevel}/5
+                  </div>
+                </div>
+                <Input
+                  value={venueComplexityComment}
+                  onChange={(e) => setVenueComplexityComment(e.target.value)}
+                  placeholder="Коментар (опціонально)..."
+                  className="h-9 text-sm"
+                />
+              </div>
             </div>
             <div className="space-y-1">
               <Label className="text-sm">На якому поверсі</Label>
@@ -732,11 +780,11 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                 />
                 <Label className="text-sm font-semibold">Фото локації</Label>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {venuePhotos.map((photo, idx) => (
-                  <div key={idx} className="relative group">
+                  <div key={idx} className="relative group w-20 h-20 flex-shrink-0">
                     <div 
-                      className="w-24 h-24 relative overflow-hidden rounded border border-gray-300 cursor-pointer hover:border-orange-500 transition"
+                      className="w-full h-full relative overflow-hidden rounded-lg border-2 border-gray-200 cursor-pointer hover:border-orange-500 transition shadow-sm"
                       onClick={() => setViewingPhoto(photo)}
                     >
                       <img 
@@ -744,8 +792,8 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                         alt={`Venue ${idx + 1}`} 
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition flex items-center justify-center">
-                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
+                        <ZoomIn className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition" />
                       </div>
                     </div>
                     <button
@@ -753,13 +801,13 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                         e.stopPropagation();
                         removePhoto(idx, 'venue');
                       }}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition z-10"
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition z-10"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
-                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition gap-1">
+                <label className="w-20 h-20 flex-shrink-0 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition shadow-sm">
                   <input
                     type="file"
                     accept="image/*"
@@ -770,8 +818,8 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                       e.target.value = '';
                     }}
                   />
-                  <Upload className="w-6 h-6 text-gray-400" />
-                  <span className="text-xs text-gray-500">Додати</span>
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-[10px] text-gray-500 mt-0.5">Додати</span>
                 </label>
               </div>
             </div>
@@ -785,11 +833,11 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                 />
                 <Label className="text-sm font-semibold">Фото заїзду</Label>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {arrivalPhotos.map((photo, idx) => (
-                  <div key={idx} className="relative group">
+                  <div key={idx} className="relative group w-20 h-20 flex-shrink-0">
                     <div 
-                      className="w-24 h-24 relative overflow-hidden rounded border border-gray-300 cursor-pointer hover:border-orange-500 transition"
+                      className="w-full h-full relative overflow-hidden rounded-lg border-2 border-gray-200 cursor-pointer hover:border-orange-500 transition shadow-sm"
                       onClick={() => setViewingPhoto(photo)}
                     >
                       <img 
@@ -797,8 +845,8 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                         alt={`Arrival ${idx + 1}`} 
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition flex items-center justify-center">
-                        <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
+                        <ZoomIn className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition" />
                       </div>
                     </div>
                     <button
@@ -806,13 +854,13 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                         e.stopPropagation();
                         removePhoto(idx, 'arrival');
                       }}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition z-10"
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600 transition z-10"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
-                <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition gap-1">
+                <label className="w-20 h-20 flex-shrink-0 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition shadow-sm">
                   <input
                     type="file"
                     accept="image/*"
@@ -823,8 +871,8 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                       e.target.value = '';
                     }}
                   />
-                  <Upload className="w-6 h-6 text-gray-400" />
-                  <span className="text-xs text-gray-500">Додати</span>
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-[10px] text-gray-500 mt-0.5">Додати</span>
                 </label>
               </div>
             </div>
@@ -896,14 +944,12 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                   </Command>
                 </PopoverContent>
               </Popover>
-              {dishServingEquipment.length > 0 && (
-                <Input
-                  value={customDishServing}
-                  onChange={(e) => setCustomDishServing(e.target.value)}
-                  placeholder="Додатковий коментар..."
-                  className="h-9 text-sm"
-                />
-              )}
+              <Input
+                value={customDishServing}
+                onChange={(e) => setCustomDishServing(e.target.value)}
+                placeholder="Додатковий коментар або якщо немає в списку..."
+                className="h-9 text-sm"
+              />
             </div>
 
             <div className="space-y-2 md:col-span-2">
@@ -963,14 +1009,12 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                   </Command>
                 </PopoverContent>
               </Popover>
-              {hotSnacksEquipment.length > 0 && (
-                <Input
-                  value={customHotSnacks}
-                  onChange={(e) => setCustomHotSnacks(e.target.value)}
-                  placeholder="Додатковий коментар..."
-                  className="h-9 text-sm"
-                />
-              )}
+              <Input
+                value={customHotSnacks}
+                onChange={(e) => setCustomHotSnacks(e.target.value)}
+                placeholder="Додатковий коментар або якщо немає в списку..."
+                className="h-9 text-sm"
+              />
             </div>
 
             <div className="space-y-2 md:col-span-2">
@@ -1030,14 +1074,12 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
                   </Command>
                 </PopoverContent>
               </Popover>
-              {saladEquipment.length > 0 && (
-                <Input
-                  value={customSalad}
-                  onChange={(e) => setCustomSalad(e.target.value)}
-                  placeholder="Додатковий коментар..."
-                  className="h-9 text-sm"
-                />
-              )}
+              <Input
+                value={customSalad}
+                onChange={(e) => setCustomSalad(e.target.value)}
+                placeholder="Додатковий коментар або якщо немає в списку..."
+                className="h-9 text-sm"
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-sm">Чи є алергія на продукти</Label>
