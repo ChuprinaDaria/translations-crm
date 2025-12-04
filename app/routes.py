@@ -2393,12 +2393,24 @@ def get_all_questionnaires(
         client = db.query(models.Client).filter(models.Client.id == q.client_id).first()
         manager = db.query(models.User).filter(models.User.id == q.manager_id).first() if q.manager_id else None
         
+        # Формуємо повне ім'я менеджера
+        manager_name = None
+        if manager:
+            if manager.first_name and manager.last_name:
+                manager_name = f"{manager.first_name} {manager.last_name}"
+            elif manager.first_name:
+                manager_name = manager.first_name
+            elif manager.last_name:
+                manager_name = manager.last_name
+            else:
+                manager_name = manager.email
+        
         q_dict = {
             **q.__dict__,
             "client_name": client.name if client else None,
             "client_phone": client.phone if client else None,
             "client_company": client.company_name if client else None,
-            "manager_name": manager.name if manager else None,
+            "manager_name": manager_name,
             "manager_email": manager.email if manager else None,
         }
         result.append(q_dict)
@@ -2518,6 +2530,18 @@ def generate_questionnaire_pdf(
     client = db.query(models.Client).filter(models.Client.id == questionnaire.client_id).first()
     manager = db.query(models.User).filter(models.User.id == questionnaire.manager_id).first() if questionnaire.manager_id else None
     
+    # Формуємо повне ім'я менеджера
+    manager_full_name = None
+    if manager:
+        if manager.first_name and manager.last_name:
+            manager_full_name = f"{manager.first_name} {manager.last_name}"
+        elif manager.first_name:
+            manager_full_name = manager.first_name
+        elif manager.last_name:
+            manager_full_name = manager.last_name
+        else:
+            manager_full_name = manager.email
+    
     # Простий HTML шаблон для анкети
     html_template = """
     <!DOCTYPE html>
@@ -2546,9 +2570,9 @@ def generate_questionnaire_pdf(
         </table>
         {% endif %}
         
-        {% if manager %}
+        {% if manager_name %}
         <table>
-            <tr><td>Менеджер:</td><td class="value">{{ manager.name }}</td></tr>
+            <tr><td>Менеджер:</td><td class="value">{{ manager_name }}</td></tr>
         </table>
         {% endif %}
         
@@ -2602,7 +2626,8 @@ def generate_questionnaire_pdf(
     html_content = template.render(
         questionnaire=questionnaire,
         client=client,
-        manager=manager
+        manager=manager,
+        manager_name=manager_full_name
     )
     
     # Генеруємо PDF
