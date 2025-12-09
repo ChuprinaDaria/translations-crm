@@ -990,27 +990,52 @@ export const templatesApi = {
   },
 
   async createTemplate(data: TemplateCreate): Promise<Template> {
-    // Завжди використовуємо multipart/form-data, щоб мати можливість передати html_content
+    // Завжди використовуємо multipart/form-data, щоб мати можливість передати html_content і всі налаштування дизайну
     const formData = new FormData();
     formData.append('name', data.name);
     formData.append('filename', data.filename);
-    if (data.description) formData.append('description', data.description);
+    if (data.description !== undefined) formData.append('description', data.description || '');
     if (data.is_default !== undefined) formData.append('is_default', data.is_default.toString());
     if (data.preview_image) formData.append('preview_image', data.preview_image);
-    if (data.preview_image_url) formData.append('preview_image_url', data.preview_image_url);
+    if (data.preview_image_url !== undefined) formData.append('preview_image_url', data.preview_image_url || '');
     if (data.html_content) formData.append('html_content', data.html_content);
     if (data.header_image) formData.append('header_image', data.header_image);
     if (data.background_image) formData.append('background_image', data.background_image);
+    if (data.logo_image) formData.append('logo_image', data.logo_image);
     if (data.primary_color) formData.append('primary_color', data.primary_color);
     if (data.secondary_color) formData.append('secondary_color', data.secondary_color);
     if (data.text_color) formData.append('text_color', data.text_color);
     if (data.font_family) formData.append('font_family', data.font_family);
+    // Налаштування відображення колонок
+    if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
+    if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
+    if (data.show_item_quantity !== undefined) formData.append('show_item_quantity', String(data.show_item_quantity));
+    if (data.show_item_price !== undefined) formData.append('show_item_price', String(data.show_item_price));
+    if (data.show_item_total !== undefined) formData.append('show_item_total', String(data.show_item_total));
+    if (data.show_item_description !== undefined) formData.append('show_item_description', String(data.show_item_description));
+    // Підсумкові блоки
+    if (data.show_weight_summary !== undefined) formData.append('show_weight_summary', String(data.show_weight_summary));
+    if (data.show_weight_per_person !== undefined) formData.append('show_weight_per_person', String(data.show_weight_per_person));
+    if (data.show_discount_block !== undefined) formData.append('show_discount_block', String(data.show_discount_block));
+    if (data.show_equipment_block !== undefined) formData.append('show_equipment_block', String(data.show_equipment_block));
+    if (data.show_service_block !== undefined) formData.append('show_service_block', String(data.show_service_block));
+    if (data.show_transport_block !== undefined) formData.append('show_transport_block', String(data.show_transport_block));
+    // Секції меню та тексти
+    if (data.menu_sections && data.menu_sections.length > 0) {
+      formData.append('menu_sections', JSON.stringify(data.menu_sections));
+    }
+    if (data.menu_title) formData.append('menu_title', data.menu_title);
+    if (data.summary_title) formData.append('summary_title', data.summary_title);
+    if (data.footer_text !== undefined) formData.append('footer_text', data.footer_text || '');
+    // Layout
+    if (data.page_orientation) formData.append('page_orientation', data.page_orientation);
+    if (data.items_per_page !== undefined) formData.append('items_per_page', String(data.items_per_page));
     
     return apiFetchMultipart<Template>('/templates', formData, 'POST');
   },
 
   async updateTemplate(templateId: number, data: TemplateUpdate): Promise<Template> {
-    // Так само завжди multipart/form-data
+    // Так само завжди multipart/form-data, включаючи всі налаштування дизайну
     const formData = new FormData();
     if (data.name) formData.append('name', data.name);
     if (data.filename) formData.append('filename', data.filename);
@@ -1023,10 +1048,35 @@ export const templatesApi = {
     if (data.background_image) formData.append('background_image', data.background_image);
     if (data.header_image_url !== undefined) formData.append('header_image_url', data.header_image_url || '');
     if (data.background_image_url !== undefined) formData.append('background_image_url', data.background_image_url || '');
+    if (data.logo_image) formData.append('logo_image', data.logo_image);
     if (data.primary_color !== undefined) formData.append('primary_color', data.primary_color || '');
     if (data.secondary_color !== undefined) formData.append('secondary_color', data.secondary_color || '');
     if (data.text_color !== undefined) formData.append('text_color', data.text_color || '');
     if (data.font_family !== undefined) formData.append('font_family', data.font_family || '');
+    // Налаштування відображення колонок
+    if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
+    if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
+    if (data.show_item_quantity !== undefined) formData.append('show_item_quantity', String(data.show_item_quantity));
+    if (data.show_item_price !== undefined) formData.append('show_item_price', String(data.show_item_price));
+    if (data.show_item_total !== undefined) formData.append('show_item_total', String(data.show_item_total));
+    if (data.show_item_description !== undefined) formData.append('show_item_description', String(data.show_item_description));
+    // Підсумкові блоки
+    if (data.show_weight_summary !== undefined) formData.append('show_weight_summary', String(data.show_weight_summary));
+    if (data.show_weight_per_person !== undefined) formData.append('show_weight_per_person', String(data.show_weight_per_person));
+    if (data.show_discount_block !== undefined) formData.append('show_discount_block', String(data.show_discount_block));
+    if (data.show_equipment_block !== undefined) formData.append('show_equipment_block', String(data.show_equipment_block));
+    if (data.show_service_block !== undefined) formData.append('show_service_block', String(data.show_service_block));
+    if (data.show_transport_block !== undefined) formData.append('show_transport_block', String(data.show_transport_block));
+    // Секції меню та тексти
+    if (data.menu_sections && data.menu_sections.length > 0) {
+      formData.append('menu_sections', JSON.stringify(data.menu_sections));
+    }
+    if (data.menu_title !== undefined) formData.append('menu_title', data.menu_title || '');
+    if (data.summary_title !== undefined) formData.append('summary_title', data.summary_title || '');
+    if (data.footer_text !== undefined) formData.append('footer_text', data.footer_text || '');
+    // Layout
+    if (data.page_orientation !== undefined) formData.append('page_orientation', data.page_orientation || '');
+    if (data.items_per_page !== undefined) formData.append('items_per_page', String(data.items_per_page));
     
     return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
   },
@@ -1160,6 +1210,12 @@ export const clientsApi = {
 
   async searchByPhone(phone: string): Promise<{ found: boolean; client: Client | null }> {
     return apiFetch<{ found: boolean; client: Client | null }>(`/clients/search-by-phone/${encodeURIComponent(phone)}`);
+  },
+
+  async deleteClient(id: number): Promise<{ status: string; id: number }> {
+    return apiFetch<{ status: string; id: number }>(`/clients/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 

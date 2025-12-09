@@ -277,21 +277,71 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
     const autofill: Record<string, { questionnaireId: number; questionnaireDate?: string }> = {};
 
+    // Дата заходу
+    if (q.event_date) {
+      // Конвертуємо дату з формату YYYY-MM-DD або ISO в формат для input[type="date"]
+      try {
+        const date = new Date(q.event_date);
+        if (!isNaN(date.getTime())) {
+          const formattedDate = date.toISOString().split('T')[0];
+          setEventDate(formattedDate);
+          autofill.eventDate = { questionnaireId: q.id, questionnaireDate: sourceDate };
+        }
+      } catch (e) {
+        console.error("Помилка форматування дати:", e);
+      }
+    }
+
+    // Кількість гостей (якщо є в анкеті)
+    // Примітка: guest_count не зберігається в моделі анкети, тому не переносимо
+
+    // Формат заходу
     if (q.event_type) {
       setEventFormat(q.event_type);
       autofill.eventFormat = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
+
+    // Локація
     if (q.location) {
       setEventLocation(q.location);
       autofill.eventLocation = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
+
+    // Координатор на локації (пріоритет on_site_contact, якщо немає - contact_person)
     if (q.on_site_contact) {
       setCoordinatorName(q.on_site_contact);
       autofill.coordinatorName = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    } else if (q.contact_person) {
+      setCoordinatorName(q.contact_person);
+      autofill.coordinatorName = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
+
+    // Телефон координатора (пріоритет on_site_phone, якщо немає - contact_phone)
     if (q.on_site_phone) {
       setCoordinatorPhone(q.on_site_phone);
       autofill.coordinatorPhone = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    } else if (q.contact_phone) {
+      setCoordinatorPhone(q.contact_phone);
+      autofill.coordinatorPhone = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    }
+
+    // Час заходу (якщо є arrival_time, додаємо його до event_time)
+    let timeString = "";
+    if (q.event_start_time && q.event_end_time) {
+      timeString = `${q.event_start_time}–${q.event_end_time}`;
+    } else if (q.event_start_time) {
+      timeString = q.event_start_time;
+    }
+    if (q.arrival_time) {
+      if (timeString) {
+        timeString = `Заїзд: ${q.arrival_time} | ${timeString}`;
+      } else {
+        timeString = `Заїзд: ${q.arrival_time}`;
+      }
+    }
+    if (timeString) {
+      setEventTime(timeString);
+      autofill.eventTime = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
 
     // Створюємо формати заходу з таймінгами з анкети
@@ -330,6 +380,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     
     if (formats.length > 0) {
       setEventFormats(formats);
+      autofill.eventFormats = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
 
     setSelectedQuestionnaireId(q.id);
@@ -1532,6 +1583,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           setEventLocation("");
                           setCoordinatorName("");
                           setCoordinatorPhone("");
+                          setEventDate("");
+                          setEventTime("");
+                          setGuestCount("");
+                          setEventFormats([]);
                           setSelectedQuestionnaireId(null);
                           setQuestionnaireAutofill({});
                         }}
@@ -1643,25 +1698,77 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   {/* Старий блок з групою/форматом прибрано, залишаємо лише багатоформатний редактор нижче */}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="event-date">
-                    Дата події <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="event-date"
-                    type="date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="event-date">
+                      Дата події <span className="text-red-500">*</span>
+                    </Label>
+                    {questionnaireAutofill.eventDate && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                        <Clipboard className="w-3 h-3" />
+                        З анкети
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="event-date"
+                      type="date"
+                      value={eventDate}
+                      onChange={(e) => {
+                        setEventDate(e.target.value);
+                        // Видаляємо індикатор якщо користувач змінює значення
+                        if (questionnaireAutofill.eventDate) {
+                          const newAutofill = { ...questionnaireAutofill };
+                          delete newAutofill.eventDate;
+                          setQuestionnaireAutofill(newAutofill);
+                        }
+                      }}
+                      className={`${
+                        questionnaireAutofill.eventDate
+                          ? "border-emerald-400 bg-emerald-50"
+                          : ""
+                      }`}
+                    />
+                    {questionnaireAutofill.eventDate && (
+                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="event-time">Час події</Label>
-                  <Input
-                    id="event-time"
-                    placeholder="17:00–19:00"
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                  />
-              </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="event-time">Час події</Label>
+                    {questionnaireAutofill.eventTime && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                        <Clipboard className="w-3 h-3" />
+                        З анкети
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="event-time"
+                      placeholder="17:00–19:00"
+                      value={eventTime}
+                      onChange={(e) => {
+                        setEventTime(e.target.value);
+                        // Видаляємо індикатор якщо користувач змінює значення
+                        if (questionnaireAutofill.eventTime) {
+                          const newAutofill = { ...questionnaireAutofill };
+                          delete newAutofill.eventTime;
+                          setQuestionnaireAutofill(newAutofill);
+                        }
+                      }}
+                      className={`${
+                        questionnaireAutofill.eventTime
+                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          : ""
+                      }`}
+                    />
+                    {questionnaireAutofill.eventTime && (
+                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Поле "Кількість гостей" під форматами прибрали — кількість рахуємо з сумарних гостей у форматах */}

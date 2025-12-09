@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Edit2, Search, Users, Calendar, FileText, Percent, Gift } from "lucide-react";
+import { Edit2, Search, Users, Calendar, FileText, Percent, Gift, Trash2 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
@@ -43,8 +43,24 @@ export function Clients() {
   const [selectedClientForEvents, setSelectedClientForEvents] = useState<Client | null>(null);
   const [clientKPs, setClientKPs] = useState<KP[]>([]);
   const [loadingKPs, setLoadingKPs] = useState(false);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
 
   useEffect(() => {
+    // Отримуємо інформацію про поточного користувача з токену
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserRole(payload.role || null);
+        setCurrentUserIsAdmin(payload.is_admin === true);
+      } catch (e) {
+        console.error("Помилка декодування токену:", e);
+      }
+    }
+
     const loadClients = async () => {
       try {
         const data = await clientsApi.getClients();
@@ -59,6 +75,9 @@ export function Clients() {
 
     loadClients();
   }, []);
+
+  // Перевірка чи користувач може видаляти клієнтів
+  const canDeleteClient = currentUserIsAdmin || (currentUserRole && currentUserRole.endsWith("-lead"));
 
   // Завантаження КП для вибраного клієнта
   useEffect(() => {
@@ -148,6 +167,22 @@ export function Clients() {
       toast.error("Помилка оновлення клієнта");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingClient) return;
+    setIsDeleting(true);
+    try {
+      await clientsApi.deleteClient(deletingClient.id);
+      setClients((prev) => prev.filter((c) => c.id !== deletingClient.id));
+      setDeletingClient(null);
+      toast.success("Клієнта видалено");
+    } catch (error: any) {
+      console.error("Error deleting client:", error);
+      toast.error(error.message || "Помилка видалення клієнта");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -305,13 +340,26 @@ export function Clients() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => openEdit(client)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => openEdit(client)}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          {canDeleteClient && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setDeletingClient(client)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Видалити клієнта"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -571,6 +619,40 @@ export function Clients() {
               className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
             >
               {saving ? "Збереження..." : "Зберегти"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Діалог підтвердження видалення */}
+      <Dialog open={!!deletingClient} onOpenChange={(open) => !open && setDeletingClient(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Видалити клієнта?</DialogTitle>
+            <DialogDescription>
+              Ви впевнені, що хочете видалити клієнта{" "}
+              <strong>{deletingClient?.name}</strong>? Цю дію неможливо скасувати.
+              {deletingClient?.phone && (
+                <span className="block mt-1 text-sm text-gray-500">
+                  Телефон: {deletingClient.phone}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeletingClient(null)}
+              disabled={isDeleting}
+            >
+              Скасувати
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Видалення..." : "Видалити"}
             </Button>
           </DialogFooter>
         </DialogContent>

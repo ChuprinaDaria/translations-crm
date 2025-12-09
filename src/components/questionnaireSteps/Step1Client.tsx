@@ -1,20 +1,21 @@
+import React, { useState } from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { Check, Search } from "lucide-react";
-import { useState } from "react";
 import { formatPhone, validatePhone, validateEmail } from "../../utils/questionnaireValidation";
-import type { ClientCreate } from "../../lib/api";
+import type { ClientCreate, Client } from "../../lib/api";
+import { ClientSelectDialog } from "../ClientSelectDialog";
 
 interface Step1ClientProps {
   clientData: ClientCreate;
   onChange: (data: ClientCreate) => void;
-  onSelectExisting?: () => void;
 }
 
-export function Step1Client({ clientData, onChange, onSelectExisting }: Step1ClientProps) {
+export function Step1Client({ clientData, onChange }: Step1ClientProps) {
   const [phoneValid, setPhoneValid] = useState<boolean | null>(null);
   const [emailValid, setEmailValid] = useState<boolean | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handlePhoneChange = (value: string) => {
     const formatted = formatPhone(value);
@@ -37,6 +38,22 @@ export function Step1Client({ clientData, onChange, onSelectExisting }: Step1Cli
     }
   };
 
+  const handleClientSelect = (client: Client) => {
+    onChange({
+      name: client.name,
+      phone: client.phone,
+      email: client.email || "",
+      company_name: client.company_name || "",
+    });
+    // Оновлюємо валідацію
+    if (client.phone) {
+      setPhoneValid(validatePhone(client.phone));
+    }
+    if (client.email) {
+      setEmailValid(validateEmail(client.email));
+    }
+  };
+
   const isValid = () => {
     return !!(clientData.name && clientData.phone && validatePhone(clientData.phone));
   };
@@ -48,17 +65,21 @@ export function Step1Client({ clientData, onChange, onSelectExisting }: Step1Cli
         <p className="text-sm text-gray-600">Основна інформація про клієнта</p>
       </div>
 
-      {onSelectExisting && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onSelectExisting}
-          className="w-full h-12 text-base"
-        >
-          <Search className="w-5 h-5 mr-2" />
-          Вибрати існуючого клієнта
-        </Button>
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setIsDialogOpen(true)}
+        className="w-full h-12 text-base"
+      >
+        <Search className="w-5 h-5 mr-2" />
+        Вибрати існуючого клієнта
+      </Button>
+
+      <ClientSelectDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onSelect={handleClientSelect}
+      />
 
       <div className="space-y-4">
         <div className="space-y-2">

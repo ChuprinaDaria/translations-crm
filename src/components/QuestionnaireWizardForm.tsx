@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { X } from "lucide-react";
 import { QuestionnaireWizard } from "./QuestionnaireWizard";
 import { Step1Client } from "./questionnaireSteps/Step1Client";
 import { Step2Event } from "./questionnaireSteps/Step2Event";
@@ -7,6 +8,7 @@ import { Step3Location } from "./questionnaireSteps/Step3Location";
 import { Step4Timing } from "./questionnaireSteps/Step4Timing";
 import { Step5Details } from "./questionnaireSteps/Step5Details";
 import { Step6Kitchen } from "./questionnaireSteps/Step6Kitchen";
+import { Step7Arrival } from "./questionnaireSteps/Step7Arrival";
 import { Step7Content } from "./questionnaireSteps/Step7Content";
 import { Step8Client } from "./questionnaireSteps/Step8Client";
 import { Step9Comments } from "./questionnaireSteps/Step9Comments";
@@ -15,6 +17,7 @@ import {
   clientsApi,
   questionnairesApi,
   itemsApi,
+  categoriesApi,
   type ClientCreate,
   type ClientQuestionnaireCreate,
   type ClientQuestionnaireUpdate,
@@ -67,6 +70,11 @@ export function QuestionnaireWizardForm({
   const [saladEquipment, setSaladEquipment] = useState<Item[]>([]);
   const [customSalad, setCustomSalad] = useState("");
 
+  // Фото заїзду
+  const [venuePhotosUrls, setVenuePhotosUrls] = useState<string[]>([]);
+  const [arrivalPhotosUrls, setArrivalPhotosUrls] = useState<string[]>([]);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
   // Попередні анкети для швидкого заповнення
   const [previousQuestionnaires, setPreviousQuestionnaires] = useState<ClientQuestionnaire[]>([]);
   const [showQuickFillDialog, setShowQuickFillDialog] = useState(false);
@@ -109,8 +117,18 @@ export function QuestionnaireWizardForm({
 
   const loadEquipment = async () => {
     try {
-      const data = await itemsApi.getItems();
-      setAllEquipment(data || []);
+      const [itemsData, categoriesData] = await Promise.all([
+        itemsApi.getItems(0, 1000),
+        categoriesApi.getCategories(),
+      ]);
+      
+      // Фільтруємо тільки обладнання (категорія "Обладнання")
+      const equipmentCategory = categoriesData.find(cat => cat.name === "Обладнання");
+      const equipmentItems = equipmentCategory
+        ? itemsData.filter(item => item.subcategory?.category_id === equipmentCategory.id)
+        : [];
+      
+      setAllEquipment(equipmentItems);
     } catch (error) {
       console.error("Помилка завантаження обладнання:", error);
     }
@@ -170,6 +188,14 @@ export function QuestionnaireWizardForm({
       if ((data as any).salad_equipment_ids && allEquipment.length > 0) {
         const ids = (data as any).salad_equipment_ids;
         setSaladEquipment(allEquipment.filter(eq => ids.includes(eq.id)));
+      }
+      
+      // Завантажуємо фото
+      if ((data as any).venue_photos_urls) {
+        setVenuePhotosUrls((data as any).venue_photos_urls || []);
+      }
+      if ((data as any).arrival_photos_urls) {
+        setArrivalPhotosUrls((data as any).arrival_photos_urls || []);
       }
     } catch (error) {
       toast.error("Помилка завантаження анкети");
@@ -238,6 +264,39 @@ export function QuestionnaireWizardForm({
     2000
   );
 
+  // Завантаження фото
+  const handlePhotoUpload = async (file: File, type: 'venue' | 'arrival') => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Файл занадто великий. Максимум 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (type === 'venue') {
+        setVenuePhotosUrls(prev => [...prev, dataUrl]);
+      } else {
+        setArrivalPhotosUrls(prev => [...prev, dataUrl]);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Видалення фото
+  const handlePhotoRemove = (index: number, type: 'venue' | 'arrival') => {
+    if (type === 'venue') {
+      setVenuePhotosUrls(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setArrivalPhotosUrls(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Перегляд фото
+  const handlePhotoView = (url: string) => {
+    setViewingPhoto(url);
+  };
+
   // Збереження анкети
   const handleSave = async () => {
     try {
@@ -295,6 +354,8 @@ export function QuestionnaireWizardForm({
         hot_snacks_equipment_ids: hotSnacksEquipment.map(eq => eq.id),
         salad_serving: saladText,
         salad_equipment_ids: saladEquipment.map(eq => eq.id),
+        venue_photos_urls: venuePhotosUrls.length > 0 ? venuePhotosUrls : undefined,
+        arrival_photos_urls: arrivalPhotosUrls.length > 0 ? arrivalPhotosUrls : undefined,
       };
 
       if (questionnaireId) {
@@ -335,12 +396,31 @@ export function QuestionnaireWizardForm({
   }, [debouncedAutoSave]);
 
   // Валідація кроків
+  // Парсинг форматів для валідації
+  const parseEventFormats = (eventTypeStr?: string): Array<{ format: string; time?: string }> => {
+    if (!eventTypeStr) return [];
+    
+    try {
+      const parsed = JSON.parse(eventTypeStr);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      if (eventTypeStr.trim()) {
+        return [{ format: eventTypeStr }];
+      }
+    }
+    
+    return [];
+  };
+
   const validateStep = (stepIndex: number): boolean => {
     switch (stepIndex) {
       case 0: // Клієнт
         return !!(clientData.name && clientData.phone);
       case 1: // Захід
-        return !!(formData.event_date && formData.event_type && (formData.guest_count || formData.people_count));
+        const formats = parseEventFormats(formData.event_type);
+        return !!(formData.event_date && formats.length > 0 && (formData.guest_count || formData.people_count));
       case 2: // Локація
         return !!(formData.location && formData.contact_person && formData.contact_phone);
       case 3: // Тайминг
@@ -349,6 +429,16 @@ export function QuestionnaireWizardForm({
         return true; // Інші кроки опціональні
     }
   };
+
+  // Ref для доступу до wizard для навігації
+  const [wizardRef, setWizardRef] = useState<{ navigateToStep: (step: number) => void } | null>(null);
+
+  const handleNavigateToStep = useCallback((stepIndex: number) => {
+    // Навігація буде оброблена через ref
+    if (wizardRef) {
+      wizardRef.navigateToStep(stepIndex);
+    }
+  }, [wizardRef]);
 
   // Створюємо кроки для wizard
   const steps = [
@@ -359,9 +449,6 @@ export function QuestionnaireWizardForm({
         <Step1Client
           clientData={clientData}
           onChange={setClientData}
-          onSelectExisting={() => {
-            toast.info("Функція вибору існуючого клієнта буде доступна в наступній версії");
-          }}
         />
       ),
       isValid: () => validateStep(0),
@@ -457,6 +544,28 @@ export function QuestionnaireWizardForm({
     },
     {
       id: 7,
+      title: "Заїзд",
+      component: (
+        <Step7Arrival
+          venueComplexity={formData.venue_complexity || ""}
+          floorNumber={formData.floor_number || ""}
+          elevatorAvailable={formData.elevator_available || false}
+          technicalRoom={formData.technical_room || ""}
+          kitchenAvailable={formData.kitchen_available || ""}
+          venuePhotos={formData.venue_photos || false}
+          arrivalPhotos={formData.arrival_photos || false}
+          venuePhotosUrls={venuePhotosUrls}
+          arrivalPhotosUrls={arrivalPhotosUrls}
+          onChange={updateField}
+          onPhotoUpload={handlePhotoUpload}
+          onPhotoRemove={handlePhotoRemove}
+          onPhotoView={handlePhotoView}
+        />
+      ),
+      isValid: () => true,
+    },
+    {
+      id: 8,
       title: "Контент",
       component: (
         <Step7Content
@@ -469,7 +578,7 @@ export function QuestionnaireWizardForm({
       isValid: () => true,
     },
     {
-      id: 8,
+      id: 9,
       title: "Замовник",
       component: (
         <Step8Client
@@ -481,12 +590,32 @@ export function QuestionnaireWizardForm({
       isValid: () => true,
     },
     {
-      id: 9,
+      id: 10,
       title: "Коментарі",
       component: (
         <Step9Comments
           specialNotes={formData.special_notes || ""}
           onFieldChange={updateField}
+        />
+      ),
+      isValid: () => true,
+    },
+    {
+      id: 11,
+      title: "Перегляд",
+      component: (
+        <Step10Preview
+          clientData={clientData}
+          formData={formData}
+          selectedEquipment={selectedEquipment}
+          dishServingEquipment={dishServingEquipment}
+          hotSnacksEquipment={hotSnacksEquipment}
+          saladEquipment={saladEquipment}
+          customEquipmentNote={customEquipmentNote}
+          customDishServing={customDishServing}
+          customHotSnacks={customHotSnacks}
+          customSalad={customSalad}
+          onNavigateToStep={handleNavigateToStep}
         />
       ),
       isValid: () => true,
@@ -551,8 +680,30 @@ export function QuestionnaireWizardForm({
         onSave={handleSave}
         onCancel={onBack}
         autoSave={debouncedAutoSave}
+        onRef={setWizardRef}
       />
       <QuickFillDialog />
+      
+      {/* Діалог перегляду фото */}
+      {viewingPhoto && (
+        <div 
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingPhoto(null)}
+        >
+          <button
+            onClick={() => setViewingPhoto(null)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+          >
+            <X className="w-8 h-8" />
+          </button>
+          <img 
+            src={viewingPhoto} 
+            alt="Photo preview" 
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 }

@@ -18,9 +18,10 @@ interface QuestionnaireWizardProps {
   onSave: () => void;
   onCancel: () => void;
   autoSave?: (step: number, data: any) => Promise<void>;
+  onRef?: (ref: { navigateToStep: (step: number) => void }) => void;
 }
 
-export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave }: QuestionnaireWizardProps) {
+export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }: QuestionnaireWizardProps) {
   // Читаємо крок з URL або використовуємо 0
   const getInitialStep = () => {
     if (typeof window !== 'undefined') {
@@ -108,6 +109,21 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave }: Quest
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  const navigateToStep = useCallback((stepIndex: number) => {
+    if (stepIndex >= 0 && stepIndex < steps.length) {
+      setCurrentStep(stepIndex);
+      setCompletedSteps(prev => new Set(prev).add(stepIndex - 1));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [steps.length]);
+
+  // Передаємо ref для навігації
+  useEffect(() => {
+    if (onRef) {
+      onRef({ navigateToStep });
+    }
+  }, [onRef, navigateToStep]);
 
   const progress = ((currentStep + 1) / steps.length) * 100;
 

@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
@@ -5,7 +6,6 @@ import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "../ui/command";
 import { Check, Plus } from "lucide-react";
-import { useState } from "react";
 import type { Item } from "../../lib/api";
 
 interface Step5DetailsProps {
@@ -71,11 +71,11 @@ export function Step5Details({
                 <Plus className="ml-2 h-5 w-5 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-              <Command>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+              <Command className="max-h-[400px]">
                 <CommandInput placeholder="Пошук обладнання..." className="h-12" />
                 <CommandEmpty>Обладнання не знайдено</CommandEmpty>
-                <CommandGroup className="max-h-64 overflow-auto">
+                <CommandGroup className="max-h-[350px] overflow-y-auto">
                   {allEquipment.map((item) => {
                     const isSelected = selectedEquipment.some((eq) => eq.id === item.id);
                     return (
@@ -88,17 +88,17 @@ export function Step5Details({
                             onEquipmentChange([...selectedEquipment, item]);
                           }
                         }}
-                        className="h-12"
+                        className="h-auto min-h-[48px] py-2 px-3 cursor-pointer"
                       >
                         <Check
-                          className={`mr-2 h-5 w-5 ${
-                            isSelected ? "opacity-100" : "opacity-0"
+                          className={`mr-3 h-5 w-5 shrink-0 ${
+                            isSelected ? "opacity-100 text-[#FF5A00]" : "opacity-0"
                           }`}
                         />
-                        <div className="flex-1">
-                          <div className="font-medium">{item.name}</div>
-                          {item.subcategory_name && (
-                            <div className="text-xs text-gray-500">{item.subcategory_name}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm leading-tight">{item.name}</div>
+                          {item.subcategory?.name && (
+                            <div className="text-xs text-gray-500 mt-0.5">{item.subcategory.name}</div>
                           )}
                         </div>
                       </CommandItem>

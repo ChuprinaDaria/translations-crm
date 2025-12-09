@@ -11,7 +11,7 @@ from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
 import crud, schema, crud_user, models
-import jwt, os, re
+import jwt, os, re, json
 import shutil
 import uuid
 from pathlib import Path
@@ -1724,6 +1724,28 @@ async def create_template(
     secondary_color: str = Form("#1a1a2e"),
     text_color: str = Form("#333333"),
     font_family: str = Form("Segoe UI, Tahoma, Geneva, Verdana, sans-serif"),
+    # Налаштування відображення колонок
+    show_item_photo: bool = Form(True),
+    show_item_weight: bool = Form(True),
+    show_item_quantity: bool = Form(True),
+    show_item_price: bool = Form(True),
+    show_item_total: bool = Form(True),
+    show_item_description: bool = Form(False),
+    # Підсумкові блоки
+    show_weight_summary: bool = Form(True),
+    show_weight_per_person: bool = Form(True),
+    show_discount_block: bool = Form(False),
+    show_equipment_block: bool = Form(True),
+    show_service_block: bool = Form(True),
+    show_transport_block: bool = Form(True),
+    # Секції меню та тексти
+    menu_sections: str = Form(None),  # JSON-рядок масиву категорій
+    menu_title: str = Form("Меню"),
+    summary_title: str = Form("Підсумок"),
+    footer_text: str = Form(None),
+    # Layout
+    page_orientation: str = Form("portrait"),
+    items_per_page: int = Form(20),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1839,6 +1861,14 @@ async def create_template(
         final_background_url = save_template_preview(background_image)
     
     # Створюємо об'єкт TemplateCreate
+    # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
+    menu_sections_list = None
+    if menu_sections:
+        try:
+            menu_sections_list = json.loads(menu_sections)
+        except Exception:
+            menu_sections_list = None
+
     template_data = schema.TemplateCreate(
         name=name,
         filename=filename,
@@ -1852,6 +1882,24 @@ async def create_template(
         secondary_color=secondary_color or None,
         text_color=text_color or None,
         font_family=font_family or None,
+        show_item_photo=show_item_photo,
+        show_item_weight=show_item_weight,
+        show_item_quantity=show_item_quantity,
+        show_item_price=show_item_price,
+        show_item_total=show_item_total,
+        show_item_description=show_item_description,
+        show_weight_summary=show_weight_summary,
+        show_weight_per_person=show_weight_per_person,
+        show_discount_block=show_discount_block,
+        show_equipment_block=show_equipment_block,
+        show_service_block=show_service_block,
+        show_transport_block=show_transport_block,
+        menu_sections=menu_sections_list,
+        menu_title=menu_title,
+        summary_title=summary_title,
+        footer_text=footer_text,
+        page_orientation=page_orientation,
+        items_per_page=items_per_page,
     )
     
     return crud.create_template(db, template_data)
@@ -1874,6 +1922,28 @@ async def update_template(
     secondary_color: str = Form(None),
     text_color: str = Form(None),
     font_family: str = Form(None),
+    # Налаштування відображення колонок
+    show_item_photo: bool = Form(None),
+    show_item_weight: bool = Form(None),
+    show_item_quantity: bool = Form(None),
+    show_item_price: bool = Form(None),
+    show_item_total: bool = Form(None),
+    show_item_description: bool = Form(None),
+    # Підсумкові блоки
+    show_weight_summary: bool = Form(None),
+    show_weight_per_person: bool = Form(None),
+    show_discount_block: bool = Form(None),
+    show_equipment_block: bool = Form(None),
+    show_service_block: bool = Form(None),
+    show_transport_block: bool = Form(None),
+    # Секції меню та тексти
+    menu_sections: str = Form(None),  # JSON-рядок
+    menu_title: str = Form(None),
+    summary_title: str = Form(None),
+    footer_text: str = Form(None),
+    # Layout
+    page_orientation: str = Form(None),
+    items_per_page: int = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -1978,6 +2048,14 @@ async def update_template(
         final_background_url = background_image_url or None
 
     # Створюємо об'єкт TemplateUpdate
+    # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
+    menu_sections_list = None
+    if menu_sections:
+        try:
+            menu_sections_list = json.loads(menu_sections)
+        except Exception:
+            menu_sections_list = None
+
     template_data = schema.TemplateUpdate(
         name=name,
         filename=final_filename if filename else None,
@@ -1991,6 +2069,24 @@ async def update_template(
         secondary_color=secondary_color,
         text_color=text_color,
         font_family=font_family,
+        show_item_photo=show_item_photo,
+        show_item_weight=show_item_weight,
+        show_item_quantity=show_item_quantity,
+        show_item_price=show_item_price,
+        show_item_total=show_item_total,
+        show_item_description=show_item_description,
+        show_weight_summary=show_weight_summary,
+        show_weight_per_person=show_weight_per_person,
+        show_discount_block=show_discount_block,
+        show_equipment_block=show_equipment_block,
+        show_service_block=show_service_block,
+        show_transport_block=show_transport_block,
+        menu_sections=menu_sections_list,
+        menu_title=menu_title,
+        summary_title=summary_title,
+        footer_text=footer_text,
+        page_orientation=page_orientation,
+        items_per_page=items_per_page,
     )
     
     updated = crud.update_template(db, template_id, template_data)
@@ -2005,30 +2101,33 @@ def delete_template(template_id: int, db: Session = Depends(get_db), user = Depe
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # Забороняємо видаляти шаблон за замовчуванням
-    if template.is_default:
-        raise HTTPException(
-            status_code=400,
-            detail="Неможливо видалити шаблон за замовчуванням. "
-                   "Спочатку зніміть позначку 'За замовчуванням' з цього шаблону."
-        )
+    # ВАЖЛИВО:
+    # Дозволяємо видаляти будь-який шаблон, навіть якщо він:
+    #  - позначений як is_default
+    #  - вже використовується в існуючих КП
+    #
+    # Для існуючих КП ми просто обнуляємо template_id.
+    # Під час генерації PDF для такого КП код автоматично:
+    #  - спробує взяти шаблон за заданим template_id (який тепер None),
+    #  - потім fallback на шаблон за замовчуванням (якщо він є),
+    #  - або на базовий файл `commercial-offer.html`.
 
-    # Перевіряємо, чи шаблон не використовується в існуючих КП
-    kp_using_template = (
-        db.query(models.KP)
-        .filter(models.KP.template_id == template_id)
-        .first()
+    # Обнуляємо template_id у всіх КП, які посилаються на цей шаблон,
+    # щоб уникнути помилок зовнішнього ключа та коректно перейти на дефолтний шаблон.
+    db.query(models.KP).filter(models.KP.template_id == template_id).update(
+        {models.KP.template_id: None}
     )
-    if kp_using_template:
-        raise HTTPException(
-            status_code=400,
-            detail="Неможливо видалити шаблон, оскільки він уже використовується в існуючих КП."
-        )
-    
+    db.commit()
+
     # Видаляємо прев'ю якщо воно існує
     if template.preview_image_url:
         delete_old_preview(template.preview_image_url)
-    
+    # Також видаляємо зображення шапки та фону, якщо вони збережені локально
+    if getattr(template, "header_image_url", None):
+        delete_old_preview(template.header_image_url)
+    if getattr(template, "background_image_url", None):
+        delete_old_preview(template.background_image_url)
+
     deleted = crud.delete_template(db, template_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -2524,6 +2623,27 @@ def update_client(
     return db_client
 
 
+@router.delete("/clients/{client_id}")
+def delete_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user_db)
+):
+    # Перевірка прав доступу: тільки адміни та керівники відділів можуть видаляти клієнтів
+    if not user.is_admin and not (user.role and user.role.endswith("-lead")):
+        raise HTTPException(403, "Доступ заборонено. Тільки адміністратори та керівники відділів можуть видаляти клієнтів")
+    
+    db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
+    if not db_client:
+        raise HTTPException(404, "Client not found")
+    
+    # Видаляємо клієнта (каскадне видалення залежних записів налаштовано в моделі)
+    db.delete(db_client)
+    db.commit()
+    
+    return {"status": "deleted", "id": client_id}
+
+
 # ==================== QUESTIONNAIRE ====================
 
 @router.post("/clients/{client_id}/questionnaire")
@@ -2809,7 +2929,19 @@ def generate_questionnaire_pdf(
         
         <h2>Сервіс</h2>
         <table>
-            {% if questionnaire.event_type %}<tr><td>Формат заходу:</td><td class="value">{{ questionnaire.event_type }}</td></tr>{% endif %}
+            {% if event_formats %}
+            <tr>
+                <td>Формати заходу:</td>
+                <td class="value">
+                    {% for fmt in event_formats %}
+                        <div style="margin-bottom: 3mm;">
+                            <strong>{{ fmt.format }}</strong>
+                            {% if fmt.time %}<br><span style="color: #666;">⏰ {{ fmt.time }}</span>{% endif %}
+                        </div>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endif %}
             {% if questionnaire.event_date %}<tr><td>Дата заходу:</td><td class="value">{{ questionnaire.event_date }}</td></tr>{% endif %}
             {% if questionnaire.location %}<tr><td>Точна локація:</td><td class="value">{{ questionnaire.location }}</td></tr>{% endif %}
             {% if questionnaire.contact_person %}<tr><td>Контакт замовника:</td><td class="value">{{ questionnaire.contact_person }}</td></tr>{% endif %}
@@ -2874,12 +3006,26 @@ def generate_questionnaire_pdf(
     </html>
     """
     
+    # Парсимо формати заходу
+    event_formats = []
+    if questionnaire.event_type:
+        try:
+            import json
+            parsed = json.loads(questionnaire.event_type)
+            if isinstance(parsed, list):
+                event_formats = parsed
+            else:
+                event_formats = [{"format": questionnaire.event_type}]
+        except:
+            event_formats = [{"format": questionnaire.event_type}]
+    
     template = Template(html_template)
     html_content = template.render(
         questionnaire=questionnaire,
         client=client,
         manager=manager,
-        manager_name=manager_full_name
+        manager_name=manager_full_name,
+        event_formats=event_formats
     )
     
     # Генеруємо PDF

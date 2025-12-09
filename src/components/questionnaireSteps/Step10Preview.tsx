@@ -46,6 +46,24 @@ export function Step10Preview({
     return timeString;
   };
 
+  // Парсинг форматів з JSON рядка або старого формату
+  const parseEventFormats = (eventTypeStr?: string): Array<{ format: string; time?: string }> => {
+    if (!eventTypeStr) return [];
+    
+    try {
+      const parsed = JSON.parse(eventTypeStr);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      if (eventTypeStr.trim()) {
+        return [{ format: eventTypeStr }];
+      }
+    }
+    
+    return [];
+  };
+
   // Перевірка обов'язкових полів
   const getValidationStatus = () => {
     const errors: string[] = [];
@@ -53,7 +71,8 @@ export function Step10Preview({
     if (!clientData.name || !clientData.phone) {
       errors.push("Дані клієнта не заповнені");
     }
-    if (!formData.event_date || !formData.event_type) {
+    const formats = parseEventFormats(formData.event_type);
+    if (!formData.event_date || formats.length === 0) {
       errors.push("Дані заходу не заповнені");
     }
     if (!formData.location || !formData.contact_person || !formData.contact_phone) {
@@ -163,7 +182,27 @@ export function Step10Preview({
           hasError={!formData.event_date || !formData.event_type}
         >
           <div className="space-y-1">
-            <InfoRow label="Формат" value={formData.event_type} />
+            {(() => {
+              const formats = parseEventFormats(formData.event_type);
+              if (formats.length > 0) {
+                return (
+                  <div className="py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Формати заходу:</span>
+                    <div className="space-y-2 mt-2">
+                      {formats.map((eventFormat, index) => (
+                        <div key={index} className="pl-2 border-l-2 border-[#FF5A00]">
+                          <div className="font-medium text-gray-900">{eventFormat.format}</div>
+                          {eventFormat.time && (
+                            <div className="text-sm text-gray-600 mt-1">⏰ {eventFormat.time}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <InfoRow label="Дата заходу" value={formatDate(formData.event_date)} />
             <InfoRow
               label="Кількість гостей"
@@ -293,8 +332,30 @@ export function Step10Preview({
           </div>
         </PreviewSection>
 
-        {/* Крок 7: Контент */}
-        <PreviewSection title="7. Контент" stepIndex={6}>
+        {/* Крок 7: Заїзд */}
+        <PreviewSection title="7. Заїзд" stepIndex={6}>
+          <div className="space-y-1">
+            <InfoRow label="Складність заїзду" value={formData.venue_complexity} />
+            <InfoRow label="Поверх" value={formData.floor_number} />
+            <InfoRow 
+              label="Ліфт" 
+              value={formData.elevator_available ? "Є" : formData.elevator_available === false ? "Немає" : undefined} 
+            />
+            <InfoRow label="Технічне приміщення" value={formData.technical_room} />
+            <InfoRow label="Кухня" value={formData.kitchen_available} />
+            <InfoRow 
+              label="Фото локації" 
+              value={formData.venue_photos ? "Є" : formData.venue_photos === false ? "Немає" : undefined} 
+            />
+            <InfoRow 
+              label="Фото заїзду" 
+              value={formData.arrival_photos ? "Є" : formData.arrival_photos === false ? "Немає" : undefined} 
+            />
+          </div>
+        </PreviewSection>
+
+        {/* Крок 8: Контент */}
+        <PreviewSection title="8. Контент" stepIndex={7}>
           <div className="space-y-1">
             <InfoRow label="Фотозйомка" value={formData.photo_allowed} />
             <InfoRow label="Відеозйомка" value={formData.video_allowed} />
@@ -302,16 +363,16 @@ export function Step10Preview({
           </div>
         </PreviewSection>
 
-        {/* Крок 8: Замовник */}
-        <PreviewSection title="8. Замовник" stepIndex={7}>
+        {/* Крок 9: Замовник */}
+        <PreviewSection title="9. Замовник" stepIndex={8}>
           <div className="space-y-1">
             <InfoRow label="Назва компанії" value={formData.client_company_name} />
             <InfoRow label="Вид діяльності" value={formData.client_activity_type} />
           </div>
         </PreviewSection>
 
-        {/* Крок 9: Коментарі */}
-        <PreviewSection title="9. Коментарі" stepIndex={8}>
+        {/* Крок 10: Коментарі */}
+        <PreviewSection title="10. Коментарі" stepIndex={9}>
           <div className="space-y-1">
             {formData.special_notes ? (
               <div className="py-2">
