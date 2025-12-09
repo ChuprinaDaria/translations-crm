@@ -356,6 +356,7 @@ class ClientQuestionnaire(Base):
     
     # СЕРВІС
     event_date = Column(Date, nullable=True)  # Дата заходу
+    event_type = Column(String(200), nullable=True)  # Формат заходу (фуршет, банкет, доставка тощо)
     location = Column(String(500), nullable=True)  # Точна локація
     contact_person = Column(String(200), nullable=True)  # Контакт замовника
     contact_phone = Column(String(50), nullable=True)

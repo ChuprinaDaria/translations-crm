@@ -24,6 +24,7 @@ import {
   menusApi,
   clientsApi,
   benefitsApi,
+  questionnairesApi,
   getImageUrl,
   type Item,
   type Category,
@@ -31,7 +32,9 @@ import {
   type Menu,
   type Client,
   type Benefit,
+  type ClientQuestionnaire,
 } from "../lib/api";
+import { InfoTooltip } from "./InfoTooltip";
 
 interface Dish {
   id: number;
@@ -132,12 +135,79 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [discountIncludeEquipment, setDiscountIncludeEquipment] = useState(false);
   const [discountIncludeService, setDiscountIncludeService] = useState(false);
 
+  // Анкети клієнта для автозаповнення КП
+  const [clientQuestionnaires, setClientQuestionnaires] = useState<ClientQuestionnaire[]>([]);
+  const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<number | null>(null);
+  const [questionnaireAutofill, setQuestionnaireAutofill] = useState<
+    Record<string, { questionnaireId: number; questionnaireDate?: string }>
+  >({});
+
   // Функція для валідації кроку 1 (без показу помилок)
   const isStep1Valid = (): boolean => {
     if (clientSelectionMode === "existing" && !selectedClientId) {
       return false;
     }
-    return !!(clientName && eventDate && guestCount && eventGroup && eventFormat);
+    // Після оновлення UI поле "Кількість гостей" та основні поля формату/групи
+    // більше не є обов'язковими на першому кроці.
+    // Для переходу далі достатньо базових даних: ім'я клієнта + дата події.
+    return !!(clientName && eventDate);
+  };
+
+  const applyQuestionnaireToKP = (q: ClientQuestionnaire | null) => {
+    if (!q) {
+      setQuestionnaireAutofill({});
+      setSelectedQuestionnaireId(null);
+      return;
+    }
+
+    const sourceDate =
+      q.event_date ||
+      q.created_at ||
+      undefined;
+
+    const autofill: Record<string, { questionnaireId: number; questionnaireDate?: string }> = {};
+
+    if (q.event_type) {
+      setEventFormat(q.event_type);
+      autofill.eventFormat = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    }
+    if (q.location) {
+      setEventLocation(q.location);
+      autofill.eventLocation = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    }
+    if (q.on_site_contact) {
+      setCoordinatorName(q.on_site_contact);
+      autofill.coordinatorName = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    }
+    if (q.on_site_phone) {
+      setCoordinatorPhone(q.on_site_phone);
+      autofill.coordinatorPhone = { questionnaireId: q.id, questionnaireDate: sourceDate };
+    }
+
+    setSelectedQuestionnaireId(q.id);
+    setQuestionnaireAutofill(autofill);
+  };
+
+  const loadClientQuestionnaires = async (clientId: number) => {
+    try {
+      const data = await questionnairesApi.getClientQuestionnaires(clientId);
+      const questionnaires = data.questionnaires || [];
+      setClientQuestionnaires(questionnaires);
+
+      if (questionnaires.length > 0) {
+        // Масив уже відсортований за created_at DESC на бекенді
+        applyQuestionnaireToKP(questionnaires[0]);
+      } else {
+        setSelectedQuestionnaireId(null);
+        setQuestionnaireAutofill({});
+      }
+    } catch (error) {
+      console.error("Помилка завантаження анкет клієнта:", error);
+      toast.error("Не вдалося завантажити анкети клієнта");
+      setClientQuestionnaires([]);
+      setSelectedQuestionnaireId(null);
+      setQuestionnaireAutofill({});
+    }
   };
 
   // Функція для валідації кроку 1 з показом помилок
@@ -146,16 +216,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       toast.error("Будь ласка, оберіть клієнта зі списку");
       return false;
     }
-    if (!clientName || !eventDate || !guestCount) {
-      toast.error("Будь ласка, заповніть всі обов'язкові дані клієнта та заходу");
-      return false;
-    }
-    if (!eventGroup) {
-      toast.error("Оберіть групу формату заходу");
-      return false;
-    }
-    if (!eventFormat) {
-      toast.error("Вкажіть формат заходу");
+    if (!clientName || !eventDate) {
+      toast.error("Будь ласка, заповніть ім'я клієнта та дату події");
       return false;
     }
     return true;
@@ -1027,6 +1089,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         if (client.event_time) {
                           setEventTime(client.event_time);
                         }
+
+                        // Завантажуємо всі анкети клієнта та автозаповнюємо останню
+                        loadClientQuestionnaires(clientId);
                       }
                     }}
                   >
@@ -1041,6 +1106,76 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {/* Вибір анкети клієнта для автозаповнення КП */}
+              {clientSelectionMode === "existing" && selectedClientId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">
+                      Обрати анкету клієнта
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={!Object.keys(questionnaireAutofill).length}
+                      onClick={() => {
+                        // Очищуємо всі поля, що були заповнені з анкети
+                        setEventFormat("");
+                        setEventLocation("");
+                        setCoordinatorName("");
+                        setCoordinatorPhone("");
+                        setSelectedQuestionnaireId(null);
+                        setQuestionnaireAutofill({});
+                      }}
+                    >
+                      Очистити дані з анкети
+                    </Button>
+                  </div>
+
+                  {clientQuestionnaires.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      У цього клієнта ще немає анкет.
+                    </p>
+                  ) : (
+                    <>
+                      <Select
+                        value={selectedQuestionnaireId?.toString() || ""}
+                        onValueChange={(value) => {
+                          const qId = parseInt(value, 10);
+                          const q = clientQuestionnaires.find((qq) => qq.id === qId) || null;
+                          applyQuestionnaireToKP(q);
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Оберіть анкету клієнта" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clientQuestionnaires.map((q) => {
+                            const dateLabel =
+                              q.event_date ||
+                              q.created_at ||
+                              "";
+                            const formattedDate = dateLabel
+                              ? new Date(dateLabel).toLocaleDateString("uk-UA")
+                              : "";
+                            return (
+                              <SelectItem key={q.id} value={q.id.toString()}>
+                                Анкета #{q.id}
+                                {formattedDate ? ` • від ${formattedDate}` : ""}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        За замовчуванням використовується остання анкета. Ви можете обрати іншу.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1225,7 +1360,25 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     placeholder="м. Київ, вул. Короленківська 4"
                     value={eventLocation}
                     onChange={(e) => setEventLocation(e.target.value)}
+                    className={`${
+                      questionnaireAutofill.eventLocation
+                        ? "border-emerald-400 bg-emerald-50"
+                        : ""
+                    }`}
                   />
+                  {questionnaireAutofill.eventLocation && (
+                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
+                      Дані з анкети{" "}
+                      {questionnaireAutofill.eventLocation.questionnaireDate && (
+                        <>
+                          від{" "}
+                          {new Date(
+                            questionnaireAutofill.eventLocation.questionnaireDate
+                          ).toLocaleDateString("uk-UA")}
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1256,7 +1409,25 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     placeholder="Ім'я координатора"
                     value={coordinatorName}
                     onChange={(e) => setCoordinatorName(e.target.value)}
+                    className={`${
+                      questionnaireAutofill.coordinatorName
+                        ? "border-emerald-400 bg-emerald-50"
+                        : ""
+                    }`}
                   />
+                  {questionnaireAutofill.coordinatorName && (
+                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
+                      Дані з анкети{" "}
+                      {questionnaireAutofill.coordinatorName.questionnaireDate && (
+                        <>
+                          від{" "}
+                          {new Date(
+                            questionnaireAutofill.coordinatorName.questionnaireDate
+                          ).toLocaleDateString("uk-UA")}
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1268,7 +1439,25 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     placeholder="+380..."
                     value={coordinatorPhone}
                     onChange={(e) => setCoordinatorPhone(e.target.value)}
+                    className={`${
+                      questionnaireAutofill.coordinatorPhone
+                        ? "border-emerald-400 bg-emerald-50"
+                        : ""
+                    }`}
                   />
+                  {questionnaireAutofill.coordinatorPhone && (
+                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
+                      Дані з анкети{" "}
+                      {questionnaireAutofill.coordinatorPhone.questionnaireDate && (
+                        <>
+                          від{" "}
+                          {new Date(
+                            questionnaireAutofill.coordinatorPhone.questionnaireDate
+                          ).toLocaleDateString("uk-UA")}
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -172,6 +172,7 @@ export interface ClientQuestionnaire {
   manager_id?: number;
   // СЕРВІС
   event_date?: string;
+  event_type?: string;
   location?: string;
   contact_person?: string;
   contact_phone?: string;
@@ -226,6 +227,7 @@ export interface ClientQuestionnaire {
 
 export interface ClientQuestionnaireUpdate {
   event_date?: string;
+  event_type?: string;
   location?: string;
   contact_person?: string;
   contact_phone?: string;

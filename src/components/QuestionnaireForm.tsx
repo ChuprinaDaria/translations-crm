@@ -440,6 +440,15 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
               />
             </div>
             <div className="space-y-1">
+              <Label className="text-sm">Формат заходу</Label>
+              <Input
+                value={formData.event_type || ""}
+                onChange={(e) => updateField("event_type", e.target.value)}
+                placeholder="Фуршет / Банкет / Доставка обідів..."
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1">
               <Label className="text-sm">Точна локація</Label>
               <Input
                 value={formData.location || ""}

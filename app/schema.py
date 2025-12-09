@@ -500,6 +500,7 @@ class Client(ClientBase):
 class ClientQuestionnaireBase(BaseModel):
     # СЕРВІС
     event_date: Optional[str] = None  # Date as string for API
+    event_type: Optional[str] = None  # Формат заходу (фуршет, банкет, доставка тощо)
     location: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
@@ -558,6 +559,7 @@ class ClientQuestionnaireCreate(ClientQuestionnaireBase):
 
 class ClientQuestionnaireUpdate(BaseModel):
     event_date: Optional[str] = None
+    event_type: Optional[str] = None
     location: Optional[str] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
