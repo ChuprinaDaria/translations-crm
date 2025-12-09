@@ -796,8 +796,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     return (discountBase * discountBenefit.value) / 100;
   };
   // Кількість гостей для розрахунків (загальне поле «Кількість гостей» в КП)
-  // Формати заходу можуть дублювати тих самих гостей, тому тут НЕ сумуємо їх.
-  const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+  // Якщо guestCount не заповнено, беремо максимальне значення з форматів
+  const peopleCountNum = guestCount 
+    ? parseInt(guestCount, 10) || 0 
+    : eventFormats.length > 0
+      ? Math.max(...eventFormats.map(f => parseInt(f.peopleCount, 10) || 0), 0)
+      : 0;
   const totalPrice = foodTotalPrice + equipmentTotal + serviceTotal;
 
   const handleApplyMenu = () => {
@@ -913,7 +917,21 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         }
 
         // Створюємо КП з усіма даними
-        const peopleCountNumForPayload = parseInt(guestCount, 10) || 0;
+        // Якщо guestCount порожній, беремо максимальне значення з форматів
+        const peopleCountNumForPayload = guestCount 
+          ? parseInt(guestCount, 10) || 0
+          : eventFormats.length > 0
+            ? Math.max(...eventFormats.map(f => parseInt(f.peopleCount, 10) || 0), 0)
+            : 0;
+        
+        console.log("Creating KP for preview with data:", {
+          guestCount,
+          eventFormats: eventFormats.map(f => ({ name: f.name, peopleCount: f.peopleCount })),
+          peopleCountNumForPayload,
+          clientName,
+          eventDate,
+          selectedDishesCount: selectedDishes.length
+        });
         const foodTotalPrice = getTotalPrice();
         const regularDishesPriceForPayload = getRegularDishesPrice();
         const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload;
@@ -1046,7 +1064,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       return;
     }
 
-  const peopleCountNumForPayload = parseInt(guestCount, 10) || 0;
+  // Якщо guestCount порожній, беремо максимальне значення з форматів
+  const peopleCountNumForPayload = guestCount 
+    ? parseInt(guestCount, 10) || 0
+    : eventFormats.length > 0
+      ? Math.max(...eventFormats.map(f => parseInt(f.peopleCount, 10) || 0), 0)
+      : 0;
   const foodTotalPrice = getTotalPrice();
   const regularDishesPriceForPayload = getRegularDishesPrice(); // Тільки звичайні страви
   const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload; // Ціна кастомних страв
@@ -3490,7 +3513,11 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </div>
                       <div>
                         <span className="text-gray-600">Гостей:</span>
-                        <span className="text-gray-900 ml-2">{guestCount}</span>
+                        <span className="text-gray-900 ml-2">
+                          {guestCount || (eventFormats.length > 0 
+                            ? Math.max(...eventFormats.map(f => parseInt(f.peopleCount, 10) || 0), 0) 
+                            : "Не вказано")}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-600">Страв:</span>
