@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { toast } from "sonner";
+import { useDebouncedCallback } from "../hooks/useDebounce";
+import { useSwipe } from "../hooks/useSwipe";
 
 interface WizardStep {
   id: number;
@@ -19,19 +21,65 @@ interface QuestionnaireWizardProps {
 }
 
 export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave }: QuestionnaireWizardProps) {
-  const [currentStep, setCurrentStep] = useState(0);
+  // Читаємо крок з URL або використовуємо 0
+  const getInitialStep = () => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const stepParam = params.get('step');
+      if (stepParam) {
+        const step = parseInt(stepParam, 10) - 1; // URL використовує 1-based індекси
+        if (step >= 0 && step < steps.length) {
+          return step;
+        }
+      }
+    }
+    return 0;
+  };
+
+  const [currentStep, setCurrentStep] = useState(getInitialStep());
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
-  // Автозбереження при зміні кроку
+  // Оновлюємо URL при зміні кроку
   useEffect(() => {
-    if (autoSave && currentStep > 0) {
-      const timer = setTimeout(() => {
-        autoSave(currentStep, {}).catch(console.error);
-      }, 2000);
-      return () => clearTimeout(timer);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('step', (currentStep + 1).toString());
+      window.history.replaceState({}, '', url.toString());
     }
-  }, [currentStep, autoSave]);
+  }, [currentStep]);
+
+  // Debounced autosave при зміні кроку
+  const debouncedAutoSave = useDebouncedCallback(
+    (step: number) => {
+      if (autoSave && step > 0) {
+        autoSave(step, {}).catch(console.error);
+      }
+    },
+    2000
+  );
+
+  useEffect(() => {
+    if (currentStep > 0) {
+      debouncedAutoSave(currentStep);
+    }
+  }, [currentStep, debouncedAutoSave]);
+
+  // Swipe навігація для мобільних
+  useSwipe({
+    onSwipeLeft: () => {
+      // Swipe вліво = наступний крок
+      if (currentStep < steps.length - 1 && steps[currentStep].isValid()) {
+        handleNext();
+      }
+    },
+    onSwipeRight: () => {
+      // Swipe вправо = попередній крок
+      if (currentStep > 0) {
+        handlePrev();
+      }
+    },
+  }, 50);
 
   const handleNext = useCallback(() => {
     if (currentStep < steps.length - 1) {

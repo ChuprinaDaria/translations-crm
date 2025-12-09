@@ -1,6 +1,8 @@
+import React, { useState, useEffect } from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
+import { Slider } from "../ui/slider";
 import { getDefaultEventDate, calculateEndTime } from "../../utils/questionnaireValidation";
 import {
   Select,
@@ -9,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { useState, useEffect } from "react";
 
 const EVENT_FORMATS = [
   "Фуршет",
@@ -31,8 +32,19 @@ interface Step2EventProps {
   onChange: (field: string, value: string) => void;
 }
 
+// Парсинг бюджету з рядка "10000-15000" в масив [10000, 15000]
+const parseBudget = (budgetStr?: string): [number, number] => {
+  if (!budgetStr) return [0, 50000];
+  const parts = budgetStr.split('-').map(p => parseInt(p.trim()) || 0);
+  if (parts.length === 2) {
+    return [parts[0], parts[1]];
+  }
+  return [0, 50000];
+};
+
 export function Step2Event({ eventDate, eventType, guestCount, budget, onChange }: Step2EventProps) {
   const [recentFormats, setRecentFormats] = useState<string[]>([]);
+  const [budgetRange, setBudgetRange] = useState<[number, number]>(parseBudget(budget));
 
   useEffect(() => {
     // Завантажуємо останні формати з localStorage
@@ -48,6 +60,11 @@ export function Step2Event({ eventDate, eventType, guestCount, budget, onChange 
       onChange('event_date', getDefaultEventDate());
     }
   }, []);
+
+  useEffect(() => {
+    // Синхронізуємо budgetRange з budget prop
+    setBudgetRange(parseBudget(budget));
+  }, [budget]);
 
   const handleFormatSelect = (format: string) => {
     onChange('event_type', format);
@@ -129,7 +146,7 @@ export function Step2Event({ eventDate, eventType, guestCount, budget, onChange 
             type="number"
             min="1"
             value={guestCount}
-            onChange={(e) => onChange('people_count', e.target.value)}
+            onChange={(e) => onChange('guest_count', e.target.value)}
             placeholder="50"
             className="h-12 text-base"
             inputMode="numeric"
@@ -137,16 +154,33 @@ export function Step2Event({ eventDate, eventType, guestCount, budget, onChange 
         </div>
 
         {budget !== undefined && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label htmlFor="budget" className="text-sm">
               Бюджет <span className="text-gray-400 text-xs">(опціонально)</span>
             </Label>
+            <div className="space-y-4 px-2">
+              <Slider
+                id="budget"
+                min={0}
+                max={200000}
+                step={5000}
+                value={budgetRange}
+                onValueChange={(values) => {
+                  setBudgetRange([values[0], values[1]]);
+                  onChange('budget', `${values[0]}-${values[1]}`);
+                }}
+                className="w-full"
+              />
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>{budgetRange[0].toLocaleString()} грн</span>
+                <span>{budgetRange[1].toLocaleString()} грн</span>
+              </div>
+            </div>
             <Input
-              id="budget"
               type="text"
               value={budget || ""}
               onChange={(e) => onChange('budget', e.target.value)}
-              placeholder="10000-15000 грн"
+              placeholder="10000-15000 або використайте слайдер"
               className="h-12 text-base"
             />
           </div>

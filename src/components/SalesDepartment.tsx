@@ -15,6 +15,7 @@ import { clientsApi, questionnairesApi, type Client } from "../lib/api";
 import { toast } from "sonner";
 import { ClientDetailsDialog } from "./ClientDetailsDialog";
 import { QuestionnaireForm } from "./QuestionnaireForm";
+import { QuestionnaireWizardForm } from "./QuestionnaireWizardForm";
 
 export function SalesDepartment() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -63,6 +64,7 @@ export function SalesDepartment() {
       // Якщо у клієнта є questionnaire_id, використовуємо його напряму
       if (client.questionnaire_id) {
         setEditingQuestionnaireId(client.questionnaire_id);
+        setSelectedClientId(client.id);
         setShowQuestionnaireForm(true);
         return;
       }
@@ -72,9 +74,11 @@ export function SalesDepartment() {
       if (data.questionnaire) {
         // Редагуємо існуючу анкету
         setEditingQuestionnaireId(data.questionnaire.id);
+        setSelectedClientId(client.id);
       } else {
         // Створюємо нову для існуючого клієнта
         setEditingQuestionnaireId(undefined);
+        setSelectedClientId(client.id);
       }
       setShowQuestionnaireForm(true);
     } catch (error: any) {
@@ -85,12 +89,14 @@ export function SalesDepartment() {
 
   const handleCreateNew = () => {
     setEditingQuestionnaireId(undefined);
+    setSelectedClientId(undefined);
     setShowQuestionnaireForm(true);
   };
 
   const handleBackFromForm = () => {
     setShowQuestionnaireForm(false);
     setEditingQuestionnaireId(undefined);
+    setSelectedClientId(undefined);
     // Очищаємо пошук щоб показати всіх клієнтів включно з новоствореним
     setSearchQuery("");
     // Затримка щоб форма закрилась і потім оновився список
@@ -120,11 +126,28 @@ export function SalesDepartment() {
     }
   };
 
+  // Стан для зберігання clientId при створенні нової анкети
+  const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined);
+
   // Якщо показуємо форму анкети
   if (showQuestionnaireForm) {
+    // Використовуємо новий wizard
+    // Отримуємо clientId з клієнта якщо редагуємо
+    let clientIdForForm: number | undefined = undefined;
+    
+    if (editingQuestionnaireId) {
+      // Шукаємо клієнта з цією анкетою
+      const clientWithQuestionnaire = clients.find(c => c.questionnaire_id === editingQuestionnaireId);
+      clientIdForForm = clientWithQuestionnaire?.id;
+    } else {
+      // Для нової анкети використовуємо selectedClientId якщо він є
+      clientIdForForm = selectedClientId;
+    }
+    
     return (
-      <QuestionnaireForm
+      <QuestionnaireWizardForm
         questionnaireId={editingQuestionnaireId}
+        clientId={clientIdForForm}
         onBack={handleBackFromForm}
         onSave={handleBackFromForm}
       />

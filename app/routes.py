@@ -2796,6 +2796,7 @@ def generate_questionnaire_pdf(
         <table>
             <tr><td>Клієнт:</td><td class="value">{{ client.name }}</td></tr>
             <tr><td>Телефон:</td><td class="value">{{ client.phone }}</td></tr>
+            {% if client.email %}<tr><td>Email:</td><td class="value">{{ client.email }}</td></tr>{% endif %}
             {% if client.company_name %}<tr><td>Компанія:</td><td class="value">{{ client.company_name }}</td></tr>{% endif %}
         </table>
         {% endif %}
@@ -2808,17 +2809,21 @@ def generate_questionnaire_pdf(
         
         <h2>Сервіс</h2>
         <table>
+            {% if questionnaire.event_type %}<tr><td>Формат заходу:</td><td class="value">{{ questionnaire.event_type }}</td></tr>{% endif %}
             {% if questionnaire.event_date %}<tr><td>Дата заходу:</td><td class="value">{{ questionnaire.event_date }}</td></tr>{% endif %}
             {% if questionnaire.location %}<tr><td>Точна локація:</td><td class="value">{{ questionnaire.location }}</td></tr>{% endif %}
             {% if questionnaire.contact_person %}<tr><td>Контакт замовника:</td><td class="value">{{ questionnaire.contact_person }}</td></tr>{% endif %}
             {% if questionnaire.contact_phone %}<tr><td>Телефон контакту:</td><td class="value">{{ questionnaire.contact_phone }}</td></tr>{% endif %}
-            {% if questionnaire.on_site_contact %}<tr><td>Хто буде головним на локації:</td><td class="value">{{ questionnaire.on_site_contact }}</td></tr>{% endif %}
+            {% if questionnaire.on_site_contact %}<tr><td>Головний на локації:</td><td class="value">{{ questionnaire.on_site_contact }}</td></tr>{% endif %}
+            {% if questionnaire.on_site_phone %}<tr><td>Телефон на локації:</td><td class="value">{{ questionnaire.on_site_phone }}</td></tr>{% endif %}
             {% if questionnaire.arrival_time %}<tr><td>Час заїзду:</td><td class="value">{{ questionnaire.arrival_time }}</td></tr>{% endif %}
             {% if questionnaire.event_start_time %}<tr><td>Час початку:</td><td class="value">{{ questionnaire.event_start_time }}</td></tr>{% endif %}
             {% if questionnaire.event_end_time %}<tr><td>Час кінця:</td><td class="value">{{ questionnaire.event_end_time }}</td></tr>{% endif %}
+            {% if questionnaire.additional_services_timing %}<tr><td>Додаткові таймінги:</td><td class="value">{{ questionnaire.additional_services_timing }}</td></tr>{% endif %}
             {% if questionnaire.equipment_notes %}<tr><td>Обладнання:</td><td class="value">{{ questionnaire.equipment_notes }}</td></tr>{% endif %}
             {% if questionnaire.payment_method %}<tr><td>Спосіб оплати:</td><td class="value">{{ questionnaire.payment_method }}</td></tr>{% endif %}
             {% if questionnaire.textile_color %}<tr><td>Колір текстилю:</td><td class="value">{{ questionnaire.textile_color }}</td></tr>{% endif %}
+            {% if questionnaire.banquet_line_color %}<tr><td>Колір оформлення лінії:</td><td class="value">{{ questionnaire.banquet_line_color }}</td></tr>{% endif %}
         </table>
         
         <h2>Заїзд</h2>
@@ -2835,7 +2840,24 @@ def generate_questionnaire_pdf(
             {% if questionnaire.dish_serving %}<tr><td>Посуд для подачі:</td><td class="value">{{ questionnaire.dish_serving }}</td></tr>{% endif %}
             {% if questionnaire.hot_snacks_serving %}<tr><td>Подача гарячих закусок:</td><td class="value">{{ questionnaire.hot_snacks_serving }}</td></tr>{% endif %}
             {% if questionnaire.salad_serving %}<tr><td>Подання салатів:</td><td class="value">{{ questionnaire.salad_serving }}</td></tr>{% endif %}
-            {% if questionnaire.menu_notes %}<tr><td>Коментарі до меню:</td><td class="value">{{ questionnaire.menu_notes }}</td></tr>{% endif %}
+            {% if questionnaire.product_allergy %}<tr><td>Алергії:</td><td class="value">{{ questionnaire.product_allergy }}</td></tr>{% endif %}
+            {% if questionnaire.hot_snacks_prep %}<tr><td>Приготування закусок:</td><td class="value">{{ questionnaire.hot_snacks_prep }}</td></tr>{% endif %}
+            {% if questionnaire.menu_notes %}<tr><td>Коментар до меню:</td><td class="value">{{ questionnaire.menu_notes }}</td></tr>{% endif %}
+            {% if questionnaire.client_drinks_notes %}<tr><td>Напої від замовника:</td><td class="value">{{ questionnaire.client_drinks_notes }}</td></tr>{% endif %}
+            {% if questionnaire.client_order_notes %}<tr><td>Їжа від замовника:</td><td class="value">{{ questionnaire.client_order_notes }}</td></tr>{% endif %}
+        </table>
+        
+        <h2>Контент</h2>
+        <table>
+            {% if questionnaire.photo_allowed %}<tr><td>Фотозйомка:</td><td class="value">{{ questionnaire.photo_allowed }}</td></tr>{% endif %}
+            {% if questionnaire.video_allowed %}<tr><td>Відеозйомка:</td><td class="value">{{ questionnaire.video_allowed }}</td></tr>{% endif %}
+            {% if questionnaire.branded_products %}<tr><td>Брендована продукція:</td><td class="value">{{ questionnaire.branded_products }}</td></tr>{% endif %}
+        </table>
+        
+        <h2>Замовник</h2>
+        <table>
+            {% if questionnaire.client_company_name %}<tr><td>Назва компанії:</td><td class="value">{{ questionnaire.client_company_name }}</td></tr>{% endif %}
+            {% if questionnaire.client_activity_type %}<tr><td>Вид діяльності:</td><td class="value">{{ questionnaire.client_activity_type }}</td></tr>{% endif %}
         </table>
         
         {% if questionnaire.special_notes %}
