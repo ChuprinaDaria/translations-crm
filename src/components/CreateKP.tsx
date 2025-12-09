@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, X, Send, FileText, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Search, X, Send, FileText, ChevronRight, Loader2, Clipboard, Edit, Pencil, Check } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -81,6 +81,103 @@ const EVENT_FORMAT_OPTIONS: string[] = [
   "Су-від",
   "Оренда обладнання/персоналу",
 ];
+
+// Компонент для редагування полів у прев'ю
+interface EditableFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onEdit: () => void;
+  stepNumber: number;
+  type?: "text" | "date" | "tel" | "number";
+}
+
+function EditableField({ label, value, onChange, onEdit, stepNumber, type = "text" }: EditableFieldProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+
+  useEffect(() => {
+    setEditValue(value);
+  }, [value]);
+
+  const handleSave = () => {
+    onChange(editValue);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditValue(value);
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="space-y-1">
+        <p className="text-gray-500 text-xs">{label}</p>
+        <div className="flex items-center gap-2">
+          <Input
+            type={type}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            className="h-8 text-sm"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSave();
+              } else if (e.key === "Escape") {
+                handleCancel();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleSave}
+            className="h-8 w-8 p-0"
+          >
+            <Check className="w-4 h-4 text-green-600" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleCancel}
+            className="h-8 w-8 p-0"
+          >
+            <X className="w-4 h-4 text-red-600" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 group relative">
+      <div className="flex items-center gap-2">
+        <p className="text-gray-500 text-xs">{label}</p>
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded"
+          title="Редагувати"
+        >
+          <Pencil className="w-3 h-3 text-gray-400" />
+        </button>
+      </div>
+      <p className="text-gray-900 font-medium">{value === "-" ? "-" : value}</p>
+      {value !== "-" && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-xs text-blue-600 hover:text-blue-800 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          Повернутись до кроку {stepNumber}
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface CreateKPProps {
   kpId?: number | null;
@@ -1417,46 +1514,67 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
               {/* Вибір анкети клієнта для автозаповнення КП */}
               {clientSelectionMode === "existing" && selectedClientId && (
-                <div className="space-y-2">
+                <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm">
-                      Обрати анкету клієнта
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <Clipboard className="w-4 h-4 text-blue-600" />
+                      Оберіть анкету клієнта
                     </Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      disabled={!Object.keys(questionnaireAutofill).length}
-                      onClick={() => {
-                        // Очищуємо всі поля, що були заповнені з анкети
-                        setEventFormat("");
-                        setEventLocation("");
-                        setCoordinatorName("");
-                        setCoordinatorPhone("");
-                        setSelectedQuestionnaireId(null);
-                        setQuestionnaireAutofill({});
-                      }}
-                    >
-                      Очистити дані з анкети
-                    </Button>
+                    {Object.keys(questionnaireAutofill).length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          // Очищуємо всі поля, що були заповнені з анкети
+                          setEventFormat("");
+                          setEventLocation("");
+                          setCoordinatorName("");
+                          setCoordinatorPhone("");
+                          setSelectedQuestionnaireId(null);
+                          setQuestionnaireAutofill({});
+                        }}
+                      >
+                        Очистити дані з анкети
+                      </Button>
+                    )}
                   </div>
 
                   {clientQuestionnaires.length === 0 ? (
-                    <p className="text-xs text-gray-500">
-                      У цього клієнта ще немає анкет.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-600">
+                        У цього клієнта ще немає анкет.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                          // Перехід до створення анкети (можна додати навігацію)
+                          toast.info("Функція створення анкети буде доступна в наступній версії");
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Створити нову анкету
+                      </Button>
+                    </div>
                   ) : (
                     <>
                       <Select
                         value={selectedQuestionnaireId?.toString() || ""}
                         onValueChange={(value) => {
+                          if (value === "new") {
+                            toast.info("Функція створення анкети буде доступна в наступній версії");
+                            return;
+                          }
                           const qId = parseInt(value, 10);
                           const q = clientQuestionnaires.find((qq) => qq.id === qId) || null;
                           applyQuestionnaireToKP(q);
                         }}
                       >
-                        <SelectTrigger className="h-9">
+                        <SelectTrigger className="h-10">
                           <SelectValue placeholder="Оберіть анкету клієнта" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1466,20 +1584,43 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               q.created_at ||
                               "";
                             const formattedDate = dateLabel
-                              ? new Date(dateLabel).toLocaleDateString("uk-UA")
+                              ? new Date(dateLabel).toLocaleDateString("uk-UA", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric"
+                                })
                               : "";
+                            const eventType = q.event_type || "";
+                            const guestCount = q.guest_count ? `${q.guest_count} гостей` : "";
                             return (
                               <SelectItem key={q.id} value={q.id.toString()}>
-                                Анкета #{q.id}
-                                {formattedDate ? ` • від ${formattedDate}` : ""}
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {formattedDate ? `Анкета від ${formattedDate}` : `Анкета #${q.id}`}
+                                  </span>
+                                  {(eventType || guestCount) && (
+                                    <span className="text-xs text-gray-500">
+                                      {eventType && guestCount ? `${eventType}, ${guestCount}` : eventType || guestCount}
+                                    </span>
+                                  )}
+                                </div>
                               </SelectItem>
                             );
                           })}
+                          <SelectItem value="new" className="text-blue-600 font-medium">
+                            <div className="flex items-center gap-2">
+                              <Plus className="w-4 h-4" />
+                              Створити нову анкету
+                            </div>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-gray-500">
-                        За замовчуванням використовується остання анкета. Ви можете обрати іншу.
-                      </p>
+                      {selectedQuestionnaireId && (
+                        <p className="text-xs text-emerald-700 flex items-center gap-1">
+                          <Clipboard className="w-3 h-3" />
+                          Дані з анкети будуть автоматично заповнені у відповідних полях
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -1525,18 +1666,39 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Поле "Кількість гостей" під форматами прибрали — кількість рахуємо з сумарних гостей у форматах */}
                 <div className="space-y-2">
-                  <Label htmlFor="event-location">Місце проведення</Label>
-                  <Input
-                    id="event-location"
-                    placeholder="м. Київ, вул. Короленківська 4"
-                    value={eventLocation}
-                    onChange={(e) => setEventLocation(e.target.value)}
-                    className={`${
-                      questionnaireAutofill.eventLocation
-                        ? "border-emerald-400 bg-emerald-50"
-                        : ""
-                    }`}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="event-location">Місце проведення</Label>
+                    {questionnaireAutofill.eventLocation && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                        <Clipboard className="w-3 h-3" />
+                        З анкети
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="event-location"
+                      placeholder="м. Київ, вул. Короленківська 4"
+                      value={eventLocation}
+                      onChange={(e) => {
+                        setEventLocation(e.target.value);
+                        // Видаляємо індикатор якщо користувач змінює значення
+                        if (questionnaireAutofill.eventLocation) {
+                          const newAutofill = { ...questionnaireAutofill };
+                          delete newAutofill.eventLocation;
+                          setQuestionnaireAutofill(newAutofill);
+                        }
+                      }}
+                      className={`${
+                        questionnaireAutofill.eventLocation
+                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          : ""
+                      }`}
+                    />
+                    {questionnaireAutofill.eventLocation && (
+                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                    )}
+                  </div>
                   {questionnaireAutofill.eventLocation && (
                     <p className="text-[11px] text-emerald-700 flex items-center gap-1">
                       Дані з анкети{" "}
@@ -1574,18 +1736,39 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="coordinator-name">Координатор</Label>
-                  <Input
-                    id="coordinator-name"
-                    placeholder="Ім'я координатора"
-                    value={coordinatorName}
-                    onChange={(e) => setCoordinatorName(e.target.value)}
-                    className={`${
-                      questionnaireAutofill.coordinatorName
-                        ? "border-emerald-400 bg-emerald-50"
-                        : ""
-                    }`}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="coordinator-name">Координатор</Label>
+                    {questionnaireAutofill.coordinatorName && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                        <Clipboard className="w-3 h-3" />
+                        З анкети
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="coordinator-name"
+                      placeholder="Ім'я координатора"
+                      value={coordinatorName}
+                      onChange={(e) => {
+                        setCoordinatorName(e.target.value);
+                        // Видаляємо індикатор якщо користувач змінює значення
+                        if (questionnaireAutofill.coordinatorName) {
+                          const newAutofill = { ...questionnaireAutofill };
+                          delete newAutofill.coordinatorName;
+                          setQuestionnaireAutofill(newAutofill);
+                        }
+                      }}
+                      className={`${
+                        questionnaireAutofill.coordinatorName
+                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          : ""
+                      }`}
+                    />
+                    {questionnaireAutofill.coordinatorName && (
+                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                    )}
+                  </div>
                   {questionnaireAutofill.coordinatorName && (
                     <p className="text-[11px] text-emerald-700 flex items-center gap-1">
                       Дані з анкети{" "}
@@ -1603,19 +1786,40 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="coordinator-phone">Телефон координатора</Label>
-                  <Input
-                    id="coordinator-phone"
-                    type="tel"
-                    placeholder="+380..."
-                    value={coordinatorPhone}
-                    onChange={(e) => setCoordinatorPhone(e.target.value)}
-                    className={`${
-                      questionnaireAutofill.coordinatorPhone
-                        ? "border-emerald-400 bg-emerald-50"
-                        : ""
-                    }`}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="coordinator-phone">Телефон координатора</Label>
+                    {questionnaireAutofill.coordinatorPhone && (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                        <Clipboard className="w-3 h-3" />
+                        З анкети
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="coordinator-phone"
+                      type="tel"
+                      placeholder="+380..."
+                      value={coordinatorPhone}
+                      onChange={(e) => {
+                        setCoordinatorPhone(e.target.value);
+                        // Видаляємо індикатор якщо користувач змінює значення
+                        if (questionnaireAutofill.coordinatorPhone) {
+                          const newAutofill = { ...questionnaireAutofill };
+                          delete newAutofill.coordinatorPhone;
+                          setQuestionnaireAutofill(newAutofill);
+                        }
+                      }}
+                      className={`${
+                        questionnaireAutofill.coordinatorPhone
+                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          : ""
+                      }`}
+                    />
+                    {questionnaireAutofill.coordinatorPhone && (
+                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                    )}
+                  </div>
                   {questionnaireAutofill.coordinatorPhone && (
                     <p className="text-[11px] text-emerald-700 flex items-center gap-1">
                       Дані з анкети{" "}
@@ -1720,6 +1924,65 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               <CardTitle>Крок 2: Виберіть страви, обладнання та обслуговування</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Швидкий вибір форматів заходу */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <Label className="text-sm font-semibold mb-3 block">Формат заходу</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "Фуршет", value: "Фуршет" },
+                    { label: "Банкет", value: "Банкет" },
+                    { label: "Корпоратив", value: "Корпоратив" },
+                    { label: "Весілля", value: "Весілля" },
+                    { label: "День народження", value: "День народження" },
+                    { label: "Інше", value: "Інше" },
+                  ].map((format) => {
+                    const isSelected = eventFormats.some((f) => f.name === format.value);
+                    return (
+                      <Button
+                        key={format.value}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        className={`h-9 text-sm ${
+                          isSelected
+                            ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                            : "bg-white hover:bg-gray-50"
+                        }`}
+                        onClick={() => {
+                          if (isSelected) {
+                            // Видаляємо формат якщо вже вибраний
+                            setEventFormats((prev) =>
+                              prev.filter((f) => f.name !== format.value)
+                            );
+                          } else {
+                            // Додаємо новий формат
+                            setEventFormats((prev) => [
+                              ...prev,
+                              {
+                                id: prev.length > 0 ? Math.max(...prev.map((f) => f.id)) + 1 : 0,
+                                name: format.value,
+                                eventTime: eventTime || "",
+                                peopleCount: guestCount || "",
+                                group: eventGroup || "",
+                                selectedDishes: [],
+                              },
+                            ]);
+                          }
+                        }}
+                      >
+                        {format.label}
+                        {isSelected && <X className="w-3 h-3 ml-1" />}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {eventFormats.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Обрані формати: {eventFormats.map((f) => f.name).join(", ")}
+                  </p>
+                )}
+              </div>
+
               <Tabs defaultValue="dishes" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="dishes">Страви</TabsTrigger>
@@ -3073,52 +3336,65 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             <CardContent>
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Клієнт</p>
-                    <p className="text-gray-900 font-medium">{clientName}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Формат</p>
-                    <p className="text-gray-900 font-medium">
-                      {eventFormat || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Дата заходу</p>
-                    <p className="text-gray-900 font-medium">
-                      {eventDate || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Час</p>
-                    <p className="text-gray-900 font-medium">
-                      {eventTime || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Кількість гостей</p>
-                    <p className="text-gray-900 font-medium">
-                      {guestCount || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Місце проведення</p>
-                    <p className="text-gray-900 font-medium">
-                      {eventLocation || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Координатор</p>
-                    <p className="text-gray-900 font-medium">
-                      {coordinatorName || "-"}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-gray-500">Телефон координатора</p>
-                    <p className="text-gray-900 font-medium">
-                      {coordinatorPhone || "-"}
-                    </p>
-                  </div>
+                  <EditableField
+                    label="Клієнт"
+                    value={clientName}
+                    onChange={(value) => setClientName(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                  />
+                  <EditableField
+                    label="Формат"
+                    value={eventFormat || "-"}
+                    onChange={(value) => setEventFormat(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                  />
+                  <EditableField
+                    label="Дата заходу"
+                    value={eventDate || "-"}
+                    onChange={(value) => setEventDate(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                    type="date"
+                  />
+                  <EditableField
+                    label="Час"
+                    value={eventTime || "-"}
+                    onChange={(value) => setEventTime(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                  />
+                  <EditableField
+                    label="Кількість гостей"
+                    value={guestCount || "-"}
+                    onChange={(value) => setGuestCount(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                    type="number"
+                  />
+                  <EditableField
+                    label="Місце проведення"
+                    value={eventLocation || "-"}
+                    onChange={(value) => setEventLocation(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                  />
+                  <EditableField
+                    label="Координатор"
+                    value={coordinatorName || "-"}
+                    onChange={(value) => setCoordinatorName(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                  />
+                  <EditableField
+                    label="Телефон координатора"
+                    value={coordinatorPhone || "-"}
+                    onChange={(value) => setCoordinatorPhone(value)}
+                    onEdit={() => goToStep(1)}
+                    stepNumber={1}
+                    type="tel"
+                  />
                 </div>
 
                 <div className="border-t pt-4 space-y-4">
