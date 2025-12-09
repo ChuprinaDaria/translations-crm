@@ -340,7 +340,8 @@ def generate_template_preview_image(html_content: str, filename: str) -> str:
                 self.show_equipment_block = True
                 self.show_service_block = True
                 self.show_transport_block = True
-                self.menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+                # Дефолтні категорії, але в реальних КП будуть використовуватися динамічні категорії зі страв
+                self.menu_sections = []
                 self.menu_title = "Меню"
                 self.summary_title = "Підсумок"
                 self.footer_text = ""
@@ -365,6 +366,12 @@ def generate_template_preview_image(html_content: str, filename: str) -> str:
             }
         ]
         
+        # Динамічно збираємо категорії з тестових даних
+        preview_menu_sections = sorted(list(set(
+            item['category_name'] for item in test_data['items'] 
+            if item.get('category_name')
+        )))
+        
         # Рендеримо HTML через Jinja2
         from jinja2 import Template
         template = Template(html_content)
@@ -376,7 +383,7 @@ def generate_template_preview_image(html_content: str, filename: str) -> str:
             secondary_color='#ffffff',
             text_color='#333333',
             font_family='Arial, sans-serif',
-            menu_sections=template_config_obj.menu_sections,
+            menu_sections=preview_menu_sections,
             formats=test_formats,
             food_total_raw=32250.0,
             price_per_person=801.0,
@@ -901,8 +908,19 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         'page_orientation': 'portrait',
     }
     
-    # Секції меню (категорії)
-    menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+    # Секції меню (категорії) - динамічно збираємо всі унікальні категорії зі страв
+    # Спочатку збираємо всі категорії з усіх форматів
+    all_categories = set()
+    for fmt in formats_map.values():
+        for item in fmt['items']:
+            if item.get('category_name'):
+                all_categories.add(item['category_name'])
+    
+    # Якщо є категорії, використовуємо їх, інакше дефолтний список
+    if all_categories:
+        menu_sections = sorted(list(all_categories))
+    else:
+        menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
 
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
@@ -930,9 +948,9 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'page_orientation': getattr(selected_template, 'page_orientation', None) or 'portrait',
         })
         
-        # Отримуємо секції меню з шаблону
+        # Отримуємо секції меню з шаблону (якщо вони визначені в шаблоні, вони мають пріоритет)
         template_menu_sections = getattr(selected_template, 'menu_sections', None)
-        if template_menu_sections:
+        if template_menu_sections and len(template_menu_sections) > 0:
             menu_sections = template_menu_sections
 
     # Конвертуємо dict в простий об'єкт для доступу через крапку в Jinja2
@@ -2141,11 +2159,20 @@ def generate_template_preview(
         
         template_config_obj = TemplateConfig(template_config)
         
-        # Секції меню
-        menu_sections = design.get('menu_sections', [
-            "Холодні закуски", "Салати", "Гарячі страви", 
-            "Гарнір", "Десерти", "Напої"
-        ])
+        # Секції меню - динамічно збираємо з items sample_data
+        items_for_preview = sample_data.get('items', [])
+        if items_for_preview:
+            # Збираємо всі унікальні категорії зі страв
+            menu_sections = sorted(list(set(
+                item.get('category_name') for item in items_for_preview
+                if item.get('category_name')
+            )))
+        else:
+            menu_sections = []
+        
+        # Якщо в design явно задані menu_sections, використовуємо їх
+        if design.get('menu_sections'):
+            menu_sections = design.get('menu_sections')
         
         # Рендеримо HTML
         # Конвертуємо суми з рядків в числа

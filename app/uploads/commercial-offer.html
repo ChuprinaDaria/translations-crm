@@ -400,9 +400,9 @@
             
             {% for section in menu_sections %}
             {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
-            <div class="category-title">{{ section }}</div>
             
             {% if section_items %}
+            <div class="category-title">{{ section }}</div>
             <table class="items-table">
                 <thead>
                     <tr>
