@@ -145,13 +145,9 @@ function App() {
         { label: "КП", href: "#" },
         { label: "Архів КП" },
       ],
-      "client-questionnaires": [
-        { label: "Відділ Продажів", href: "#" },
-        { label: "Анкета" },
-      ],
       "all-questionnaires": [
         { label: "Відділ Продажів", href: "#" },
-        { label: "Всі анкети" },
+        { label: "Анкети" },
       ],
       "my-kp": [
         { label: "Продажі", href: "#" },
@@ -238,10 +234,18 @@ function App() {
       case "client-questionnaires":
         return <SalesDepartment />;
       case "all-questionnaires":
-        return <AllQuestionnaires onEdit={(questionnaireId) => {
-          // TODO: Відкрити форму редагування анкети
-          setActiveItem("client-questionnaires");
-        }} />;
+        return (
+          <AllQuestionnaires
+            onCreate={() => {
+              // Переходимо в розділ відділу продажів для створення/редагування анкети
+              setActiveItem("client-questionnaires");
+            }}
+            onEdit={(questionnaireId) => {
+              // TODO: Відкрити форму редагування анкети по ID
+              setActiveItem("client-questionnaires");
+            }}
+          />
+        );
       case "my-kp":
         return (
           <div className="space-y-6">

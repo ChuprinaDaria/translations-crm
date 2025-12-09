@@ -118,15 +118,8 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
       title: "Відділ Продажів",
       items: [
         {
-          id: "client-questionnaires",
-          label: "Анкета",
-          icon: <ClipboardList className="w-5 h-5" />,
-          tooltip: "Анкета клієнта для відділу продажів",
-          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
-        },
-        {
           id: "all-questionnaires",
-          label: "Всі анкети",
+          label: "Анкети",
           icon: <FileText className="w-5 h-5" />,
           tooltip: "Список всіх анкет клієнтів",
           roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],

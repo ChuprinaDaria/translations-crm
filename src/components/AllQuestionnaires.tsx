@@ -18,9 +18,10 @@ interface QuestionnaireWithExtras extends ClientQuestionnaire {
 
 interface AllQuestionnairesProps {
   onEdit?: (questionnaireId: number) => void;
+  onCreate?: () => void;
 }
 
-export function AllQuestionnaires({ onEdit }: AllQuestionnairesProps) {
+export function AllQuestionnaires({ onEdit, onCreate }: AllQuestionnairesProps) {
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireWithExtras[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -112,10 +113,17 @@ export function AllQuestionnaires({ onEdit }: AllQuestionnairesProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Всі анкети</h1>
-        <Button onClick={loadQuestionnaires} variant="outline" size="sm">
-          Оновити
-        </Button>
+        <h1 className="text-2xl font-semibold text-gray-900">Анкети</h1>
+        <div className="flex items-center gap-2">
+          {onCreate && (
+            <Button onClick={onCreate} size="sm">
+              Створити нову анкету
+            </Button>
+          )}
+          <Button onClick={loadQuestionnaires} variant="outline" size="sm">
+            Оновити
+          </Button>
+        </div>
       </div>
 
       <Card>
