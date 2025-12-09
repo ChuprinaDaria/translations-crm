@@ -786,6 +786,15 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         except Exception:
             event_date = ""
     
+    # Визначаємо ефективну кількість гостей:
+    #  - якщо в kp.people_count є значення > 0 — використовуємо його
+    #  - інакше беремо максимальне people_count серед форматів (якщо там задано)
+    #  - якщо ніде не вказано — вважаємо 0 (без розрахунку на людину)
+    effective_people_count = kp.people_count or 0
+    if not effective_people_count and formats_map:
+        max_from_formats = max((fmt.get("people_count") or 0) for fmt in formats_map.values())
+        effective_people_count = max_from_formats or 0
+
     # Форматуємо ціни та вагу (загальні по КП)
     food_total_raw = sum(item["total_raw"] for item in items_data)
     formatted_food_total = f"{food_total_raw:.2f} грн"
@@ -801,12 +810,20 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         # Вага зберігається в грамах
         total_weight_grams_value = kp_total_weight
         formatted_total_weight = f"{kp_total_weight:.0f} г"
-        calculated_weight_per_person = kp_weight_per_person if kp_weight_per_person is not None else (kp_total_weight / kp.people_count if kp.people_count else 0)
+        calculated_weight_per_person = (
+            kp_weight_per_person
+            if kp_weight_per_person is not None
+            else (kp_total_weight / effective_people_count if effective_people_count else 0)
+        )
     else:
         # Якщо ваги немає в БД, використовуємо розраховану (в кг, конвертуємо в г)
         total_weight_grams_value = calculated_total_weight_grams
         formatted_total_weight = f"{calculated_total_weight_grams:.0f} г"
-        calculated_weight_per_person = calculated_total_weight_grams / kp.people_count if kp.people_count else 0
+        calculated_weight_per_person = (
+            calculated_total_weight_grams / effective_people_count
+            if effective_people_count
+            else 0
+        )
     
     # Конвертуємо Decimal з БД в float для уникнення помилок типів
     equipment_total = float(getattr(kp, "equipment_total", None) or 0)
@@ -821,7 +838,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     # Підсумки по кожному формату меню
     formats: list[dict] = []
     for fmt in formats_map.values():
-        people = fmt["people_count"] or kp.people_count or 0
+        people = fmt["people_count"] or effective_people_count or 0
         food_total_fmt = fmt["food_total_raw"]
         fmt["food_total"] = food_total_fmt
         fmt["food_total_formatted"] = f"{food_total_fmt:.2f} грн"
@@ -908,19 +925,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         'page_orientation': 'portrait',
     }
     
-    # Секції меню (категорії) - динамічно збираємо всі унікальні категорії зі страв
-    # Спочатку збираємо всі категорії з усіх форматів
-    all_categories = set()
+    # Секції меню (категорії) – БЕЗ хардкоду, тільки з реальних страв КП.
+    # 1) Збираємо всі унікальні category_name зі всіх форматів.
+    all_categories: set[str] = set()
     for fmt in formats_map.values():
-        for item in fmt['items']:
-            if item.get('category_name'):
-                all_categories.add(item['category_name'])
-    
-    # Якщо є категорії, використовуємо їх, інакше дефолтний список
-    if all_categories:
-        menu_sections = sorted(list(all_categories))
-    else:
-        menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+        for item in fmt["items"]:
+            category_name = item.get("category_name")
+            if category_name:
+                all_categories.add(str(category_name))
+
+    # 2) Формуємо список секцій. Якщо у страв немає категорій – залишаємо список порожнім.
+    #    (у такому випадку шаблон може виводити всі страви без поділу на секції, якщо це потрібно)
+    menu_sections = sorted(all_categories) if all_categories else []
 
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
@@ -929,6 +945,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         font_family = getattr(selected_template, "font_family", None) or font_family
         
         # Оновлюємо конфігурацію з налаштувань шаблону
+        # ВАЖЛИВО: menu_sections тепер завжди приходять з реальних категорій страв
+        # і не можуть бути перезаписані хардкодженим списком з шаблону.
         template_config.update({
             'show_item_photo': getattr(selected_template, 'show_item_photo', True),
             'show_item_weight': getattr(selected_template, 'show_item_weight', True),
@@ -947,11 +965,6 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'footer_text': getattr(selected_template, 'footer_text', None),
             'page_orientation': getattr(selected_template, 'page_orientation', None) or 'portrait',
         })
-        
-        # Отримуємо секції меню з шаблону (якщо вони визначені в шаблоні, вони мають пріоритет)
-        template_menu_sections = getattr(selected_template, 'menu_sections', None)
-        if template_menu_sections and len(template_menu_sections) > 0:
-            menu_sections = template_menu_sections
 
     # Конвертуємо dict в простий об'єкт для доступу через крапку в Jinja2
     class TemplateConfig:
@@ -963,6 +976,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
 
     html_content = template.render(
         kp=kp,
+        people_count=effective_people_count,
         items=items_data,
         formats=formats,
         # Підсумки по кухні та додаткових блоках
@@ -2159,20 +2173,19 @@ def generate_template_preview(
         
         template_config_obj = TemplateConfig(template_config)
         
-        # Секції меню - динамічно збираємо з items sample_data
+        # Секції меню - динамічно збираємо з items sample_data (БЕЗ хардкоду)
         items_for_preview = sample_data.get('items', [])
         if items_for_preview:
             # Збираємо всі унікальні категорії зі страв
-            menu_sections = sorted(list(set(
-                item.get('category_name') for item in items_for_preview
+            menu_sections = sorted(list({
+                str(item.get('category_name'))
+                for item in items_for_preview
                 if item.get('category_name')
-            )))
+            }))
         else:
+            # Якщо в sample_data немає категорій, залишаємо список порожнім.
+            # У такому випадку шаблон може виводити всі страви без секцій.
             menu_sections = []
-        
-        # Якщо в design явно задані menu_sections, використовуємо їх
-        if design.get('menu_sections'):
-            menu_sections = design.get('menu_sections')
         
         # Рендеримо HTML
         # Конвертуємо суми з рядків в числа
