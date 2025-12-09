@@ -801,9 +801,10 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         formatted_total_weight = f"{calculated_total_weight_grams:.0f} г"
         calculated_weight_per_person = calculated_total_weight_grams / kp.people_count if kp.people_count else 0
     
-    equipment_total = getattr(kp, "equipment_total", None) or 0
-    service_total = getattr(kp, "service_total", None) or 0
-    transport_total = getattr(kp, "transport_total", None) or 0
+    # Конвертуємо Decimal з БД в float для уникнення помилок типів
+    equipment_total = float(getattr(kp, "equipment_total", None) or 0)
+    service_total = float(getattr(kp, "service_total", None) or 0)
+    transport_total = float(getattr(kp, "transport_total", None) or 0)
     
     # Знижка по КП (як відсоток), якщо налаштована
     discount_percent: float | None = None

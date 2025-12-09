@@ -98,6 +98,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [clientName, setClientName] = useState("");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [createdKPId, setCreatedKPId] = useState<number | null>(null);
   const [eventGroup, setEventGroup] = useState<"" | "delivery-boxes" | "catering" | "other">("");
   const [eventFormat, setEventFormat] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -397,6 +400,15 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   useEffect(() => {
     loadFormDataFromLocalStorage();
   }, []);
+
+  // Cleanup PDF preview URL при розмонтуванні
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
 
   // Автоматичне збереження даних при зміні полів форми
   useEffect(() => {
@@ -874,6 +886,138 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   };
 
   const [creatingKP, setCreatingKP] = useState(false);
+
+  // Функція для генерації PDF preview
+  const handleGeneratePDFPreview = async () => {
+    if (!selectedTemplateId) {
+      toast.error("Будь ласка, оберіть шаблон КП");
+      return;
+    }
+
+    setIsGeneratingPreview(true);
+    try {
+      // Спочатку створюємо КП якщо ще не створено
+      let kpIdForPreview = createdKPId;
+      
+      if (!kpIdForPreview) {
+        // Валідація перед створенням
+        if (!validateStep1()) {
+          setStep(1);
+          setIsGeneratingPreview(false);
+          return;
+        }
+        if (!validateStep2()) {
+          setStep(2);
+          setIsGeneratingPreview(false);
+          return;
+        }
+
+        // Створюємо КП з усіма даними
+        const peopleCountNumForPayload = parseInt(guestCount, 10) || 0;
+        const foodTotalPrice = getTotalPrice();
+        const regularDishesPriceForPayload = getRegularDishesPrice();
+        const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload;
+        const transportTotalNum = parseFloat(transportTotal || "0") || 0;
+        
+        let discountAmount = calculateDiscountAmount();
+        let finalFoodPrice = foodTotalPrice;
+        let finalEquipmentTotal = equipmentTotal;
+        let finalServiceTotal = serviceTotal;
+        
+        if (selectedDiscountId) {
+          const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+          if (discountBenefit) {
+            if (discountIncludeMenu) {
+              const regularDishesDiscount = (regularDishesPriceForPayload * discountBenefit.value) / 100;
+              finalFoodPrice = foodTotalPrice - regularDishesDiscount;
+            }
+            if (discountIncludeEquipment) {
+              finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
+            }
+            if (discountIncludeService) {
+              finalServiceTotal = serviceTotal - (serviceTotal * discountBenefit.value) / 100;
+            }
+          }
+        }
+        
+        let cashbackAmount = 0;
+        const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalNum;
+        if (selectedCashbackId) {
+          const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);
+          if (cashbackBenefit) {
+            cashbackAmount = (totalBeforeCashback * cashbackBenefit.value) / 100;
+          }
+        }
+        
+        const totalPrice = totalBeforeCashback - (useCashback ? cashbackAmount : 0);
+        const title = clientName || `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
+
+        // Формуємо payload для страв
+        const itemsPayload: Array<{ item_id: number; quantity: number; event_format_id?: number }> = [];
+        const allSelectedDishIds = new Set<number>();
+        eventFormats.forEach((format) => {
+          format.selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
+        });
+        selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
+        
+        allSelectedDishIds.forEach((dishId) => {
+          const dish = dishes.find((d) => d.id === dishId);
+          if (dish && !isCustomDish(dish.id)) {
+            itemsPayload.push({
+              item_id: dish.id,
+              quantity: dishQuantities[dish.id] || 1,
+            });
+          }
+        });
+
+        const kpData = {
+          title,
+          client_name: clientName || undefined,
+          client_email: clientEmail || undefined,
+          client_phone: clientPhone || undefined,
+          people_count: peopleCountNumForPayload,
+          menu_total: foodTotalPrice,
+          equipment_total: equipmentTotal || undefined,
+          service_total: serviceTotal || undefined,
+          transport_total: transportTotalNum || undefined,
+          discount_amount: discountAmount || undefined,
+          discount_benefit_id: selectedDiscountId || undefined,
+          cashback_benefit_id: selectedCashbackId || undefined,
+          cashback_amount: useCashback ? cashbackAmount : undefined,
+          cashback_earned: !useCashback ? cashbackAmount : undefined,
+          total_amount: totalBeforeCashback,
+          final_amount: totalPrice,
+          total_price: totalPrice,
+          template_id: selectedTemplateId,
+          items: itemsPayload,
+          event_date: eventDate || undefined,
+          event_format: eventFormat || undefined,
+          event_group: eventGroup || undefined,
+          event_location: eventLocation || undefined,
+          event_time: eventTime || undefined,
+          coordinator_name: coordinatorName || undefined,
+          coordinator_phone: coordinatorPhone || undefined,
+          status: "draft",
+        };
+
+        const newKP = await kpApi.createKP(kpData);
+        kpIdForPreview = newKP.id;
+        setCreatedKPId(newKP.id);
+        toast.success("КП створено для preview");
+      }
+
+      // Генеруємо PDF preview
+      const pdfBlob = await kpApi.generateKPPDF(kpIdForPreview, selectedTemplateId);
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      setPdfPreviewUrl(pdfUrl);
+      toast.success("PDF preview згенеровано");
+    } catch (error: any) {
+      console.error("Error generating PDF preview:", error);
+      toast.error(error.message || "Помилка генерації PDF preview");
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  };
 
   const handleCreateKP = async () => {
     // Валідація всіх обов'язкових полів
@@ -3280,9 +3424,60 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   </div>
                 </div>
 
-                {/* Preview */}
+                {/* PDF Preview Actions */}
                 <div className="border-t pt-6">
-                  <h3 className="text-gray-900 mb-4">Попередній перегляд КП</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-gray-900">Попередній перегляд PDF</h3>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleGeneratePDFPreview}
+                        variant="outline"
+                        disabled={!selectedTemplateId || isGeneratingPreview}
+                      >
+                        {isGeneratingPreview ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Генерація...
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="w-4 h-4 mr-2" />
+                            Переглянути PDF
+                          </>
+                        )}
+                      </Button>
+                      {pdfPreviewUrl && (
+                        <Button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = pdfPreviewUrl;
+                            link.download = `KP_${clientName || 'preview'}_${new Date().toLocaleDateString('uk-UA')}.pdf`;
+                            link.click();
+                          }}
+                          variant="outline"
+                          className="bg-[#FF5A00] text-white hover:bg-[#FF5A00]/90"
+                        >
+                          Скачати PDF
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {pdfPreviewUrl && (
+                    <div className="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+                      <iframe
+                        src={pdfPreviewUrl}
+                        className="w-full"
+                        style={{ height: '600px' }}
+                        title="PDF Preview"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Text Preview */}
+                <div className="border-t pt-6">
+                  <h3 className="text-gray-900 mb-4">Деталі КП</h3>
                   <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 space-y-4">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>

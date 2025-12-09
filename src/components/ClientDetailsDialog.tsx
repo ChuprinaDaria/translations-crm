@@ -578,20 +578,28 @@ function hasQuestionnaireData(questionnaire: ClientQuestionnaire, section: 'serv
 // Допоміжні функції для статусів КП
 function getStatusLabel(status: string): string {
   const statusMap: Record<string, string> = {
-    sent: 'Відправлено',
+    in_progress: 'В роботі',
+    sent_to_sales: 'Відправлено менеджеру з продажу',
+    revision: 'Коригування',
+    sent: 'Відправлено клієнту',
     approved: 'Затверджено',
     rejected: 'Відхилено',
     completed: 'Виконано',
+    draft: 'Чернетка',
   };
   return statusMap[status] || status;
 }
 
 function getStatusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   const variantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    in_progress: 'default',
+    sent_to_sales: 'secondary',
+    revision: 'outline',
     sent: 'default',
     approved: 'default',
     rejected: 'destructive',
     completed: 'secondary',
+    draft: 'outline',
   };
   return variantMap[status] || 'outline';
 }

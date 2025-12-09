@@ -149,11 +149,15 @@ class KP(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by = relationship("User")
     # Статус життєвого циклу КП:
-    # sent      – відправлено клієнту
-    # approved  – затверджено клієнтом
-    # rejected  – відхилено клієнтом
-    # completed – виконано (подія відбулася)
-    status = Column(String, default="sent", index=True)
+    # in_progress    – в роботі (збір інформації, аналіз ТЗ, формування КП)
+    # sent_to_sales  – відправлено менеджеру з продажу (внутрішня перевірка)
+    # revision       – коригування (правки після коментарів)
+    # sent           – відправлено клієнту
+    # approved       – затверджено клієнтом
+    # rejected       – відхилено клієнтом
+    # completed      – виконано (подія відбулася)
+    # draft          – чернетка
+    status = Column(String, default="in_progress", index=True)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     client_email = Column(String, nullable=True, index=True)  # Email клієнта
     client_phone = Column(String, nullable=True, index=True)  # Телефон клієнта (Telegram / Viber etc.)

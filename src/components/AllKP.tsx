@@ -30,7 +30,7 @@ import {
   type User as ApiUser,
 } from "../lib/api";
 
-type KPStatus = "sent" | "approved" | "rejected" | "completed";
+type KPStatus = "in_progress" | "sent_to_sales" | "revision" | "sent" | "approved" | "rejected" | "completed" | "draft";
 
 interface KPListItem {
   id: number;
@@ -50,28 +50,45 @@ interface KPListItem {
 
 function getStatusLabel(status: KPStatus): string {
   switch (status) {
+    case "in_progress":
+      return "В роботі";
+    case "sent_to_sales":
+      return "Відправлено менеджеру з продажу";
+    case "revision":
+      return "Коригування";
+    case "sent":
+      return "Відправлено клієнту";
     case "approved":
       return "Затверджено";
     case "rejected":
       return "Відхилено";
     case "completed":
       return "Виконано";
-    case "sent":
+    case "draft":
+      return "Чернетка";
     default:
-      return "Відправлено";
+      return status;
   }
 }
 
 function getStatusColor(status: KPStatus): string {
   switch (status) {
+    case "in_progress":
+      return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100";
+    case "sent_to_sales":
+      return "bg-purple-100 text-purple-700 hover:bg-purple-100";
+    case "revision":
+      return "bg-orange-100 text-orange-700 hover:bg-orange-100";
+    case "sent":
+      return "bg-blue-100 text-blue-700 hover:bg-blue-100";
     case "approved":
       return "bg-green-100 text-green-700 hover:bg-green-100";
-    case "completed":
-      return "bg-blue-100 text-blue-700 hover:bg-blue-100";
-    case "sent":
-      return "bg-purple-100 text-purple-700 hover:bg-purple-100";
     case "rejected":
       return "bg-red-100 text-red-700 hover:bg-red-100";
+    case "completed":
+      return "bg-teal-100 text-teal-700 hover:bg-teal-100";
+    case "draft":
+      return "bg-gray-100 text-gray-700 hover:bg-gray-100";
     default:
       return "bg-gray-100 text-gray-700 hover:bg-gray-100";
   }
@@ -327,10 +344,14 @@ export function AllKP({ onEditKP }: AllKPProps = {}) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Всі статуси</SelectItem>
-                  <SelectItem value="sent">Відправлено</SelectItem>
+                  <SelectItem value="in_progress">В роботі</SelectItem>
+                  <SelectItem value="sent_to_sales">Відправлено менеджеру з продажу</SelectItem>
+                  <SelectItem value="revision">Коригування</SelectItem>
+                  <SelectItem value="sent">Відправлено клієнту</SelectItem>
                   <SelectItem value="approved">Затверджено</SelectItem>
                   <SelectItem value="rejected">Відхилено</SelectItem>
                   <SelectItem value="completed">Виконано</SelectItem>
+                  <SelectItem value="draft">Чернетка</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -442,9 +463,28 @@ export function AllKP({ onEditKP }: AllKPProps = {}) {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
+                                  onClick={() => handleStatusChange(item, "in_progress")}
+                                >
+                                  В роботі
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleStatusChange(item, "sent_to_sales")
+                                  }
+                                >
+                                  Відправлено менеджеру з продажу
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleStatusChange(item, "revision")
+                                  }
+                                >
+                                  Коригування
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => handleStatusChange(item, "sent")}
                                 >
-                                  Відправлено
+                                  Відправлено клієнту
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -466,6 +506,13 @@ export function AllKP({ onEditKP }: AllKPProps = {}) {
                                   }
                                 >
                                   Виконано
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleStatusChange(item, "draft")
+                                  }
+                                >
+                                  Чернетка
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
