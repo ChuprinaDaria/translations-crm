@@ -63,6 +63,8 @@ interface UIEventFormat {
   peopleCount: string;
   // Група формату (для візуальної структури КП): доставка боксів / кейтерінг / інше
   group?: "" | "delivery-boxes" | "catering" | "other";
+  // Страви, вибрані для цього формату
+  selectedDishes: number[];
 }
 
 // Популярні формати заходів для підказок у випадаючому списку
@@ -116,6 +118,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [transportTotal, setTransportTotal] = useState<string>("");
   // Кілька форматів заходу (Welcome drink, Фуршет тощо)
   const [eventFormats, setEventFormats] = useState<UIEventFormat[]>([]);
+  // Кастомні страви (додані вручну) - мають негативні ID
+  const [customDishes, setCustomDishes] = useState<Dish[]>([]);
+  // Змінені ваги та ціни страв (ключ - dish.id, значення - {weight?, price?})
+  const [dishOverrides, setDishOverrides] = useState<Record<number, { weight?: number; price?: number }>>({});
+  // Лічильник для генерації унікальних негативних ID для кастомних страв
+  const [customDishIdCounter, setCustomDishIdCounter] = useState(-1);
+  // Активний формат заходу для вибору страв (null = загальний вибір)
+  const [activeFormatId, setActiveFormatId] = useState<number | null>(null);
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -184,6 +194,44 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       autofill.coordinatorPhone = { questionnaireId: q.id, questionnaireDate: sourceDate };
     }
 
+    // Створюємо формати заходу з таймінгами з анкети
+    const formats: UIEventFormat[] = [];
+    
+    // Якщо є event_type та таймінги, створюємо формат
+    if (q.event_type) {
+      let timing = "";
+      if (q.event_start_time && q.event_end_time) {
+        timing = `${q.event_start_time}–${q.event_end_time}`;
+      } else if (q.service_type_timing) {
+        timing = q.service_type_timing;
+      } else if (q.event_start_time) {
+        timing = q.event_start_time;
+      }
+      
+      formats.push({
+        id: 0,
+        name: q.event_type,
+        eventTime: timing,
+        peopleCount: guestCount || "",
+        selectedDishes: [],
+      });
+    }
+    
+    // Якщо є additional_services_timing, можна створити додатковий формат
+    if (q.additional_services_timing && q.additional_services_timing.trim() !== "") {
+      formats.push({
+        id: formats.length,
+        name: "Додатковий сервіс",
+        eventTime: q.additional_services_timing,
+        peopleCount: guestCount || "",
+        selectedDishes: [],
+      });
+    }
+    
+    if (formats.length > 0) {
+      setEventFormats(formats);
+    }
+
     setSelectedQuestionnaireId(q.id);
     setQuestionnaireAutofill(autofill);
   };
@@ -225,8 +273,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
   // Функція для валідації кроку 2
   const validateStep2 = (): boolean => {
-    if (selectedDishes.length === 0) {
-      toast.error("Будь ласка, оберіть хоча б одну страву");
+    if (selectedDishes.length === 0 && customDishes.length === 0) {
+      toast.error("Будь ласка, оберіть хоча б одну страву або додайте позицію вручну");
+      return false;
+    }
+    // Перевіряємо, що всі кастомні страви мають назву
+    const invalidCustomDishes = customDishes.filter((d) => !d.name || d.name.trim() === "");
+    if (invalidCustomDishes.length > 0) {
+      toast.error("Будь ласка, заповніть назви всіх доданих вручну позицій");
       return false;
     }
     return true;
@@ -283,10 +337,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       discountIncludeMenu,
       discountIncludeEquipment,
       discountIncludeService,
-      eventFormats,
+        eventFormats,
+        customDishes,
+        dishOverrides,
+        customDishIdCounter,
+        activeFormatId,
+      };
+      localStorage.setItem('kp_form_data', JSON.stringify(formData));
     };
-    localStorage.setItem('kp_form_data', JSON.stringify(formData));
-  };
 
   // Завантаження даних форми з localStorage
   const loadFormDataFromLocalStorage = () => {
@@ -321,7 +379,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setDiscountIncludeMenu(formData.discountIncludeMenu !== undefined ? formData.discountIncludeMenu : true);
         setDiscountIncludeEquipment(formData.discountIncludeEquipment || false);
         setDiscountIncludeService(formData.discountIncludeService || false);
-        setEventFormats(formData.eventFormats || []);
+        setEventFormats((formData.eventFormats || []).map((f: any) => ({
+          ...f,
+          selectedDishes: f.selectedDishes || [],
+        })));
+        setCustomDishes(formData.customDishes || []);
+        setDishOverrides(formData.dishOverrides || {});
+        setCustomDishIdCounter(formData.customDishIdCounter || -1);
+        setActiveFormatId(formData.activeFormatId || null);
       } catch (error) {
         console.error("Помилка завантаження даних з localStorage:", error);
       }
@@ -368,6 +433,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     discountIncludeEquipment,
     discountIncludeService,
     eventFormats,
+    customDishes,
+    dishOverrides,
+    customDishIdCounter,
+    activeFormatId,
   ]);
 
   // Load dishes from API
@@ -543,7 +612,33 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     return matchesSearch && matchesTags;
   });
 
-  const toggleDish = (dishId: number) => {
+  const toggleDish = (dishId: number, formatId?: number | null) => {
+    const targetFormatId = formatId !== undefined ? formatId : activeFormatId;
+    
+    // Якщо обрано формат, додаємо страву до формату
+    if (targetFormatId !== null && targetFormatId !== undefined) {
+      setEventFormats((prev) =>
+        prev.map((f) => {
+          if (f.id === targetFormatId) {
+            const isSelected = f.selectedDishes.includes(dishId);
+            if (isSelected) {
+              return {
+                ...f,
+                selectedDishes: f.selectedDishes.filter((id) => id !== dishId),
+              };
+            } else {
+              return {
+                ...f,
+                selectedDishes: [...f.selectedDishes, dishId],
+              };
+            }
+          }
+          return f;
+        })
+      );
+    }
+    
+    // Також додаємо до загального списку обраних страв
     setSelectedDishes((prev) => {
       const isSelected = prev.includes(dishId);
       if (isSelected) {
@@ -578,22 +673,56 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   };
 
   const getSelectedDishesData = () => {
-    return dishes.filter((dish) => selectedDishes.includes(dish.id));
+    const regularDishes = dishes.filter((dish) => selectedDishes.includes(dish.id));
+    return [...regularDishes, ...customDishes];
+  };
+
+  // Отримати вагу страви з урахуванням перевизначень
+  const getDishWeight = (dish: Dish): number => {
+    if (dishOverrides[dish.id]?.weight !== undefined) {
+      return dishOverrides[dish.id].weight!;
+    }
+    return dish.weight || 0;
+  };
+
+  // Отримати ціну страви з урахуванням перевизначень
+  const getDishPrice = (dish: Dish): number => {
+    if (dishOverrides[dish.id]?.price !== undefined) {
+      return dishOverrides[dish.id].price!;
+    }
+    return dish.price;
+  };
+
+  // Перевірити чи страва кастомна (додана вручну)
+  const isCustomDish = (dishId: number): boolean => {
+    return dishId < 0;
   };
 
   const getTotalPrice = () => {
     return getSelectedDishesData().reduce((sum, dish) => {
       const qty = dishQuantities[dish.id] ?? 1;
-      return sum + dish.price * qty;
+      const price = getDishPrice(dish);
+      return sum + price * qty;
     }, 0);
+  };
+
+  // Отримати вартість тільки звичайних страв (без кастомних) для розрахунку знижки
+  const getRegularDishesPrice = () => {
+    return dishes
+      .filter((dish) => selectedDishes.includes(dish.id))
+      .reduce((sum, dish) => {
+        const qty = dishQuantities[dish.id] ?? 1;
+        const price = getDishPrice(dish);
+        return sum + price * qty;
+      }, 0);
   };
 
   const getTotalWeight = () => {
     // Розраховуємо загальну вагу в грамах
     return getSelectedDishesData().reduce((sum, dish) => {
       const qty = dishQuantities[dish.id] ?? 1;
-      let weightInGrams = dish.weight || 0;
-      const unit = (dish.unit || 'кг').toLowerCase();
+      let weightInGrams = getDishWeight(dish);
+      const unit = (dish.unit || 'г').toLowerCase();
       
       // Конвертуємо в грами
       if (unit === 'кг') {
@@ -631,8 +760,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const serviceTotal = calculateAdditionalTotal(serviceItems);
 
   const foodTotalPrice = getTotalPrice();
+  const regularDishesPrice = getRegularDishesPrice(); // Тільки звичайні страви (без кастомних)
 
   // Функція для розрахунку знижки з урахуванням вибраних опцій
+  // Знижка застосовується тільки до звичайних страв, не до кастомних
   const calculateDiscountAmount = () => {
     if (!selectedDiscountId) return 0;
     
@@ -641,7 +772,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     
     let discountBase = 0;
     if (discountIncludeMenu) {
-      discountBase += foodTotalPrice;
+      discountBase += regularDishesPrice; // Тільки звичайні страви
     }
     if (discountIncludeEquipment) {
       discountBase += equipmentTotal;
@@ -773,12 +904,15 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
   const peopleCountNumForPayload = parseInt(guestCount, 10) || 0;
   const foodTotalPrice = getTotalPrice();
+  const regularDishesPriceForPayload = getRegularDishesPrice(); // Тільки звичайні страви
+  const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload; // Ціна кастомних страв
     const transportTotalNum = parseFloat(transportTotal || "0") || 0;
     
     // Розрахунок знижки з урахуванням вибраних опцій
     let discountAmount = calculateDiscountAmount();
     
     // Розраховуємо фінальні ціни з урахуванням знижки
+    // Знижка застосовується тільки до звичайних страв, кастомні страви не враховуються
     let finalFoodPrice = foodTotalPrice;
     let finalEquipmentTotal = equipmentTotal;
     let finalServiceTotal = serviceTotal;
@@ -787,7 +921,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
       if (discountBenefit) {
         if (discountIncludeMenu) {
-          finalFoodPrice = foodTotalPrice - (foodTotalPrice * discountBenefit.value) / 100;
+          // Знижка тільки на звичайні страви
+          const regularDishesDiscount = (regularDishesPriceForPayload * discountBenefit.value) / 100;
+          finalFoodPrice = foodTotalPrice - regularDishesDiscount;
         }
         if (discountIncludeEquipment) {
           finalEquipmentTotal = equipmentTotal - (equipmentTotal * discountBenefit.value) / 100;
@@ -813,11 +949,29 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       clientName ||
       `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
 
-    const itemsPayload = getSelectedDishesData().map((dish) => ({
-      item_id: dish.id,
-      quantity: dishQuantities[dish.id] || 1,
-      // Поки що не розподіляємо страви по форматах, тому event_format_id не задаємо
-    }));
+    // Формуємо payload для страв
+    // Примітка: event_format_id буде встановлено після створення КП та форматів на бекенді
+    const itemsPayload: Array<{ item_id: number; quantity: number; event_format_id?: number }> = [];
+    
+    // Збираємо всі унікальні страви з форматів та загального вибору
+    const allSelectedDishIds = new Set<number>();
+    eventFormats.forEach((format) => {
+      format.selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
+    });
+    // Додаємо страви з загального вибору
+    selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
+    
+    // Формуємо payload для всіх обраних страв
+    allSelectedDishIds.forEach((dishId) => {
+      const dish = dishes.find((d) => d.id === dishId);
+      if (dish && !isCustomDish(dish.id)) {
+        itemsPayload.push({
+          item_id: dish.id,
+          quantity: dishQuantities[dish.id] || 1,
+          // event_format_id буде встановлено після створення форматів на бекенді
+        });
+      }
+    });
 
     setCreatingKP(true);
     try {
@@ -931,25 +1085,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       setEquipmentItems([]);
       setServiceItems([]);
       setTransportTotal("");
-      setClientName("");
-      setEventGroup("");
-      setEventDate("");
-      setEventFormat("");
-      setEventTime("");
-      setGuestCount("");
-      setEventLocation("");
-      setClientEmail("");
-      setClientPhone("");
-      setCoordinatorName("");
-      setCoordinatorPhone("");
-      setSendEmail(false);
-      setEmailMessage("");
-      setSendTelegram(false);
-      setTelegramMessage("");
-      setDishQuantities({});
-      setEquipmentItems([]);
-      setServiceItems([]);
-      setTransportTotal("");
+      setCustomDishes([]);
+      setDishOverrides({});
+      setCustomDishIdCounter(-1);
+      setActiveFormatId(null);
     } catch (error: any) {
       console.error("Error creating KP:", error);
       toast.error(
@@ -1216,141 +1355,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   />
               </div>
               </div>
-              
-              {/* Декілька форматів заходу */}
-              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      Формати заходу (опційно)
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Ви можете додати кілька форматів (наприклад, Welcome drink, Фуршет) зі своїм часом та кількістю гостей.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEventFormats((prev) => [
-                        ...prev,
-                        {
-                          id: prev.length,
-                          name: eventFormat || `Формат ${prev.length + 1}`,
-                          eventTime: eventTime || "",
-                          peopleCount: guestCount || "",
-                          group: eventGroup || "",
-                        },
-                      ]);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Додати формат
-                  </Button>
-                </div>
-
-                {eventFormats.length > 0 && (
-                  <div className="space-y-2">
-                    {eventFormats.map((format) => (
-                      <div
-                        key={format.id}
-                        className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end p-3 bg-white rounded-lg border"
-                      >
-                        <div className="space-y-1">
-                          <Label className="text-xs text-gray-600">Назва формату</Label>
-                          <Input
-                            value={format.name}
-                            list="event-format-options"
-                            onChange={(e) =>
-                              setEventFormats((prev) =>
-                                prev.map((f) =>
-                                  f.id === format.id ? { ...f, name: e.target.value } : f
-                                )
-                              )
-                            }
-                            placeholder="Welcome drink / Фуршет"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-gray-600">Час</Label>
-                          <Input
-                            value={format.eventTime}
-                            onChange={(e) =>
-                              setEventFormats((prev) =>
-                                prev.map((f) =>
-                                  f.id === format.id ? { ...f, eventTime: e.target.value } : f
-                                )
-                              )
-                            }
-                            placeholder="09:00–11:00"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-gray-600">К-сть гостей</Label>
-                          <Input
-                            type="number"
-                            value={format.peopleCount}
-                            onChange={(e) =>
-                              setEventFormats((prev) =>
-                                prev.map((f) =>
-                                  f.id === format.id ? { ...f, peopleCount: e.target.value } : f
-                                )
-                              )
-                            }
-                            placeholder={guestCount || "50"}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs text-gray-600">Група формату</Label>
-                          <Select
-                            value={format.group || ""}
-                            onValueChange={(value) =>
-                              setEventFormats((prev) =>
-                                prev.map((f) =>
-                                  f.id === format.id ? { ...f, group: value as UIEventFormat["group"] } : f
-                                )
-                              )
-                            }
-                          >
-                            <SelectTrigger className="h-9 text-xs">
-                              <SelectValue placeholder="—" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
-                              <SelectItem value="catering">Кейтерінг</SelectItem>
-                              <SelectItem value="other">Інше</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setEventFormats((prev) =>
-                                prev.filter((f) => f.id !== format.id).map((f, idx) => ({
-                                  ...f,
-                                  id: idx,
-                                }))
-                              )
-                            }
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {/* Datalist з популярними форматами для підказки */}
-                    <datalist id="event-format-options">
-                      {EVENT_FORMAT_OPTIONS.map((option) => (
-                        <option key={option} value={option} />
-                      ))}
-                    </datalist>
-                  </div>
-                )}
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Поле "Кількість гостей" під форматами прибрали — кількість рахуємо з сумарних гостей у форматах */}
                 <div className="space-y-2">
@@ -1575,6 +1579,185 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Формати заходу з таймінгами */}
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          Формати заходу та таймінг
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Додайте формати заходу (наприклад, Welcome drink, Фуршет) з таймінгами та оберіть страви для кожного формату.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEventFormats((prev) => [
+                            ...prev,
+                            {
+                              id: prev.length,
+                              name: eventFormat || `Формат ${prev.length + 1}`,
+                              eventTime: eventTime || "",
+                              peopleCount: guestCount || "",
+                              group: eventGroup || "",
+                              selectedDishes: [],
+                            },
+                          ]);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Додати формат
+                      </Button>
+                    </div>
+
+                    {eventFormats.length > 0 && (
+                      <div className="space-y-3">
+                        {eventFormats.map((format) => (
+                          <div
+                            key={format.id}
+                            className="p-4 bg-white rounded-lg border border-gray-200"
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Назва формату</Label>
+                                <Input
+                                  value={format.name}
+                                  list="event-format-options"
+                                  onChange={(e) =>
+                                    setEventFormats((prev) =>
+                                      prev.map((f) =>
+                                        f.id === format.id ? { ...f, name: e.target.value } : f
+                                      )
+                                    )
+                                  }
+                                  placeholder="Welcome drink / Фуршет"
+                                  className="h-9"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Таймінг</Label>
+                                <Input
+                                  value={format.eventTime}
+                                  onChange={(e) =>
+                                    setEventFormats((prev) =>
+                                      prev.map((f) =>
+                                        f.id === format.id ? { ...f, eventTime: e.target.value } : f
+                                      )
+                                    )
+                                  }
+                                  placeholder="09:00–11:00"
+                                  className="h-9"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">К-сть гостей</Label>
+                                <Input
+                                  type="number"
+                                  value={format.peopleCount}
+                                  onChange={(e) =>
+                                    setEventFormats((prev) =>
+                                      prev.map((f) =>
+                                        f.id === format.id ? { ...f, peopleCount: e.target.value } : f
+                                      )
+                                    )
+                                  }
+                                  placeholder={guestCount || "50"}
+                                  className="h-9"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Група формату</Label>
+                                <Select
+                                  value={format.group || ""}
+                                  onValueChange={(value) =>
+                                    setEventFormats((prev) =>
+                                      prev.map((f) =>
+                                        f.id === format.id ? { ...f, group: value as UIEventFormat["group"] } : f
+                                      )
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="h-9 text-xs">
+                                    <SelectValue placeholder="—" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
+                                    <SelectItem value="catering">Кейтерінг</SelectItem>
+                                    <SelectItem value="other">Інше</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex justify-end">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    setEventFormats((prev) =>
+                                      prev.filter((f) => f.id !== format.id).map((f, idx) => ({
+                                        ...f,
+                                        id: idx,
+                                        selectedDishes: f.selectedDishes || [],
+                                      }))
+                                    )
+                                  }
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t">
+                              <Label className="text-xs text-gray-600 mb-2 block">
+                                Обрані страви для формату "{format.name}": {format.selectedDishes.length}
+                              </Label>
+                              {format.selectedDishes.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {format.selectedDishes.map((dishId) => {
+                                    const dish = dishes.find((d) => d.id === dishId);
+                                    if (!dish) return null;
+                                    return (
+                                      <Badge
+                                        key={dishId}
+                                        variant="outline"
+                                        className="bg-[#FF5A00]/10 border-[#FF5A00] text-[#FF5A00]"
+                                      >
+                                        {dish.name}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEventFormats((prev) =>
+                                              prev.map((f) =>
+                                                f.id === format.id
+                                                  ? { ...f, selectedDishes: f.selectedDishes.filter((id) => id !== dishId) }
+                                                  : f
+                                              )
+                                            );
+                                          }}
+                                          className="ml-2 hover:text-red-600"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {/* Datalist з популярними форматами для підказки */}
+                        <datalist id="event-format-options">
+                          {EVENT_FORMAT_OPTIONS.map((option) => (
+                            <option key={option} value={option} />
+                          ))}
+                        </datalist>
+                      </div>
+                    )}
+                  </div>
                   {/* Ready menus selector */}
                   {menus.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-3 md:items-end">
@@ -1611,6 +1794,47 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         <Plus className="w-4 h-4 mr-2" />
                         Додати меню
                       </Button>
+                    </div>
+                  )}
+
+                  {/* Активний формат для вибору страв */}
+                  {eventFormats.length > 0 && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-900 mb-1 block">
+                            Оберіть формат для вибору страв:
+                          </Label>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant={activeFormatId === null ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setActiveFormatId(null)}
+                              className={activeFormatId === null ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
+                            >
+                              Загальний вибір
+                            </Button>
+                            {eventFormats.map((format) => (
+                              <Button
+                                key={format.id}
+                                type="button"
+                                variant={activeFormatId === format.id ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setActiveFormatId(format.id)}
+                                className={activeFormatId === format.id ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
+                              >
+                                {format.name} {format.eventTime && `(${format.eventTime})`}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {activeFormatId !== null && (
+                        <p className="text-xs text-gray-600 mt-2">
+                          Страви будуть додані до формату "{eventFormats.find((f) => f.id === activeFormatId)?.name}"
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1658,12 +1882,17 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[500px] overflow-y-auto p-1">
                       {filteredDishes.map((dish) => {
                         const isSelected = selectedDishes.includes(dish.id);
+                        const isSelectedForFormat = activeFormatId !== null 
+                          ? eventFormats.find((f) => f.id === activeFormatId)?.selectedDishes.includes(dish.id) || false
+                          : false;
                         return (
                           <div
                             key={dish.id}
                             onClick={() => toggleDish(dish.id)}
                             className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                              isSelected
+                              isSelectedForFormat
+                                ? "border-blue-500 bg-blue-50"
+                                : isSelected
                                 ? "border-[#FF5A00] bg-[#FF5A00]/5"
                                 : "border-gray-200 hover:border-gray-300"
                             }`}
@@ -1688,8 +1917,13 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2 mb-1">
                                   <h4 className="text-gray-900 truncate">{dish.name}</h4>
-                                  <Checkbox checked={isSelected} />
+                                  <Checkbox checked={isSelectedForFormat || isSelected} />
                                 </div>
+                                {isSelectedForFormat && activeFormatId !== null && (
+                                  <Badge variant="outline" className="text-xs mb-1 bg-blue-100 border-blue-300 text-blue-700">
+                                    {eventFormats.find((f) => f.id === activeFormatId)?.name}
+                                  </Badge>
+                                )}
                                 <p className="text-sm text-gray-600 line-clamp-2 mb-2">
                                   {dish.description}
                                 </p>
@@ -2238,12 +2472,42 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                 <p className="text-sm text-gray-600">
                   Налаштуйте кількість порцій по кожній позиції меню, щоб система розрахувала вагу та вартість.
                 </p>
-                {selectedDishes.length === 0 ? (
+                {(selectedDishes.length === 0 && customDishes.length === 0) ? (
                   <p className="text-gray-500">
-                    Страви не обрано. Поверніться на крок &quot;Вибір страв&quot;.
+                    Страви не обрано. Поверніться на крок &quot;Вибір страв&quot; або додайте позицію вручну.
                   </p>
                 ) : (
                   <>
+                    <div className="flex justify-end mb-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newId = customDishIdCounter - 1;
+                          setCustomDishIdCounter(newId);
+                          const newDish: Dish = {
+                            id: newId,
+                            name: "",
+                            description: "",
+                            weight: 0,
+                            unit: "г",
+                            price: 0,
+                            photo_url: "",
+                            category: "",
+                            subcategory: "",
+                          };
+                          setCustomDishes([...customDishes, newDish]);
+                          setDishQuantities((prev) => ({
+                            ...prev,
+                            [newId]: 1,
+                          }));
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Додати позицію вручну
+                      </Button>
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-sm border-collapse">
                         <thead>
@@ -2254,21 +2518,58 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Ціна,<br />грн</th>
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Сума,<br />грн</th>
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід грам<br />на особу</th>
+                            <th className="py-3 px-4 text-center font-semibold">Дії</th>
                           </tr>
                         </thead>
                         <tbody>
                           {getSelectedDishesData().map((dish) => {
                             const qty = dishQuantities[dish.id] ?? 1;
-                            const total = qty * dish.price;
-                            const peopleCountNum = parseInt(guestCount, 10) || 1;
-                            const weightPerPerson = dish.weight && qty > 0 && peopleCountNum > 0 
-                              ? (dish.weight * qty / peopleCountNum).toFixed(2)
+                            const price = getDishPrice(dish);
+                            const weight = getDishWeight(dish);
+                            const total = qty * price;
+                            const peopleCountNum = parseInt(guestCount, 10) || 0;
+                            const weightInGrams = weight || 0;
+                            const totalWeightGrams = weightInGrams * qty;
+                            const weightPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
+                              ? (totalWeightGrams / peopleCountNum).toFixed(2)
                               : "0.00";
+                            const isCustom = isCustomDish(dish.id);
+                            
                             return (
-                              <tr key={dish.id} className="border-b last:border-0 hover:bg-gray-50">
-                                <td className="py-3 px-4 text-left">{dish.name}</td>
+                              <tr key={dish.id} className={`border-b last:border-0 hover:bg-gray-50 ${isCustom ? 'bg-yellow-50' : ''}`}>
+                                <td className="py-3 px-4 text-left">
+                                  {isCustom ? (
+                                    <Input
+                                      type="text"
+                                      className="w-full"
+                                      placeholder="Назва страви"
+                                      value={dish.name}
+                                      onChange={(e) => {
+                                        setCustomDishes((prev) =>
+                                          prev.map((d) => (d.id === dish.id ? { ...d, name: e.target.value } : d))
+                                        );
+                                      }}
+                                    />
+                                  ) : (
+                                    dish.name
+                                  )}
+                                </td>
                                 <td className="py-3 px-4 text-right">
-                                  {dish.weight > 0 ? `${dish.weight} ${dish.unit || 'г'}` : "-"}
+                                  <Input
+                                    type="number"
+                                    className="w-24 ml-auto text-right"
+                                    min="0"
+                                    step="0.01"
+                                    value={weight}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value) || 0;
+                                      setDishOverrides((prev) => ({
+                                        ...prev,
+                                        [dish.id]: { ...prev[dish.id], weight: value },
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-xs text-gray-500 ml-1">{dish.unit || 'г'}</span>
                                 </td>
                                 <td className="py-3 px-4 text-right">
                                   <Input
@@ -2285,9 +2586,46 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                     }}
                                   />
                                 </td>
-                                <td className="py-3 px-4 text-right">{dish.price.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right">
+                                  <Input
+                                    type="number"
+                                    className="w-24 ml-auto text-right"
+                                    min="0"
+                                    step="0.01"
+                                    value={price.toFixed(2)}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value) || 0;
+                                      setDishOverrides((prev) => ({
+                                        ...prev,
+                                        [dish.id]: { ...prev[dish.id], price: value },
+                                      }));
+                                    }}
+                                  />
+                                </td>
                                 <td className="py-3 px-4 text-right font-medium">{total.toFixed(2)}</td>
                                 <td className="py-3 px-4 text-right">{weightPerPerson}</td>
+                                <td className="py-3 px-4 text-center">
+                                  {isCustom && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setCustomDishes((prev) => prev.filter((d) => d.id !== dish.id));
+                                        setDishQuantities((prev) => {
+                                          const { [dish.id]: _, ...rest } = prev;
+                                          return rest;
+                                        });
+                                        setDishOverrides((prev) => {
+                                          const { [dish.id]: _, ...rest } = prev;
+                                          return rest;
+                                        });
+                                      }}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
@@ -2300,15 +2638,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         <div className="text-sm text-gray-600 mb-1">
                           Вартість страв (усі позиції)
                         </div>
-                        {selectedDiscountId ? (() => {
-                          const discountAmount = calculateDiscountAmount();
-                          // Розраховуємо знижку тільки на меню для відображення в цьому блоці
-                          const menuDiscountAmount = discountIncludeMenu 
-                            ? (() => {
-                                const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                                return discountBenefit ? (foodTotalPrice * discountBenefit.value) / 100 : 0;
-                              })()
-                            : 0;
+                        {selectedDiscountId && discountIncludeMenu ? (() => {
+                          // Розраховуємо знижку тільки на звичайні страви (без кастомних)
+                          const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                          const menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
                           const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
                           return (
                             <>
@@ -2317,6 +2650,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               </div>
                               <div className="text-xs text-[#FF5A00] mb-1">
                                 Знижка: -{menuDiscountAmount.toLocaleString()} грн
+                                {customDishes.length > 0 && (
+                                  <span className="text-gray-500 ml-1">(тільки на звичайні страви)</span>
+                                )}
                               </div>
                               <div className="text-lg font-semibold text-gray-900">
                                 {finalFoodPrice.toLocaleString()} грн
@@ -2342,19 +2678,18 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           Вартість страв на 1 гостя
                         </div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {peopleCountNum > 0
-                            ? (selectedDiscountId ? (() => {
-                                const menuDiscountAmount = discountIncludeMenu 
-                                  ? (() => {
-                                      const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                                      return discountBenefit ? (foodTotalPrice * discountBenefit.value) / 100 : 0;
-                                    })()
-                                  : 0;
-                                const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
-                                return (finalFoodPrice / peopleCountNum).toFixed(2);
-                              })() : (foodTotalPrice / peopleCountNum).toFixed(2))
-                            : "-"}{" "}
-                          грн
+                          {(() => {
+                            const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+                            if (peopleCountNum <= 0) return "-";
+                            
+                            if (selectedDiscountId && discountIncludeMenu) {
+                              const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                              const menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
+                              const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                              return `${(finalFoodPrice / peopleCountNum).toFixed(2)} грн`;
+                            }
+                            return `${(foodTotalPrice / peopleCountNum).toFixed(2)} грн`;
+                          })()}
                         </div>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
@@ -2362,10 +2697,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           Орієнтовний вихід на 1 гостя
                         </div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {peopleCountNum > 0
-                            ? getWeightPerPerson().toFixed(0)
-                            : "-"}{" "}
-                          г
+                          {(() => {
+                            const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+                            if (peopleCountNum <= 0) return "- г";
+                            const weightPerPerson = getWeightPerPerson();
+                            return `${weightPerPerson.toFixed(0)} г`;
+                          })()}
                         </div>
                       </div>
                     </div>

@@ -98,7 +98,7 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
     price_per_person = kp_in.price_per_person
     print(f"Price per person: {price_per_person}")
     
-    if not price_per_person:
+    if not price_per_person and kp_in.people_count and kp_in.people_count > 0:
         price_per_person = kp_in.total_price / kp_in.people_count
 
     kp = models.KP(

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FileText, Loader2, Eye, Edit, Search, Download } from "lucide-react";
+import { FileText, Loader2, Eye, Edit, Search, Download, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -63,6 +63,22 @@ export function AllQuestionnaires({ onEdit, onCreate }: AllQuestionnairesProps) 
       setFilteredQuestionnaires(questionnaires);
     }
   }, [searchQuery, questionnaires]);
+
+  const handleDelete = async (questionnaireId: number) => {
+    if (!window.confirm("Видалити цю анкету? Цю дію не можна скасувати.")) {
+      return;
+    }
+
+    try {
+      await questionnairesApi.delete(questionnaireId);
+      setQuestionnaires((prev) => prev.filter((q) => q.id !== questionnaireId));
+      setFilteredQuestionnaires((prev) => prev.filter((q) => q.id !== questionnaireId));
+      toast.success("Анкету видалено");
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Не вдалося видалити анкету");
+    }
+  };
 
   const handleDownloadPDF = async (questionnaireId: number) => {
     try {
@@ -218,6 +234,15 @@ export function AllQuestionnaires({ onEdit, onCreate }: AllQuestionnairesProps) 
                               <Edit className="w-3 h-3" />
                             </Button>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(questionnaire.id)}
+                            className="text-red-600 hover:bg-red-50"
+                            title="Видалити анкету"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

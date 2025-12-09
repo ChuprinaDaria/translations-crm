@@ -158,7 +158,7 @@ def delete_old_preview(preview_url: str):
                 print(f"Error deleting old preview: {e}")
 
 
-def generate_template_preview(html_content: str, filename: str) -> str:
+def generate_template_preview_image(html_content: str, filename: str) -> str:
     """
     Генерує прев'ю зображення з HTML шаблону.
     Повертає відносний шлях до збереженого зображення.
@@ -166,6 +166,8 @@ def generate_template_preview(html_content: str, filename: str) -> str:
     try:
         from pdf2image import convert_from_bytes
         from io import BytesIO
+        
+        print(f"🔍 Starting preview generation for template: {filename}")
         
         # Генеруємо PDF з HTML (використовуємо тестові дані)
         # Важливо: дані повинні містити всі поля, які використовує HTML шаблон
@@ -247,13 +249,60 @@ def generate_template_preview(html_content: str, filename: str) -> str:
             'background_image_src': None,
         }
         
+        # Додаткові дані для шаблону
+        # Створюємо об'єкт template_config з налаштуваннями відображення
+        class TemplateConfig:
+            def __init__(self):
+                self.show_item_photo = True
+                self.show_item_weight = True
+                self.show_item_quantity = True
+                self.show_item_price = True
+                self.show_item_total = True
+                self.show_item_description = False
+                self.show_weight_summary = True
+                self.show_weight_per_person = True
+                self.show_discount_block = False
+                self.show_equipment_block = True
+                self.show_service_block = True
+                self.show_transport_block = True
+                self.menu_sections = ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]
+                self.menu_title = "Меню"
+                self.summary_title = "Підсумок"
+                self.footer_text = ""
+                self.page_orientation = "portrait"
+                self.items_per_page = 20
+        
+        template_config_obj = TemplateConfig()
+        
         # Рендеримо HTML через Jinja2
         from jinja2 import Template
         template = Template(html_content)
-        rendered_html = template.render(**test_data)
+        rendered_html = template.render(
+            **test_data,
+            template=template_config_obj,
+            template_config=template_config_obj,
+            primary_color='#FF5A00',
+            secondary_color='#ffffff',
+            text_color='#333333',
+            font_family='Arial, sans-serif',
+            menu_sections=template_config_obj.menu_sections,
+            formats=[],  # Формати заходу (порожній список для тестового preview)
+            food_total_raw=7450.0,
+            grand_total=8450.0,
+            grand_total_formatted='8450.00 грн',
+            fop_percent=0,
+            fop_extra=0,
+            fop_extra_formatted=None,
+            grand_total_with_fop=8450.0,
+            grand_total_with_fop_formatted='8450.00 грн',
+        )
+        
+        print(f"📄 HTML rendered successfully, generating PDF...")
         
         # Генеруємо PDF з HTML з правильним base_url
         pdf_bytes = HTML(string=rendered_html, base_url=str(BASE_DIR)).write_pdf(zoom=0.75)
+        
+        print(f"✓ PDF generated, converting to image...")
         
         # Конвертуємо першу сторінку PDF у зображення
         images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
@@ -1635,7 +1684,7 @@ async def create_template(
             # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
             # (незалежно від того, чи передано preview_image_url)
             print(f"Generating automatic preview for template: {filename}")
-            auto_preview = generate_template_preview(html_for_preview, filename)
+            auto_preview = generate_template_preview_image(html_for_preview, filename)
             if auto_preview:
                 final_preview_url = auto_preview
             else:
@@ -1764,7 +1813,7 @@ async def update_template(
             if current_template.preview_image_url:
                 delete_old_preview(current_template.preview_image_url)
             # Генеруємо нове
-            auto_preview = generate_template_preview(html_for_preview, final_filename)
+            auto_preview = generate_template_preview_image(html_for_preview, final_filename)
             if auto_preview:
                 final_preview_url = auto_preview
                 print(f"✓ Preview regenerated successfully: {auto_preview}")
