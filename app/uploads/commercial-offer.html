@@ -140,24 +140,32 @@
             margin-bottom: 8mm;
         }
         
+        /* ФОРМАТ ЗАХОДУ - НАЙЯСКРАВІШЕ ВИДІЛЕННЯ */
         .section-title {
-            font-size: 14pt;
+            font-size: 16pt;
             font-weight: bold;
-            color: {{ primary_color or '#FF5A00' }};
-            margin-bottom: 4mm;
-            margin-top: 6mm;
-            padding-bottom: 2mm;
-            border-bottom: 2pt solid {{ primary_color or '#FF5A00' }};
+            color: white;
+            background-color: {{ primary_color or '#FF5A00' }};
+            padding: 4mm 5mm;
+            margin-bottom: 5mm;
+            margin-top: 8mm;
+            border-radius: 2mm;
+            text-transform: uppercase;
+            letter-spacing: 0.5pt;
         }
         
+        /* КАТЕГОРІЇ СТРАВ - ЯСКРАВЕ ВИДІЛЕННЯ (але менше ніж формат) */
         .category-title {
-            font-size: 12pt;
+            font-size: 13pt;
             font-weight: bold;
-            color: #333;
+            color: {{ primary_color or '#FF5A00' }};
             margin-top: 5mm;
             margin-bottom: 3mm;
-            padding-left: 3mm;
-            border-left: 3pt solid {{ primary_color or '#FF5A00' }};
+            padding-left: 4mm;
+            padding-top: 2mm;
+            padding-bottom: 2mm;
+            border-left: 4pt solid {{ primary_color or '#FF5A00' }};
+            background-color: rgba(255, 90, 0, 0.08);
         }
         
         .items-table {
