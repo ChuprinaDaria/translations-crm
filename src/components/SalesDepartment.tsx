@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, UserPlus } from "lucide-react";
+import { Search, UserPlus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import { clientsApi, type Client } from "../lib/api";
+import { clientsApi, questionnairesApi, type Client } from "../lib/api";
 import { toast } from "sonner";
 import { ClientDetailsDialog } from "./ClientDetailsDialog";
 import { QuestionnaireForm } from "./QuestionnaireForm";
@@ -60,6 +60,14 @@ export function SalesDepartment() {
 
   const handleClientSelect = async (client: Client) => {
     try {
+      // Якщо у клієнта є questionnaire_id, використовуємо його напряму
+      if (client.questionnaire_id) {
+        setEditingQuestionnaireId(client.questionnaire_id);
+        setShowQuestionnaireForm(true);
+        return;
+      }
+
+      // Якщо немає questionnaire_id, перевіряємо через API
       const data = await clientsApi.getClient(client.id);
       if (data.questionnaire) {
         // Редагуємо існуючу анкету
@@ -71,6 +79,7 @@ export function SalesDepartment() {
       setShowQuestionnaireForm(true);
     } catch (error: any) {
       toast.error("Помилка завантаження даних клієнта");
+      console.error(error);
     }
   };
 
@@ -88,6 +97,27 @@ export function SalesDepartment() {
     setTimeout(() => {
       loadClients();
     }, 100);
+  };
+
+  const handleDeleteQuestionnaire = async (client: Client) => {
+    if (!client.questionnaire_id) {
+      toast.error("У цього клієнта немає анкети");
+      return;
+    }
+
+    if (!window.confirm(`Видалити анкету клієнта ${client.name}? Цю дію не можна скасувати.`)) {
+      return;
+    }
+
+    try {
+      await questionnairesApi.delete(client.questionnaire_id);
+      toast.success("Анкету видалено");
+      // Оновлюємо список клієнтів
+      loadClients();
+    } catch (error: any) {
+      console.error("Error deleting questionnaire:", error);
+      toast.error("Не вдалося видалити анкету");
+    }
   };
 
   // Якщо показуємо форму анкети
@@ -180,6 +210,17 @@ export function SalesDepartment() {
                           >
                             Анкета
                           </Button>
+                          {client.questionnaire_id && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteQuestionnaire(client)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Видалити анкету"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

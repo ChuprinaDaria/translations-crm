@@ -724,12 +724,6 @@ def update_client(db: Session, client_id: int, client_in: schemas.ClientUpdate):
     for key, value in update_data.items():
         setattr(client, key, value)
 
-    # Якщо не оплачена сума не задана явно — рахуємо як total - paid
-    if "kp_total_amount" in update_data or "paid_amount" in update_data:
-        total = client.kp_total_amount or 0
-        paid = client.paid_amount or 0
-        client.unpaid_amount = max(total - paid, 0)
-
     db.commit()
     db.refresh(client)
     return client
@@ -739,6 +733,7 @@ def upsert_client_from_kp(db: Session, kp: models.KP):
     """
     Автоматично створює або оновлює клієнта на основі даних КП.
     Пошук клієнта: спочатку по телефону, потім по email, потім по імені.
+    Оновлює накопичувальну статистику клієнта.
     """
     if not (kp.client_name or kp.client_phone or kp.client_email):
         return None
@@ -753,50 +748,27 @@ def upsert_client_from_kp(db: Session, kp: models.KP):
     if not client and kp.client_name:
         client = query.filter(models.Client.name == kp.client_name).first()
 
+    is_new_client = False
     if not client:
+        is_new_client = True
         client = models.Client(
             name=kp.client_name or kp.title,
-            phone=kp.client_phone,
+            phone=kp.client_phone or "",
             email=kp.client_email,
-            status="новий",
         )
         db.add(client)
+        db.flush()  # Отримуємо ID клієнта
 
-    # Оновлюємо актуальні дані заходу
-    client.event_date = kp.event_date
-    client.event_format = kp.event_format
-    client.event_group = kp.event_group
-    client.event_time = kp.event_time
-    client.event_location = kp.event_location
+    # Прив'язуємо КП до клієнта
+    if not kp.client_id:
+        kp.client_id = client.id
 
-    # Підсумки по КП
-    client.kp_total_amount = kp.total_price
-    if client.paid_amount is not None and kp.total_price is not None:
-        client.unpaid_amount = max(kp.total_price - client.paid_amount, 0)
-    else:
-        client.unpaid_amount = kp.total_price
-    
-    # Оновлення знижки та кешбеку
-    if kp.discount_id and kp.discount_amount:
-        # Завантажуємо benefit для отримання значення
-        discount_benefit = db.query(models.Benefit).filter(models.Benefit.id == kp.discount_id).first()
-        discount_value = discount_benefit.value if discount_benefit else '?'
-        # Додаємо інформацію про знижку до текстового поля
-        discount_text = f"{discount_value}% до КП #{kp.id}"
-        if client.discount:
-            client.discount = f"{client.discount}; {discount_text}"
-        else:
-            client.discount = discount_text
-    
-    # Оновлюємо кешбек (сумуємо всі кешбеки з усіх КП клієнта)
-    # Знаходимо всі КП цього клієнта та сумуємо кешбек
-    all_client_kps = db.query(models.KP).filter(
-        (models.KP.client_name == client.name) |
-        (models.KP.client_phone == client.phone) |
-        (models.KP.client_email == client.email)
-    ).all()
-    total_cashback = sum(k.cashback_amount or 0 for k in all_client_kps)
-    client.cashback = total_cashback
+    # Оновлюємо накопичувальну статистику (тільки для нових КП)
+    # Це базова логіка - детальне оновлення робиться в loyalty_service
+    if is_new_client:
+        client.total_orders = 1
+        client.lifetime_spent = kp.total_price or 0
+    # Для існуючих клієнтів статистика оновлюється окремо при зміні статусу КП
 
     db.commit()
     db.refresh(client)

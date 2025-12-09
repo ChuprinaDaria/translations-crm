@@ -44,6 +44,7 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(!questionnaireId);
+  const [questionnaireLoaded, setQuestionnaireLoaded] = useState(false);
   
   // Дані клієнта для нового
   const [newClientData, setNewClientData] = useState<ClientCreate>({
@@ -87,11 +88,25 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
   const [venueComplexityComment, setVenueComplexityComment] = useState("");
 
   useEffect(() => {
+    loadEquipment();
+  }, []);
+
+  useEffect(() => {
     if (questionnaireId) {
+      setQuestionnaireLoaded(false);
+      // Завантажуємо анкету одразу
+      loadQuestionnaire();
+    } else {
+      setQuestionnaireLoaded(false);
+    }
+  }, [questionnaireId]);
+
+  // Перезавантажуємо анкету після завантаження обладнання, щоб правильно завантажити вибране обладнання
+  useEffect(() => {
+    if (questionnaireId && allEquipment.length > 0 && questionnaireLoaded) {
       loadQuestionnaire();
     }
-    loadEquipment();
-  }, [questionnaireId]);
+  }, [allEquipment.length]);
 
   const loadEquipment = async () => {
     try {
@@ -212,6 +227,7 @@ export function QuestionnaireForm({ questionnaireId, onBack, onSave }: Questionn
       }
       
       setIsCreatingNew(false);
+      setQuestionnaireLoaded(true);
     } catch (error: any) {
       toast.error("Помилка завантаження анкети");
       console.error(error);

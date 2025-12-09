@@ -322,15 +322,21 @@
         <div class="client-info">
             <table>
                 <tr>
-                    <td>Формат</td>
+                    <td>Формат заходу:</td>
                     <td>{{ kp.event_format or '—' }}</td>
                 </tr>
+                {% if kp.event_group %}
+                <tr>
+                    <td>Тип послуги:</td>
+                    <td>{{ kp.event_group }}</td>
+                </tr>
+                {% endif %}
                 <tr>
                     <td>Замовник:</td>
                     <td>{{ kp.client_name or '—' }}</td>
                 </tr>
                 <tr>
-                    <td>телефон:</td>
+                    <td>Телефон:</td>
                     <td>
                         {% if kp.client_phone %}
                             {{ kp.client_phone }}
@@ -342,7 +348,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <td>email:</td>
+                    <td>Email:</td>
                     <td>{{ kp.client_email or '—' }}</td>
                 </tr>
                 <tr>
@@ -350,7 +356,7 @@
                     <td>{{ kp.coordinator_name or '—' }}</td>
                 </tr>
                 <tr>
-                    <td>Координатор тел.:</td>
+                    <td>Тел. координатора:</td>
                     <td>{{ kp.coordinator_phone or '—' }}</td>
                 </tr>
                 <tr>
@@ -369,6 +375,12 @@
                     <td>Кількість осіб:</td>
                     <td>{{ kp.people_count or 0 }}</td>
                 </tr>
+                {% if kp.price_per_person or price_per_person %}
+                <tr>
+                    <td>Вартість на особу:</td>
+                    <td>{{ kp.price_per_person or price_per_person }} грн</td>
+                </tr>
+                {% endif %}
             </table>
         </div>
         
@@ -555,10 +567,30 @@
                     <td>Всього позицій:</td>
                     <td>{{ total_items }}</td>
                 </tr>
+                {% if discount_amount and discount_amount > 0 %}
+                <tr style="color: #16a34a;">
+                    <td>
+                        Знижка{% if discount_percent %} ({{ discount_percent }}%){% endif %}:
+                    </td>
+                    <td>-{{ discount_amount_formatted or discount_amount }} грн</td>
+                </tr>
+                {% endif %}
+                {% if cashback_used and cashback_used > 0 %}
+                <tr style="color: #2563eb;">
+                    <td>Використано кешбек:</td>
+                    <td>-{{ cashback_used_formatted or cashback_used }} грн</td>
+                </tr>
+                {% endif %}
                 <tr>
                     <td style="padding-top: 8px; font-weight: 600;">Всього до сплати:</td>
                     <td style="padding-top: 8px; font-weight: 600;">{{ grand_total_formatted }}</td>
                 </tr>
+                {% if cashback_earned and cashback_earned > 0 %}
+                <tr style="color: #16a34a;">
+                    <td>Буде нараховано кешбек:</td>
+                    <td>+{{ cashback_earned_formatted or cashback_earned }} грн</td>
+                </tr>
+                {% endif %}
                 {% if fop_percent and fop_extra_formatted %}
                 <tr>
                     <td>До оплати через ФОП 3-ї категорії (+{{ fop_percent|round(2) }}%):</td>

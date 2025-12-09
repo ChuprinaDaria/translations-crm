@@ -127,6 +127,7 @@ export interface Client {
   notes?: string;
   created_at?: string;
   updated_at?: string;
+  questionnaire_id?: number; // ID останньої анкети клієнта
   // Старі поля для сумісності
   total_spent?: number;
   status?: string;
