@@ -385,6 +385,17 @@ async function apiFetch<T>(
       errorData = { detail: response.statusText };
     }
     console.error('[API] Error response:', errorData);
+    
+    // Якщо токен закінчився або невалідний, перенаправляємо на сторінку логіну
+    if (response.status === 401) {
+      console.log('[API] Unauthorized - redirecting to login');
+      tokenManager.removeToken();
+      // Перенаправляємо на сторінку логіну, якщо ми не на ній
+      if (!window.location.pathname.includes('/auth')) {
+        window.location.href = '/auth';
+      }
+    }
+    
     throw new ApiError(response.status, response.statusText, errorData);
   }
 
@@ -443,6 +454,17 @@ async function apiFetchMultipart<T>(
       errorData = { detail: response.statusText };
     }
     console.error('[API] Error response:', errorData);
+    
+    // Якщо токен закінчився або невалідний, перенаправляємо на сторінку логіну
+    if (response.status === 401) {
+      console.log('[API] Unauthorized - redirecting to login');
+      tokenManager.removeToken();
+      // Перенаправляємо на сторінку логіну, якщо ми не на ній
+      if (!window.location.pathname.includes('/auth')) {
+        window.location.href = '/auth';
+      }
+    }
+    
     throw new ApiError(response.status, response.statusText, errorData);
   }
 

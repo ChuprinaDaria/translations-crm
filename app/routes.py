@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import Optional
+from typing import Optional, Any
 
 from db import SessionLocal
 from datetime import datetime, timedelta
@@ -622,7 +622,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     # Підготовка структур для форматів меню (Welcome drink, Фуршет, тощо)
     formats_map: dict[Any, dict] = {}
     for event_format in getattr(kp, "event_formats", []) or []:
-        people = event_format.people_count or kp.people_count or 0
+        # Використовуємо people_count формату, якщо він вказаний і > 0, інакше з КП, інакше None
+        people = None
+        if event_format.people_count and event_format.people_count > 0:
+            people = event_format.people_count
+        elif kp.people_count and kp.people_count > 0:
+            people = kp.people_count
         formats_map[event_format.id] = {
             "id": event_format.id,
             "name": event_format.name,
@@ -641,7 +646,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             "id": None,
             "name": getattr(kp, "event_format", None) or "Меню",
             "event_time": getattr(kp, "event_time", None),
-            "people_count": kp.people_count or 0,
+            "people_count": kp.people_count if kp.people_count and kp.people_count > 0 else None,
             "order_index": 0,
             "items": [],
             "food_total_raw": 0.0,
@@ -706,7 +711,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         fmt_key = kp_item.event_format_id if kp_item.event_format_id in formats_map else default_format_key
         # Якщо формат ще не ініціалізовано (наприклад, страва прив'язана до формату, якого немає в kp.event_formats)
         if fmt_key not in formats_map:
-            people = kp_item.event_format.people_count if getattr(kp_item, "event_format", None) and kp_item.event_format.people_count else kp.people_count or 0
+            # Використовуємо people_count з формату події, якщо він є і > 0, інакше з КП, інакше None
+            people = None
+            if getattr(kp_item, "event_format", None) and kp_item.event_format.people_count and kp_item.event_format.people_count > 0:
+                people = kp_item.event_format.people_count
+            elif kp.people_count and kp.people_count > 0:
+                people = kp.people_count
             formats_map[fmt_key] = {
                 "id": fmt_key,
                 "name": kp_item.event_format.name if getattr(kp_item, "event_format", None) else "Меню",
@@ -838,12 +848,13 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     # Підсумки по кожному формату меню
     formats: list[dict] = []
     for fmt in formats_map.values():
-        people = fmt["people_count"] or effective_people_count or 0
+        # Використовуємо people_count формату, якщо він вказаний і > 0, інакше використовуємо effective_people_count
+        people = fmt["people_count"] if fmt["people_count"] and fmt["people_count"] > 0 else effective_people_count
         food_total_fmt = fmt["food_total_raw"]
         fmt["food_total"] = food_total_fmt
         fmt["food_total_formatted"] = f"{food_total_fmt:.2f} грн"
         fmt["price_per_person"] = (
-            (food_total_fmt / people) if people else None
+            (food_total_fmt / people) if people and people > 0 else None
         )
         fmt["price_per_person_formatted"] = (
             f"{fmt['price_per_person']:.2f} грн/люд" if fmt["price_per_person"] is not None else None
@@ -859,7 +870,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             fmt["total_after_discount"] = total_after_discount
             fmt["total_after_discount_formatted"] = f"{total_after_discount:.2f} грн"
             fmt["price_per_person_after_discount"] = (
-                (total_after_discount / people) if people else None
+                (total_after_discount / people) if people and people > 0 else None
             )
             fmt["price_per_person_after_discount_formatted"] = (
                 f"{fmt['price_per_person_after_discount']:.2f} грн/люд"
@@ -1673,7 +1684,13 @@ def login(payload: schema.LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="User account is inactive")
     
     crud_user.update_last_login(db, user)
-    to_encode = {"sub": str(user.id), "email": user.email, "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}
+    to_encode = {
+        "sub": str(user.id), 
+        "email": user.email, 
+        "role": user.role,
+        "is_admin": user.is_admin,
+        "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    }
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
 

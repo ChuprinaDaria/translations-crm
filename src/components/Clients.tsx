@@ -54,8 +54,10 @@ export function Clients() {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log("Token payload:", payload); // Для дебагу
         setCurrentUserRole(payload.role || null);
         setCurrentUserIsAdmin(payload.is_admin === true);
+        console.log("canDeleteClient:", payload.is_admin === true || (payload.role && payload.role.endsWith("-lead"))); // Для дебагу
       } catch (e) {
         console.error("Помилка декодування токену:", e);
       }
