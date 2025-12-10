@@ -158,7 +158,14 @@ def delete_old_preview(preview_url: str):
                 print(f"Error deleting old preview: {e}")
 
 
-def generate_template_preview_image(html_content: str, filename: str) -> str:
+def generate_template_preview_image(
+    html_content: str,
+    filename: str,
+    primary_color: str | None = None,
+    secondary_color: str | None = None,
+    text_color: str | None = None,
+    font_family: str | None = None,
+) -> str:
     """
     Генерує прев'ю зображення з HTML шаблону.
     Повертає відносний шлях до збереженого зображення.
@@ -372,6 +379,13 @@ def generate_template_preview_image(html_content: str, filename: str) -> str:
             if item.get('category_name')
         )))
         
+        # Визначаємо кольори та шрифт для превʼю:
+        # якщо явно не передані – використовуємо брендовані значення за замовчуванням
+        effective_primary_color = primary_color or "#FF5A00"
+        effective_secondary_color = secondary_color or "#ffffff"
+        effective_text_color = text_color or "#333333"
+        effective_font_family = font_family or "Arial, sans-serif"
+
         # Рендеримо HTML через Jinja2
         from jinja2 import Template
         template = Template(html_content)
@@ -379,10 +393,10 @@ def generate_template_preview_image(html_content: str, filename: str) -> str:
             **test_data,
             template=template_config_obj,
             template_config=template_config_obj,
-            primary_color='#FF5A00',
-            secondary_color='#ffffff',
-            text_color='#333333',
-            font_family='Arial, sans-serif',
+            primary_color=effective_primary_color,
+            secondary_color=effective_secondary_color,
+            text_color=effective_text_color,
+            font_family=effective_font_family,
             menu_sections=preview_menu_sections,
             formats=test_formats,
             food_total_raw=32250.0,
@@ -1857,7 +1871,14 @@ async def create_template(
             # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
             # (незалежно від того, чи передано preview_image_url)
             print(f"Generating automatic preview for template: {filename}")
-            auto_preview = generate_template_preview_image(html_for_preview, filename)
+            auto_preview = generate_template_preview_image(
+                html_for_preview,
+                filename,
+                primary_color=primary_color,
+                secondary_color=secondary_color,
+                text_color=text_color,
+                font_family=font_family,
+            )
             if auto_preview:
                 final_preview_url = auto_preview
             else:
@@ -2033,8 +2054,15 @@ async def update_template(
             # Видаляємо старе прев'ю
             if current_template.preview_image_url:
                 delete_old_preview(current_template.preview_image_url)
-            # Генеруємо нове
-            auto_preview = generate_template_preview_image(html_for_preview, final_filename)
+            # Генеруємо нове превʼю з актуальними кольорами / шрифтом
+            auto_preview = generate_template_preview_image(
+                html_for_preview,
+                final_filename,
+                primary_color=primary_color or current_template.primary_color,
+                secondary_color=secondary_color or current_template.secondary_color,
+                text_color=text_color or current_template.text_color,
+                font_family=font_family or current_template.font_family,
+            )
             if auto_preview:
                 final_preview_url = auto_preview
                 print(f"✓ Preview regenerated successfully: {auto_preview}")
@@ -2646,9 +2674,20 @@ def delete_client(
     db: Session = Depends(get_db),
     user = Depends(get_current_user_db)
 ):
+    # Логування для діагностики
+    print(f"[DELETE CLIENT] User: {user.email}, is_admin: {user.is_admin}, role: {user.role}")
+    
     # Перевірка прав доступу: тільки адміни та керівники відділів можуть видаляти клієнтів
-    if not user.is_admin and not (user.role and user.role.endswith("-lead")):
-        raise HTTPException(403, "Доступ заборонено. Тільки адміністратори та керівники відділів можуть видаляти клієнтів")
+    is_admin = user.is_admin is True or user.is_admin == 1
+    is_lead = user.role and user.role.endswith("-lead")
+    
+    print(f"[DELETE CLIENT] is_admin={is_admin}, is_lead={is_lead}")
+    
+    if not is_admin and not is_lead:
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Доступ заборонено. Тільки адміністратори та керівники відділів можуть видаляти клієнтів. Ваш статус: is_admin={user.is_admin}, role={user.role}"
+        )
     
     db_client = db.query(models.Client).filter(models.Client.id == client_id).first()
     if not db_client:

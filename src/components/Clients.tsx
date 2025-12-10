@@ -56,8 +56,24 @@ export function Clients() {
         const payload = JSON.parse(atob(token.split('.')[1]));
         console.log("Token payload:", payload); // Для дебагу
         setCurrentUserRole(payload.role || null);
-        setCurrentUserIsAdmin(payload.is_admin === true);
-        console.log("canDeleteClient:", payload.is_admin === true || (payload.role && payload.role.endsWith("-lead"))); // Для дебагу
+        // Перевірка is_admin - може бути true, "true", або 1
+        const isAdminFromPayload =
+          payload.is_admin === true ||
+          payload.is_admin === "true" ||
+          payload.is_admin === 1 ||
+          payload.isAdmin === true ||
+          payload.isAdmin === "true" ||
+          payload.isAdmin === 1 ||
+          payload.admin === true ||
+          payload.admin === "true" ||
+          payload.admin === 1 ||
+          (typeof payload.role === "string" && payload.role.toLowerCase().includes("admin"));
+        setCurrentUserIsAdmin(isAdminFromPayload);
+        console.log("isAdminFromPayload:", isAdminFromPayload);
+        console.log("currentUserRole:", payload.role);
+        const canDelete = isAdminFromPayload ||
+          (payload.role && (payload.role.endsWith("-lead") || payload.role.toLowerCase().includes("admin")));
+        console.log("canDeleteClient:", canDelete);
       } catch (e) {
         console.error("Помилка декодування токену:", e);
       }
@@ -79,7 +95,19 @@ export function Clients() {
   }, []);
 
   // Перевірка чи користувач може видаляти клієнтів
-  const canDeleteClient = currentUserIsAdmin || (currentUserRole && currentUserRole.endsWith("-lead"));
+  const canDeleteClient =
+    currentUserIsAdmin ||
+    (currentUserRole &&
+      (currentUserRole.endsWith("-lead") || currentUserRole.toLowerCase().includes("admin")));
+  
+  // Логування для діагностики
+  useEffect(() => {
+    console.log("canDeleteClient check:", {
+      currentUserIsAdmin,
+      currentUserRole,
+      canDeleteClient
+    });
+  }, [currentUserIsAdmin, currentUserRole, canDeleteClient]);
 
   // Завантаження КП для вибраного клієнта
   useEffect(() => {
@@ -182,7 +210,21 @@ export function Clients() {
       toast.success("Клієнта видалено");
     } catch (error: any) {
       console.error("Error deleting client:", error);
-      toast.error(error.message || "Помилка видалення клієнта");
+      // Отримуємо детальне повідомлення про помилку
+      let errorMessage = "Помилка видалення клієнта";
+      if (error.data) {
+        // ApiError має поле data з даними з бекенду
+        errorMessage = error.data.detail || error.data.message || errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      console.error("Delete error details:", {
+        status: error.status,
+        statusText: error.statusText,
+        data: error.data,
+        message: errorMessage
+      });
+      toast.error(errorMessage);
     } finally {
       setIsDeleting(false);
     }

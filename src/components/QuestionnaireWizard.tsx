@@ -173,7 +173,7 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }
                   ${index < currentStep || completedSteps.has(index)
                     ? 'bg-green-500 text-white'
                     : index === currentStep
-                    ? 'bg-[#FF5A00] text-white'
+                    ? 'bg-green-500 text-white'
                     : 'bg-gray-300 text-gray-600'}
                 `}
               >
@@ -185,7 +185,7 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }
               </div>
               <span className={`
                 text-xs text-center leading-tight
-                ${index === currentStep ? 'font-semibold text-[#FF5A00]' : 'text-gray-600'}
+                ${index === currentStep ? 'font-semibold text-green-700' : 'text-gray-600'}
               `}>
                 {step.title}
               </span>
