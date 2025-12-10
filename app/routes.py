@@ -1259,8 +1259,6 @@ def export_purchase_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={'Content-Disposition': f'attachment; filename=\"{safe_filename}\"'},
     )
-    
-    return kp
 
 
 @router.patch("/kp/{kp_id}/status", response_model=schema.KP)
