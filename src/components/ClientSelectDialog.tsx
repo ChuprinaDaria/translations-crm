@@ -42,7 +42,13 @@ export function ClientSelectDialog({
       setHasSearched(true);
       try {
         const result = await clientsApi.getClients(0, 20, query.trim());
-        setClients(result.clients);
+        // Бекенд може повертати:
+        // 1) масив клієнтів
+        // 2) об'єкт { total, clients: [...] }
+        const list = Array.isArray(result)
+          ? result
+          : (result as any).clients || [];
+        setClients(list);
       } catch (error) {
         console.error("Error searching clients:", error);
         setClients([]);

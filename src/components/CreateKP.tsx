@@ -245,6 +245,13 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [discountIncludeEquipment, setDiscountIncludeEquipment] = useState(false);
   const [discountIncludeService, setDiscountIncludeService] = useState(false);
 
+  // Помилки валідації для кроку 1
+  const [step1Errors, setStep1Errors] = useState<{
+    clientName?: string;
+    eventDate?: string;
+    selectedClient?: string;
+  }>({});
+
   // Анкети клієнта для автозаповнення КП
   const [clientQuestionnaires, setClientQuestionnaires] = useState<ClientQuestionnaire[]>([]);
   const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<number | null>(null);
@@ -411,14 +418,31 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
   // Функція для валідації кроку 1 з показом помилок
   const validateStep1 = (): boolean => {
+    const errors: {
+      clientName?: string;
+      eventDate?: string;
+      selectedClient?: string;
+    } = {};
+
     if (clientSelectionMode === "existing" && !selectedClientId) {
-      toast.error("Будь ласка, оберіть клієнта зі списку");
+      errors.selectedClient = "Оберіть клієнта зі списку";
+    }
+
+    if (!clientName.trim()) {
+      errors.clientName = "Ім'я клієнта є обов'язковим полем";
+    }
+
+    if (!eventDate) {
+      errors.eventDate = "Дата події є обов'язковим полем";
+    }
+
+    setStep1Errors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      toast.error("Будь ласка, заповніть обов'язкові поля на кроці 1");
       return false;
     }
-    if (!clientName || !eventDate) {
-      toast.error("Будь ласка, заповніть ім'я клієнта та дату події");
-      return false;
-    }
+
     return true;
   };
 
@@ -1524,6 +1548,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     onValueChange={(value) => {
                       const clientId = parseInt(value);
                       setSelectedClientId(clientId);
+                      setStep1Errors((prev) => ({ ...prev, selectedClient: undefined }));
+
                       const client = clients.find((c) => c.id === clientId);
                       if (client) {
                         setClientName(client.name || "");
@@ -1540,16 +1566,20 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         if (client.event_location) {
                           setEventLocation(client.event_location);
                         }
-                        if (client.event_time) {
-                          setEventTime(client.event_time);
-                        }
 
                         // Завантажуємо всі анкети клієнта та автозаповнюємо останню
                         loadClientQuestionnaires(clientId);
                       }
                     }}
                   >
-                    <SelectTrigger id="select-client">
+                    <SelectTrigger
+                      id="select-client"
+                      className={`h-10 ${
+                        step1Errors.selectedClient
+                          ? "border-red-500 focus-visible:ring-red-500"
+                          : ""
+                      }`}
+                    >
                       <SelectValue placeholder="Оберіть клієнта зі списку" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1560,6 +1590,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       ))}
                     </SelectContent>
                   </Select>
+                  {step1Errors.selectedClient && (
+                    <p className="text-xs text-red-600">{step1Errors.selectedClient}</p>
+                  )}
                 </div>
               )}
 
@@ -1690,9 +1723,18 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     id="client-name"
                     placeholder="ТОВ 'Компанія' або Іван Петренко"
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
+                    onChange={(e) => {
+                      setClientName(e.target.value);
+                      if (step1Errors.clientName) {
+                        setStep1Errors((prev) => ({ ...prev, clientName: undefined }));
+                      }
+                    }}
+                    aria-invalid={!!step1Errors.clientName}
                     disabled={clientSelectionMode === "existing" && !selectedClientId}
                   />
+                  {step1Errors.clientName && (
+                    <p className="text-xs text-red-600">{step1Errors.clientName}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {/* Старий блок з групою/форматом прибрано, залишаємо лише багатоформатний редактор нижче */}
@@ -1716,6 +1758,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       value={eventDate}
                       onChange={(e) => {
                         setEventDate(e.target.value);
+                        if (step1Errors.eventDate) {
+                          setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
+                        }
                         // Видаляємо індикатор якщо користувач змінює значення
                         if (questionnaireAutofill.eventDate) {
                           const newAutofill = { ...questionnaireAutofill };
@@ -1723,9 +1768,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           setQuestionnaireAutofill(newAutofill);
                         }
                       }}
+                      aria-invalid={!!step1Errors.eventDate}
                       className={`${
                         questionnaireAutofill.eventDate
-                          ? "border-emerald-400 bg-emerald-50"
+                          ? "!border-emerald-400 !bg-emerald-50"
                           : ""
                       }`}
                     />
@@ -1733,6 +1779,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
                     )}
                   </div>
+                  {step1Errors.eventDate && (
+                    <p className="text-xs text-red-600">{step1Errors.eventDate}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -1760,7 +1809,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       }}
                       className={`${
                         questionnaireAutofill.eventTime
-                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
                           : ""
                       }`}
                     />
@@ -1798,7 +1847,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       }}
                       className={`${
                         questionnaireAutofill.eventLocation
-                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
                           : ""
                       }`}
                     />
@@ -1868,7 +1917,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       }}
                       className={`${
                         questionnaireAutofill.coordinatorName
-                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
                           : ""
                       }`}
                     />
@@ -1919,7 +1968,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       }}
                       className={`${
                         questionnaireAutofill.coordinatorPhone
-                          ? "border-emerald-400 bg-emerald-50 pr-8"
+                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
                           : ""
                       }`}
                     />
