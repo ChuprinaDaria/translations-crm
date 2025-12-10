@@ -14,6 +14,7 @@ import { Clients } from "./components/Clients";
 import { EventsCalendar } from "./components/EventsCalendar";
 import { UsersManagement } from "./components/UsersManagement";
 import { BenefitsManagement } from "./components/BenefitsManagement";
+import { ProcurementExcel } from "./components/ProcurementExcel";
 import { SalesDepartment } from "./components/SalesDepartment";
 import { AllQuestionnaires } from "./components/AllQuestionnaires";
 import { AuthPage } from "./components/auth/AuthPage";
@@ -271,18 +272,7 @@ function App() {
           </div>
         );
       case "procurement-excel":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Excel для закупівлі
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Експорт даних для закупівлі буде тут
-              </p>
-            </div>
-          </div>
-        );
+        return <ProcurementExcel />;
       case "service-templates":
         return (
           <div className="space-y-6">

@@ -720,6 +720,11 @@ export interface KP {
   discount_include_service?: boolean;
 }
 
+export interface PurchaseExportRequest {
+  kp_ids: number[];
+  format?: "excel" | "pdf";
+}
+
 export interface KPCreate {
   title: string;
   people_count: number;
@@ -845,6 +850,38 @@ export const kpApi = {
       body: JSON.stringify(data),
     });
   }
+};
+
+// Purchase / Procurement API
+export const purchaseApi = {
+  async exportPurchase(data: PurchaseExportRequest): Promise<Blob> {
+    const token = tokenManager.getToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/purchase/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: response.statusText };
+      }
+      throw new ApiError(response.status, response.statusText, errorData);
+    }
+
+    return response.blob();
+  },
 };
 
 // Template Types

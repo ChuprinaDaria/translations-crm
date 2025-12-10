@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 # Category schemas (define first)
@@ -674,3 +674,20 @@ class CashbackTransaction(CashbackTransactionBase):
 
     class Config:
         from_attributes = True
+
+
+############################################################
+# Purchase / Procurement schemas
+############################################################
+
+
+class PurchaseExportRequest(BaseModel):
+    """
+    Запит на експорт файлу закупки.
+
+    kp_ids - список ID КП, які потрібно врахувати.
+    format - формат файлу (поки що підтримується лише 'excel').
+    """
+
+    kp_ids: List[int]
+    format: Literal["excel", "pdf"] = "excel"

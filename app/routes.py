@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 from db import SessionLocal
 from datetime import datetime, timedelta
@@ -21,6 +21,7 @@ from email_service import send_kp_email
 from telegram_service import send_kp_telegram
 from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
 import loyalty_service
+from purchase_service import generate_purchase_excel
 
 
 router = APIRouter()
@@ -1225,6 +1226,39 @@ def update_kp(
                 )
         except Exception as e:
             print(f"Error sending Telegram after KP update: {e}")
+
+
+@router.post("/purchase/export")
+def export_purchase_excel(
+    export_in: schema.PurchaseExportRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Експорт файлу закупки на основі вибраних КП.
+
+    Поки що підтримується лише формат 'excel'.
+    """
+    if not export_in.kp_ids:
+        raise HTTPException(status_code=400, detail="Список KP ID порожній")
+
+    if export_in.format != "excel":
+        raise HTTPException(status_code=400, detail="Поки що підтримується лише формат 'excel'")
+
+    try:
+        excel_bytes, filename = generate_purchase_excel(db, export_in.kp_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
+    if not safe_filename or safe_filename == '.xlsx':
+        safe_filename = 'purchase.xlsx'
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={'Content-Disposition': f'attachment; filename=\"{safe_filename}\"'},
+    )
     
     return kp
 
