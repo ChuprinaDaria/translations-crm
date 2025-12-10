@@ -128,6 +128,19 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
       roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
     },
     {
+      title: "Відділ Закупки",
+      items: [
+        {
+          id: "procurement-excel",
+          label: "Сформувати закупку",
+          icon: <FileSpreadsheet className="w-5 h-5" />,
+          tooltip: "Сформувати Excel для закупки на основі вибраних КП",
+          roles: ["kp-manager", "sales-lead"],
+        },
+      ],
+      roles: ["kp-manager", "sales-lead"],
+    },
+    {
       title: "Сервіс",
       items: [
         {
