@@ -239,9 +239,14 @@ class KPItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     kp_id = Column(Integer, ForeignKey("kps.id"))
-    item_id = Column(Integer, ForeignKey("items.id"))
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=True)  # Nullable для custom items
     quantity = Column(Integer, default=1)
     event_format_id = Column(Integer, ForeignKey("kp_event_formats.id"), nullable=True)  # Якщо страва належить до конкретного формату
+    # Поля для custom items (коли item_id = None)
+    name = Column(String, nullable=True)
+    price = Column(Float, nullable=True)
+    weight = Column(Float, nullable=True)
+    unit = Column(String, nullable=True)
 
     kp = relationship("KP", back_populates="items")
     item = relationship("Item", back_populates="kp_items", lazy="joined")

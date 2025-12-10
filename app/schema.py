@@ -116,9 +116,14 @@ class KPBase(BaseModel):
 
 
 class KPItemCreate(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None  # None для custom items без прив'язки до меню
     quantity: int
     event_format_id: Optional[int] = None  # Якщо страва належить до конкретного формату
+    # Поля для custom items (коли item_id = None)
+    name: Optional[str] = None
+    price: Optional[float] = None
+    weight: Optional[float] = None
+    unit: Optional[str] = None
 
 class EventFormatCreate(BaseModel):
     name: str  # Назва формату (наприклад, "Welcome drink", "Фуршет")
@@ -182,8 +187,13 @@ class KPCreate(KPBase):
 class KPItem(BaseModel):
     id: int
     kp_id: int
-    item_id: int
+    item_id: Optional[int] = None  # None для custom items
     quantity: int
+    # Поля для custom items
+    name: Optional[str] = None
+    price: Optional[float] = None
+    weight: Optional[float] = None
+    unit: Optional[str] = None
 
     class Config:
         from_attributes = True
