@@ -349,9 +349,9 @@ export function ChecklistManagement() {
         </TabsContent>
       </Tabs>
 
-      {/* Wizard Dialog */}
+      {/* Wizard Dialog - Full Screen */}
       <Dialog open={showWizard} onOpenChange={setShowWizard}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-7xl w-[95vw] h-[95vh] p-0 gap-0">
           <DialogHeader className="sr-only">
             <DialogTitle>
               {editingChecklist ? "Редагування чекліста" : 
@@ -361,19 +361,21 @@ export function ChecklistManagement() {
               Заповніть форму для створення чекліста
             </DialogDescription>
           </DialogHeader>
-          {wizardType === "box" ? (
-            <ChecklistWizardBox
-              checklist={editingChecklist}
-              onSave={handleWizardSave}
-              onCancel={() => setShowWizard(false)}
-            />
-          ) : (
-            <ChecklistWizardCatering
-              checklist={editingChecklist}
-              onSave={handleWizardSave}
-              onCancel={() => setShowWizard(false)}
-            />
-          )}
+          <div className="h-full overflow-y-auto">
+            {wizardType === "box" ? (
+              <ChecklistWizardBox
+                checklist={editingChecklist}
+                onSave={handleWizardSave}
+                onCancel={() => setShowWizard(false)}
+              />
+            ) : (
+              <ChecklistWizardCatering
+                checklist={editingChecklist}
+                onSave={handleWizardSave}
+                onCancel={() => setShowWizard(false)}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

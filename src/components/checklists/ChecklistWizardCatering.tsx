@@ -14,7 +14,8 @@ import {
   Loader2,
   Save,
   Armchair,
-  Wine
+  Wine,
+  X
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -186,33 +187,43 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
   };
 
   return (
-    <div className="bg-white rounded-lg">
+    <div className="bg-white h-full flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#FF5A00] to-orange-500 p-6 rounded-t-lg">
-        <div className="flex items-center gap-3 text-white mb-4">
-          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-            <ChefHat className="w-6 h-6" />
+      <div className="bg-gradient-to-r from-[#FF5A00] to-orange-500 px-8 py-6 flex-shrink-0">
+        <div className="flex items-center justify-between text-white mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
+              <ChefHat className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">
+                {checklist ? "Редагування чекліста" : "Новий чекліст на кейтеринг"}
+              </h2>
+              <p className="text-orange-100">Крок {currentStep} з {STEPS.length}</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold">
-              {checklist ? "Редагування чекліста" : "Новий чекліст на кейтеринг"}
-            </h2>
-            <p className="text-orange-100 text-sm">Крок {currentStep} з {STEPS.length}</p>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onCancel}
+            className="text-white hover:bg-white/20"
+          >
+            <X className="w-5 h-5" />
+          </Button>
         </div>
         
         {/* Progress bar */}
-        <div className="w-full bg-white/20 rounded-full h-2">
+        <div className="w-full bg-white/20 rounded-full h-2.5">
           <div
-            className="bg-white h-2 rounded-full transition-all duration-300"
+            className="bg-white h-2.5 rounded-full transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
       {/* Step indicators */}
-      <div className="px-6 py-4 border-b overflow-x-auto">
-        <div className="flex gap-2 min-w-max">
+      <div className="px-8 py-5 border-b bg-gray-50 overflow-x-auto flex-shrink-0">
+        <div className="flex gap-3 min-w-max">
           {STEPS.map((step) => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
@@ -222,20 +233,20 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
               <button
                 key={step.id}
                 onClick={() => setCurrentStep(step.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm ${
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl transition-all font-medium ${
                   isActive
-                    ? "bg-[#FF5A00] text-white"
+                    ? "bg-[#FF5A00] text-white shadow-lg scale-105"
                     : isCompleted
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-white text-gray-500 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                  isCompleted ? "bg-green-500 text-white" : ""
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                  isCompleted ? "bg-green-500 text-white" : isActive ? "bg-white/20" : ""
                 }`}>
                   {isCompleted ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                 </div>
-                <span className="hidden md:inline">{step.title}</span>
+                <span>{step.title}</span>
               </button>
             );
           })}
@@ -243,53 +254,65 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
       </div>
 
       {/* Content */}
-      <div className="p-6 min-h-[400px]">
-        {renderStep()}
+      <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="max-w-4xl mx-auto">
+          {renderStep()}
+        </div>
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t bg-gray-50 rounded-b-lg flex justify-between">
+      <div className="px-8 py-5 border-t bg-white flex justify-between items-center flex-shrink-0 shadow-lg">
         <Button
           variant="outline"
+          size="lg"
           onClick={currentStep === 1 ? onCancel : handlePrev}
+          className="px-6"
         >
-          <ChevronLeft className="w-4 h-4 mr-2" />
+          <ChevronLeft className="w-5 h-5 mr-2" />
           {currentStep === 1 ? "Скасувати" : "Назад"}
         </Button>
         
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <Button
             variant="outline"
+            size="lg"
             onClick={handleSave}
             disabled={isSaving}
+            className="px-6"
           >
-            <Save className="w-4 h-4 mr-2" />
-            Зберегти
+            {isSaving ? (
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            ) : (
+              <Save className="w-5 h-5 mr-2" />
+            )}
+            Зберегти чернетку
           </Button>
           
           {currentStep < STEPS.length ? (
             <Button
+              size="lg"
               onClick={handleNext}
-              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white px-8 shadow-lg"
             >
               Далі
-              <ChevronRight className="w-4 h-4 ml-2" />
+              <ChevronRight className="w-5 h-5 ml-2" />
             </Button>
           ) : (
             <Button
+              size="lg"
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-green-500 hover:bg-green-600"
+              className="bg-green-500 hover:bg-green-600 text-white px-8 shadow-lg"
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                   Збереження...
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Завершити
+                  <Check className="w-5 h-5 mr-2" />
+                  Завершити і зберегти
                 </>
               )}
             </Button>
