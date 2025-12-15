@@ -1,7 +1,7 @@
 // API Configuration and Helper Functions
 
 // Use relative path /api - will be proxied by nginx in Docker
-const API_BASE_URL = '/api';
+export const API_BASE_URL = '/api';
 
 // Helper function to get full URL for uploaded images
 export function getImageUrl(imagePath?: string | null): string | undefined {
