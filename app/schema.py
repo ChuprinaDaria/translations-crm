@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Literal, Dict, Any
+from pydantic import BaseModel, EmailStr, field_validator
+from typing import Optional, List, Literal, Dict, Any, Union
 from datetime import datetime
 
 # Category schemas (define first)
@@ -35,10 +35,17 @@ class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
+    weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = True
+    
+    @field_validator('weight', mode='before')
+    @classmethod
+    def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        return str(v)
 
 class ItemCreate(ItemBase):
     subcategory_id: Optional[int] = None
@@ -48,16 +55,30 @@ class ItemUpdate(BaseModel):
     subcategory_id: Optional[int] = None
     description: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
+    weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = None
+    
+    @field_validator('weight', mode='before')
+    @classmethod
+    def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        return str(v)
 
 class Item(ItemBase):
     id: int
     subcategory_id: Optional[int] = None
     subcategory: Optional[Subcategory] = None
     created_at: Optional[datetime] = None
+    
+    @field_validator('weight', mode='before')
+    @classmethod
+    def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        return str(v)
     
     class Config:
         from_attributes = True
@@ -203,8 +224,15 @@ class KPItem(BaseModel):
     # Поля для custom items
     name: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
+    weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
+    
+    @field_validator('weight', mode='before')
+    @classmethod
+    def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        return str(v)
 
     class Config:
         from_attributes = True
