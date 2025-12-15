@@ -107,7 +107,7 @@ export function MenuManagement() {
     name: "",
     description: "",
     price: 0,
-    weight: 0,
+    weight: '',
     unit: "",
     photo_url: "",
     active: true,
@@ -186,7 +186,7 @@ export function MenuManagement() {
       name: "",
       description: "",
       price: 0,
-      weight: 0,
+      weight: '',
       unit: "",
       photo_url: "",
       active: true,
@@ -237,7 +237,7 @@ export function MenuManagement() {
       name: item.name,
       description: item.description || "",
       price: item.price,
-      weight: item.weight || 0,
+      weight: item.weight ? String(item.weight) : '',
       unit: item.unit || "",
       photo_url: item.photo_url || "",
       active: item.active,
@@ -1429,15 +1429,14 @@ export function MenuManagement() {
               </div>
               
               <div>
-                <Label htmlFor="weight">Вага</Label>
+                <Label htmlFor="weight">Вага (можна вводити через слеш, наприклад: 150/75)</Label>
                 <div className="flex gap-2">
                   <Input
                     id="weight"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={itemFormData.weight}
-                    onChange={(e) => setItemFormData({...itemFormData, weight: parseFloat(e.target.value) || 0})}
+                    type="text"
+                    placeholder="150 або 150/75"
+                    value={itemFormData.weight ? String(itemFormData.weight) : ''}
+                    onChange={(e) => setItemFormData({...itemFormData, weight: e.target.value || ''})}
                     className="flex-1"
                   />
                   <Input

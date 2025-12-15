@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   itemsApi,
   categoriesApi,
+  subcategoriesApi,
   kpApi,
   templatesApi,
   menusApi,
@@ -28,6 +29,7 @@ import {
   getImageUrl,
   type Item,
   type Category,
+  type Subcategory,
   type Template as ApiTemplate,
   type Menu,
   type Client,
@@ -40,7 +42,7 @@ interface Dish {
   id: number;
   name: string;
   description: string;
-  weight: number;
+  weight: number | string; // Може бути число або рядок типу "150/75"
   unit: string;
   price: number;
   photo_url: string;
@@ -53,6 +55,7 @@ interface AdditionalItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  subcategoryId?: number; // Для обладнання - підкатегорія для розрахунку знижок
 }
 
 // Формат заходу в UI (локальний стан)
@@ -67,12 +70,16 @@ interface UIEventFormat {
   selectedDishes: number[];
 }
 
-// Популярні формати заходів для підказок у випадаючому списку
-const EVENT_FORMAT_OPTIONS: string[] = [
+// Формати для доставки боксів
+const BOX_FORMAT_OPTIONS: string[] = [
+  "Доставка боксів",
+];
+
+// Формати для кейтерингу
+const CATERING_FORMAT_OPTIONS: string[] = [
   "Доставка готових страв",
   "Доставка обідів",
   "Кава-брейк",
-  "Welcome drink",
   "Фуршет",
   "Банкет",
   "Комплексне обслуговування",
@@ -80,6 +87,12 @@ const EVENT_FORMAT_OPTIONS: string[] = [
   "Бар кейтерінг",
   "Су-від",
   "Оренда обладнання/персоналу",
+];
+
+// Популярні формати заходів для підказок у випадаючому списку (застарілий, використовується для сумісності)
+const EVENT_FORMAT_OPTIONS: string[] = [
+  ...BOX_FORMAT_OPTIONS,
+  ...CATERING_FORMAT_OPTIONS,
 ];
 
 // Компонент для редагування полів у прев'ю
@@ -215,7 +228,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [dishQuantities, setDishQuantities] = useState<Record<number, number>>({});
   const [equipmentItems, setEquipmentItems] = useState<AdditionalItem[]>([]);
   const [serviceItems, setServiceItems] = useState<AdditionalItem[]>([]);
-  const [transportTotal, setTransportTotal] = useState<string>("");
+  const [transportEquipmentTotal, setTransportEquipmentTotal] = useState<string>("");
+  const [transportPersonnelTotal, setTransportPersonnelTotal] = useState<string>("");
+  const [equipmentLossOrBreakagePrice, setEquipmentLossOrBreakagePrice] = useState<string>("");
   // Кілька форматів заходу (Welcome drink, Фуршет тощо)
   const [eventFormats, setEventFormats] = useState<UIEventFormat[]>([]);
   // Кастомні страви (додані вручну) - мають негативні ID
@@ -231,16 +246,23 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [clientSelectionMode, setClientSelectionMode] = useState<"existing" | "new">("new");
   const [benefits, setBenefits] = useState<Benefit[]>([]);
-  const [selectedDiscountId, setSelectedDiscountId] = useState<number | null>(null);
+  const [selectedDiscountId, setSelectedDiscountId] = useState<number | null>(null); // Deprecated, для сумісності
   const [selectedCashbackId, setSelectedCashbackId] = useState<number | null>(null);
   const [useCashback, setUseCashback] = useState(false);
-  // Налаштування знижки: що включати в знижку
+  // Окремі знижки для кожної категорії
+  const [discountMenuId, setDiscountMenuId] = useState<number | null>(null);
+  const [discountEquipmentId, setDiscountEquipmentId] = useState<number | null>(null);
+  const [discountServiceId, setDiscountServiceId] = useState<number | null>(null);
+  // Знижки по підкатегоріях обладнання: {subcategory_id: benefit_id}
+  const [discountEquipmentSubcategories, setDiscountEquipmentSubcategories] = useState<Record<number, number>>({});
+  // Deprecated: для сумісності
   const [discountIncludeMenu, setDiscountIncludeMenu] = useState(true);
   const [discountIncludeEquipment, setDiscountIncludeEquipment] = useState(false);
   const [discountIncludeService, setDiscountIncludeService] = useState(false);
@@ -250,6 +272,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     clientName?: string;
     eventDate?: string;
     selectedClient?: string;
+    eventGroup?: string;
   }>({});
 
   // Анкети клієнта для автозаповнення КП
@@ -264,10 +287,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     if (clientSelectionMode === "existing" && !selectedClientId) {
       return false;
     }
-    // Після оновлення UI поле "Кількість гостей" та основні поля формату/групи
-    // більше не є обов'язковими на першому кроці.
-    // Для переходу далі достатньо базових даних: ім'я клієнта + дата події.
-    return !!(clientName && eventDate);
+    // Обов'язкові поля: ім'я клієнта + дата події + тип (Бокс/Кейтеринг)
+    return !!(clientName && eventDate && eventGroup);
   };
 
   const applyQuestionnaireToKP = (q: ClientQuestionnaire | null) => {
@@ -422,6 +443,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       clientName?: string;
       eventDate?: string;
       selectedClient?: string;
+      eventGroup?: string;
     } = {};
 
     if (clientSelectionMode === "existing" && !selectedClientId) {
@@ -434,6 +456,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
     if (!eventDate) {
       errors.eventDate = "Дата події є обов'язковим полем";
+    }
+
+    if (!eventGroup) {
+      errors.eventGroup = "Оберіть тип: Бокс або Кейтеринг";
     }
 
     setStep1Errors(errors);
@@ -504,7 +530,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       dishQuantities,
       equipmentItems,
       serviceItems,
-      transportTotal,
+      transportEquipmentTotal,
+      transportPersonnelTotal,
+      equipmentLossOrBreakagePrice,
       selectedTemplateId,
       selectedDiscountId,
       selectedCashbackId,
@@ -546,7 +574,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setDishQuantities(formData.dishQuantities || {});
         setEquipmentItems(formData.equipmentItems || []);
         setServiceItems(formData.serviceItems || []);
-        setTransportTotal(formData.transportTotal || "");
+        setTransportEquipmentTotal(formData.transportEquipmentTotal || "");
+        setTransportPersonnelTotal(formData.transportPersonnelTotal || "");
+        setEquipmentLossOrBreakagePrice(formData.equipmentLossOrBreakagePrice || "");
         setSelectedTemplateId(formData.selectedTemplateId || null);
         setSelectedDiscountId(formData.selectedDiscountId || null);
         setSelectedCashbackId(formData.selectedCashbackId || null);
@@ -608,7 +638,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     dishQuantities,
     equipmentItems,
     serviceItems,
-    transportTotal,
+    transportEquipmentTotal,
+    transportPersonnelTotal,
     selectedTemplateId,
     selectedDiscountId,
     selectedCashbackId,
@@ -628,9 +659,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     const loadDishes = async () => {
       setLoading(true);
       try {
-        const [itemsData, categoriesData] = await Promise.all([
+        const [itemsData, categoriesData, subcategoriesData] = await Promise.all([
           itemsApi.getItems(0, 1000),
           categoriesApi.getCategories(),
+          subcategoriesApi.getSubcategories(),
         ]);
         
         // Filter only active dishes and map to our Dish interface
@@ -650,6 +682,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         
         setDishes(activeDishes);
         setCategories(categoriesData);
+        setSubcategories(subcategoriesData);
         toast.success("Страви завантажено");
       } catch (error: any) {
         toast.error("Помилка завантаження страв");
@@ -715,12 +748,17 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setCoordinatorPhone(kp.coordinator_phone || "");
         setTransportTotal(kp.transport_total?.toString() || "");
         setSelectedTemplateId(kp.template_id || null);
-        setSelectedDiscountId(kp.discount_id || null);
+        setSelectedDiscountId(kp.discount_id || null); // Deprecated
         setSelectedCashbackId(kp.cashback_id || null);
         setUseCashback(kp.use_cashback || false);
-        setDiscountIncludeMenu(kp.discount_include_menu !== undefined ? kp.discount_include_menu : true);
-        setDiscountIncludeEquipment(kp.discount_include_equipment || false);
-        setDiscountIncludeService(kp.discount_include_service || false);
+        setDiscountIncludeMenu(kp.discount_include_menu !== undefined ? kp.discount_include_menu : true); // Deprecated
+        setDiscountIncludeEquipment(kp.discount_include_equipment || false); // Deprecated
+        setDiscountIncludeService(kp.discount_include_service || false); // Deprecated
+        // Нові окремі знижки
+        setDiscountMenuId((kp as any).discount_menu_id || null);
+        setDiscountEquipmentId((kp as any).discount_equipment_id || null);
+        setDiscountServiceId((kp as any).discount_service_id || null);
+        setDiscountEquipmentSubcategories((kp as any).discount_equipment_subcategories || {});
 
         // Завантажуємо страви
         if (kp.items && kp.items.length > 0) {
@@ -786,14 +824,79 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     new Set<string>(dishes.map((dish) => dish.category))
   );
 
-  const filteredDishes = dishes.filter((dish) => {
-    const matchesSearch =
-      dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dish.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTags =
-      selectedTags.length === 0 ||
-      selectedTags.some((tag) => dish.category.includes(tag));
-    return matchesSearch && matchesTags;
+  // Порядок категорій для сортування (якщо категорія є в БД, вона відсортується за цим порядком)
+  const categoryOrder: string[] = [
+    "Холодні закуски",
+    "Салати",
+    "Гарячі страви",
+    "Гарнір",
+    "Десерти",
+    "Безалкогольні напої",
+    "Алкогольні напої",
+    "Доповнення"
+  ];
+
+  // Функція для перевірки, чи страва є напоєм
+  const isDrink = (dish: Dish): boolean => {
+    const category = dish.category || "";
+    return category.toLowerCase().includes("напой") || 
+           category.toLowerCase().includes("напої") ||
+           category === "Безалкогольні напої" ||
+           category === "Алкогольні напої";
+  };
+
+  // Функція для отримання індексу категорії (для сортування)
+  const getCategoryIndex = (category: string): number => {
+    if (!category) return 999;
+    
+    // Перевіряємо точну відповідність
+    const exactIndex = categoryOrder.findIndex(cat => 
+      category.toLowerCase().trim() === cat.toLowerCase().trim()
+    );
+    if (exactIndex !== -1) return exactIndex;
+    
+    // Перевіряємо часткову відповідність (на випадок варіацій назв)
+    const partialIndex = categoryOrder.findIndex(cat => 
+      category.toLowerCase().includes(cat.toLowerCase()) || 
+      cat.toLowerCase().includes(category.toLowerCase())
+    );
+    if (partialIndex !== -1) return partialIndex;
+    
+    // Якщо категорія не знайдена в порядку, повертаємо велике число, щоб вона була в кінці
+    return 999;
+  };
+
+  const filteredDishes = dishes
+    .filter((dish) => {
+      const matchesSearch =
+        dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dish.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesTags =
+        selectedTags.length === 0 ||
+        selectedTags.some((tag) => dish.category.includes(tag));
+      return matchesSearch && matchesTags;
+    })
+    .sort((a, b) => {
+      // Спочатку сортуємо за категорією
+      const categoryDiff = getCategoryIndex(a.category) - getCategoryIndex(b.category);
+      if (categoryDiff !== 0) return categoryDiff;
+      // Потім за назвою в межах категорії
+      return a.name.localeCompare(b.name, 'uk');
+    });
+
+  // Групуємо страви за категоріями (категорії беруться з БД)
+  const dishesByCategory = filteredDishes.reduce((acc, dish) => {
+    const category = dish.category || "Інше";
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(dish);
+    return acc;
+  }, {} as Record<string, typeof filteredDishes>);
+
+  // Сортуємо категорії за порядком (тільки ті, що є в БД)
+  const sortedCategories = Object.keys(dishesByCategory).sort((a, b) => {
+    return getCategoryIndex(a) - getCategoryIndex(b);
   });
 
   const toggleDish = (dishId: number, formatId?: number | null) => {
@@ -862,11 +965,28 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   };
 
   // Отримати вагу страви з урахуванням перевизначень
-  const getDishWeight = (dish: Dish): number => {
+  const getDishWeight = (dish: Dish): number | string => {
     if (dishOverrides[dish.id]?.weight !== undefined) {
       return dishOverrides[dish.id].weight!;
     }
     return dish.weight || 0;
+  };
+
+  // Функція для парсингу ваги з формату "150/75" або числа
+  const parseWeightValue = (weight: number | string): { first: number; second?: number; isRange: boolean } => {
+    if (typeof weight === 'string') {
+      // Перевіряємо формат "150/75"
+      const parts = weight.toString().split('/');
+      if (parts.length === 2) {
+        const first = parseFloat(parts[0].trim()) || 0;
+        const second = parseFloat(parts[1].trim()) || 0;
+        return { first, second, isRange: true };
+      }
+      // Якщо не формат через слеш, намагаємося парсити як число
+      const num = parseFloat(weight);
+      return { first: isNaN(num) ? 0 : num, isRange: false };
+    }
+    return { first: weight || 0, isRange: false };
   };
 
   // Отримати ціну страви з урахуванням перевизначень
@@ -902,10 +1022,18 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   };
 
   const getTotalWeight = () => {
-    // Розраховуємо загальну вагу в грамах
+    // Розраховуємо загальну вагу в грамах (БЕЗ напоїв)
     return getSelectedDishesData().reduce((sum, dish) => {
+      // Пропускаємо напої - вони не рахуються до загальної ваги
+      if (isDrink(dish)) {
+        return sum;
+      }
+      
       const qty = dishQuantities[dish.id] ?? 1;
-      let weightInGrams = getDishWeight(dish);
+      const weightValue = getDishWeight(dish);
+      // Парсимо вагу з формату "150/75" або числа
+      const parsedWeight = parseWeightValue(weightValue);
+      let weightInGrams = parsedWeight.first;
       const unit = (dish.unit || 'г').toLowerCase();
       
       // Конвертуємо в грами
@@ -925,11 +1053,51 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     }, 0);
   };
 
+  // Розраховуємо загальний об'єм напоїв в мл
+  const getTotalDrinksVolume = () => {
+    return getSelectedDishesData().reduce((sum, dish) => {
+      if (!isDrink(dish)) {
+        return sum;
+      }
+      
+      const qty = dishQuantities[dish.id] ?? 1;
+      const weightValue = getDishWeight(dish);
+      // Парсимо вагу з формату "150/75" або числа
+      const parsedWeight = parseWeightValue(weightValue);
+      let volumeInMl = parsedWeight.first;
+      const unit = (dish.unit || 'мл').toLowerCase();
+      
+      // Конвертуємо в мілілітри
+      if (unit === 'л') {
+        volumeInMl = volumeInMl * 1000;
+      } else if (unit === 'мл') {
+        volumeInMl = volumeInMl;
+      } else if (unit === 'г' || unit === 'кг') {
+        // Якщо напій був в грамах/кг, конвертуємо в мл (1г ≈ 1мл для води)
+        if (unit === 'кг') {
+          volumeInMl = volumeInMl * 1000;
+        }
+      }
+      
+      return sum + volumeInMl * qty;
+    }, 0);
+  };
+
   const getWeightPerPerson = () => {
     const totalWeight = getTotalWeight();
     const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
     if (totalWeight > 0 && peopleCountNum > 0) {
       return totalWeight / peopleCountNum;
+    }
+    return 0;
+  };
+
+  // Розраховуємо об'єм напоїв на 1 особу в мл
+  const getDrinksVolumePerPerson = () => {
+    const totalDrinksVolume = getTotalDrinksVolume();
+    const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+    if (totalDrinksVolume > 0 && peopleCountNum > 0) {
+      return totalDrinksVolume / peopleCountNum;
     }
     return 0;
   };
@@ -940,32 +1108,82 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       0
     );
 
-  const equipmentTotal = calculateAdditionalTotal(equipmentItems);
+  const equipmentLossOrBreakagePriceNum = parseFloat(equipmentLossOrBreakagePrice) || 0;
+  const equipmentTotal = calculateAdditionalTotal(equipmentItems) + equipmentLossOrBreakagePriceNum;
   const serviceTotal = calculateAdditionalTotal(serviceItems);
 
   const foodTotalPrice = getTotalPrice();
   const regularDishesPrice = getRegularDishesPrice(); // Тільки звичайні страви (без кастомних)
 
-  // Функція для розрахунку знижки з урахуванням вибраних опцій
-  // Знижка застосовується тільки до звичайних страв, не до кастомних
+  // Функція для розрахунку знижки з урахуванням окремих знижок по категоріях
   const calculateDiscountAmount = () => {
-    if (!selectedDiscountId) return 0;
+    let totalDiscount = 0;
     
-    const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-    if (!discountBenefit) return 0;
-    
-    let discountBase = 0;
-    if (discountIncludeMenu) {
-      discountBase += regularDishesPrice; // Тільки звичайні страви
-    }
-    if (discountIncludeEquipment) {
-      discountBase += equipmentTotal;
-    }
-    if (discountIncludeService) {
-      discountBase += serviceTotal;
+    // Знижка на меню
+    if (discountMenuId) {
+      const discountBenefit = benefits.find((b) => b.id === discountMenuId);
+      if (discountBenefit) {
+        totalDiscount += (regularDishesPrice * discountBenefit.value) / 100;
+      }
     }
     
-    return (discountBase * discountBenefit.value) / 100;
+    // Знижка на обладнання
+    if (discountEquipmentId || Object.keys(discountEquipmentSubcategories).length > 0) {
+      // Якщо є знижки по підкатегоріях, розраховуємо окремо для кожної
+      if (Object.keys(discountEquipmentSubcategories).length > 0) {
+        equipmentItems.forEach(item => {
+          if (item.subcategoryId && discountEquipmentSubcategories[item.subcategoryId]) {
+            const benefitId = discountEquipmentSubcategories[item.subcategoryId];
+            const discountBenefit = benefits.find((b) => b.id === benefitId);
+            if (discountBenefit) {
+              const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
+              totalDiscount += (itemTotal * discountBenefit.value) / 100;
+            }
+          }
+        });
+        // Додаємо знижку на "Втрати та бій" якщо є загальна знижка
+        if (discountEquipmentId) {
+          const discountBenefit = benefits.find((b) => b.id === discountEquipmentId);
+          if (discountBenefit) {
+            totalDiscount += (equipmentLossOrBreakagePriceNum * discountBenefit.value) / 100;
+          }
+        }
+      } else if (discountEquipmentId) {
+        // Загальна знижка на все обладнання
+        const discountBenefit = benefits.find((b) => b.id === discountEquipmentId);
+        if (discountBenefit) {
+          totalDiscount += (equipmentTotal * discountBenefit.value) / 100;
+        }
+      }
+    }
+    
+    // Знижка на сервіс
+    if (discountServiceId) {
+      const discountBenefit = benefits.find((b) => b.id === discountServiceId);
+      if (discountBenefit) {
+        totalDiscount += (serviceTotal * discountBenefit.value) / 100;
+      }
+    }
+    
+    // Для сумісності зі старою системою
+    if (!discountMenuId && !discountEquipmentId && !discountServiceId && selectedDiscountId) {
+      const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+      if (discountBenefit) {
+        let discountBase = 0;
+        if (discountIncludeMenu) {
+          discountBase += regularDishesPrice;
+        }
+        if (discountIncludeEquipment) {
+          discountBase += equipmentTotal;
+        }
+        if (discountIncludeService) {
+          discountBase += serviceTotal;
+        }
+        totalDiscount += (discountBase * discountBenefit.value) / 100;
+      }
+    }
+    
+    return totalDiscount;
   };
   // Кількість гостей для розрахунків (загальне поле «Кількість гостей» в КП)
   // Якщо guestCount не заповнено, беремо максимальне значення з форматів
@@ -1107,7 +1325,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         const foodTotalPrice = getTotalPrice();
         const regularDishesPriceForPayload = getRegularDishesPrice();
         const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload;
-        const transportTotalNum = parseFloat(transportTotal || "0") || 0;
+        const transportEquipmentTotalNum = parseFloat(transportEquipmentTotal || "0") || 0;
+        const transportPersonnelTotalNum = parseFloat(transportPersonnelTotal || "0") || 0;
+        const transportTotalNum = transportEquipmentTotalNum + transportPersonnelTotalNum;
         
         let discountAmount = calculateDiscountAmount();
         let finalFoodPrice = foodTotalPrice;
@@ -1170,6 +1390,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
           equipment_total: equipmentTotal || undefined,
           service_total: serviceTotal || undefined,
           transport_total: transportTotalNum || undefined,
+          transport_equipment_total: transportEquipmentTotalNum || undefined,
+          transport_personnel_total: transportPersonnelTotalNum || undefined,
           discount_amount: discountAmount || undefined,
           discount_benefit_id: selectedDiscountId || undefined,
           cashback_benefit_id: selectedCashbackId || undefined,
@@ -1245,7 +1467,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const foodTotalPrice = getTotalPrice();
   const regularDishesPriceForPayload = getRegularDishesPrice(); // Тільки звичайні страви
   const customDishesPrice = foodTotalPrice - regularDishesPriceForPayload; // Ціна кастомних страв
-    const transportTotalNum = parseFloat(transportTotal || "0") || 0;
+  const transportEquipmentTotalNum = parseFloat(transportEquipmentTotal || "0") || 0;
+  const transportPersonnelTotalNum = parseFloat(transportPersonnelTotal || "0") || 0;
+  const transportTotalNum = transportEquipmentTotalNum + transportPersonnelTotalNum;
     
     // Розрахунок знижки з урахуванням вибраних опцій
     let discountAmount = calculateDiscountAmount();
@@ -1348,14 +1572,22 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         transport_total: transportTotalNum || undefined,
         total_weight: getTotalWeight() > 0 ? getTotalWeight() : undefined,
         weight_per_person: getWeightPerPerson() > 0 ? getWeightPerPerson() : undefined,
-        discount_id: selectedDiscountId || undefined,
+        discount_id: selectedDiscountId || undefined, // Deprecated, для сумісності
         cashback_id: selectedCashbackId || undefined,
         use_cashback: useCashback,
         discount_amount: discountAmount > 0 ? discountAmount : undefined,
         cashback_amount: cashbackAmount > 0 ? cashbackAmount : undefined,
-        discount_include_menu: discountIncludeMenu,
-        discount_include_equipment: discountIncludeEquipment,
-        discount_include_service: discountIncludeService,
+        discount_include_menu: discountIncludeMenu, // Deprecated
+        discount_include_equipment: discountIncludeEquipment, // Deprecated
+        discount_include_service: discountIncludeService, // Deprecated
+        discount_menu_id: discountMenuId || undefined,
+        discount_equipment_id: discountEquipmentId || undefined,
+        discount_service_id: discountServiceId || undefined,
+        discount_equipment_subcategories: Object.keys(discountEquipmentSubcategories).length > 0 
+          ? Object.fromEntries(
+              Object.entries(discountEquipmentSubcategories).map(([k, v]) => [String(k), v])
+            )
+          : undefined,
         event_formats:
           eventFormats.length > 0
             ? eventFormats.map((f, index) => ({
@@ -1423,7 +1655,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       setDishQuantities({});
       setEquipmentItems([]);
       setServiceItems([]);
-      setTransportTotal("");
+      setTransportEquipmentTotal("");
+      setTransportPersonnelTotal("");
+      setEquipmentLossOrBreakagePrice("");
       setCustomDishes([]);
       setDishOverrides({});
       setCustomDishIdCounter(-1);
@@ -1497,6 +1731,70 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4 md:space-y-6">
+              {/* Вибір типу: Бокс або Кейтеринг */}
+              <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <Label className="text-base font-semibold">
+                  Тип послуги <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex gap-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="type-boxes"
+                      checked={eventGroup === "delivery-boxes"}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setEventGroup("delivery-boxes");
+                          setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
+                          // Очищаємо формати, якщо вони не відповідають новому типу
+                          setEventFormats((prev) => 
+                            prev.filter(f => f.group === "delivery-boxes" || !f.group).map((f, idx) => ({
+                              ...f,
+                              id: idx,
+                              group: f.group || "delivery-boxes",
+                            }))
+                          );
+                        } else if (eventGroup === "delivery-boxes") {
+                          // Якщо знімаємо вибір, очищаємо eventGroup
+                          setEventGroup("");
+                        }
+                      }}
+                    />
+                    <Label htmlFor="type-boxes" className="cursor-pointer font-medium">
+                      Доставка боксів
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="type-catering"
+                      checked={eventGroup === "catering"}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setEventGroup("catering");
+                          setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
+                          // Очищаємо формати, якщо вони не відповідають новому типу
+                          setEventFormats((prev) => 
+                            prev.filter(f => f.group === "catering" || !f.group).map((f, idx) => ({
+                              ...f,
+                              id: idx,
+                              group: f.group || "catering",
+                            }))
+                          );
+                        } else if (eventGroup === "catering") {
+                          // Якщо знімаємо вибір, очищаємо eventGroup
+                          setEventGroup("");
+                        }
+                      }}
+                    />
+                    <Label htmlFor="type-catering" className="cursor-pointer font-medium">
+                      Кейтерінг
+                    </Label>
+                  </div>
+                </div>
+                {step1Errors.eventGroup && (
+                  <p className="text-xs text-red-600">{step1Errors.eventGroup}</p>
+                )}
+              </div>
+
               {/* Вибір між новим та існуючим клієнтом */}
               <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
                 <Label>Оберіть клієнта</Label>
@@ -2081,17 +2379,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             </CardHeader>
             <CardContent>
               {/* Швидкий вибір форматів заходу */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-                <Label className="text-sm font-semibold mb-3 block">Формат заходу</Label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: "Фуршет", value: "Фуршет" },
-                    { label: "Банкет", value: "Банкет" },
-                    { label: "Корпоратив", value: "Корпоратив" },
-                    { label: "Весілля", value: "Весілля" },
-                    { label: "День народження", value: "День народження" },
-                    { label: "Інше", value: "Інше" },
-                  ].map((format) => {
+              {eventGroup && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                  <Label className="text-sm font-semibold mb-3 block">Формат заходу</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {(eventGroup === "delivery-boxes" ? BOX_FORMAT_OPTIONS : CATERING_FORMAT_OPTIONS).map((formatValue) => {
+                      const format = { label: formatValue, value: formatValue };
                     const isSelected = eventFormats.some((f) => f.name === format.value);
                     return (
                       <Button
@@ -2111,7 +2404,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               prev.filter((f) => f.name !== format.value)
                             );
                           } else {
-                            // Додаємо новий формат
+                            // Додаємо новий формат з правильною групою
                             setEventFormats((prev) => [
                               ...prev,
                               {
@@ -2119,25 +2412,26 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 name: format.value,
                                 eventTime: eventTime || "",
                                 peopleCount: guestCount || "",
-                                group: eventGroup || "",
+                                group: eventGroup,
                                 selectedDishes: [],
                               },
                             ]);
                           }
                         }}
                       >
-                        {format.label}
+                        {formatValue}
                         {isSelected && <X className="w-3 h-3 ml-1" />}
                       </Button>
                     );
-                  })}
+                    })}
+                  </div>
+                  {eventFormats.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Обрані формати: {eventFormats.map((f) => f.name).join(", ")}
+                    </p>
+                  )}
                 </div>
-                {eventFormats.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Обрані формати: {eventFormats.map((f) => f.name).join(", ")}
-                  </p>
-                )}
-              </div>
+              )}
 
               <Tabs defaultValue="dishes" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
@@ -2193,6 +2487,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             },
                           ]);
                         }}
+                        disabled={!eventGroup}
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Додати формат
@@ -2256,25 +2551,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs text-gray-600">Група формату</Label>
-                                <Select
-                                  value={format.group || ""}
-                                  onValueChange={(value) =>
-                                    setEventFormats((prev) =>
-                                      prev.map((f) =>
-                                        f.id === format.id ? { ...f, group: value as UIEventFormat["group"] } : f
-                                      )
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue placeholder="—" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="delivery-boxes">Доставка боксів</SelectItem>
-                                    <SelectItem value="catering">Кейтерінг</SelectItem>
-                                    <SelectItem value="other">Інше</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <div className="text-xs text-gray-600 px-2 py-1.5 bg-gray-50 rounded border">
+                                  {eventGroup === "delivery-boxes" ? "Доставка боксів" : eventGroup === "catering" ? "Кейтерінг" : "—"}
+                                </div>
                               </div>
                               <div className="flex justify-end">
                                 <Button
@@ -2337,7 +2616,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         ))}
                         {/* Datalist з популярними форматами для підказки */}
                         <datalist id="event-format-options">
-                          {EVENT_FORMAT_OPTIONS.map((option) => (
+                          {(eventGroup === "delivery-boxes" ? BOX_FORMAT_OPTIONS : eventGroup === "catering" ? CATERING_FORMAT_OPTIONS : EVENT_FORMAT_OPTIONS).map((option) => (
                             <option key={option} value={option} />
                           ))}
                         </datalist>
@@ -2465,66 +2744,80 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[500px] overflow-y-auto p-1">
-                      {filteredDishes.map((dish) => {
-                        const isSelected = selectedDishes.includes(dish.id);
-                        const isSelectedForFormat = activeFormatId !== null 
-                          ? eventFormats.find((f) => f.id === activeFormatId)?.selectedDishes.includes(dish.id) || false
-                          : false;
+                    <div className="space-y-6 max-h-[500px] overflow-y-auto p-1">
+                      {sortedCategories.map((category) => {
+                        const categoryDishes = dishesByCategory[category];
+                        if (!categoryDishes || categoryDishes.length === 0) return null;
+                        
                         return (
-                          <div
-                            key={dish.id}
-                            onClick={() => toggleDish(dish.id)}
-                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                              isSelectedForFormat
-                                ? "border-blue-500 bg-blue-50"
-                                : isSelected
-                                ? "border-[#FF5A00] bg-[#FF5A00]/5"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex gap-4">
-                              <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
-                                {dish.photo_url ? (
-                                  <img
-                                    src={getImageUrl(dish.photo_url) || ""}
-                                    alt={dish.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).style.display = "none";
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-[10px] text-gray-400 text-center px-1">
-                                    Нема фото
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <h4 className="text-gray-900 truncate">{dish.name}</h4>
-                                  <Checkbox checked={isSelectedForFormat || isSelected} />
-                                </div>
-                                {isSelectedForFormat && activeFormatId !== null && (
-                                  <Badge variant="outline" className="text-xs mb-1 bg-blue-100 border-blue-300 text-blue-700">
-                                    {eventFormats.find((f) => f.id === activeFormatId)?.name}
-                                  </Badge>
-                                )}
-                                <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                                  {dish.description}
-                                </p>
-                                <div className="flex items-center justify-between">
-                                  <div className="text-sm text-gray-600">
-                                    {dish.weight > 0 ? `${dish.weight}${dish.unit}` : '-'}
+                          <div key={category} className="space-y-3">
+                            <h3 className="text-lg font-semibold text-gray-900 border-b-2 border-[#FF5A00] pb-2">
+                              {category}
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                              {categoryDishes.map((dish) => {
+                                const isSelected = selectedDishes.includes(dish.id);
+                                const isSelectedForFormat = activeFormatId !== null 
+                                  ? eventFormats.find((f) => f.id === activeFormatId)?.selectedDishes.includes(dish.id) || false
+                                  : false;
+                                return (
+                                  <div
+                                    key={dish.id}
+                                    onClick={() => toggleDish(dish.id)}
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                      isSelectedForFormat
+                                        ? "border-blue-500 bg-blue-50"
+                                        : isSelected
+                                        ? "border-[#FF5A00] bg-[#FF5A00]/5"
+                                        : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                  >
+                                    <div className="flex gap-4">
+                                      <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
+                                        {dish.photo_url ? (
+                                          <img
+                                            src={getImageUrl(dish.photo_url) || ""}
+                                            alt={dish.name}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => {
+                                              (e.target as HTMLImageElement).style.display = "none";
+                                            }}
+                                          />
+                                        ) : (
+                                          <span className="text-[10px] text-gray-400 text-center px-1">
+                                            Нема фото
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                          <h4 className="text-gray-900 truncate">{dish.name}</h4>
+                                          <Checkbox checked={isSelectedForFormat || isSelected} />
+                                        </div>
+                                        {isSelectedForFormat && activeFormatId !== null && (
+                                          <Badge variant="outline" className="text-xs mb-1 bg-blue-100 border-blue-300 text-blue-700">
+                                            {eventFormats.find((f) => f.id === activeFormatId)?.name}
+                                          </Badge>
+                                        )}
+                                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                          {dish.description}
+                                        </p>
+                                        <div className="flex items-center justify-between">
+                                          <div className="text-sm text-gray-600">
+                                            {dish.weight ? `${dish.weight}${dish.unit}` : '-'}
+                                          </div>
+                                          <div className="text-gray-900">{dish.price} грн</div>
+                                        </div>
+                                        {dish.subcategory && (
+                                          <Badge variant="outline" className="mt-2 text-xs">
+                                            {dish.subcategory}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="text-gray-900">{dish.price} грн</div>
-                                </div>
-                                {dish.subcategory && (
-                                  <Badge variant="outline" className="mt-2 text-xs">
-                                    {dish.subcategory}
-                                  </Badge>
-                                )}
-                              </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -2556,10 +2849,16 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       Додайте все необхідне обладнання для заходу (столи, посуд, текстиль тощо).
                     </p>
                     <div className="space-y-3">
-                      {equipmentItems.map((item) => (
+                      {equipmentItems.map((item) => {
+                        const equipmentCategory = categories.find(cat => cat.name === "Обладнання");
+                        const equipmentSubcategories = equipmentCategory 
+                          ? subcategories.filter(sub => sub.category_id === equipmentCategory.id)
+                          : [];
+                        
+                        return (
                         <div
                           key={item.id}
-                          className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end border rounded-lg p-3 bg-gray-50"
+                          className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end border rounded-lg p-3 bg-gray-50"
                         >
                           <div className="space-y-1 md:col-span-2">
                             <Label>Найменування</Label>
@@ -2576,6 +2875,36 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               placeholder="Наприклад, коктейльний стіл у чохлі"
                             />
                           </div>
+                          {equipmentSubcategories.length > 0 && (
+                            <div className="space-y-1">
+                              <Label>Підкатегорія (для знижки)</Label>
+                              <Select
+                                value={item.subcategoryId?.toString() || ""}
+                                onValueChange={(value) => {
+                                  const subcategoryId = value ? parseInt(value) : undefined;
+                                  setEquipmentItems(prev =>
+                                    prev.map(i =>
+                                      i.id === item.id
+                                        ? { ...i, subcategoryId }
+                                        : i
+                                    )
+                                  );
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Оберіть" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">Не вказано</SelectItem>
+                                  {equipmentSubcategories.map((sub) => (
+                                    <SelectItem key={sub.id} value={sub.id.toString()}>
+                                      {sub.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                           <div className="space-y-1">
                             <Label>Кількість</Label>
                             <Input
@@ -2639,11 +2968,39 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         Додати позицію
                       </Button>
                     </div>
-                    {equipmentItems.length > 0 && (
+                    
+                    {/* Поле для втрати або бію */}
+                    <div className="mt-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold text-gray-900">
+                          Втрата або бій
+                        </Label>
+                        <div className="flex gap-3 items-end">
+                          <div className="flex-1 space-y-1">
+                            <Input
+                              type="number"
+                              value={equipmentLossOrBreakagePrice}
+                              onChange={(e) => setEquipmentLossOrBreakagePrice(e.target.value)}
+                              placeholder="0"
+                              className="bg-white"
+                            />
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            грн
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Вкажіть суму за можливу втрату або бій обладнання
+                        </p>
+                      </div>
+                    </div>
+
+                    {(equipmentItems.length > 0 || equipmentLossOrBreakagePriceNum > 0) && (
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="flex items-center justify-between">
                           <span className="text-gray-900">
                             Позицій: {equipmentItems.length}
+                            {equipmentLossOrBreakagePriceNum > 0 && " + Втрата/бій"}
                           </span>
                           <span className="text-gray-900">
                             Всього: {equipmentTotal} грн
@@ -3011,17 +3368,41 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       {serviceTotal} грн
                     </span>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between gap-4">
-                    <span className="text-gray-700 font-medium">
-                      Транспортні витрати (загальна сума), грн
-                    </span>
-                    <Input
-                      className="w-40 text-right"
-                      type="number"
-                      value={transportTotal}
-                      onChange={(e) => setTransportTotal(e.target.value)}
-                      placeholder="0"
-                    />
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between gap-4">
+                      <span className="text-gray-700 font-medium">
+                        Транспортні витрати (для доставки обладнання), грн
+                      </span>
+                      <Input
+                        className="w-40 text-right"
+                        type="number"
+                        value={transportEquipmentTotal}
+                        onChange={(e) => setTransportEquipmentTotal(e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 flex items-center justify-between gap-4">
+                      <span className="text-gray-700 font-medium">
+                        Транспортні витрати (для персоналу), грн
+                      </span>
+                      <Input
+                        className="w-40 text-right"
+                        type="number"
+                        value={transportPersonnelTotal}
+                        onChange={(e) => setTransportPersonnelTotal(e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    {(parseFloat(transportEquipmentTotal || "0") > 0 || parseFloat(transportPersonnelTotal || "0") > 0) && (
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 flex items-center justify-between">
+                        <span className="text-gray-700 font-semibold">
+                          Всього транспортних витрат:
+                        </span>
+                        <span className="text-gray-900 font-bold">
+                          {transportTotalNum} грн
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3099,27 +3480,113 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         <thead>
                           <tr className="border-b bg-[#FF5A00] text-white">
                             <th className="py-3 px-4 text-left font-semibold">Страва</th>
-                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід на стіл,<br />порція/вага, гр.</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід на стіл,<br />порція/вага (гр/мл)</th>
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Кіл-сть<br />порцій</th>
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Ціна,<br />грн</th>
                             <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Сума,<br />грн</th>
-                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід грам<br />на особу</th>
+                            <th className="py-3 px-4 text-right font-semibold whitespace-nowrap">Вихід грам/мл<br />на особу</th>
                             <th className="py-3 px-4 text-center font-semibold">Дії</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {getSelectedDishesData().map((dish) => {
+                      {(() => {
+                        // Розділяємо страви на звичайні та напої
+                        const allDishes = getSelectedDishesData();
+                        const regularDishes = allDishes.filter(d => !isDrink(d));
+                        const drinks = allDishes.filter(d => isDrink(d));
+                        
+                        // Розраховуємо кількість гостей один раз
+                        let peopleCountNum = 0;
+                        if (eventFormats.length > 0) {
+                          peopleCountNum = eventFormats.reduce((sum, format) => {
+                            const formatPeopleCount = parseInt(format.peopleCount, 10) || 0;
+                            return sum + formatPeopleCount;
+                          }, 0);
+                        }
+                        if (peopleCountNum === 0) {
+                          peopleCountNum = parseInt(guestCount, 10) || 0;
+                        }
+                        
+                        // Функція для відображення рядка страви
+                        const renderDishRow = (dish: Dish, isDrinkItem: boolean) => {
                             const qty = dishQuantities[dish.id] ?? 1;
                             const price = getDishPrice(dish);
                             const weight = getDishWeight(dish);
                             const total = qty * price;
-                            const peopleCountNum = parseInt(guestCount, 10) || 0;
-                            const weightInGrams = weight || 0;
-                            const totalWeightGrams = weightInGrams * qty;
-                            const weightPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
-                              ? (totalWeightGrams / peopleCountNum).toFixed(2)
-                              : "0.00";
                             const isCustom = isCustomDish(dish.id);
+                            
+                            // Для напоїв: конвертуємо в мл
+                            // Для звичайних страв: конвертуємо в грами
+                            // Парсимо вагу з формату "150/75" або числа
+                            const parsedWeight = parseWeightValue(weight);
+                            let displayValue: number | string = weight || 0;
+                            let displayUnit = dish.unit || (isDrinkItem ? 'мл' : 'г');
+                            let outputPerPerson = "0.00";
+                            
+                            if (isDrinkItem) {
+                              // Для напоїв: конвертуємо все в мл
+                              const unit = (dish.unit || 'мл').toLowerCase();
+                              let volumeInMl = parsedWeight.first;
+                              if (unit === 'л') {
+                                volumeInMl = volumeInMl * 1000;
+                              } else if (unit === 'мл') {
+                                volumeInMl = volumeInMl;
+                              } else if (unit === 'г' || unit === 'кг') {
+                                // Якщо напій був в грамах/кг, конвертуємо в мл (1г ≈ 1мл для води)
+                                if (unit === 'кг') {
+                                  volumeInMl = volumeInMl * 1000;
+                                }
+                              }
+                              displayValue = volumeInMl;
+                              displayUnit = 'мл';
+                              
+                              const totalVolumeMl = volumeInMl * qty;
+                              outputPerPerson = totalVolumeMl > 0 && peopleCountNum > 0 
+                                ? (totalVolumeMl / peopleCountNum).toFixed(2)
+                                : "0.00";
+                            } else {
+                              // Для звичайних страв: якщо вага в форматі через слеш, відображаємо як є
+                              if (parsedWeight.isRange) {
+                                displayValue = weight; // Відображаємо оригінальний формат "150/75"
+                                displayUnit = dish.unit || 'г';
+                                // Для обчислень використовуємо перше число
+                                const unit = (dish.unit || 'г').toLowerCase();
+                                let weightInGrams = parsedWeight.first;
+                                if (unit === 'кг') {
+                                  weightInGrams = weightInGrams * 1000;
+                                } else if (unit === 'г') {
+                                  weightInGrams = weightInGrams;
+                                } else if (unit === 'л') {
+                                  weightInGrams = weightInGrams * 1000;
+                                } else if (unit === 'мл') {
+                                  weightInGrams = weightInGrams;
+                                }
+                                const totalWeightGrams = weightInGrams * qty;
+                                outputPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
+                                  ? (totalWeightGrams / peopleCountNum).toFixed(2)
+                                  : "0.00";
+                              } else {
+                                // Для звичайних страв: конвертуємо в грами
+                                const unit = (dish.unit || 'г').toLowerCase();
+                                let weightInGrams = parsedWeight.first;
+                                if (unit === 'кг') {
+                                  weightInGrams = weightInGrams * 1000;
+                                } else if (unit === 'г') {
+                                  weightInGrams = weightInGrams;
+                                } else if (unit === 'л') {
+                                  weightInGrams = weightInGrams * 1000;
+                                } else if (unit === 'мл') {
+                                  weightInGrams = weightInGrams;
+                                }
+                                displayValue = weightInGrams;
+                                displayUnit = 'г';
+                                
+                                const totalWeightGrams = weightInGrams * qty;
+                                outputPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
+                                  ? (totalWeightGrams / peopleCountNum).toFixed(2)
+                                  : "0.00";
+                              }
+                            }
                             
                             return (
                               <tr key={dish.id} className={`border-b last:border-0 hover:bg-gray-50 ${isCustom ? 'bg-yellow-50' : ''}`}>
@@ -3142,20 +3609,19 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 </td>
                                 <td className="py-3 px-4 text-right">
                                   <Input
-                                    type="number"
+                                    type="text"
                                     className="w-24 ml-auto text-right"
-                                    min="0"
-                                    step="0.01"
-                                    value={weight}
+                                    placeholder="150 або 150/75"
+                                    value={typeof displayValue === 'string' ? displayValue : String(displayValue)}
                                     onChange={(e) => {
-                                      const value = parseFloat(e.target.value) || 0;
+                                      const value = e.target.value;
                                       setDishOverrides((prev) => ({
                                         ...prev,
                                         [dish.id]: { ...prev[dish.id], weight: value },
                                       }));
                                     }}
                                   />
-                                  <span className="text-xs text-gray-500 ml-1">{dish.unit || 'г'}</span>
+                                  <span className="text-xs text-gray-500 ml-1">{displayUnit}</span>
                                 </td>
                                 <td className="py-3 px-4 text-right">
                                   <Input
@@ -3189,7 +3655,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                   />
                                 </td>
                                 <td className="py-3 px-4 text-right font-medium">{total.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-right">{weightPerPerson}</td>
+                                <td className="py-3 px-4 text-right">{outputPerPerson}</td>
                                 <td className="py-3 px-4 text-center">
                                   {isCustom && (
                                     <Button
@@ -3214,42 +3680,181 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 </td>
                               </tr>
                             );
-                          })}
+                          };
+                          
+                          return (
+                            <>
+                              {/* Звичайні страви */}
+                              {regularDishes.map(dish => renderDishRow(dish, false))}
+                              {/* Напої */}
+                              {drinks.length > 0 && (
+                                <>
+                                  <tr>
+                                    <td colSpan={7} className="py-2 px-4 bg-blue-50 border-t-2 border-blue-200">
+                                      <div className="font-semibold text-blue-900">Напої</div>
+                                    </td>
+                                  </tr>
+                                  {drinks.map(dish => renderDishRow(dish, true))}
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                         </tbody>
                       </table>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-sm text-gray-600 mb-1">
                           Вартість страв (усі позиції)
                         </div>
-                        {selectedDiscountId && discountIncludeMenu ? (() => {
-                          // Розраховуємо знижку тільки на звичайні страви (без кастомних)
-                          const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
-                          const menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
-                          const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                        {(() => {
+                          // Розраховуємо знижку на меню з урахуванням нової системи
+                          let finalFoodPrice = foodTotalPrice;
+                          let menuDiscountAmount = 0;
+                          
+                          if (discountMenuId) {
+                            const discountBenefit = benefits.find((b) => b.id === discountMenuId);
+                            menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
+                            finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                          } else if (selectedDiscountId && discountIncludeMenu) {
+                            // Стара система для сумісності
+                            const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                            menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
+                            finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                          }
+                          
+                          if (menuDiscountAmount > 0) {
+                            return (
+                              <>
+                                <div className="text-xs text-gray-500 line-through mb-1">
+                                  {foodTotalPrice.toLocaleString()} грн
+                                </div>
+                                <div className="text-xs text-[#FF5A00] mb-1">
+                                  Знижка: -{menuDiscountAmount.toLocaleString()} грн
+                                  {customDishes.length > 0 && (
+                                    <span className="text-gray-500 ml-1">(тільки на звичайні страви)</span>
+                                  )}
+                                </div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                  {finalFoodPrice.toLocaleString()} грн
+                                </div>
+                              </>
+                            );
+                          }
                           return (
-                            <>
-                              <div className="text-xs text-gray-500 line-through mb-1">
-                                {foodTotalPrice.toLocaleString()} грн
-                              </div>
-                              <div className="text-xs text-[#FF5A00] mb-1">
-                                Знижка: -{menuDiscountAmount.toLocaleString()} грн
-                                {customDishes.length > 0 && (
-                                  <span className="text-gray-500 ml-1">(тільки на звичайні страви)</span>
-                                )}
-                              </div>
-                              <div className="text-lg font-semibold text-gray-900">
-                                {finalFoodPrice.toLocaleString()} грн
-                              </div>
-                            </>
+                            <div className="text-lg font-semibold text-gray-900">
+                              {foodTotalPrice.toLocaleString()} грн
+                            </div>
                           );
-                        })() : (
-                          <div className="text-lg font-semibold text-gray-900">
-                            {foodTotalPrice.toLocaleString()} грн
-                          </div>
-                        )}
+                        })()}
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Вартість обладнання
+                        </div>
+                        {(() => {
+                          // Розраховуємо знижку на обладнання
+                          let finalEquipmentPrice = equipmentTotal;
+                          let equipmentDiscountAmount = 0;
+                          
+                          if (discountEquipmentId || Object.keys(discountEquipmentSubcategories).length > 0) {
+                            // Якщо є знижки по підкатегоріях, розраховуємо окремо
+                            if (Object.keys(discountEquipmentSubcategories).length > 0) {
+                              equipmentItems.forEach(item => {
+                                if (item.subcategoryId && discountEquipmentSubcategories[item.subcategoryId]) {
+                                  const benefitId = discountEquipmentSubcategories[item.subcategoryId];
+                                  const discountBenefit = benefits.find((b) => b.id === benefitId);
+                                  if (discountBenefit) {
+                                    const itemTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                                    equipmentDiscountAmount += (itemTotal * discountBenefit.value) / 100;
+                                  }
+                                }
+                              });
+                              // Додаємо знижку на "Втрати та бій" якщо є загальна знижка
+                              if (discountEquipmentId) {
+                                const discountBenefit = benefits.find((b) => b.id === discountEquipmentId);
+                                if (discountBenefit) {
+                                  equipmentDiscountAmount += (equipmentLossOrBreakagePriceNum * discountBenefit.value) / 100;
+                                }
+                              }
+                            } else if (discountEquipmentId) {
+                              // Загальна знижка на все обладнання
+                              const discountBenefit = benefits.find((b) => b.id === discountEquipmentId);
+                              equipmentDiscountAmount = discountBenefit ? (equipmentTotal * discountBenefit.value) / 100 : 0;
+                            }
+                            finalEquipmentPrice = equipmentTotal - equipmentDiscountAmount;
+                          } else if (selectedDiscountId && discountIncludeEquipment) {
+                            // Стара система для сумісності
+                            const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                            equipmentDiscountAmount = discountBenefit ? (equipmentTotal * discountBenefit.value) / 100 : 0;
+                            finalEquipmentPrice = equipmentTotal - equipmentDiscountAmount;
+                          }
+                          
+                          if (equipmentDiscountAmount > 0) {
+                            return (
+                              <>
+                                <div className="text-xs text-gray-500 line-through mb-1">
+                                  {equipmentTotal.toLocaleString()} грн
+                                </div>
+                                <div className="text-xs text-[#FF5A00] mb-1">
+                                  Знижка: -{equipmentDiscountAmount.toLocaleString()} грн
+                                </div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                  {finalEquipmentPrice.toLocaleString()} грн
+                                </div>
+                              </>
+                            );
+                          }
+                          return (
+                            <div className="text-lg font-semibold text-gray-900">
+                              {equipmentTotal.toLocaleString()} грн
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Вартість сервісу
+                        </div>
+                        {(() => {
+                          // Розраховуємо знижку на сервіс
+                          let finalServicePrice = serviceTotal;
+                          let serviceDiscountAmount = 0;
+                          
+                          if (discountServiceId) {
+                            const discountBenefit = benefits.find((b) => b.id === discountServiceId);
+                            serviceDiscountAmount = discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0;
+                            finalServicePrice = serviceTotal - serviceDiscountAmount;
+                          } else if (selectedDiscountId && discountIncludeService) {
+                            // Стара система для сумісності
+                            const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
+                            serviceDiscountAmount = discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0;
+                            finalServicePrice = serviceTotal - serviceDiscountAmount;
+                          }
+                          
+                          if (serviceDiscountAmount > 0) {
+                            return (
+                              <>
+                                <div className="text-xs text-gray-500 line-through mb-1">
+                                  {serviceTotal.toLocaleString()} грн
+                                </div>
+                                <div className="text-xs text-[#FF5A00] mb-1">
+                                  Знижка: -{serviceDiscountAmount.toLocaleString()} грн
+                                </div>
+                                <div className="text-lg font-semibold text-gray-900">
+                                  {finalServicePrice.toLocaleString()} грн
+                                </div>
+                              </>
+                            );
+                          }
+                          return (
+                            <div className="text-lg font-semibold text-gray-900">
+                              {serviceTotal.toLocaleString()} грн
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-sm text-gray-600 mb-1">
@@ -3268,13 +3873,20 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
                             if (peopleCountNum <= 0) return "-";
                             
-                            if (selectedDiscountId && discountIncludeMenu) {
+                            let finalFoodPrice = foodTotalPrice;
+                            if (discountMenuId) {
+                              const discountBenefit = benefits.find((b) => b.id === discountMenuId);
+                              const menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
+                              finalFoodPrice = foodTotalPrice - menuDiscountAmount;
+                            } else if (selectedDiscountId && discountIncludeMenu) {
                               const discountBenefit = benefits.find((b) => b.id === selectedDiscountId);
                               const menuDiscountAmount = discountBenefit ? (regularDishesPrice * discountBenefit.value) / 100 : 0;
-                              const finalFoodPrice = foodTotalPrice - menuDiscountAmount;
-                              return `${(finalFoodPrice / peopleCountNum).toFixed(2)} грн`;
+                              finalFoodPrice = foodTotalPrice - menuDiscountAmount;
                             }
-                            return `${(foodTotalPrice / peopleCountNum).toFixed(2)} грн`;
+                            
+                            const pricePerPerson = finalFoodPrice / peopleCountNum;
+                            if (pricePerPerson <= 0) return "-";
+                            return `${pricePerPerson.toFixed(2)} грн`;
                           })()}
                         </div>
                       </div>
@@ -3287,7 +3899,22 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
                             if (peopleCountNum <= 0) return "- г";
                             const weightPerPerson = getWeightPerPerson();
+                            if (weightPerPerson <= 0) return "- г";
                             return `${weightPerPerson.toFixed(0)} г`;
+                          })()}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-sm text-gray-600 mb-1">
+                          Напої на 1 гостя
+                        </div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {(() => {
+                            const peopleCountNum = guestCount ? parseInt(guestCount, 10) || 0 : 0;
+                            if (peopleCountNum <= 0) return "- мл";
+                            const drinksPerPerson = getDrinksVolumePerPerson();
+                            if (drinksPerPerson <= 0) return "- мл";
+                            return `${drinksPerPerson.toFixed(0)} мл`;
                           })()}
                         </div>
                       </div>
@@ -3297,70 +3924,138 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     <div className="space-y-4 p-4 bg-gray-50 rounded-lg border mt-6">
                       <h3 className="text-gray-900 font-medium">Знижка та кешбек</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="discount-select-step5">Знижка</Label>
-                          <Select
-                            value={selectedDiscountId?.toString() || ""}
-                            onValueChange={(value) => {
-                              const id = parseInt(value);
-                              setSelectedDiscountId(id);
-                              // Якщо обрано знижку, скидаємо кешбек
-                              if (id) {
-                                setSelectedCashbackId(null);
-                                setUseCashback(false);
-                              }
-                            }}
-                          >
-                            <SelectTrigger id="discount-select-step5">
-                              <SelectValue placeholder="Оберіть знижку" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {benefits
-                                .filter((b) => b.type === "discount" && b.is_active)
-                                .map((benefit) => (
-                                  <SelectItem key={benefit.id} value={benefit.id.toString()}>
-                                    {benefit.name} ({benefit.value}%)
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          {selectedDiscountId && (
-                            <div className="mt-3 space-y-2 pt-2 border-t">
-                              <Label className="text-sm text-gray-700">Включити в знижку:</Label>
-                              <div className="space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id="discount-include-menu"
-                                    checked={discountIncludeMenu}
-                                    onCheckedChange={(checked) => setDiscountIncludeMenu(checked as boolean)}
-                                  />
-                                  <Label htmlFor="discount-include-menu" className="cursor-pointer text-sm">
-                                    Меню
-                                  </Label>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="discount-menu-select">Знижка на меню</Label>
+                            <Select
+                              value={discountMenuId?.toString() || ""}
+                              onValueChange={(value) => {
+                                const id = value ? parseInt(value) : null;
+                                setDiscountMenuId(id);
+                              }}
+                            >
+                              <SelectTrigger id="discount-menu-select">
+                                <SelectValue placeholder="Оберіть знижку на меню" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Без знижки</SelectItem>
+                                {benefits
+                                  .filter((b) => b.type === "discount" && b.is_active)
+                                  .map((benefit) => (
+                                    <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                      {benefit.name} ({benefit.value}%)
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="discount-equipment-select">Знижка на обладнання (загальна)</Label>
+                            <Select
+                              value={discountEquipmentId?.toString() || ""}
+                              onValueChange={(value) => {
+                                const id = value ? parseInt(value) : null;
+                                setDiscountEquipmentId(id);
+                                // Якщо вибрано загальну знижку, очищаємо знижки по підкатегоріях
+                                if (id) {
+                                  setDiscountEquipmentSubcategories({});
+                                }
+                              }}
+                            >
+                              <SelectTrigger id="discount-equipment-select">
+                                <SelectValue placeholder="Оберіть знижку на обладнання" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Без знижки</SelectItem>
+                                {benefits
+                                  .filter((b) => b.type === "discount" && b.is_active)
+                                  .map((benefit) => (
+                                    <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                      {benefit.name} ({benefit.value}%)
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {/* Знижки по підкатегоріях обладнання */}
+                          {(() => {
+                            const equipmentCategory = categories.find(cat => cat.name === "Обладнання");
+                            const equipmentSubcategories = equipmentCategory 
+                              ? subcategories.filter(sub => sub.category_id === equipmentCategory.id)
+                              : [];
+                            
+                            if (equipmentSubcategories.length > 0 && !discountEquipmentId) {
+                              return (
+                                <div className="space-y-2 pt-2 border-t">
+                                  <Label className="text-sm text-gray-700">Знижки по підкатегоріях обладнання:</Label>
+                                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                                    {equipmentSubcategories.map((sub) => (
+                                      <div key={sub.id} className="flex items-center gap-2">
+                                        <Label className="text-xs flex-1 min-w-0 truncate">{sub.name}:</Label>
+                                        <Select
+                                          value={discountEquipmentSubcategories[sub.id]?.toString() || ""}
+                                          onValueChange={(value) => {
+                                            const id = value ? parseInt(value) : null;
+                                            setDiscountEquipmentSubcategories(prev => {
+                                              const next = { ...prev };
+                                              if (id) {
+                                                next[sub.id] = id;
+                                              } else {
+                                                delete next[sub.id];
+                                              }
+                                              return next;
+                                            });
+                                          }}
+                                        >
+                                          <SelectTrigger className="w-32 h-8 text-xs">
+                                            <SelectValue placeholder="—" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="">Без знижки</SelectItem>
+                                            {benefits
+                                              .filter((b) => b.type === "discount" && b.is_active)
+                                              .map((benefit) => (
+                                                <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                                  {benefit.value}%
+                                                </SelectItem>
+                                              ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id="discount-include-equipment"
-                                    checked={discountIncludeEquipment}
-                                    onCheckedChange={(checked) => setDiscountIncludeEquipment(checked as boolean)}
-                                  />
-                                  <Label htmlFor="discount-include-equipment" className="cursor-pointer text-sm">
-                                    Обладнання
-                                  </Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id="discount-include-service"
-                                    checked={discountIncludeService}
-                                    onCheckedChange={(checked) => setDiscountIncludeService(checked as boolean)}
-                                  />
-                                  <Label htmlFor="discount-include-service" className="cursor-pointer text-sm">
-                                    Сервіс
-                                  </Label>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                              );
+                            }
+                            return null;
+                          })()}
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="discount-service-select">Знижка на сервіс</Label>
+                            <Select
+                              value={discountServiceId?.toString() || ""}
+                              onValueChange={(value) => {
+                                const id = value ? parseInt(value) : null;
+                                setDiscountServiceId(id);
+                              }}
+                            >
+                              <SelectTrigger id="discount-service-select">
+                                <SelectValue placeholder="Оберіть знижку на сервіс" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Без знижки</SelectItem>
+                                {benefits
+                                  .filter((b) => b.type === "discount" && b.is_active)
+                                  .map((benefit) => (
+                                    <SelectItem key={benefit.id} value={benefit.id.toString()}>
+                                      {benefit.name} ({benefit.value}%)
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cashback-select-step5">Кешбек</Label>
@@ -3411,7 +4106,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               return discountBenefit ? (serviceTotal * discountBenefit.value) / 100 : 0;
                             })()
                           : serviceTotal;
-                        const totalBeforeCashback = foodPrice + equipmentPrice + servicePrice + (parseFloat(transportTotal || "0") || 0);
+                        const transportTotalPreview = (parseFloat(transportEquipmentTotal || "0") || 0) + (parseFloat(transportPersonnelTotal || "0") || 0);
+                        const totalBeforeCashback = foodPrice + equipmentPrice + servicePrice + transportTotalPreview;
                         const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
                         const selectedClient = selectedClientId ? clients.find((c) => c.id === selectedClientId) : null;
                         const clientBalance = selectedClient?.cashback || 0;
@@ -3685,7 +4381,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       Транспортні витрати
                     </span>
                     <span className="text-gray-900 font-semibold">
-                      {transportTotal || "0"} грн
+                      {transportTotalNum} грн
                     </span>
                   </div>
                 </div>
@@ -3781,10 +4477,25 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             Орієнтовний вихід на 1 гостя
                           </div>
                           <div className="text-lg font-semibold text-gray-900">
-                            {peopleCountNum > 0
-                              ? getWeightPerPerson().toFixed(0)
-                              : "-"}{" "}
-                            г
+                            {(() => {
+                              if (peopleCountNum <= 0) return "- г";
+                              const weightPerPerson = getWeightPerPerson();
+                              if (weightPerPerson <= 0) return "- г";
+                              return `${weightPerPerson.toFixed(0)} г`;
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                          <div className="text-sm text-gray-600 mb-1">
+                            Напої на 1 гостя
+                          </div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {(() => {
+                              if (peopleCountNum <= 0) return "- мл";
+                              const drinksPerPerson = getDrinksVolumePerPerson();
+                              if (drinksPerPerson <= 0) return "- мл";
+                              return `${drinksPerPerson.toFixed(0)} мл`;
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -4024,7 +4735,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             }
                           }
                           
-                          const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + (parseFloat(transportTotal || "0") || 0);
+                          const transportTotalPreview = (parseFloat(transportEquipmentTotal || "0") || 0) + (parseFloat(transportPersonnelTotal || "0") || 0);
+                          const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalPreview;
                           const cashbackAmount = cashbackBenefit ? (totalBeforeCashback * cashbackBenefit.value) / 100 : 0;
                           return (
                             <>
@@ -4065,7 +4777,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 }
                               }
                               
-                              const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + (parseFloat(transportTotal || "0") || 0);
+                              const transportTotalPreview = (parseFloat(transportEquipmentTotal || "0") || 0) + (parseFloat(transportPersonnelTotal || "0") || 0);
+                          const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalPreview;
                               const cashbackAmount = selectedCashbackId
                                 ? (() => {
                                     const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);

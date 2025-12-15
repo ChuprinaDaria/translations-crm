@@ -46,7 +46,7 @@ export function ItemsManagementEnhanced() {
     name: "",
     description: "",
     price: 0,
-    weight: 0,
+    weight: "",
     unit: "",
     photo_url: "",
     active: true,
@@ -186,7 +186,7 @@ export function ItemsManagementEnhanced() {
       name: "",
       description: "",
       price: 0,
-      weight: 0,
+      weight: "",
       unit: "",
       photo_url: "",
       active: true,
@@ -209,7 +209,7 @@ export function ItemsManagementEnhanced() {
       name: item.name,
       description: item.description || "",
       price: item.price,
-      weight: item.weight || 0,
+      weight: item.weight ? String(item.weight) : "",
       unit: item.unit || "",
       photo_url: item.photo_url || "",
       active: item.active,
@@ -1017,14 +1017,13 @@ export function ItemsManagementEnhanced() {
               
               {/* Weight */}
               <div>
-                <Label htmlFor="weight">Вага</Label>
+                <Label htmlFor="weight">Вага (можна вводити через слеш, наприклад: 150/75)</Label>
                 <Input
                   id="weight"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.weight || ''}
-                  onChange={(e) => setFormData({...formData, weight: parseFloat(e.target.value) || 0})}
+                  type="text"
+                  placeholder="150 або 150/75"
+                  value={formData.weight ? String(formData.weight) : ''}
+                  onChange={(e) => setFormData({...formData, weight: e.target.value || ''})}
                 />
               </div>
               
