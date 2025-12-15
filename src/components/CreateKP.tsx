@@ -26,6 +26,7 @@ import {
   clientsApi,
   benefitsApi,
   questionnairesApi,
+  checklistsApi,
   getImageUrl,
   type Item,
   type Category,
@@ -35,6 +36,7 @@ import {
   type Client,
   type Benefit,
   type ClientQuestionnaire,
+  type Checklist,
 } from "../lib/api";
 import { InfoTooltip } from "./InfoTooltip";
 
@@ -275,11 +277,18 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     eventGroup?: string;
   }>({});
 
-  // Анкети клієнта для автозаповнення КП
+  // Анкети клієнта для автозаповнення КП (legacy)
   const [clientQuestionnaires, setClientQuestionnaires] = useState<ClientQuestionnaire[]>([]);
   const [selectedQuestionnaireId, setSelectedQuestionnaireId] = useState<number | null>(null);
   const [questionnaireAutofill, setQuestionnaireAutofill] = useState<
     Record<string, { questionnaireId: number; questionnaireDate?: string }>
+  >({});
+  
+  // Чеклісти клієнта для автозаповнення КП (нова система)
+  const [clientChecklists, setClientChecklists] = useState<Checklist[]>([]);
+  const [selectedChecklistId, setSelectedChecklistId] = useState<number | null>(null);
+  const [checklistAutofill, setChecklistAutofill] = useState<
+    Record<string, { checklistId: number; checklistDate?: string }>
   >({});
 
   // Функція для валідації кроку 1 (без показу помилок)
@@ -421,20 +430,164 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       const questionnaires = data.questionnaires || [];
       setClientQuestionnaires(questionnaires);
 
-      if (questionnaires.length > 0) {
-        // Масив уже відсортований за created_at DESC на бекенді
-        applyQuestionnaireToKP(questionnaires[0]);
-      } else {
-        setSelectedQuestionnaireId(null);
-        setQuestionnaireAutofill({});
-      }
+      // НЕ автоматично застосовуємо анкету - пріоритет чеклістам
+      setSelectedQuestionnaireId(null);
+      setQuestionnaireAutofill({});
     } catch (error) {
       console.error("Помилка завантаження анкет клієнта:", error);
-      toast.error("Не вдалося завантажити анкети клієнта");
       setClientQuestionnaires([]);
       setSelectedQuestionnaireId(null);
       setQuestionnaireAutofill({});
     }
+  };
+
+  // Застосування чекліста до КП
+  const applyChecklistToKP = (checklist: Checklist | null) => {
+    if (!checklist) {
+      setChecklistAutofill({});
+      setSelectedChecklistId(null);
+      return;
+    }
+
+    const sourceDate = checklist.event_date || checklist.created_at || undefined;
+    const autofill: Record<string, { checklistId: number; checklistDate?: string }> = {};
+
+    // Дата заходу
+    if (checklist.event_date) {
+      try {
+        const date = new Date(checklist.event_date);
+        if (!isNaN(date.getTime())) {
+          const formattedDate = date.toISOString().split('T')[0];
+          setEventDate(formattedDate);
+          autofill.eventDate = { checklistId: checklist.id, checklistDate: sourceDate };
+        }
+      } catch (e) {
+        console.error("Помилка форматування дати:", e);
+      }
+    }
+
+    // Тип послуги (eventGroup)
+    if (checklist.checklist_type) {
+      const group = checklist.checklist_type === "box" ? "delivery-boxes" : "catering";
+      setEventGroup(group);
+      autofill.eventGroup = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Формат заходу
+    if (checklist.event_format) {
+      setEventFormat(checklist.event_format);
+      autofill.eventFormat = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Кількість гостей
+    if (checklist.guest_count) {
+      setGuestCount(checklist.guest_count.toString());
+      autofill.guestCount = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Локація
+    if (checklist.location_address) {
+      let location = checklist.location_address;
+      if (checklist.location_floor) {
+        location += `, поверх ${checklist.location_floor}`;
+      }
+      if (checklist.location_elevator) {
+        location += ` (є ліфт)`;
+      }
+      setEventLocation(location);
+      autofill.eventLocation = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Контактна особа
+    if (checklist.contact_name) {
+      setCoordinatorName(checklist.contact_name);
+      autofill.coordinatorName = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Телефон контакту
+    if (checklist.contact_phone) {
+      setCoordinatorPhone(checklist.contact_phone);
+      autofill.coordinatorPhone = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Email
+    if (checklist.contact_email) {
+      setClientEmail(checklist.contact_email);
+      autofill.clientEmail = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Ім'я клієнта
+    if (checklist.contact_name) {
+      setClientName(checklist.contact_name);
+      autofill.clientName = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Час заходу
+    if (checklist.delivery_time) {
+      setEventTime(checklist.delivery_time);
+      autofill.eventTime = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    // Створюємо формат заходу з чекліста
+    const formats: UIEventFormat[] = [];
+    if (checklist.event_format) {
+      formats.push({
+        id: 0,
+        name: checklist.event_format,
+        eventTime: checklist.delivery_time || "",
+        peopleCount: checklist.guest_count?.toString() || "",
+        group: checklist.checklist_type === "box" ? "delivery-boxes" : "catering",
+        selectedDishes: [],
+      });
+    }
+    if (formats.length > 0) {
+      setEventFormats(formats);
+      autofill.eventFormats = { checklistId: checklist.id, checklistDate: sourceDate };
+    }
+
+    setSelectedChecklistId(checklist.id);
+    setChecklistAutofill(autofill);
+    
+    // Очищаємо дані з анкети якщо обрали чекліст
+    setSelectedQuestionnaireId(null);
+    setQuestionnaireAutofill({});
+  };
+
+  // Завантаження чеклістів клієнта
+  const loadClientChecklists = async (clientId: number) => {
+    try {
+      const data = await checklistsApi.getClientChecklists(clientId);
+      const checklists = data.checklists || [];
+      setClientChecklists(checklists);
+
+      // Автоматично застосовуємо найновіший чекліст
+      if (checklists.length > 0) {
+        applyChecklistToKP(checklists[0]);
+      } else {
+        setSelectedChecklistId(null);
+        setChecklistAutofill({});
+      }
+    } catch (error) {
+      console.error("Помилка завантаження чеклістів клієнта:", error);
+      setClientChecklists([]);
+      setSelectedChecklistId(null);
+      setChecklistAutofill({});
+    }
+  };
+
+  // Очищення даних чекліста
+  const clearChecklistData = () => {
+    setSelectedChecklistId(null);
+    setChecklistAutofill({});
+    // Очищаємо поля, які були заповнені з чекліста
+    setEventDate("");
+    setEventFormat("");
+    setEventLocation("");
+    setCoordinatorName("");
+    setCoordinatorPhone("");
+    setEventTime("");
+    setGuestCount("");
+    setEventFormats([]);
   };
 
   // Функція для валідації кроку 1 з показом помилок
@@ -1865,7 +2018,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           setEventLocation(client.event_location);
                         }
 
-                        // Завантажуємо всі анкети клієнта та автозаповнюємо останню
+                        // Завантажуємо всі чеклісти та анкети клієнта
+                        loadClientChecklists(clientId);
                         loadClientQuestionnaires(clientId);
                       }
                     }}
@@ -1894,114 +2048,140 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                 </div>
               )}
 
-              {/* Вибір анкети клієнта для автозаповнення КП */}
+              {/* Вибір чекліста або анкети клієнта для автозаповнення КП */}
               {clientSelectionMode === "existing" && selectedClientId && (
                 <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center justify-between gap-2">
                     <Label className="text-sm font-semibold flex items-center gap-2">
                       <Clipboard className="w-4 h-4 text-blue-600" />
-                      Оберіть анкету клієнта
+                      Оберіть чекліст клієнта
                     </Label>
-                    {Object.keys(questionnaireAutofill).length > 0 && (
+                    {(Object.keys(checklistAutofill).length > 0 || Object.keys(questionnaireAutofill).length > 0) && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="h-8 text-xs"
                         onClick={() => {
-                          // Очищуємо всі поля, що були заповнені з анкети
-                          setEventFormat("");
-                          setEventLocation("");
-                          setCoordinatorName("");
-                          setCoordinatorPhone("");
-                          setEventDate("");
-                          setEventTime("");
-                          setGuestCount("");
-                          setEventFormats([]);
+                          clearChecklistData();
                           setSelectedQuestionnaireId(null);
                           setQuestionnaireAutofill({});
                         }}
                       >
-                        Очистити дані з анкети
+                        Очистити дані
                       </Button>
                     )}
                   </div>
 
-                  {clientQuestionnaires.length === 0 ? (
+                  {clientChecklists.length === 0 && clientQuestionnaires.length === 0 ? (
                     <div className="space-y-2">
                       <p className="text-xs text-gray-600">
-                        У цього клієнта ще немає анкет.
+                        У цього клієнта ще немає чеклістів або анкет.
                       </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => {
-                          // Перехід до створення анкети (можна додати навігацію)
-                          toast.info("Функція створення анкети буде доступна в наступній версії");
-                        }}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Створити нову анкету
-                      </Button>
                     </div>
                   ) : (
                     <>
-                      <Select
-                        value={selectedQuestionnaireId?.toString() || ""}
-                        onValueChange={(value) => {
-                          if (value === "new") {
-                            toast.info("Функція створення анкети буде доступна в наступній версії");
-                            return;
-                          }
-                          const qId = parseInt(value, 10);
-                          const q = clientQuestionnaires.find((qq) => qq.id === qId) || null;
-                          applyQuestionnaireToKP(q);
-                        }}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Оберіть анкету клієнта" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clientQuestionnaires.map((q) => {
-                            const dateLabel =
-                              q.event_date ||
-                              q.created_at ||
-                              "";
-                            const formattedDate = dateLabel
-                              ? new Date(dateLabel).toLocaleDateString("uk-UA", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric"
-                                })
-                              : "";
-                            const eventType = q.event_type || "";
-                            const guestCount = q.guest_count ? `${q.guest_count} гостей` : "";
-                            return (
-                              <SelectItem key={q.id} value={q.id.toString()}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">
-                                    {formattedDate ? `Анкета від ${formattedDate}` : `Анкета #${q.id}`}
-                                  </span>
-                                  {(eventType || guestCount) && (
-                                    <span className="text-xs text-gray-500">
-                                      {eventType && guestCount ? `${eventType}, ${guestCount}` : eventType || guestCount}
+                      {/* Вибір чекліста (пріоритет) */}
+                      {clientChecklists.length > 0 && (
+                        <Select
+                          value={selectedChecklistId?.toString() || ""}
+                          onValueChange={(value) => {
+                            const clId = parseInt(value, 10);
+                            const cl = clientChecklists.find((c) => c.id === clId) || null;
+                            applyChecklistToKP(cl);
+                          }}
+                        >
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Оберіть чекліст клієнта" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientChecklists.map((cl) => {
+                              const dateLabel = cl.event_date || cl.created_at || "";
+                              const formattedDate = dateLabel
+                                ? new Date(dateLabel).toLocaleDateString("uk-UA", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric"
+                                  })
+                                : "";
+                              const typeLabel = cl.checklist_type === "box" ? "🎁 Бокси" : "🍽️ Кейтеринг";
+                              const eventFormat = cl.event_format || "";
+                              const guestCount = cl.guest_count ? `${cl.guest_count} гостей` : "";
+                              return (
+                                <SelectItem key={cl.id} value={cl.id.toString()}>
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {typeLabel} {formattedDate ? `від ${formattedDate}` : `#${cl.id}`}
                                     </span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                          <SelectItem value="new" className="text-blue-600 font-medium">
-                            <div className="flex items-center gap-2">
-                              <Plus className="w-4 h-4" />
-                              Створити нову анкету
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {selectedQuestionnaireId && (
+                                    {(eventFormat || guestCount) && (
+                                      <span className="text-xs text-gray-500">
+                                        {eventFormat && guestCount ? `${eventFormat}, ${guestCount}` : eventFormat || guestCount}
+                                      </span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      
+                      {/* Fallback на анкети якщо немає чеклістів */}
+                      {clientChecklists.length === 0 && clientQuestionnaires.length > 0 && (
+                        <>
+                          <p className="text-xs text-amber-600 mb-2">
+                            💡 Немає чеклістів - використовуємо анкети
+                          </p>
+                          <Select
+                            value={selectedQuestionnaireId?.toString() || ""}
+                            onValueChange={(value) => {
+                              const qId = parseInt(value, 10);
+                              const q = clientQuestionnaires.find((qq) => qq.id === qId) || null;
+                              applyQuestionnaireToKP(q);
+                            }}
+                          >
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Оберіть анкету клієнта" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientQuestionnaires.map((q) => {
+                                const dateLabel = q.event_date || q.created_at || "";
+                                const formattedDate = dateLabel
+                                  ? new Date(dateLabel).toLocaleDateString("uk-UA", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "numeric"
+                                    })
+                                  : "";
+                                const eventType = q.event_type || "";
+                                const guestCount = q.guest_count ? `${q.guest_count} гостей` : "";
+                                return (
+                                  <SelectItem key={q.id} value={q.id.toString()}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {formattedDate ? `Анкета від ${formattedDate}` : `Анкета #${q.id}`}
+                                      </span>
+                                      {(eventType || guestCount) && (
+                                        <span className="text-xs text-gray-500">
+                                          {eventType && guestCount ? `${eventType}, ${guestCount}` : eventType || guestCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </>
+                      )}
+                      
+                      {selectedChecklistId && (
+                        <p className="text-xs text-emerald-700 flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Дані з чекліста будуть автоматично заповнені у відповідних полях
+                        </p>
+                      )}
+                      {selectedQuestionnaireId && !selectedChecklistId && (
                         <p className="text-xs text-emerald-700 flex items-center gap-1">
                           <Clipboard className="w-3 h-3" />
                           Дані з анкети будуть автоматично заповнені у відповідних полях
