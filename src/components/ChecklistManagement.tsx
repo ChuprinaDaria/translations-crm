@@ -191,10 +191,10 @@ export function ChecklistManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border-2 border-gray-200">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Чекліст</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-3xl font-bold text-gray-900">Чекліст</h1>
+          <p className="text-gray-600 mt-2 text-base">
             Збір інформації для формування комерційних пропозицій
           </p>
         </div>
@@ -202,60 +202,62 @@ export function ChecklistManagement() {
         <div className="flex gap-3">
           <Button
             onClick={() => handleCreateNew("box")}
-            className="bg-amber-500 hover:bg-amber-600 text-white"
+            size="lg"
+            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg hover:shadow-xl transition-all px-6"
           >
-            <Package className="w-4 h-4 mr-2" />
+            <Package className="w-5 h-5 mr-2" />
             Новий бокс
           </Button>
           <Button
             onClick={() => handleCreateNew("catering")}
-            className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+            size="lg"
+            className="bg-gradient-to-r from-[#FF5A00] to-orange-600 hover:from-[#FF5A00]/90 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all px-6"
           >
-            <ChefHat className="w-4 h-4 mr-2" />
+            <ChefHat className="w-5 h-5 mr-2" />
             Новий кейтеринг
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-          <CardContent className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-300 hover:shadow-xl transition-all cursor-pointer">
+          <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-amber-700 font-medium">Бокси</p>
-                <p className="text-3xl font-bold text-amber-900">{stats.box_count}</p>
+                <p className="text-sm text-amber-700 font-semibold mb-2">Бокси</p>
+                <p className="text-4xl font-bold text-amber-900">{stats.box_count}</p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center">
-                <Package className="w-6 h-6 text-amber-700" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg">
+                <Package className="w-8 h-8 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardContent className="p-4">
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 hover:shadow-xl transition-all cursor-pointer">
+          <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-orange-700 font-medium">Кейтеринг</p>
-                <p className="text-3xl font-bold text-orange-900">{stats.catering_count}</p>
+                <p className="text-sm text-orange-700 font-semibold mb-2">Кейтеринг</p>
+                <p className="text-4xl font-bold text-orange-900">{stats.catering_count}</p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-orange-200 flex items-center justify-center">
-                <ChefHat className="w-6 h-6 text-orange-700" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF5A00] to-orange-500 flex items-center justify-center shadow-lg">
+                <ChefHat className="w-8 h-8 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-          <CardContent className="p-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 hover:shadow-xl transition-all cursor-pointer">
+          <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 font-medium">Всього</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-sm text-blue-700 font-semibold mb-2">Всього</p>
+                <p className="text-4xl font-bold text-blue-900">{stats.total}</p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                <FileText className="w-6 h-6 text-gray-600" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-500 flex items-center justify-center shadow-lg">
+                <FileText className="w-8 h-8 text-white" />
               </div>
             </div>
           </CardContent>
