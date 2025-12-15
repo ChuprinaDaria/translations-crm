@@ -468,6 +468,10 @@ class Recipe(Base):
     """
     Техкарта (калькуляція) страви.
     Містить інгредієнти та їх кількості для приготування однієї порції.
+    
+    Підтримує два типи:
+    - catering: проста структура (страва → інгредієнти)
+    - box: трирівнева структура (страва → компоненти → інгредієнти)
     """
     __tablename__ = "recipes"
     
@@ -475,6 +479,9 @@ class Recipe(Base):
     name = Column(String(300), nullable=False, index=True)  # Назва страви
     category = Column(String(100), nullable=True, index=True)  # Категорія (холодні, гарячі, etc.)
     weight_per_portion = Column(Float, nullable=True)  # Вага однієї порції в грамах
+    
+    # Тип техкарти: 'catering' або 'box'
+    recipe_type = Column(String(20), default="catering", index=True)
     
     # Зв'язок з Item (якщо страва є в меню)
     item_id = Column(Integer, ForeignKey("items.id"), nullable=True)
@@ -485,11 +492,37 @@ class Recipe(Base):
     
     # Відносини
     ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
+    components = relationship("RecipeComponent", back_populates="recipe", cascade="all, delete-orphan")
+
+
+class RecipeComponent(Base):
+    """
+    Компонент боксу (позначений маркером 'in' в Excel).
+    Використовується для трирівневої структури боксів.
+    
+    Приклад: Бокс "Сніданок" містить:
+    - 2 круасани (компонент)
+    - 1 йогурт (компонент)
+    Кожен компонент має свої інгредієнти.
+    """
+    __tablename__ = "recipe_components"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    
+    name = Column(String(300), nullable=False)  # Назва компонента
+    quantity_per_portion = Column(Float, default=1.0)  # Кількість на 1 порцію боксу
+    order_index = Column(Integer, default=0)  # Порядок відображення
+    
+    # Відносини
+    recipe = relationship("Recipe", back_populates="components")
+    ingredients = relationship("RecipeComponentIngredient", back_populates="component", cascade="all, delete-orphan")
 
 
 class RecipeIngredient(Base):
     """
     Інгредієнт техкарти - продукт та його кількість на 1 порцію страви.
+    Використовується для кейтерінгу (пряма структура: страва → інгредієнти).
     """
     __tablename__ = "recipe_ingredients"
     
@@ -499,9 +532,31 @@ class RecipeIngredient(Base):
     product_name = Column(String(300), nullable=False, index=True)  # Назва продукту
     weight_per_portion = Column(Float, nullable=False)  # Вага на 1 порцію в грамах
     unit = Column(String(50), default="г")  # Одиниця виміру
+    order_index = Column(Integer, default=0)  # Порядок відображення
     
     # Відносини
     recipe = relationship("Recipe", back_populates="ingredients")
+
+
+class RecipeComponentIngredient(Base):
+    """
+    Інгредієнт компонента боксу.
+    Використовується для трирівневої структури боксів.
+    
+    Формула розрахунку: вага × кількість_компонентів × кількість_порцій
+    """
+    __tablename__ = "recipe_component_ingredients"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    component_id = Column(Integer, ForeignKey("recipe_components.id", ondelete="CASCADE"), nullable=False)
+    
+    product_name = Column(String(300), nullable=False, index=True)  # Назва продукту
+    weight_per_unit = Column(Float, nullable=False)  # Вага на 1 одиницю компонента в грамах
+    unit = Column(String(50), default="г")  # Одиниця виміру
+    order_index = Column(Integer, default=0)  # Порядок відображення
+    
+    # Відносини
+    component = relationship("RecipeComponent", back_populates="ingredients")
 
 
 class Product(Base):
@@ -517,3 +572,101 @@ class Product(Base):
     unit = Column(String(50), default="г")  # Одиниця виміру
     
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Checklist(Base):
+    """
+    Чекліст для боксів або кейтерингу.
+    Використовується відділом продажів для збору інформації перед формуванням КП.
+    """
+    __tablename__ = "checklists"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Тип чекліста: 'box' або 'catering'
+    checklist_type = Column(String(20), nullable=False, index=True)
+    
+    # Зв'язок з клієнтом та КП
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    kp_id = Column(Integer, ForeignKey("kps.id"), nullable=True, index=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    # 1. Дата заходу
+    event_date = Column(Date, nullable=True)
+    
+    # 2. Контакт
+    contact_name = Column(String(200), nullable=True)
+    contact_phone = Column(String(50), nullable=True)
+    contact_email = Column(String(200), nullable=True)
+    
+    # 3. Формат заходу (фуршет, кава-пауза, бокси...)
+    event_format = Column(String(200), nullable=True)
+    
+    # 4. Привід/причина святкування
+    event_reason = Column(String(300), nullable=True)  # корпоратив, день народження, весілля і тд
+    
+    # 5. Номер замовлення (для боксів)
+    order_number = Column(String(100), nullable=True)
+    
+    # 6. Час доставки / Час початку заходу
+    delivery_time = Column(String(100), nullable=True)
+    
+    # 7. Тривалість заходу
+    event_duration = Column(String(100), nullable=True)
+    
+    # 8. Чи потрібен кур'єр/інший персонал (для боксів)
+    needs_courier = Column(Boolean, default=False)
+    personnel_notes = Column(Text, nullable=True)
+    
+    # 9. Локація
+    location_address = Column(String(500), nullable=True)
+    location_floor = Column(String(50), nullable=True)
+    location_elevator = Column(Boolean, default=False)
+    
+    # 10. К-кість гостей
+    guest_count = Column(Integer, nullable=True)
+    
+    # 11. Бюджет
+    budget = Column(String(200), nullable=True)
+    budget_amount = Column(Numeric(10, 2), nullable=True)
+    
+    # 12. Обладнання (тільки для кейтерингу)
+    equipment_furniture = Column(Boolean, default=False)  # меблі
+    equipment_tablecloths = Column(Boolean, default=False)  # скатертини
+    equipment_disposable_dishes = Column(Boolean, default=False)  # посуд одноразовий
+    equipment_glass_dishes = Column(Boolean, default=False)  # скло
+    equipment_notes = Column(Text, nullable=True)
+    
+    # 13. Побажання клієнта/менеджера щодо страв
+    food_hot = Column(Boolean, default=False)  # гарячі
+    food_cold = Column(Boolean, default=False)  # холодні
+    food_salads = Column(Boolean, default=False)  # салати
+    food_garnish = Column(Boolean, default=False)  # гарнір
+    food_sweet = Column(Boolean, default=False)  # солодке
+    food_vegetarian = Column(Boolean, default=False)  # вегетаріанці
+    food_vegan = Column(Boolean, default=False)  # вегани
+    food_preference = Column(String(100), nullable=True)  # більше м'ясного чи рибного
+    food_notes = Column(Text, nullable=True)  # інші побажання
+    
+    # 14. Загальний коментар
+    general_comment = Column(Text, nullable=True)
+    
+    # 15. Напої та алкоголь
+    drinks_notes = Column(Text, nullable=True)
+    alcohol_notes = Column(Text, nullable=True)
+    
+    # 16. Знижка та націнка
+    discount_notes = Column(Text, nullable=True)
+    surcharge_notes = Column(Text, nullable=True)
+    
+    # Статус чекліста
+    status = Column(String(50), default="draft", index=True)  # draft, in_progress, completed, sent_to_kp
+    
+    # Метадані
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Зв'язки
+    client = relationship("Client", backref="checklists")
+    kp = relationship("KP", backref="checklists")
+    manager = relationship("User", foreign_keys=[manager_id])

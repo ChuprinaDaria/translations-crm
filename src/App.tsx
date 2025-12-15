@@ -19,6 +19,7 @@ import { ServiceExcel } from "./components/ServiceExcel";
 import { RecipesManagement } from "./components/RecipesManagement";
 import { SalesDepartment } from "./components/SalesDepartment";
 import { AllQuestionnaires } from "./components/AllQuestionnaires";
+import { ChecklistManagement } from "./components/ChecklistManagement";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
@@ -148,6 +149,10 @@ function App() {
         { label: "КП", href: "#" },
         { label: "Архів КП" },
       ],
+      "checklists": [
+        { label: "Відділ Продажів", href: "#" },
+        { label: "Чекліст" },
+      ],
       "all-questionnaires": [
         { label: "Відділ Продажів", href: "#" },
         { label: "Анкети" },
@@ -236,6 +241,8 @@ function App() {
         }} />;
       case "client-questionnaires":
         return <SalesDepartment />;
+      case "checklists":
+        return <ChecklistManagement />;
       case "all-questionnaires":
         return (
           <AllQuestionnaires

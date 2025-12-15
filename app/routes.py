@@ -1293,7 +1293,10 @@ def export_purchase_excel(
     """
     Експорт файлу закупки на основі вибраних КП.
 
-    Поки що підтримується лише формат 'excel'.
+    Підтримує два типи розрахунку:
+    - **catering**: кейтерінг (формула: вага × порції)
+    - **box**: бокси (формула: вага × компоненти × порції)
+    - **auto**: автовизначення на основі event_group КП
     """
     if not export_in.kp_ids:
         raise HTTPException(status_code=400, detail="Список KP ID порожній")
@@ -1302,7 +1305,11 @@ def export_purchase_excel(
         raise HTTPException(status_code=400, detail="Поки що підтримується лише формат 'excel'")
 
     try:
-        excel_bytes, filename = generate_purchase_excel(db, export_in.kp_ids)
+        excel_bytes, filename = generate_purchase_excel(
+            db, 
+            export_in.kp_ids,
+            export_in.calculation_type
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1355,23 +1362,35 @@ def export_service_excel(
 @router.post("/recipes/import", response_model=schema.CalcImportResult)
 async def import_calculations(
     file: UploadFile = File(...),
+    recipe_type: str = "catering",
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
     """
     Імпортує файл калькуляцій (техкарт) у форматі Excel.
     
-    Очікуваний формат: "Оновлена закупка 2024" з листами:
+    **Типи техкарт:**
+    - **catering** (за замовчуванням): проста структура (страва → інгредієнти)
+    - **box**: трирівнева структура (страва → компоненти → інгредієнти)
+    
+    **Очікуваний формат файлу:** "Оновлена закупка 2024" з листами:
     - "калькуляции" - техкарти страв
     - "список продуктов" - словник продуктів
+    
+    **Маркери в Excel:**
+    - `point` - початок нової страви
+    - `in` - початок компонента боксу (тільки для типу box)
     """
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Файл має бути у форматі Excel (.xlsx)")
     
+    if recipe_type not in ["catering", "box"]:
+        raise HTTPException(status_code=400, detail="recipe_type має бути 'catering' або 'box'")
+    
     content = await file.read()
     
     try:
-        result = import_calculations_file(db, content)
+        result = import_calculations_file(db, content, recipe_type)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Помилка імпорту: {str(e)}")
@@ -1379,11 +1398,34 @@ async def import_calculations(
 
 @router.get("/recipes", response_model=list[schema.Recipe])
 def list_recipes(
+    recipe_type: str = None,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """Отримати список всіх техкарт."""
-    return get_all_recipes(db)
+    """
+    Отримати список всіх техкарт.
+    
+    **Фільтри:**
+    - recipe_type: 'catering', 'box' або None (всі)
+    """
+    return get_all_recipes(db, recipe_type)
+
+
+@router.get("/recipes/stats")
+def get_recipes_stats(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Отримати статистику техкарт."""
+    all_recipes = get_all_recipes(db)
+    catering_count = sum(1 for r in all_recipes if r.recipe_type == "catering")
+    box_count = sum(1 for r in all_recipes if r.recipe_type == "box")
+    
+    return {
+        "total": len(all_recipes),
+        "catering_count": catering_count,
+        "box_count": box_count
+    }
 
 
 @router.get("/recipes/{recipe_id}", response_model=schema.Recipe)
@@ -1393,13 +1435,28 @@ def get_recipe(
     user=Depends(get_current_user),
 ):
     """Отримати техкарту за ID."""
-    recipe = db.query(models.Recipe).filter(models.Recipe.id == recipe_id).first()
+    from recipe_service import get_recipe_by_id
+    recipe = get_recipe_by_id(db, recipe_id)
     if not recipe:
         raise HTTPException(status_code=404, detail="Техкарта не знайдена")
     return recipe
 
 
-@router.post("/purchase/calculate")
+@router.delete("/recipes/{recipe_id}")
+def delete_recipe_endpoint(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Видалити техкарту за ID."""
+    from recipe_service import delete_recipe
+    success = delete_recipe(db, recipe_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
+    return {"success": True, "message": "Техкарта видалена"}
+
+
+@router.post("/purchase/calculate", response_model=schema.PurchaseCalculateResult)
 def calculate_purchase(
     export_in: schema.PurchaseExportRequest,
     db: Session = Depends(get_db),
@@ -1408,13 +1465,22 @@ def calculate_purchase(
     """
     Розраховує закупку продуктів на основі вибраних КП та техкарт.
     
+    **Типи розрахунку:**
+    - **catering**: формула `вага × порції`
+    - **box**: формула `вага × компоненти × порції`
+    - **auto**: автовизначення на основі event_group КП
+    
     Повертає список продуктів з кількостями та інформацію про страви без техкарт.
     """
     if not export_in.kp_ids:
         raise HTTPException(status_code=400, detail="Список KP ID порожній")
     
     try:
-        result = calculate_purchase_from_kps(db, export_in.kp_ids)
+        result = calculate_purchase_from_kps(
+            db, 
+            export_in.kp_ids,
+            export_in.calculation_type
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Помилка розрахунку: {str(e)}")
@@ -3595,4 +3661,272 @@ def use_diamond_bonus_endpoint(
         return {"message": f"Бонус '{bonus_type}' активовано"}
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ==================== ЧЕКЛІСТИ (БОКСИ / КЕЙТЕРИНГ) ====================
+
+@router.get("/checklists")
+def get_all_checklists(
+    skip: int = 0,
+    limit: int = 100,
+    checklist_type: Optional[str] = None,
+    status: Optional[str] = None,
+    manager_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати всі чекліста з фільтрацією"""
+    query = db.query(models.Checklist)
+    
+    if checklist_type:
+        query = query.filter(models.Checklist.checklist_type == checklist_type)
+    if status:
+        query = query.filter(models.Checklist.status == status)
+    if manager_id:
+        query = query.filter(models.Checklist.manager_id == manager_id)
+    
+    total = query.count()
+    box_count = query.filter(models.Checklist.checklist_type == "box").count()
+    catering_count = query.filter(models.Checklist.checklist_type == "catering").count()
+    
+    checklists = query.order_by(
+        models.Checklist.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    # Додаємо інформацію про клієнта та менеджера
+    result = []
+    for c in checklists:
+        client = db.query(models.Client).filter(models.Client.id == c.client_id).first() if c.client_id else None
+        manager = db.query(models.User).filter(models.User.id == c.manager_id).first() if c.manager_id else None
+        
+        # Формуємо повне ім'я менеджера
+        manager_name = None
+        if manager:
+            if manager.first_name and manager.last_name:
+                manager_name = f"{manager.first_name} {manager.last_name}"
+            elif manager.first_name:
+                manager_name = manager.first_name
+            elif manager.last_name:
+                manager_name = manager.last_name
+            else:
+                manager_name = manager.email
+        
+        c_dict = {
+            **{k: v for k, v in c.__dict__.items() if not k.startswith('_')},
+            "client_name": client.name if client else c.contact_name,
+            "manager_name": manager_name,
+        }
+        result.append(c_dict)
+    
+    return {
+        "checklists": result,
+        "total": total,
+        "box_count": box_count,
+        "catering_count": catering_count
+    }
+
+
+@router.get("/checklists/{checklist_id}")
+def get_checklist_by_id(
+    checklist_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати чекліст за ID"""
+    checklist = db.query(models.Checklist).filter(
+        models.Checklist.id == checklist_id
+    ).first()
+    
+    if not checklist:
+        raise HTTPException(404, "Checklist not found")
+    
+    # Додаємо інформацію про клієнта та менеджера
+    client = db.query(models.Client).filter(models.Client.id == checklist.client_id).first() if checklist.client_id else None
+    manager = db.query(models.User).filter(models.User.id == checklist.manager_id).first() if checklist.manager_id else None
+    
+    manager_name = None
+    if manager:
+        if manager.first_name and manager.last_name:
+            manager_name = f"{manager.first_name} {manager.last_name}"
+        elif manager.first_name:
+            manager_name = manager.first_name
+        else:
+            manager_name = manager.email
+    
+    result = {
+        **{k: v for k, v in checklist.__dict__.items() if not k.startswith('_')},
+        "client_name": client.name if client else checklist.contact_name,
+        "manager_name": manager_name,
+    }
+    
+    return result
+
+
+@router.post("/checklists")
+def create_checklist(
+    checklist_data: schema.ChecklistCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Створити новий чекліст"""
+    # Якщо вказано client_id, перевіряємо чи існує клієнт
+    if checklist_data.client_id:
+        client = db.query(models.Client).filter(models.Client.id == checklist_data.client_id).first()
+        if not client:
+            raise HTTPException(404, "Client not found")
+    
+    # Парсимо дату якщо вона є
+    event_date = None
+    if checklist_data.event_date:
+        try:
+            from datetime import datetime as dt
+            # Підтримуємо різні формати дати
+            for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+                try:
+                    event_date = dt.strptime(checklist_data.event_date, fmt).date()
+                    break
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+    
+    # Створюємо чекліст
+    data = checklist_data.dict(exclude_unset=True)
+    data['event_date'] = event_date
+    
+    new_checklist = models.Checklist(**data)
+    
+    # Якщо manager_id не вказано, використовуємо поточного користувача
+    if not new_checklist.manager_id:
+        new_checklist.manager_id = int(user.get("sub"))
+    
+    db.add(new_checklist)
+    db.commit()
+    db.refresh(new_checklist)
+    
+    return new_checklist
+
+
+@router.put("/checklists/{checklist_id}")
+def update_checklist(
+    checklist_id: int,
+    checklist_update: schema.ChecklistUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Оновити чекліст за ID"""
+    checklist = db.query(models.Checklist).filter(
+        models.Checklist.id == checklist_id
+    ).first()
+    
+    if not checklist:
+        raise HTTPException(404, "Checklist not found")
+    
+    # Парсимо дату якщо вона є
+    update_data = checklist_update.dict(exclude_unset=True)
+    
+    if 'event_date' in update_data and update_data['event_date']:
+        try:
+            from datetime import datetime as dt
+            for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+                try:
+                    update_data['event_date'] = dt.strptime(update_data['event_date'], fmt).date()
+                    break
+                except ValueError:
+                    continue
+        except Exception:
+            update_data['event_date'] = None
+    
+    for key, value in update_data.items():
+        setattr(checklist, key, value)
+    
+    checklist.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(checklist)
+    
+    return checklist
+
+
+@router.delete("/checklists/{checklist_id}")
+def delete_checklist(
+    checklist_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Видалити чекліст"""
+    checklist = db.query(models.Checklist).filter(
+        models.Checklist.id == checklist_id
+    ).first()
+    
+    if not checklist:
+        raise HTTPException(404, "Checklist not found")
+    
+    db.delete(checklist)
+    db.commit()
+    
+    return {"message": "Checklist deleted successfully", "id": checklist_id}
+
+
+@router.post("/checklists/{checklist_id}/create-kp")
+def create_kp_from_checklist(
+    checklist_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Створити КП з чекліста"""
+    checklist = db.query(models.Checklist).filter(
+        models.Checklist.id == checklist_id
+    ).first()
+    
+    if not checklist:
+        raise HTTPException(404, "Checklist not found")
+    
+    # Визначаємо event_group на основі типу чекліста
+    event_group = "Доставка боксів" if checklist.checklist_type == "box" else "Кейтерінг"
+    
+    # Створюємо КП з даними з чекліста
+    new_kp = models.KP(
+        title=f"КП - {checklist.contact_name or 'Новий клієнт'} - {checklist.event_format or event_group}",
+        people_count=checklist.guest_count or 1,
+        client_name=checklist.contact_name,
+        client_email=checklist.contact_email,
+        client_phone=checklist.contact_phone,
+        event_format=checklist.event_format,
+        event_group=event_group,
+        event_date=checklist.event_date,
+        event_location=checklist.location_address,
+        event_time=checklist.delivery_time,
+        status="in_progress",
+        created_by_id=int(user.get("sub")),
+        client_id=checklist.client_id,
+    )
+    
+    db.add(new_kp)
+    db.commit()
+    db.refresh(new_kp)
+    
+    # Оновлюємо статус чекліста та прив'язуємо до КП
+    checklist.status = "sent_to_kp"
+    checklist.kp_id = new_kp.id
+    db.commit()
+    
+    return {
+        "message": "КП створено успішно",
+        "kp_id": new_kp.id,
+        "checklist_id": checklist_id
+    }
+
+
+@router.get("/clients/{client_id}/checklists")
+def get_client_checklists(
+    client_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Отримати всі чекліста клієнта"""
+    checklists = db.query(models.Checklist).filter(
+        models.Checklist.client_id == client_id
+    ).order_by(models.Checklist.created_at.desc()).all()
+    
+    return {"checklists": checklists, "total": len(checklists)}
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Any
 from datetime import datetime
 
 # Category schemas (define first)
@@ -700,10 +700,15 @@ class PurchaseExportRequest(BaseModel):
 
     kp_ids - список ID КП, які потрібно врахувати.
     format - формат файлу (поки що підтримується лише 'excel').
+    calculation_type - тип розрахунку:
+        - 'catering': кейтерінг (формула: вага × порції)
+        - 'box': бокси (формула: вага × компоненти × порції)
+        - 'auto': автовизначення на основі event_group КП
     """
 
     kp_ids: List[int]
     format: Literal["excel", "pdf"] = "excel"
+    calculation_type: Literal["catering", "box", "auto"] = "auto"
 
 
 class ServiceExportRequest(BaseModel):
@@ -721,9 +726,11 @@ class ServiceExportRequest(BaseModel):
 # ============ Техкарти (Рецепти) ============
 
 class RecipeIngredientBase(BaseModel):
+    """Інгредієнт техкарти для кейтерінгу."""
     product_name: str
     weight_per_portion: float
     unit: Optional[str] = "г"
+    order_index: Optional[int] = 0
 
 
 class RecipeIngredientCreate(RecipeIngredientBase):
@@ -738,25 +745,81 @@ class RecipeIngredient(RecipeIngredientBase):
         from_attributes = True
 
 
+# --- Компоненти боксів ---
+
+class RecipeComponentIngredientBase(BaseModel):
+    """Інгредієнт компонента боксу."""
+    product_name: str
+    weight_per_unit: float  # Вага на 1 одиницю компонента
+    unit: Optional[str] = "г"
+    order_index: Optional[int] = 0
+
+
+class RecipeComponentIngredientCreate(RecipeComponentIngredientBase):
+    pass
+
+
+class RecipeComponentIngredient(RecipeComponentIngredientBase):
+    id: int
+    component_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class RecipeComponentBase(BaseModel):
+    """Компонент боксу (позначений маркером 'in' в Excel)."""
+    name: str
+    quantity_per_portion: Optional[float] = 1.0  # Кількість на 1 порцію
+    order_index: Optional[int] = 0
+
+
+class RecipeComponentCreate(RecipeComponentBase):
+    ingredients: List[RecipeComponentIngredientCreate] = []
+
+
+class RecipeComponent(RecipeComponentBase):
+    id: int
+    recipe_id: int
+    ingredients: List[RecipeComponentIngredient] = []
+
+    class Config:
+        from_attributes = True
+
+
+# --- Основна техкарта ---
+
 class RecipeBase(BaseModel):
     name: str
     category: Optional[str] = None
     weight_per_portion: Optional[float] = None
     item_id: Optional[int] = None
+    recipe_type: Literal["catering", "box"] = "catering"
 
 
 class RecipeCreate(RecipeBase):
-    ingredients: List[RecipeIngredientCreate] = []
+    """Створення техкарти."""
+    ingredients: List[RecipeIngredientCreate] = []  # Для кейтерінгу
+    components: List[RecipeComponentCreate] = []     # Для боксів
 
 
 class Recipe(RecipeBase):
     id: int
     ingredients: List[RecipeIngredient] = []
+    components: List[RecipeComponent] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class RecipeListResponse(BaseModel):
+    """Відповідь зі списком техкарт."""
+    recipes: List[Recipe]
+    total: int
+    catering_count: int
+    box_count: int
 
 
 # ============ Продукти для закупки ============
@@ -782,8 +845,177 @@ class Product(ProductBase):
 
 # ============ Імпорт калькуляцій ============
 
+class CalcImportRequest(BaseModel):
+    """Запит на імпорт файлу калькуляцій."""
+    recipe_type: Literal["catering", "box"] = "catering"
+
+
 class CalcImportResult(BaseModel):
     """Результат імпорту файлу калькуляцій."""
     recipes_imported: int
+    components_imported: Optional[int] = 0  # Тільки для боксів
     products_imported: int
     errors: List[str] = []
+    recipe_type: str = "catering"
+
+
+class PurchaseCalculateResult(BaseModel):
+    """Результат розрахунку закупки."""
+    products: Dict[str, Dict[str, Any]]
+    dishes_without_recipe: List[str]
+    total_dishes: int
+    dishes_with_recipe: int
+    calculation_type: str
+
+
+# ============ Чекліст для боксів / кейтерингу ============
+
+class ChecklistBase(BaseModel):
+    """Базова схема чекліста."""
+    checklist_type: Literal["box", "catering"]
+    
+    # Дата заходу
+    event_date: Optional[str] = None
+    
+    # Контакт
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    
+    # Формат заходу
+    event_format: Optional[str] = None
+    
+    # Привід/причина святкування
+    event_reason: Optional[str] = None
+    
+    # Номер замовлення (для боксів)
+    order_number: Optional[str] = None
+    
+    # Час доставки / Час початку заходу
+    delivery_time: Optional[str] = None
+    
+    # Тривалість заходу
+    event_duration: Optional[str] = None
+    
+    # Чи потрібен кур'єр/інший персонал
+    needs_courier: Optional[bool] = False
+    personnel_notes: Optional[str] = None
+    
+    # Локація
+    location_address: Optional[str] = None
+    location_floor: Optional[str] = None
+    location_elevator: Optional[bool] = False
+    
+    # К-кість гостей
+    guest_count: Optional[int] = None
+    
+    # Бюджет
+    budget: Optional[str] = None
+    budget_amount: Optional[float] = None
+    
+    # Обладнання (кейтеринг)
+    equipment_furniture: Optional[bool] = False
+    equipment_tablecloths: Optional[bool] = False
+    equipment_disposable_dishes: Optional[bool] = False
+    equipment_glass_dishes: Optional[bool] = False
+    equipment_notes: Optional[str] = None
+    
+    # Побажання щодо страв
+    food_hot: Optional[bool] = False
+    food_cold: Optional[bool] = False
+    food_salads: Optional[bool] = False
+    food_garnish: Optional[bool] = False
+    food_sweet: Optional[bool] = False
+    food_vegetarian: Optional[bool] = False
+    food_vegan: Optional[bool] = False
+    food_preference: Optional[str] = None  # більше м'ясного чи рибного
+    food_notes: Optional[str] = None
+    
+    # Загальний коментар
+    general_comment: Optional[str] = None
+    
+    # Напої та алкоголь
+    drinks_notes: Optional[str] = None
+    alcohol_notes: Optional[str] = None
+    
+    # Знижка та націнка
+    discount_notes: Optional[str] = None
+    surcharge_notes: Optional[str] = None
+    
+    # Статус
+    status: Optional[str] = "draft"
+
+
+class ChecklistCreate(ChecklistBase):
+    """Схема для створення чекліста."""
+    client_id: Optional[int] = None
+    manager_id: Optional[int] = None
+
+
+class ChecklistUpdate(BaseModel):
+    """Схема для оновлення чекліста."""
+    checklist_type: Optional[Literal["box", "catering"]] = None
+    event_date: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    event_format: Optional[str] = None
+    event_reason: Optional[str] = None
+    order_number: Optional[str] = None
+    delivery_time: Optional[str] = None
+    event_duration: Optional[str] = None
+    needs_courier: Optional[bool] = None
+    personnel_notes: Optional[str] = None
+    location_address: Optional[str] = None
+    location_floor: Optional[str] = None
+    location_elevator: Optional[bool] = None
+    guest_count: Optional[int] = None
+    budget: Optional[str] = None
+    budget_amount: Optional[float] = None
+    equipment_furniture: Optional[bool] = None
+    equipment_tablecloths: Optional[bool] = None
+    equipment_disposable_dishes: Optional[bool] = None
+    equipment_glass_dishes: Optional[bool] = None
+    equipment_notes: Optional[str] = None
+    food_hot: Optional[bool] = None
+    food_cold: Optional[bool] = None
+    food_salads: Optional[bool] = None
+    food_garnish: Optional[bool] = None
+    food_sweet: Optional[bool] = None
+    food_vegetarian: Optional[bool] = None
+    food_vegan: Optional[bool] = None
+    food_preference: Optional[str] = None
+    food_notes: Optional[str] = None
+    general_comment: Optional[str] = None
+    drinks_notes: Optional[str] = None
+    alcohol_notes: Optional[str] = None
+    discount_notes: Optional[str] = None
+    surcharge_notes: Optional[str] = None
+    status: Optional[str] = None
+    client_id: Optional[int] = None
+    kp_id: Optional[int] = None
+
+
+class Checklist(ChecklistBase):
+    """Схема для повернення чекліста."""
+    id: int
+    client_id: Optional[int] = None
+    kp_id: Optional[int] = None
+    manager_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    # Додаткові поля для відображення
+    client_name: Optional[str] = None
+    manager_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ChecklistListResponse(BaseModel):
+    """Відповідь зі списком чеклістів."""
+    checklists: List[Checklist]
+    total: int
+    box_count: int
+    catering_count: int

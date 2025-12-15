@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  ClipboardCheck,
 } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
 import { cn } from "./ui/utils";
@@ -117,6 +118,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
     {
       title: "Відділ Продажів",
       items: [
+        {
+          id: "checklists",
+          label: "Чекліст",
+          icon: <ClipboardCheck className="w-5 h-5" />,
+          tooltip: "Чеклісти для боксів та кейтерингу",
+          roles: ["sales-manager", "sales-lead", "kp-lead", "service-lead", "kp-manager"],
+        },
         {
           id: "all-questionnaires",
           label: "Анкети",

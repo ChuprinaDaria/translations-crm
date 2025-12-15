@@ -1451,3 +1451,203 @@ export const benefitsApi = {
     });
   },
 };
+
+// ========== Checklist Types ==========
+
+export interface Checklist {
+  id: number;
+  checklist_type: "box" | "catering";
+  client_id?: number;
+  kp_id?: number;
+  manager_id?: number;
+  
+  // Дата
+  event_date?: string;
+  
+  // Контакт
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  
+  // Формат заходу
+  event_format?: string;
+  
+  // Привід/причина святкування
+  event_reason?: string;
+  
+  // Номер замовлення (бокси)
+  order_number?: string;
+  
+  // Час доставки / Час початку
+  delivery_time?: string;
+  
+  // Тривалість заходу
+  event_duration?: string;
+  
+  // Кур'єр/персонал
+  needs_courier?: boolean;
+  personnel_notes?: string;
+  
+  // Локація
+  location_address?: string;
+  location_floor?: string;
+  location_elevator?: boolean;
+  
+  // К-кість гостей
+  guest_count?: number;
+  
+  // Бюджет
+  budget?: string;
+  budget_amount?: number;
+  
+  // Обладнання (кейтеринг)
+  equipment_furniture?: boolean;
+  equipment_tablecloths?: boolean;
+  equipment_disposable_dishes?: boolean;
+  equipment_glass_dishes?: boolean;
+  equipment_notes?: string;
+  
+  // Побажання щодо страв
+  food_hot?: boolean;
+  food_cold?: boolean;
+  food_salads?: boolean;
+  food_garnish?: boolean;
+  food_sweet?: boolean;
+  food_vegetarian?: boolean;
+  food_vegan?: boolean;
+  food_preference?: string;
+  food_notes?: string;
+  
+  // Загальний коментар
+  general_comment?: string;
+  
+  // Напої та алкоголь
+  drinks_notes?: string;
+  alcohol_notes?: string;
+  
+  // Знижка та націнка
+  discount_notes?: string;
+  surcharge_notes?: string;
+  
+  // Статус
+  status?: string;
+  
+  // Метадані
+  created_at?: string;
+  updated_at?: string;
+  
+  // Додаткові поля для відображення
+  client_name?: string;
+  manager_name?: string;
+}
+
+export interface ChecklistCreate {
+  checklist_type: "box" | "catering";
+  client_id?: number;
+  manager_id?: number;
+  event_date?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  event_format?: string;
+  event_reason?: string;
+  order_number?: string;
+  delivery_time?: string;
+  event_duration?: string;
+  needs_courier?: boolean;
+  personnel_notes?: string;
+  location_address?: string;
+  location_floor?: string;
+  location_elevator?: boolean;
+  guest_count?: number;
+  budget?: string;
+  budget_amount?: number;
+  equipment_furniture?: boolean;
+  equipment_tablecloths?: boolean;
+  equipment_disposable_dishes?: boolean;
+  equipment_glass_dishes?: boolean;
+  equipment_notes?: string;
+  food_hot?: boolean;
+  food_cold?: boolean;
+  food_salads?: boolean;
+  food_garnish?: boolean;
+  food_sweet?: boolean;
+  food_vegetarian?: boolean;
+  food_vegan?: boolean;
+  food_preference?: string;
+  food_notes?: string;
+  general_comment?: string;
+  drinks_notes?: string;
+  alcohol_notes?: string;
+  discount_notes?: string;
+  surcharge_notes?: string;
+  status?: string;
+}
+
+export interface ChecklistUpdate extends Partial<ChecklistCreate> {
+  kp_id?: number;
+}
+
+export interface ChecklistListResponse {
+  checklists: Checklist[];
+  total: number;
+  box_count: number;
+  catering_count: number;
+}
+
+// ========== Checklist API ==========
+
+export const checklistsApi = {
+  async getAll(
+    skip?: number,
+    limit?: number,
+    checklistType?: "box" | "catering",
+    status?: string,
+    managerId?: number
+  ): Promise<ChecklistListResponse> {
+    const params = new URLSearchParams();
+    if (skip !== undefined) params.append("skip", skip.toString());
+    if (limit !== undefined) params.append("limit", limit.toString());
+    if (checklistType) params.append("checklist_type", checklistType);
+    if (status) params.append("status", status);
+    if (managerId !== undefined) params.append("manager_id", managerId.toString());
+    return apiFetch<ChecklistListResponse>(`/checklists?${params.toString()}`);
+  },
+
+  async getById(id: number): Promise<Checklist> {
+    return apiFetch<Checklist>(`/checklists/${id}`);
+  },
+
+  async create(data: ChecklistCreate): Promise<Checklist> {
+    return apiFetch<Checklist>("/checklists", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: number, data: ChecklistUpdate): Promise<Checklist> {
+    return apiFetch<Checklist>(`/checklists/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async delete(id: number): Promise<{ message: string; id: number }> {
+    return apiFetch<{ message: string; id: number }>(`/checklists/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  async createKP(id: number): Promise<{ message: string; kp_id: number; checklist_id: number }> {
+    return apiFetch<{ message: string; kp_id: number; checklist_id: number }>(
+      `/checklists/${id}/create-kp`,
+      { method: "POST" }
+    );
+  },
+
+  async getClientChecklists(clientId: number): Promise<{ checklists: Checklist[]; total: number }> {
+    return apiFetch<{ checklists: Checklist[]; total: number }>(
+      `/clients/${clientId}/checklists`
+    );
+  },
+};
