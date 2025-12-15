@@ -2957,7 +2957,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             </Button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                       <Button
                         type="button"
                         variant="outline"
