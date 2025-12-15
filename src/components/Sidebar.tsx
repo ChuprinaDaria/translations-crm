@@ -137,12 +137,26 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           tooltip: "Сформувати Excel для закупки на основі вибраних КП",
           roles: ["kp-manager", "sales-lead"],
         },
+        {
+          id: "recipes-management",
+          label: "Техкарти (Калькуляції)",
+          icon: <FileText className="w-5 h-5" />,
+          tooltip: "Управління техкартами страв та імпорт файлу калькуляцій",
+          roles: ["kp-manager", "sales-lead"],
+        },
       ],
       roles: ["kp-manager", "sales-lead"],
     },
     {
       title: "Сервіс",
       items: [
+        {
+          id: "service-excel",
+          label: "Сформувати Excel для сервісу",
+          icon: <FileSpreadsheet className="w-5 h-5" />,
+          tooltip: "Сформувати Excel для відділу сервісу (обладнання, послуги, транспорт)",
+          roles: ["service-manager", "service-lead", "kp-manager"],
+        },
         {
           id: "service-templates",
           label: "Шаблони сервірування",

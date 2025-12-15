@@ -256,9 +256,7 @@ def generate_purchase_excel(db: Session, kp_ids: List[int]) -> Tuple[bytes, str]
                 ]
             )
 
-    # ---------- (Майбутнє) Листи "техкарта {клієнт}" ----------
-    # Поки що створюємо спрощений варіант: список страв і їх кількості по кожному КП,
-    # щоб наблизити структуру до скриптів Роми і мати основу під інтеграцію з файлом техкарт.
+    # ---------- Листи "техкарта {клієнт}" ----------
     for kp in kps:
         client_name = kp.client_name or (kp.client.name if kp.client else "")
         tech_title = client_name or kp.title or f"KP {kp.id}"
@@ -284,6 +282,37 @@ def generate_purchase_excel(db: Session, kp_ids: List[int]) -> Tuple[bytes, str]
                     data.get("unit") or "",
                 ]
             )
+
+    # ---------- Лист "Продукти" (агрегація інгредієнтів за техкартами) ----------
+    try:
+        from recipe_service import calculate_purchase_from_kps
+        
+        purchase_result = calculate_purchase_from_kps(db, kp_ids)
+        products = purchase_result.get("products", {})
+        dishes_without_recipe = purchase_result.get("dishes_without_recipe", [])
+        
+        if products:
+            ws_products = wb.create_sheet("Продукти")
+            ws_products.append(["Продукт", "Кількість (г)", "Одиниця"])
+            
+            for product_name, data in sorted(products.items(), key=lambda x: str(x[0])):
+                ws_products.append([
+                    product_name,
+                    round(data.get("quantity", 0), 2),
+                    data.get("unit", "г")
+                ])
+            
+            # Якщо є страви без техкарт, додаємо примітку
+            if dishes_without_recipe:
+                ws_products.append([])
+                ws_products.append(["Страви без техкарт:"])
+                for dish in dishes_without_recipe:
+                    ws_products.append([dish])
+    except ImportError:
+        pass  # recipe_service не доступний
+    except Exception as e:
+        # Якщо помилка, просто пропускаємо лист з продуктами
+        print(f"Помилка розрахунку продуктів: {e}")
 
     # Збереження у bytes
     buffer = BytesIO()

@@ -22,6 +22,8 @@ from telegram_service import send_kp_telegram
 from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
 import loyalty_service
 from purchase_service import generate_purchase_excel
+from service_excel_service import generate_service_excel
+from recipe_service import import_calculations_file, get_all_recipes, calculate_purchase_from_kps
 
 
 router = APIRouter()
@@ -964,6 +966,37 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     #    (у такому випадку шаблон може виводити всі страви без поділу на секції, якщо це потрібно)
     menu_sections = sorted(all_categories) if all_categories else []
 
+    # 3) Формуємо підсумки по категоріях для відображення у підсумковій таблиці
+    category_summaries = {}
+    for category in menu_sections:
+        category_summaries[category] = {
+            "total_weight": 0.0,  # Загальна вага по категорії в кг
+            "total_quantity": 0,  # Загальна кількість порцій
+            "item_count": 0,      # Кількість різних страв у категорії
+        }
+    
+    # Підраховуємо дані по категоріях з усіх форматів
+    for fmt in formats_map.values():
+        for item in fmt["items"]:
+            category_name = item.get("category_name")
+            if category_name and category_name in category_summaries:
+                category_summaries[category_name]["total_weight"] += item.get("total_weight", 0)
+                category_summaries[category_name]["total_quantity"] += item.get("quantity", 0)
+                category_summaries[category_name]["item_count"] += 1
+    
+    # Конвертуємо ваги в грами та форматуємо для відображення
+    category_summaries_formatted = []
+    for category in menu_sections:
+        data = category_summaries[category]
+        weight_grams = data["total_weight"] * 1000  # Конвертуємо кг в г
+        category_summaries_formatted.append({
+            "name": category,
+            "total_weight_grams": weight_grams,
+            "total_weight_formatted": f"{weight_grams:.0f} г",
+            "total_quantity": data["total_quantity"],
+            "item_count": data["item_count"],
+        })
+
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
         secondary_color = getattr(selected_template, "secondary_color", None) or secondary_color
@@ -1000,6 +1033,26 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     
     template_config_obj = TemplateConfig(template_config)
 
+    # Форматуємо вагу на людину
+    formatted_weight_per_person = f"{calculated_weight_per_person:.0f} г" if calculated_weight_per_person else None
+    
+    # Обробляємо фото галереї (конвертуємо в file:// URLs для WeasyPrint)
+    gallery_photos_src = []
+    if getattr(kp, "gallery_photos", None):
+        for photo_url in kp.gallery_photos:
+            if photo_url:
+                try:
+                    # Якщо це вже абсолютний URL або data URL, залишаємо як є
+                    if photo_url.startswith('http') or photo_url.startswith('data:') or photo_url.startswith('file://'):
+                        gallery_photos_src.append(photo_url)
+                    else:
+                        # Інакше конвертуємо відносний шлях в file:// URL
+                        photo_path = (BASE_DIR / photo_url).resolve()
+                        if photo_path.exists():
+                            gallery_photos_src.append(f"file://{photo_path}")
+                except Exception:
+                    pass
+    
     html_content = template.render(
         kp=kp,
         people_count=effective_people_count,
@@ -1012,7 +1065,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         transport_total=f"{transport_total:.2f} грн" if transport_total else None,
         total_weight=formatted_total_weight,
         total_weight_grams=total_weight_grams_value,
-        weight_per_person=calculated_weight_per_person,
+        weight_per_person=formatted_weight_per_person,
         total_items=len(items_data),
         logo_src=logo_src,
         header_image_src=header_image_src,
@@ -1027,6 +1080,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         # Конфігурація та секції шаблону
         template_config=template_config_obj,
         menu_sections=menu_sections,
+        category_summaries=category_summaries_formatted,
         # Загальні фінансові підсумки
         grand_total=grand_total,
         grand_total_formatted=grand_total_formatted,
@@ -1035,6 +1089,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         fop_extra_formatted=fop_extra_formatted,
         grand_total_with_fop=grand_total_with_fop,
         grand_total_with_fop_formatted=grand_total_with_fop_formatted,
+        # Фото галереї
+        gallery_photos=gallery_photos_src,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -1261,6 +1317,109 @@ def export_purchase_excel(
     )
 
 
+@router.post("/service/export")
+def export_service_excel(
+    export_in: schema.ServiceExportRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Експорт файлу для відділу сервісу на основі вибраних КП.
+
+    Включає: обладнання, послуги, транспорт для кожного заходу.
+    """
+    if not export_in.kp_ids:
+        raise HTTPException(status_code=400, detail="Список KP ID порожній")
+
+    if export_in.format != "excel":
+        raise HTTPException(status_code=400, detail="Поки що підтримується лише формат 'excel'")
+
+    try:
+        excel_bytes, filename = generate_service_excel(db, export_in.kp_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
+    if not safe_filename or safe_filename == '.xlsx':
+        safe_filename = 'service.xlsx'
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={'Content-Disposition': f'attachment; filename=\"{safe_filename}\"'},
+    )
+
+
+# ============ Техкарти (Калькуляції) ============
+
+@router.post("/recipes/import", response_model=schema.CalcImportResult)
+async def import_calculations(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Імпортує файл калькуляцій (техкарт) у форматі Excel.
+    
+    Очікуваний формат: "Оновлена закупка 2024" з листами:
+    - "калькуляции" - техкарти страв
+    - "список продуктов" - словник продуктів
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Файл має бути у форматі Excel (.xlsx)")
+    
+    content = await file.read()
+    
+    try:
+        result = import_calculations_file(db, content)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Помилка імпорту: {str(e)}")
+
+
+@router.get("/recipes", response_model=list[schema.Recipe])
+def list_recipes(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Отримати список всіх техкарт."""
+    return get_all_recipes(db)
+
+
+@router.get("/recipes/{recipe_id}", response_model=schema.Recipe)
+def get_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Отримати техкарту за ID."""
+    recipe = db.query(models.Recipe).filter(models.Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
+    return recipe
+
+
+@router.post("/purchase/calculate")
+def calculate_purchase(
+    export_in: schema.PurchaseExportRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Розраховує закупку продуктів на основі вибраних КП та техкарт.
+    
+    Повертає список продуктів з кількостями та інформацію про страви без техкарт.
+    """
+    if not export_in.kp_ids:
+        raise HTTPException(status_code=400, detail="Список KP ID порожній")
+    
+    try:
+        result = calculate_purchase_from_kps(db, export_in.kp_ids)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Помилка розрахунку: {str(e)}")
+
+
 @router.patch("/kp/{kp_id}/status", response_model=schema.KP)
 def update_kp_status(
     kp_id: int,
@@ -1373,6 +1532,118 @@ def send_kp_by_telegram(
         raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, f"Error sending Telegram message: {str(e)}")
+
+@router.post("/kp/{kp_id}/upload-gallery-photo")
+async def upload_kp_gallery_photo(
+    kp_id: int,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Завантажує фото до галереї КП (максимум 9 фото).
+    """
+    kp = crud.get_kp(db, kp_id)
+    if not kp:
+        raise HTTPException(404, "KP not found")
+    
+    # Валідація типу файлу
+    if photo.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимий тип файлу. Дозволені: JPEG, PNG, WebP, GIF"
+        )
+    
+    # Перевіряємо, чи не перевищено ліміт фото
+    current_photos = kp.gallery_photos or []
+    if len(current_photos) >= 9:
+        raise HTTPException(400, "Максимум 9 фото для КП")
+    
+    # Створюємо унікальне ім'я файлу
+    ext = Path(photo.filename).suffix.lower() if photo.filename else ".jpg"
+    unique_filename = f"kp_{kp_id}_gallery_{len(current_photos) + 1}_{uuid.uuid4().hex[:8]}{ext}"
+    
+    # Створюємо директорію для фото КП, якщо її немає
+    kp_gallery_dir = UPLOADS_DIR / "kp-gallery"
+    kp_gallery_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = kp_gallery_dir / unique_filename
+    
+    # Зберігаємо файл
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(photo.file, buffer)
+    
+    # Додаємо шлях до фото в БД
+    relative_path = f"uploads/kp-gallery/{unique_filename}"
+    current_photos.append(relative_path)
+    kp.gallery_photos = current_photos
+    
+    db.commit()
+    db.refresh(kp)
+    
+    return {
+        "status": "success",
+        "photo_url": relative_path,
+        "gallery_photos": kp.gallery_photos
+    }
+
+@router.delete("/kp/{kp_id}/gallery-photo/{photo_index}")
+def delete_kp_gallery_photo(
+    kp_id: int,
+    photo_index: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Видаляє фото з галереї КП за індексом (0-2).
+    """
+    kp = crud.get_kp(db, kp_id)
+    if not kp:
+        raise HTTPException(404, "KP not found")
+    
+    current_photos = kp.gallery_photos or []
+    if photo_index < 0 or photo_index >= len(current_photos):
+        raise HTTPException(400, "Невірний індекс фото")
+    
+    # Видаляємо файл
+    photo_path = BASE_DIR / current_photos[photo_index]
+    try:
+        if photo_path.exists():
+            photo_path.unlink()
+    except Exception as e:
+        print(f"Error deleting photo file: {e}")
+    
+    # Видаляємо шлях з БД
+    current_photos.pop(photo_index)
+    kp.gallery_photos = current_photos
+    
+    db.commit()
+    db.refresh(kp)
+    
+    return {
+        "status": "success",
+        "gallery_photos": kp.gallery_photos
+    }
+
+@router.get("/settings/booking-terms")
+def get_default_booking_terms(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає останні використані умови бронювання.
+    """
+    booking_terms = crud.get_setting(db, "default_booking_terms")
+    return {"booking_terms": booking_terms or ""}
+
+@router.post("/settings/booking-terms")
+def save_default_booking_terms(
+    booking_terms: str = Form(""),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Зберігає умови бронювання як дефолтні для майбутніх КП.
+    """
+    crud.set_setting(db, "default_booking_terms", booking_terms)
+    return {"status": "success", "booking_terms": booking_terms}
 
 @router.get("/settings/logo")
 def get_company_logo(user = Depends(get_current_user)):
@@ -2363,6 +2634,38 @@ def generate_template_preview(
             # У такому випадку шаблон може виводити всі страви без секцій.
             menu_sections = []
         
+        # Формуємо підсумки по категоріях для preview
+        category_summaries = {}
+        for category in menu_sections:
+            category_summaries[category] = {
+                "total_weight": 0.0,
+                "total_quantity": 0,
+                "item_count": 0,
+            }
+        
+        # Підраховуємо дані по категоріях
+        for item in items_for_preview:
+            category_name = item.get('category_name')
+            if category_name and category_name in category_summaries:
+                # Вага може бути передана як weight_raw (в кг) або total_weight (загальна вага в кг)
+                item_weight = item.get('total_weight', 0) or (item.get('weight_raw', 0) * item.get('quantity', 0))
+                category_summaries[category_name]["total_weight"] += item_weight
+                category_summaries[category_name]["total_quantity"] += item.get('quantity', 0)
+                category_summaries[category_name]["item_count"] += 1
+        
+        # Форматуємо для відображення
+        category_summaries_formatted = []
+        for category in menu_sections:
+            data = category_summaries[category]
+            weight_grams = data["total_weight"] * 1000
+            category_summaries_formatted.append({
+                "name": category,
+                "total_weight_grams": weight_grams,
+                "total_weight_formatted": f"{weight_grams:.0f} г",
+                "total_quantity": data["total_quantity"],
+                "item_count": data["item_count"],
+            })
+        
         # Рендеримо HTML
         # Конвертуємо суми з рядків в числа
         def parse_amount(value):
@@ -2474,8 +2777,13 @@ def generate_template_preview(
         fop_extra_formatted = f"{fop_extra:.2f} грн" if fop_extra else None
         grand_total_with_fop_formatted = f"{grand_total_with_fop:.2f} грн"
         
+        # Розраховуємо price_per_person для відображення у верхньому блоці
+        price_per_person_value = formats[0]["price_per_person"] if formats[0]["price_per_person"] is not None else None
+        
         html_content = template.render(
             kp=sample_kp,
+            people_count=preview_people,
+            price_per_person=price_per_person_value,
             items=sample_data.get('items', []),
             formats=formats,
             food_total=sample_data.get('food_total', '0 грн'),
@@ -2499,6 +2807,7 @@ def generate_template_preview(
             template=template_config_obj,
             template_config=template_config_obj,
             menu_sections=menu_sections,
+            category_summaries=category_summaries_formatted,
             grand_total=grand_total,
             grand_total_formatted=grand_total_formatted,
             fop_percent=fop_percent,

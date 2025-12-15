@@ -1,7 +1,38 @@
 from sqlalchemy.orm import Session, selectinload
+import re
 
 import models as models
 import schema as schemas
+
+
+def parse_weight_to_float(weight_str: str | float | None) -> float:
+    """
+    Парсить вагу з формату "150/75" або числа.
+    Для обчислень беремо перше число (основну вагу).
+    """
+    if weight_str is None:
+        return 0.0
+    
+    if isinstance(weight_str, (int, float)):
+        return float(weight_str)
+    
+    if isinstance(weight_str, str):
+        # Якщо є слеш, беремо перше число
+        if '/' in weight_str:
+            match = re.search(r'(\d+(?:\.\d+)?)', weight_str)
+            if match:
+                return float(match.group(1))
+        else:
+            # Спробуємо конвертувати весь рядок в число
+            try:
+                return float(weight_str)
+            except ValueError:
+                # Якщо не вдалося, спробуємо знайти перше число
+                match = re.search(r'(\d+(?:\.\d+)?)', weight_str)
+                if match:
+                    return float(match.group(1))
+    
+    return 0.0
 
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Item).offset(skip).limit(limit).all()
@@ -119,11 +150,18 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         coordinator_phone=kp_in.coordinator_phone,
         client_email=kp_in.client_email,
         client_phone=kp_in.client_phone,
+        # Фінансові дані
+        menu_total=getattr(kp_in, "menu_total", None),
         equipment_total=kp_in.equipment_total,
         service_total=kp_in.service_total,
         transport_total=getattr(kp_in, "transport_total", None),
+        transport_equipment_total=getattr(kp_in, "transport_equipment_total", None),
+        transport_personnel_total=getattr(kp_in, "transport_personnel_total", None),
+        total_amount=getattr(kp_in, "total_amount", None),
+        final_amount=getattr(kp_in, "final_amount", None),
         created_by_id=created_by_id,
         status=kp_in.status or "sent",
+        # Знижки (стара система - deprecated)
         discount_id=getattr(kp_in, "discount_id", None),
         cashback_id=getattr(kp_in, "cashback_id", None),
         use_cashback=getattr(kp_in, "use_cashback", False),
@@ -132,6 +170,21 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         discount_include_menu=getattr(kp_in, "discount_include_menu", True),
         discount_include_equipment=getattr(kp_in, "discount_include_equipment", False),
         discount_include_service=getattr(kp_in, "discount_include_service", False),
+        discount_menu_id=getattr(kp_in, "discount_menu_id", None),
+        discount_equipment_id=getattr(kp_in, "discount_equipment_id", None),
+        discount_service_id=getattr(kp_in, "discount_service_id", None),
+        discount_equipment_subcategories=getattr(kp_in, "discount_equipment_subcategories", None),
+        # Знижки (нова система)
+        discount_type=getattr(kp_in, "discount_type", None),
+        discount_value=getattr(kp_in, "discount_value", None),
+        discount_reason=getattr(kp_in, "discount_reason", None),
+        # Кешбек (нова система)
+        cashback_earned=getattr(kp_in, "cashback_earned", None),
+        cashback_used=getattr(kp_in, "cashback_used", None),
+        cashback_rate_applied=getattr(kp_in, "cashback_rate_applied", None),
+        # Умови бронювання та фото галереї
+        booking_terms=getattr(kp_in, "booking_terms", None),
+        gallery_photos=getattr(kp_in, "gallery_photos", None),
     )
 
     db.add(kp)
@@ -266,17 +319,62 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
     kp.coordinator_phone = kp_in.coordinator_phone
     kp.client_email = kp_in.client_email
     kp.client_phone = kp_in.client_phone
-    kp.equipment_total = kp_in.equipment_total
-    kp.service_total = kp_in.service_total
-    kp.transport_total = getattr(kp_in, "transport_total", None)
+    
+    # Фінансові дані - НЕ перезаписуємо якщо None (зберігаємо попередні значення)
+    if kp_in.equipment_total is not None:
+        kp.equipment_total = kp_in.equipment_total
+    if kp_in.service_total is not None:
+        kp.service_total = kp_in.service_total
+    if getattr(kp_in, "transport_total", None) is not None:
+        kp.transport_total = kp_in.transport_total
+    if getattr(kp_in, "menu_total", None) is not None:
+        kp.menu_total = kp_in.menu_total
+    if getattr(kp_in, "total_amount", None) is not None:
+        kp.total_amount = kp_in.total_amount
+    if getattr(kp_in, "final_amount", None) is not None:
+        kp.final_amount = kp_in.final_amount
+    
+    # Статус - оновлюємо тільки якщо передано
+    if getattr(kp_in, "status", None):
+        kp.status = kp_in.status
+    
+    # Клієнт
+    if getattr(kp_in, "client_id", None) is not None:
+        kp.client_id = kp_in.client_id
+    
+    # Знижки та кешбек (стара система)
     kp.discount_id = getattr(kp_in, "discount_id", None)
     kp.cashback_id = getattr(kp_in, "cashback_id", None)
     kp.use_cashback = getattr(kp_in, "use_cashback", False)
     kp.discount_amount = getattr(kp_in, "discount_amount", None)
     kp.cashback_amount = getattr(kp_in, "cashback_amount", None)
-    kp.discount_include_menu = getattr(kp_in, "discount_include_menu", True)
-    kp.discount_include_equipment = getattr(kp_in, "discount_include_equipment", False)
-    kp.discount_include_service = getattr(kp_in, "discount_include_service", False)
+    kp.discount_include_menu = getattr(kp_in, "discount_include_menu", True)  # Deprecated
+    kp.discount_include_equipment = getattr(kp_in, "discount_include_equipment", False)  # Deprecated
+    kp.discount_include_service = getattr(kp_in, "discount_include_service", False)  # Deprecated
+    kp.discount_menu_id = getattr(kp_in, "discount_menu_id", None)
+    kp.discount_equipment_id = getattr(kp_in, "discount_equipment_id", None)
+    kp.discount_service_id = getattr(kp_in, "discount_service_id", None)
+    kp.discount_equipment_subcategories = getattr(kp_in, "discount_equipment_subcategories", None)
+    
+    # Знижки та кешбек (нова система)
+    if getattr(kp_in, "discount_type", None) is not None:
+        kp.discount_type = kp_in.discount_type
+    if getattr(kp_in, "discount_value", None) is not None:
+        kp.discount_value = kp_in.discount_value
+    if getattr(kp_in, "discount_reason", None) is not None:
+        kp.discount_reason = kp_in.discount_reason
+    if getattr(kp_in, "cashback_earned", None) is not None:
+        kp.cashback_earned = kp_in.cashback_earned
+    if getattr(kp_in, "cashback_used", None) is not None:
+        kp.cashback_used = kp_in.cashback_used
+    if getattr(kp_in, "cashback_rate_applied", None) is not None:
+        kp.cashback_rate_applied = kp_in.cashback_rate_applied
+    
+    # Умови бронювання та фото галереї - оновлюємо тільки якщо передано (не None)
+    if getattr(kp_in, "booking_terms", None) is not None:
+        kp.booking_terms = kp_in.booking_terms
+    if getattr(kp_in, "gallery_photos", None) is not None:
+        kp.gallery_photos = kp_in.gallery_photos
     
     # Спочатку видаляємо старі формати та позиції
     db.query(models.KPItem).filter(models.KPItem.kp_id == kp_id).delete()
@@ -310,7 +408,7 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
             item = existing_items[it.item_id]
             # Розраховуємо вагу в грамах
             if item.weight:
-                item_weight = item.weight
+                item_weight = parse_weight_to_float(item.weight)
                 unit = (item.unit or 'кг').lower()
                 # Конвертуємо в грами
                 if unit == 'кг':

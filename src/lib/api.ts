@@ -61,7 +61,7 @@ export interface Item {
   name: string;
   description?: string;
   price: number;
-  weight?: number;
+  weight?: string | number; // Може бути число або рядок типу "150/75"
   unit?: string;
   photo_url?: string;
   active: boolean;
@@ -74,7 +74,7 @@ export interface ItemCreate {
   name: string;
   description?: string;
   price?: number;
-  weight?: number;
+  weight?: string | number; // Може бути число або рядок типу "150/75"
   unit?: string;
   photo_url?: string;
   active?: boolean;
@@ -704,6 +704,8 @@ export interface KP {
   equipment_total?: number;
   service_total?: number;
   transport_total?: number;
+  transport_equipment_total?: number;
+  transport_personnel_total?: number;
   total_weight?: number; // Орієнтовний вихід (сума ваги) - загальна вага в грамах
   weight_per_person?: number; // Вага на 1 гостя в грамах
   created_by_id?: number;
@@ -750,6 +752,8 @@ export interface KPCreate {
   equipment_total?: number;
   service_total?: number;
   transport_total?: number;
+  transport_equipment_total?: number;
+  transport_personnel_total?: number;
   total_weight?: number; // Орієнтовний вихід (сума ваги) - загальна вага в грамах
   weight_per_person?: number; // Вага на 1 гостя в грамах
   discount_id?: number;
@@ -864,6 +868,44 @@ export const purchaseApi = {
     }
 
     const response = await fetch(`${API_BASE_URL}/purchase/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: response.statusText };
+      }
+      throw new ApiError(response.status, response.statusText, errorData);
+    }
+
+    return response.blob();
+  },
+};
+
+// Service Export Request
+export interface ServiceExportRequest {
+  kp_ids: number[];
+  format?: "excel" | "pdf";
+}
+
+// Service / Сервіс API
+export const serviceApi = {
+  async exportService(data: ServiceExportRequest): Promise<Blob> {
+    const token = tokenManager.getToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/service/export`, {
       method: "POST",
       headers,
       body: JSON.stringify(data),

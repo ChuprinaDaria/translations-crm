@@ -42,7 +42,7 @@ class Item(Base):
     subcategory = relationship("Subcategory", back_populates="items")
     
     price = Column(Float, index=True)
-    weight = Column(Float, index=True)
+    weight = Column(String, index=True)  # Може бути число або рядок типу "150/75"
     unit = Column(String, index=True)
     description = Column(String, index=True)
 
@@ -165,20 +165,28 @@ class KP(Base):
     menu_total = Column(Numeric(10, 2), default=0)  # Сума тільки меню (кухня)
     equipment_total = Column(Numeric(10, 2), default=0)
     service_total = Column(Numeric(10, 2), default=0)
-    transport_total = Column(Numeric(10, 2), default=0)
+    transport_total = Column(Numeric(10, 2), default=0)  # Загальна сума (для сумісності)
+    transport_equipment_total = Column(Numeric(10, 2), default=0)  # Транспортні витрати для доставки обладнання
+    transport_personnel_total = Column(Numeric(10, 2), default=0)  # Транспортні витрати для персоналу
     # Орієнтовний вихід (сума ваги)
     total_weight = Column(Float, nullable=True)  # Загальна вага в грамах
     weight_per_person = Column(Float, nullable=True)  # Вага на 1 гостя в грамах
     # Знижки та кешбек (стара система через benefits)
-    discount_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
+    discount_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)  # Deprecated: використовується для сумісності
     cashback_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)
     use_cashback = Column(Boolean, default=False, nullable=False)  # Чи списати кешбек з бонусного рахунку
     discount_amount = Column(Float, nullable=True)  # Сума знижки
     cashback_amount = Column(Float, nullable=True)  # Сума кешбеку
-    # Налаштування знижки: що включати в знижку
-    discount_include_menu = Column(Boolean, default=True, nullable=False)  # Включити меню в знижку
-    discount_include_equipment = Column(Boolean, default=False, nullable=False)  # Включити обладнання в знижку
-    discount_include_service = Column(Boolean, default=False, nullable=False)  # Включити сервіс в знижку
+    # Налаштування знижки: що включати в знижку (deprecated)
+    discount_include_menu = Column(Boolean, default=True, nullable=False)  # Deprecated
+    discount_include_equipment = Column(Boolean, default=False, nullable=False)  # Deprecated
+    discount_include_service = Column(Boolean, default=False, nullable=False)  # Deprecated
+    # Окремі знижки для кожної категорії
+    discount_menu_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)  # Знижка на меню
+    discount_equipment_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)  # Знижка на обладнання (загальна)
+    discount_service_id = Column(Integer, ForeignKey("benefits.id"), nullable=True)  # Знижка на сервіс
+    # Знижки по підкатегоріях обладнання (JSON: {subcategory_id: benefit_id})
+    discount_equipment_subcategories = Column(JSON, nullable=True)  # {"1": 2, "3": 5} - підкатегорія_id -> benefit_id
     
     # Історія знижок для цього КП (нова система)
     discount_type = Column(String, nullable=True)  # "percentage" | "fixed"
@@ -193,6 +201,10 @@ class KP(Base):
     # Загальна сума
     total_amount = Column(Numeric(10, 2), default=0)
     final_amount = Column(Numeric(10, 2), default=0)  # Після знижок та кешбеку
+    
+    # Умови бронювання та додаткові матеріали
+    booking_terms = Column(Text, nullable=True)  # Умови бронювання заходу
+    gallery_photos = Column(JSON, nullable=True)  # Масив шляхів до фото (до 9 фото, відображаються по 3 в рядок)
 
     items = relationship("KPItem", back_populates="kp", lazy="selectin", cascade='all, delete-orphan')
     event_formats = relationship("KPEventFormat", back_populates="kp", lazy="selectin", cascade='all, delete-orphan', order_by="KPEventFormat.order_index")
@@ -245,7 +257,7 @@ class KPItem(Base):
     # Поля для custom items (коли item_id = None)
     name = Column(String, nullable=True)
     price = Column(Float, nullable=True)
-    weight = Column(Float, nullable=True)
+    weight = Column(String, nullable=True)  # Може бути число або рядок типу "150/75"
     unit = Column(String, nullable=True)
 
     kp = relationship("KP", back_populates="items")
@@ -450,3 +462,58 @@ class CashbackTransaction(Base):
     # Відносини
     client = relationship("Client", back_populates="cashback_transactions")
     kp = relationship("KP")
+
+
+class Recipe(Base):
+    """
+    Техкарта (калькуляція) страви.
+    Містить інгредієнти та їх кількості для приготування однієї порції.
+    """
+    __tablename__ = "recipes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(300), nullable=False, index=True)  # Назва страви
+    category = Column(String(100), nullable=True, index=True)  # Категорія (холодні, гарячі, etc.)
+    weight_per_portion = Column(Float, nullable=True)  # Вага однієї порції в грамах
+    
+    # Зв'язок з Item (якщо страва є в меню)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=True)
+    item = relationship("Item")
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Відносини
+    ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
+
+
+class RecipeIngredient(Base):
+    """
+    Інгредієнт техкарти - продукт та його кількість на 1 порцію страви.
+    """
+    __tablename__ = "recipe_ingredients"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    
+    product_name = Column(String(300), nullable=False, index=True)  # Назва продукту
+    weight_per_portion = Column(Float, nullable=False)  # Вага на 1 порцію в грамах
+    unit = Column(String(50), default="г")  # Одиниця виміру
+    
+    # Відносини
+    recipe = relationship("Recipe", back_populates="ingredients")
+
+
+class Product(Base):
+    """
+    Продукт для закупки (словник продуктів).
+    """
+    __tablename__ = "products"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(300), nullable=False, unique=True, index=True)
+    category = Column(String(100), nullable=True, index=True)  # РИБНИЙ, М'ЯСНИЙ, ОВОЧІ, etc.
+    subcategory = Column(String(100), nullable=True)  # РИБА, КУРЯТИНА, etc.
+    unit = Column(String(50), default="г")  # Одиниця виміру
+    
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -15,6 +15,8 @@ import { EventsCalendar } from "./components/EventsCalendar";
 import { UsersManagement } from "./components/UsersManagement";
 import { BenefitsManagement } from "./components/BenefitsManagement";
 import { ProcurementExcel } from "./components/ProcurementExcel";
+import { ServiceExcel } from "./components/ServiceExcel";
+import { RecipesManagement } from "./components/RecipesManagement";
 import { SalesDepartment } from "./components/SalesDepartment";
 import { AllQuestionnaires } from "./components/AllQuestionnaires";
 import { AuthPage } from "./components/auth/AuthPage";
@@ -273,6 +275,10 @@ function App() {
         );
       case "procurement-excel":
         return <ProcurementExcel />;
+      case "recipes-management":
+        return <RecipesManagement />;
+      case "service-excel":
+        return <ServiceExcel />;
       case "service-templates":
         return (
           <div className="space-y-6">

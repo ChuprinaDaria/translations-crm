@@ -35,7 +35,7 @@ class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[float] = None
+    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = True
@@ -48,7 +48,7 @@ class ItemUpdate(BaseModel):
     subcategory_id: Optional[int] = None
     description: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[float] = None
+    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = None
@@ -159,7 +159,9 @@ class KPCreate(KPBase):
     menu_total: Optional[float] = 0
     equipment_total: Optional[float] = None
     service_total: Optional[float] = None
-    transport_total: Optional[float] = None
+    transport_total: Optional[float] = None  # Загальна сума (для сумісності)
+    transport_equipment_total: Optional[float] = None  # Транспортні витрати для доставки обладнання
+    transport_personnel_total: Optional[float] = None  # Транспортні витрати для персоналу
     total_amount: Optional[float] = 0
     final_amount: Optional[float] = 0
     total_weight: Optional[float] = None  # Орієнтовний вихід (сума ваги) - загальна вага в грамах
@@ -170,10 +172,16 @@ class KPCreate(KPBase):
     use_cashback: Optional[bool] = False  # Чи списати кешбек з бонусного рахунку
     discount_amount: Optional[float] = None
     cashback_amount: Optional[float] = None
-    # Налаштування знижки: що включати в знижку
-    discount_include_menu: Optional[bool] = True  # Включити меню в знижку
-    discount_include_equipment: Optional[bool] = False  # Включити обладнання в знижку
-    discount_include_service: Optional[bool] = False  # Включити сервіс в знижку
+    # Налаштування знижки: що включати в знижку (deprecated, для сумісності)
+    discount_include_menu: Optional[bool] = True  # Deprecated
+    discount_include_equipment: Optional[bool] = False  # Deprecated
+    discount_include_service: Optional[bool] = False  # Deprecated
+    # Окремі знижки для кожної категорії
+    discount_menu_id: Optional[int] = None  # Знижка на меню
+    discount_equipment_id: Optional[int] = None  # Знижка на обладнання (загальна)
+    discount_service_id: Optional[int] = None  # Знижка на сервіс
+    # Знижки по підкатегоріях обладнання (JSON: {subcategory_id: benefit_id})
+    discount_equipment_subcategories: Optional[dict] = None  # {"1": 2, "3": 5} - підкатегорія_id -> benefit_id
     # Нові поля для знижок та кешбеку
     client_id: Optional[int] = None
     discount_type: Optional[str] = None  # "percentage" | "fixed"
@@ -183,6 +191,9 @@ class KPCreate(KPBase):
     cashback_used: Optional[float] = 0
     cashback_rate_applied: Optional[float] = None
     cashback_to_use: Optional[float] = None  # Сума кешбеку для використання при створенні КП
+    # Умови бронювання та фото
+    booking_terms: Optional[str] = None  # Умови бронювання заходу
+    gallery_photos: Optional[list[str]] = None  # Масив шляхів до фото (до 9 фото)
 
 class KPItem(BaseModel):
     id: int
@@ -192,7 +203,7 @@ class KPItem(BaseModel):
     # Поля для custom items
     name: Optional[str] = None
     price: Optional[float] = None
-    weight: Optional[float] = None
+    weight: Optional[str] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
 
     class Config:
@@ -235,7 +246,9 @@ class KP(KPBase):
     cashback_used: Optional[float] = 0
     cashback_rate_applied: Optional[float] = None
     cashback_to_use: Optional[float] = None  # Сума кешбеку для використання при створенні КП
-    cashback_rate_applied: Optional[float] = None
+    # Умови бронювання та фото
+    booking_terms: Optional[str] = None  # Умови бронювання заходу
+    gallery_photos: Optional[list[str]] = None  # Масив шляхів до фото (до 9 фото)
     
     class Config:
         from_attributes = True
@@ -691,3 +704,86 @@ class PurchaseExportRequest(BaseModel):
 
     kp_ids: List[int]
     format: Literal["excel", "pdf"] = "excel"
+
+
+class ServiceExportRequest(BaseModel):
+    """
+    Запит на експорт файлу для відділу сервісу.
+
+    kp_ids - список ID КП, які потрібно врахувати.
+    format - формат файлу (поки що підтримується лише 'excel').
+    """
+
+    kp_ids: List[int]
+    format: Literal["excel", "pdf"] = "excel"
+
+
+# ============ Техкарти (Рецепти) ============
+
+class RecipeIngredientBase(BaseModel):
+    product_name: str
+    weight_per_portion: float
+    unit: Optional[str] = "г"
+
+
+class RecipeIngredientCreate(RecipeIngredientBase):
+    pass
+
+
+class RecipeIngredient(RecipeIngredientBase):
+    id: int
+    recipe_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class RecipeBase(BaseModel):
+    name: str
+    category: Optional[str] = None
+    weight_per_portion: Optional[float] = None
+    item_id: Optional[int] = None
+
+
+class RecipeCreate(RecipeBase):
+    ingredients: List[RecipeIngredientCreate] = []
+
+
+class Recipe(RecipeBase):
+    id: int
+    ingredients: List[RecipeIngredient] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============ Продукти для закупки ============
+
+class ProductBase(BaseModel):
+    name: str
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    unit: Optional[str] = "г"
+
+
+class ProductCreate(ProductBase):
+    pass
+
+
+class Product(ProductBase):
+    id: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============ Імпорт калькуляцій ============
+
+class CalcImportResult(BaseModel):
+    """Результат імпорту файлу калькуляцій."""
+    recipes_imported: int
+    products_imported: int
+    errors: List[str] = []
