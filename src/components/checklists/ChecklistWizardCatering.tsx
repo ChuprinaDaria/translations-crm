@@ -186,9 +186,9 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
   };
 
   return (
-    <div className="bg-white h-full flex flex-col">
+    <div className="bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#FF5A00] to-orange-500 px-8 py-6 flex-shrink-0">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#FF5A00] to-orange-500 px-4 md:px-8 py-4 md:py-6 flex-shrink-0 shadow-lg">
         <div className="flex items-center justify-between text-white mb-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">

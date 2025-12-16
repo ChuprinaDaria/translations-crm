@@ -12,21 +12,13 @@ import {
   Edit,
   FileText,
   ArrowRight,
-  Filter,
-  X
+  Filter
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
 import {
   Select,
   SelectContent,
@@ -187,6 +179,23 @@ export function ChecklistManagement() {
       return dateString;
     }
   };
+
+  // Якщо показуємо wizard - відображаємо його на весь екран (як анкету)
+  if (showWizard) {
+    return wizardType === "box" ? (
+      <ChecklistWizardBox
+        checklist={editingChecklist}
+        onSave={handleWizardSave}
+        onCancel={() => setShowWizard(false)}
+      />
+    ) : (
+      <ChecklistWizardCatering
+        checklist={editingChecklist}
+        onSave={handleWizardSave}
+        onCancel={() => setShowWizard(false)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -350,39 +359,6 @@ export function ChecklistManagement() {
           />
         </TabsContent>
       </Tabs>
-
-      {/* Wizard Dialog - Full Screen */}
-      <Dialog open={showWizard} onOpenChange={setShowWizard}>
-        <DialogContent 
-          hideClose 
-          className="!max-w-[100vw] !w-[100vw] !h-[100vh] !max-h-[100vh] !p-0 !gap-0 overflow-hidden !rounded-none !border-0 !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%]"
-        >
-          <DialogHeader className="sr-only">
-            <DialogTitle>
-              {editingChecklist ? "Редагування чекліста" : 
-                wizardType === "box" ? "Новий чекліст на доставку боксів" : "Новий чекліст на кейтеринг"}
-            </DialogTitle>
-            <DialogDescription>
-              Заповніть форму для створення чекліста
-            </DialogDescription>
-          </DialogHeader>
-          <div className="h-full w-full">
-            {wizardType === "box" ? (
-              <ChecklistWizardBox
-                checklist={editingChecklist}
-                onSave={handleWizardSave}
-                onCancel={() => setShowWizard(false)}
-              />
-            ) : (
-              <ChecklistWizardCatering
-                checklist={editingChecklist}
-                onSave={handleWizardSave}
-                onCancel={() => setShowWizard(false)}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
