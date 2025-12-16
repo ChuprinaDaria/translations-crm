@@ -274,10 +274,11 @@
         
         /* === ФІНАЛЬНИЙ ПІДСУМОК === */
         .final-summary {
-            background: var(--bg-gray);
+            background: var(--orange-format);
             color: white;
             padding: 4mm 5mm;
             margin-top: 5mm;
+            text-align: center;
         }
         
         .final-summary-main {
@@ -289,6 +290,7 @@
         
         .final-summary-fop {
             font-size: 11pt;
+            font-weight: 600;
             padding: 1mm 0;
         }
         
@@ -597,12 +599,16 @@
             {% endif %}
         </div>
         
-        <!-- УМОВИ БРОНЮВАННЯ -->
-        {% if kp.booking_terms %}
+        <!-- УМОВИ БРОНЮВАННЯ (з шаблону) -->
+        {% if booking_terms %}
         <div class="booking-terms">
             <div class="booking-terms-title">УМОВИ БРОНЮВАННЯ ЗАХОДУ:</div>
             <div class="booking-terms-list">
-                {{ kp.booking_terms | replace('\n', '</div><div class="booking-terms-item">') | safe }}
+                {% for line in booking_terms.split('\n') %}
+                {% if line.strip() %}
+                <div class="booking-terms-item">{{ line.strip() }}</div>
+                {% endif %}
+                {% endfor %}
             </div>
         </div>
         {% endif %}

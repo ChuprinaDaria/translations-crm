@@ -336,6 +336,9 @@ class TemplateBase(BaseModel):
     
     # Галерея фото (до 9 фото, по 3 в рядок)
     gallery_photos: Optional[List[str]] = None
+    
+    # Умови бронювання
+    booking_terms: Optional[str] = None
 
 
 class TemplateCreate(TemplateBase):
@@ -395,6 +398,9 @@ class TemplateUpdate(BaseModel):
     
     # Галерея фото
     gallery_photos: Optional[List[str]] = None
+    
+    # Умови бронювання
+    booking_terms: Optional[str] = None
 
 
 class Template(TemplateBase):

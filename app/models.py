@@ -125,6 +125,9 @@ class Template(Base):
     
     # Галерея фото (до 9 фото, відображаються по 3 в рядок)
     gallery_photos = Column(JSON, nullable=True)  # Масив шляхів до фото галереї
+    
+    # Умови бронювання (текст з пунктами)
+    booking_terms = Column(Text, nullable=True)
 
     kps = relationship("KP", back_populates="template")
 

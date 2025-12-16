@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ kp.title or 'Комерційна пропозиція' }}</title>
+    <style>
+        @page {
+            size: {% if template_config and template_config.page_orientation == 'landscape' %}A4 landscape{% else %}A4{% endif %};
+            margin: 15mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: {{ font_family or 'Arial, sans-serif' }};
+            color: {{ text_color or '#333333' }};
+            background-color: {{ secondary_color or '#ffffff' }};
+            line-height: 1.6;
+            font-size: 10pt;
+            {% if background_image_src %}
+            background-image: url('{{ background_image_src }}');
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: 50%;
+            background-attachment: fixed;
+            {% endif %}
+        }
+        
+        .container {
+            max-width: 100%;
+            {% if background_image_src %}
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 5mm;
+            {% endif %}
+        }
+        
+        /* Шапка документу */
+        .header {
+            margin-bottom: 10mm;
+        }
+
+        .header-image {
+            width: 100%;
+            height: auto;
+            max-height: 80mm;
+            object-fit: cover;
+            border-radius: 3mm;
+            margin-bottom: 5mm;
+        }
+
+        .header-content-wrapper {
+            display: table;
+            width: 100%;
+            padding-bottom: 5mm;
+            {% if not header_image_src %}
+            border-bottom: 3pt solid {{ primary_color or '#FF5A00' }};
+            {% endif %}
+        }
+        
+        .header-content {
+            display: table-row;
+        }
+        
+        .logo-section {
+            display: table-cell;
+            vertical-align: middle;
+            width: 40%;
+        }
+        
+        {% if logo_src %}
+        .logo {
+            max-width: 120pt;
+            max-height: 60pt;
+            margin-bottom: 3mm;
+        }
+        {% endif %}
+        
+        .company-name {
+            font-size: 20pt;
+            font-weight: bold;
+            color: {{ primary_color or '#FF5A00' }};
+            {% if header_image_src %}
+            color: white;
+            {% endif %}
+        }
+        
+        .info-section {
+            display: table-cell;
+            vertical-align: middle;
+            text-align: right;
+            width: 60%;
+        }
+        
+        .kp-title {
+            font-size: 16pt;
+            font-weight: 600;
+            margin-bottom: 2mm;
+        }
+        
+        .creation-date {
+            font-size: 9pt;
+            color: #666;
+            {% if header_image_src %}
+            color: rgba(255,255,255,0.9);
+            {% endif %}
+        }
+        
+        /* Інформація про клієнта */
+        .client-info {
+            background-color: #f9f9f9;
+            padding: 5mm;
+            border-radius: 2mm;
+            margin-bottom: 8mm;
+            border-left: 3pt solid {{ primary_color or '#FF5A00' }};
+            display: table;
+            width: 100%;
+        }
+        
+        .client-info-row {
+            display: table-row;
+        }
+        
+        .client-info-col {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding-right: 5mm;
+        }
+        
+        .client-info-col:last-child {
+            padding-right: 0;
+            padding-left: 5mm;
+        }
+        
+        .client-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .client-info td {
+            padding: 2mm 0;
+            font-size: 10pt;
+        }
+        
+        .client-info td:first-child {
+            font-weight: 600;
+            width: 45%;
+            color: #666;
+        }
+        
+        /* Таблиця меню */
+        .menu-section {
+            margin-bottom: 8mm;
+        }
+        
+        /* ФОРМАТ ЗАХОДУ - НАЙЯСКРАВІШЕ ВИДІЛЕННЯ */
+        .section-title {
+            font-size: 16pt;
+            font-weight: bold;
+            color: white;
+            background-color: {{ primary_color or '#FF5A00' }};
+            padding: 4mm 5mm;
+            margin-bottom: 5mm;
+            margin-top: 8mm;
+            border-radius: 2mm;
+            text-transform: uppercase;
+            letter-spacing: 0.5pt;
+        }
+        
+        /* КАТЕГОРІЇ СТРАВ - ЯСКРАВЕ ВИДІЛЕННЯ (але менше ніж формат) */
+        .category-title {
+            font-size: 13pt;
+            font-weight: bold;
+            color: {{ primary_color or '#FF5A00' }};
+            margin-top: 5mm;
+            margin-bottom: 3mm;
+            padding-left: 4mm;
+            padding-top: 2mm;
+            padding-bottom: 2mm;
+            border-left: 4pt solid {{ primary_color or '#FF5A00' }};
+            background-color: rgba(255, 90, 0, 0.08);
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            margin-bottom: 5mm;
+        }
+        
+        .items-table thead {
+            background-color: transparent;
+        }
+        
+        .items-table th {
+            padding: 3mm;
+            text-align: left;
+            font-size: 9pt;
+            font-weight: 600;
+            color: {{ primary_color or '#FF5A00' }};
+        }
+        
+        .items-table td {
+            padding: 3mm;
+            border-bottom: 1pt solid #e0e0e0;
+            font-size: 9pt;
+            vertical-align: top;
+        }
+        
+        .items-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .item-photo {
+            width: 40pt;
+            height: 40pt;
+            object-fit: cover;
+            border-radius: 2mm;
+            border: 1pt solid #ddd;
+        }
+        
+        .item-name {
+            font-weight: 600;
+            margin-bottom: 1mm;
+        }
+        
+        .item-description {
+            font-size: 8pt;
+            color: #666;
+            margin-top: 1mm;
+        }
+        
+        .category-badge {
+            display: inline-block;
+            background-color: #f0f0f0;
+            padding: 1mm 2mm;
+            border-radius: 1mm;
+            font-size: 7pt;
+            color: #666;
+            margin-top: 1mm;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        /* Підсумки */
+        .summary-section {
+            margin-top: 8mm;
+            background-color: #f9f9f9;
+            padding: 5mm;
+            border-radius: 2mm;
+        }
+        
+        .summary-section .items-table {
+            background-color: white;
+            border: 1pt solid #e0e0e0;
+            border-radius: 2mm;
+            overflow: hidden;
+        }
+        
+        .summary-section .items-table thead th {
+            color: white;
+            padding: 3mm;
+            font-weight: 600;
+        }
+        
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4mm;
+        }
+        
+        .summary-table td {
+            padding: 2mm 0;
+            font-size: 10pt;
+        }
+        
+        .summary-table td:first-child {
+            font-weight: 600;
+            color: #666;
+            width: 60%;
+        }
+        
+        .summary-table td:last-child {
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        .total-row {
+            border-top: 2pt solid {{ primary_color or '#FF5A00' }};
+            padding-top: 3mm;
+        }
+        
+        .total-row td {
+            font-size: 12pt;
+            color: {{ primary_color or '#FF5A00' }};
+            padding-top: 3mm;
+        }
+        
+        .notes-section {
+            margin-top: 5mm;
+            padding: 3mm;
+            background-color: #fff9e6;
+            border-left: 3pt solid #ffd700;
+            border-radius: 2mm;
+        }
+        
+        .notes-title {
+            font-weight: 600;
+            margin-bottom: 2mm;
+            color: {{ primary_color or '#FF5A00' }};
+        }
+        
+        .notes-content {
+            font-size: 9pt;
+            line-height: 1.5;
+        }
+        
+        /* Умови бронювання */
+        .booking-terms-section {
+            margin-top: 8mm;
+            padding: 5mm;
+            background-color: #f0f9ff;
+            border-left: 3pt solid {{ primary_color or '#FF5A00' }};
+            border-radius: 2mm;
+            page-break-inside: avoid;
+        }
+        
+        .booking-terms-content {
+            font-size: 9pt;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        /* Галерея фото */
+        .gallery-section {
+            margin-top: 10mm;
+            page-break-inside: avoid;
+        }
+        
+        .gallery-row {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: separate;
+            border-spacing: 3mm;
+            margin-bottom: 3mm;
+        }
+        
+        .gallery-item {
+            display: table-cell;
+            width: 33.333%;
+            vertical-align: top;
+        }
+        
+        .gallery-photo {
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+            border-radius: 2mm;
+            border: 1pt solid #e0e0e0;
+            max-height: 50mm;
+        }
+        
+        /* Футер */
+        .footer {
+            margin-top: 10mm;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            padding-top: 5mm;
+            border-top: 1pt solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Шапка -->
+        <div class="header">
+            {% if header_image_src %}
+            <img src="{{ header_image_src }}" alt="Header" class="header-image">
+            {% endif %}
+            <div class="header-content-wrapper">
+                <div class="header-content">
+                    <div class="logo-section">
+                        <div class="company-name">{{ company_name or 'Назва компанії' }}</div>
+                    </div>
+                    <div class="info-section">
+                        <div class="kp-title">{{ kp.title or 'Комерційна пропозиція' }}</div>
+                        <div class="creation-date">{{ created_date }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Інформація про захід / клієнта у дві колонки -->
+        <div class="client-info">
+            <div class="client-info-row">
+                <!-- Ліва колонка -->
+                <div class="client-info-col">
+                    <table>
+                        <tr>
+                            <td>Заявник:</td>
+                            <td>{{ kp.client_name or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Номер телефону:</td>
+                            <td>
+                                {% if kp.client_phone %}
+                                    {{ kp.client_phone }}
+                                {% elif kp.client_contact %}
+                                    {{ kp.client_contact }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Пошта:</td>
+                            <td>{{ kp.client_email or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Формат:</td>
+                            <td>{{ kp.event_format or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Місце проведення:</td>
+                            <td>{{ kp.event_location or '—' }}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <!-- Права колонка -->
+                <div class="client-info-col">
+                    <table>
+                        <tr>
+                            <td>Тривалість заходу:</td>
+                            <td>{{ kp.event_time or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Кількість гостей:</td>
+                            <td>{{ people_count or kp.people_count or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Вихід г/людина:</td>
+                            <td>{{ weight_per_person or '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Вихід грн/людину:</td>
+                            <td>
+                                {% if kp.price_per_person %}
+                                    {{ "%.0f"|format(kp.price_per_person) }} грн
+                                {% elif price_per_person %}
+                                    {{ "%.0f"|format(price_per_person) }} грн
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight: 700; color: {{ primary_color or '#FF5A00' }};">Всього до сплати:</td>
+                            <td style="font-weight: 700; color: {{ primary_color or '#FF5A00' }};">{{ grand_total_formatted or '—' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Меню по форматах (Welcome drink, Фуршет тощо) -->
+        {% if formats %}
+        {% for fmt in formats %}
+        <div class="menu-section">
+            <div class="section-title">
+                {% if fmt.name %}{{ fmt.name }}{% else %}{{ template_config.menu_title if template_config and template_config.menu_title else "Меню" }}{% endif %}
+                {% if fmt.event_time %} {{ fmt.event_time }}{% endif %}
+            </div>
+            {% if fmt.people_count %}
+            <div style="font-size: 10pt; margin-bottom: 4mm;">
+                Меню із розрахунку на {{ fmt.people_count }} осіб
+            </div>
+            {% endif %}
+            
+            {% for section in menu_sections %}
+            {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
+            
+            {% if section_items %}
+            <div class="category-title">{{ section }}</div>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 4%;">#</th>
+                        {% if not template_config or template_config.show_item_photo %}
+                        <th style="width: 8%;">Фото</th>
+                        {% endif %}
+                        <th style="width: {% if template_config and not template_config.show_item_photo %}40{% else %}30{% endif %}%;">Назва</th>
+                        {% if not template_config or template_config.show_item_price %}
+                        <th style="width: 12%;" class="text-right">Ціна</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_quantity %}
+                        <th style="width: 8%;" class="text-center">К-сть</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_weight %}
+                        <th style="width: 12%;" class="text-right">Вага</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_total %}
+                        <th style="width: 15%;" class="text-right">Сума</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in section_items %}
+                    <tr>
+                        <td class="text-center">{{ loop.index }}</td>
+                        {% if not template_config or template_config.show_item_photo %}
+                        <td>
+                            {% if item.photo_src %}
+                            <img src="{{ item.photo_src }}" alt="{{ item.name }}" class="item-photo">
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        <td>
+                            <div class="item-name">{{ item.name }}</div>
+                            {% if (not template_config or template_config.show_item_description) and item.description %}
+                            <div class="item-description">{{ item.description }}</div>
+                            {% endif %}
+                            {% if item.subcategory_name %}
+                            <div class="category-badge">{{ item.subcategory_name }}</div>
+                            {% endif %}
+                        </td>
+                        {% if not template_config or template_config.show_item_price %}
+                        <td class="text-right">{{ item.price }}</td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_quantity %}
+                        <td class="text-center">{{ item.quantity }} {{ item.unit if item.unit else 'шт' }}</td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_weight %}
+                        <td class="text-right">
+                            {{ item.weight }}
+                            {% if item.quantity > 1 and item.total_weight %}
+                            <br><span style="font-size: 8pt; color: #666;">(всього: {{ "%.0f"|format(item.total_weight * 1000) }} г)</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_total %}
+                        <td class="text-right">{{ item.total }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            {% endfor %}
+
+            {# Страви без категорії – показуємо окремим блоком в кінці #}
+            {% set uncategorized_items = fmt['items'] | rejectattr('category_name') | list %}
+            {% if uncategorized_items %}
+            <div class="category-title">Інші страви</div>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 4%;">#</th>
+                        {% if not template_config or template_config.show_item_photo %}
+                        <th style="width: 8%;">Фото</th>
+                        {% endif %}
+                        <th style="width: {% if template_config and not template_config.show_item_photo %}40{% else %}30{% endif %}%;">Назва</th>
+                        {% if not template_config or template_config.show_item_price %}
+                        <th style="width: 12%;" class="text-right">Ціна</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_quantity %}
+                        <th style="width: 8%;" class="text-center">К-сть</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_weight %}
+                        <th style="width: 12%;" class="text-right">Вага</th>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_total %}
+                        <th style="width: 15%;" class="text-right">Сума</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in uncategorized_items %}
+                    <tr>
+                        <td class="text-center">{{ loop.index }}</td>
+                        {% if not template_config or template_config.show_item_photo %}
+                        <td>
+                            {% if item.photo_src %}
+                            <img src="{{ item.photo_src }}" alt="{{ item.name }}" class="item-photo">
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        <td>
+                            <div class="item-name">{{ item.name }}</div>
+                            {% if (not template_config or template_config.show_item_description) and item.description %}
+                            <div class="item-description">{{ item.description }}</div>
+                            {% endif %}
+                        </td>
+                        {% if not template_config or template_config.show_item_price %}
+                        <td class="text-right">{{ item.price }}</td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_quantity %}
+                        <td class="text-center">{{ item.quantity }} {{ item.unit if item.unit else 'шт' }}</td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_weight %}
+                        <td class="text-right">
+                            {{ item.weight }}
+                            {% if item.quantity > 1 and item.total_weight %}
+                            <br><span style="font-size: 8pt; color: #666;">(всього: {{ "%.0f"|format(item.total_weight * 1000) }} г)</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        {% if not template_config or template_config.show_item_total %}
+                        <td class="text-right">{{ item.total }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            
+            <!-- Підсумки по формату (сума, знижка, сума на особу) -->
+            <div class="summary-section" style="margin-top: 6mm; font-size: 10pt;">
+                <table style="width: 60%; margin-left: auto; border-collapse: collapse;">
+                    <tr>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">Всього:</td>
+                        <td style="text-align: right; padding: 2px 4px;">{{ fmt.food_total_formatted }}</td>
+                        {% if fmt.price_per_person_formatted %}
+                        <td style="text-align: right; padding: 2px 4px; white-space: nowrap;">{{ fmt.price_per_person_formatted }}</td>
+                        {% endif %}
+                    </tr>
+                    {% if template_config.show_discount_block and fmt.discount_percent %}
+                    <tr>
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030;">
+                            Знижка {{ fmt.discount_percent|round(2) }}%:
+                        </td>
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030;">
+                            {{ fmt.discount_amount_formatted }}
+                        </td>
+                        {% if fmt.price_per_person_after_discount_formatted %}
+                        <td style="text-align: right; padding: 2px 4px; color: #c53030; white-space: nowrap;">
+                            {{ fmt.price_per_person_after_discount_formatted }}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    <tr>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">З урахуванням знижки:</td>
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px;">
+                            {{ fmt.total_after_discount_formatted }}
+                        </td>
+                        {% if fmt.price_per_person_after_discount_formatted %}
+                        <td style="text-align: right; font-weight: 600; padding: 2px 4px; white-space: nowrap;">
+                            {{ fmt.price_per_person_after_discount_formatted }}
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        
+        <!-- Блок "Обладнання та сервіс" -->
+        {% if (not template_config or template_config.show_equipment_block or template_config.show_service_block or template_config.show_transport_block) and (equipment_total or service_total or transport_total) %}
+        <div class="summary-section">
+            <div class="section-title">Обладнання та сервіс</div>
+            <table class="summary-table">
+                {% if (not template_config or template_config.show_equipment_block) and equipment_total %}
+                <tr>
+                    <td>Оренда обладнання / посуду:</td>
+                    <td>{{ equipment_total }}</td>
+                </tr>
+                {% endif %}
+                {% if (not template_config or template_config.show_service_block) and service_total %}
+                <tr>
+                    <td>Обслуговування / персонал:</td>
+                    <td>{{ service_total }}</td>
+                </tr>
+                {% endif %}
+                {% if (not template_config or template_config.show_transport_block) and transport_total %}
+                <tr>
+                    <td>Транспорт / доставка:</td>
+                    <td>{{ transport_total }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td style="font-weight: 600;">Всього до сплати (меню + обладнання + сервіс + доставка):</td>
+                    <td style="font-weight: 600;">{{ grand_total_formatted }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Підсумки -->
+        <div class="summary-section">
+            <div class="section-title">{{ template_config.summary_title if template_config and template_config.summary_title else "Підсумок" }}</div>
+            
+            <!-- Підсумки по категоріях -->
+            {% if category_summaries and category_summaries|length > 0 %}
+            <div style="margin-bottom: 8mm;">
+                <table class="items-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background-color: {{ primary_color }}; color: white;">
+                            <th style="text-align: left; padding: 2mm;">Категорія</th>
+                            <th style="text-align: center; padding: 2mm;">Вага</th>
+                            <th style="text-align: center; padding: 2mm;">К-сть порцій</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in category_summaries %}
+                        <tr>
+                            <td style="padding: 2mm; font-weight: 500;">{{ category.name }}</td>
+                            <td style="text-align: center; padding: 2mm;">{{ category.total_weight_formatted }}</td>
+                            <td style="text-align: center; padding: 2mm;">{{ category.total_quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            
+            <table class="summary-table">
+                <tr>
+                    <td>Страви:</td>
+                    <td>{{ food_total }}</td>
+                </tr>
+                {% if (not template_config or template_config.show_weight_summary) %}
+                <tr>
+                    <td>Загальна вага:</td>
+                    <td>{{ total_weight }}</td>
+                </tr>
+                {% endif %}
+                {% if (not template_config or template_config.show_weight_per_person) and weight_per_person %}
+                <tr>
+                    <td>Вага на людину:</td>
+                    <td>{{ weight_per_person }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td>Всього позицій:</td>
+                    <td>{{ total_items }}</td>
+                </tr>
+                {% if discount_amount and discount_amount > 0 %}
+                <tr style="color: #16a34a;">
+                    <td>
+                        Знижка{% if discount_percent %} ({{ discount_percent }}%){% endif %}:
+                    </td>
+                    <td>-{{ discount_amount_formatted or discount_amount }} грн</td>
+                </tr>
+                {% endif %}
+                {% if cashback_used and cashback_used > 0 %}
+                <tr style="color: #2563eb;">
+                    <td>Використано кешбек:</td>
+                    <td>-{{ cashback_used_formatted or cashback_used }} грн</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td style="padding-top: 8px; font-weight: 600;">Всього до сплати:</td>
+                    <td style="padding-top: 8px; font-weight: 600;">{{ grand_total_formatted }}</td>
+                </tr>
+                {% if cashback_earned and cashback_earned > 0 %}
+                <tr style="color: #16a34a;">
+                    <td>Буде нараховано кешбек:</td>
+                    <td>+{{ cashback_earned_formatted or cashback_earned }} грн</td>
+                </tr>
+                {% endif %}
+                {% if fop_percent and fop_extra_formatted %}
+                <tr>
+                    <td>До оплати через ФОП 3-ї категорії (+{{ fop_percent|round(2) }}%):</td>
+                    <td>{{ fop_extra_formatted }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 700; color: #c53030;">Разом до оплати:</td>
+                    <td style="font-weight: 700; color: #c53030;">{{ grand_total_with_fop_formatted }}</td>
+                </tr>
+                {% endif %}
+            </table>
+            
+            {% if kp.notes %}
+            <div class="notes-section">
+                <div class="notes-title">Примітки:</div>
+                <div class="notes-content">{{ kp.notes }}</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Умови бронювання заходу -->
+        {% if kp.booking_terms %}
+        <div class="booking-terms-section">
+            <div class="section-title">Умови бронювання заходу:</div>
+            <div class="booking-terms-content">{{ kp.booking_terms | replace('\n', '<br>') | safe }}</div>
+        </div>
+        {% endif %}
+        
+        <!-- Галерея фото (до 9 фото по 3 в рядок) -->
+        {% if gallery_photos and gallery_photos|length > 0 %}
+        <div class="gallery-section">
+            <div class="section-title" style="margin-bottom: 5mm;">Наші роботи:</div>
+            
+            {% for row_num in range(0, (gallery_photos|length + 2) // 3) %}
+            <div class="gallery-row">
+                {% for col_num in range(3) %}
+                    {% set photo_index = row_num * 3 + col_num %}
+                    {% if photo_index < gallery_photos|length %}
+                    <div class="gallery-item">
+                        <img src="{{ gallery_photos[photo_index] }}" alt="Фото {{ photo_index + 1 }}" class="gallery-photo">
+                    </div>
+                    {% else %}
+                    <div class="gallery-item"></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Футер -->
+        <div class="footer">
+            {% if template_config and template_config.footer_text %}
+            <p>{{ template_config.footer_text }}</p>
+            {% else %}
+            <p>Дякуємо за довіру! {{ company_name or '' }}</p>
+            <p>Документ згенеровано автоматично</p>
+            {% endif %}
+            {% if logo_src %}
+            <div style="margin-top: 5mm;">
+                <img src="{{ logo_src }}" alt="Логотип" class="logo">
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

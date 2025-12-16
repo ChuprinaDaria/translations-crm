@@ -962,6 +962,8 @@ export interface Template {
   menu_sections?: string[];
   // Галерея фото
   gallery_photos?: string[];
+  // Умови бронювання
+  booking_terms?: string;
   // Текстові налаштування
   menu_title?: string;
   summary_title?: string;

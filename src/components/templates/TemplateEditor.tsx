@@ -47,6 +47,7 @@ type TemplateDesign = {
   page_orientation: string;
   items_per_page: number;
   gallery_photos: string[];
+  booking_terms: string;
 };
 
 // Компонент для завантаження галереї фото (9 фото по 3 в рядок)
@@ -375,6 +376,27 @@ function ContentTab({
         />
       </div>
 
+      {/* Умови бронювання */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Умови бронювання</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Кожен пункт з нового рядка. Буде відображено зі списком (•) в PDF.
+        </p>
+        <Textarea
+          value={design.booking_terms}
+          onChange={(e) => setDesign({ ...design, booking_terms: e.target.value })}
+          className="resize-none font-mono text-sm"
+          rows={10}
+          placeholder={`Дата бронюється після передоплати за захід
+Передоплата сплачується в розмірі 50%, залишок сплачується в день заходу
+Передоплата повертається у розмірі 30% при повідомленні про відміну заходу за 5 днів до броньованої дати
+Передоплата не повертається при повідомленні про відміну заходу за 3 дні добронбованої дати
+Оплата можлива готівкою або оплатою на рахунок ФОП 3-ї групи
+У разі продовження заходу на 1 годину оплата буде становити 5% від загальної суми заходу
+Бій/втрата одиниці посуду - 150 грн/шт`}
+        />
+      </div>
+
       {/* Галерея фото */}
       <GalleryUploader
         templateId={templateId}
@@ -534,6 +556,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     items_per_page: template?.items_per_page || 20,
     // Галерея фото
     gallery_photos: template?.gallery_photos || [],
+    // Умови бронювання
+    booking_terms: template?.booking_terms || "",
   });
 
   const uploadImages = async () => {

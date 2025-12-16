@@ -1054,6 +1054,11 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
                 except Exception:
                     pass
     
+    # Умови бронювання з шаблону (якщо є)
+    booking_terms = None
+    if selected_template and getattr(selected_template, "booking_terms", None):
+        booking_terms = selected_template.booking_terms
+    
     html_content = template.render(
         kp=kp,
         people_count=effective_people_count,
@@ -1092,6 +1097,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         grand_total_with_fop_formatted=grand_total_with_fop_formatted,
         # Фото галереї
         gallery_photos=gallery_photos_src,
+        # Умови бронювання
+        booking_terms=booking_terms,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -2847,6 +2854,25 @@ def generate_template_preview(
         # Розраховуємо price_per_person для відображення у верхньому блоці
         price_per_person_value = formats[0]["price_per_person"] if formats[0]["price_per_person"] is not None else None
         
+        # Умови бронювання для прев'ю
+        booking_terms_preview = design.get('booking_terms', None)
+        
+        # Галерея фото для прев'ю
+        gallery_photos_preview = design.get('gallery_photos', [])
+        gallery_photos_src = []
+        if gallery_photos_preview:
+            for photo_url in gallery_photos_preview:
+                if photo_url:
+                    try:
+                        if photo_url.startswith('http') or photo_url.startswith('data:') or photo_url.startswith('file://'):
+                            gallery_photos_src.append(photo_url)
+                        else:
+                            photo_path = (BASE_DIR / photo_url).resolve()
+                            if photo_path.exists():
+                                gallery_photos_src.append(f"file://{photo_path}")
+                    except Exception:
+                        pass
+        
         html_content = template.render(
             kp=sample_kp,
             people_count=preview_people,
@@ -2882,6 +2908,9 @@ def generate_template_preview(
             fop_extra_formatted=fop_extra_formatted,
             grand_total_with_fop=grand_total_with_fop,
             grand_total_with_fop_formatted=grand_total_with_fop_formatted,
+            # Умови бронювання та галерея
+            booking_terms=booking_terms_preview,
+            gallery_photos=gallery_photos_src,
         )
         
         # Генеруємо PDF
