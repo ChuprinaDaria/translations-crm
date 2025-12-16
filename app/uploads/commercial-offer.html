@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ kp.title or 'Комерційна пропозиція' }}</title>
-    <!-- Google Fonts -->
+    <!-- Google Fonts - розширений набір -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Oswald:wght@400;500;600&family=Lora:wght@400;600;700&family=Raleway:wght@400;500;700&family=PT+Sans:wght@400;700&family=Nunito:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&family=Merriweather:wght@400;700&family=Poppins:wght@400;500;600;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         /* === КОЛЬОРОВА СХЕМА (динамічна з шаблону) === */
         :root {
@@ -20,6 +20,12 @@
             --text-gray: #666666;
             --border-light: #E5E5E5;
             --bg-gray: #666666;
+            
+            /* Шрифти */
+            --font-title: {{ title_font or 'Montserrat, Arial, sans-serif' }};
+            --font-header: {{ header_font or 'Montserrat, Arial, sans-serif' }};
+            --font-body: {{ body_font or 'Inter, Arial, sans-serif' }};
+            --font-table: {{ table_font or 'Inter, Arial, sans-serif' }};
         }
         
         @page {
@@ -35,7 +41,7 @@
         
         /* === ШРИФТИ === */
         body {
-            font-family: 'Inter', Arial, sans-serif;
+            font-family: var(--font-body);
             font-weight: 400;
             color: var(--text-dark);
             background-color: #ffffff;
@@ -43,16 +49,27 @@
             font-size: 10pt;
         }
         
-        /* Заголовки */
-        h1, h2, .format-title, .category-title, .section-header {
-            font-family: 'Montserrat', Arial, sans-serif;
+        /* Головний заголовок */
+        h1, .main-title h1 {
+            font-family: var(--font-title);
+            font-weight: 700;
+        }
+        
+        /* Заголовки секцій */
+        h2, .format-title, .category-title, .section-header {
+            font-family: var(--font-header);
             font-weight: 700;
         }
         
         /* Жирний акцент */
-        .header-info strong, .price, .table-header, .client-info-label {
-            font-family: 'Inter', Arial, sans-serif;
+        .header-info strong, .price, .client-info-label {
+            font-family: var(--font-body);
             font-weight: 600;
+        }
+        
+        /* Таблиця */
+        .table-header, .menu-table, .menu-table td {
+            font-family: var(--font-table);
         }
         
         .container {
@@ -73,7 +90,7 @@
         }
         
         .main-title h1 {
-            font-family: 'Montserrat', Arial, sans-serif;
+            font-family: var(--font-title);
             font-size: 18pt;
             font-weight: 700;
             color: var(--orange-text);
@@ -408,7 +425,7 @@
         
         <!-- Головний заголовок -->
         <div class="main-title">
-            <h1>КОМЕРЦІЙНА ПРОПОЗИЦІЯ {{ company_name or 'DZYGA CATERING' }}</h1>
+            <h1>{{ title_text or 'КОМЕРЦІЙНА ПРОПОЗИЦІЯ' }} {{ template_company_name or company_name or 'ДЗИҐА КЕЙТЕРІНҐ' }}</h1>
             <div class="manager-info">
                 <div class="manager-info-row">
                     <span class="manager-info-cell">Менеджер: {{ kp.coordinator_name or '—' }}</span>

@@ -1004,11 +1004,29 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     summary_bg_color = "#F3F4F6"
     total_bg_color = "#FF8C00"
     
+    # Шрифти (дефолтні)
+    title_font = "Montserrat, Arial, sans-serif"
+    header_font = "Montserrat, Arial, sans-serif"
+    body_font = "Inter, Arial, sans-serif"
+    table_font = "Inter, Arial, sans-serif"
+    
+    # Заголовок КП (дефолтні)
+    title_text = "КОМЕРЦІЙНА ПРОПОЗИЦІЯ"
+    template_company_name = "ДЗИҐА КЕЙТЕРІНҐ"
+    
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
         secondary_color = getattr(selected_template, "secondary_color", None) or secondary_color
         text_color = getattr(selected_template, "text_color", None) or text_color
         font_family = getattr(selected_template, "font_family", None) or font_family
+        # Шрифти з шаблону
+        title_font = getattr(selected_template, "title_font", None) or title_font
+        header_font = getattr(selected_template, "header_font", None) or header_font
+        body_font = getattr(selected_template, "body_font", None) or body_font
+        table_font = getattr(selected_template, "table_font", None) or table_font
+        # Заголовок КП з шаблону
+        title_text = getattr(selected_template, "title_text", None) or title_text
+        template_company_name = getattr(selected_template, "company_name", None) or template_company_name
         # Кольори елементів PDF з шаблону
         format_bg_color = getattr(selected_template, "format_bg_color", None) or format_bg_color
         table_header_bg_color = getattr(selected_template, "table_header_bg_color", None) or table_header_bg_color
@@ -1093,6 +1111,14 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         secondary_color=secondary_color,
         text_color=text_color,
         font_family=font_family,
+        # Шрифти
+        title_font=title_font,
+        header_font=header_font,
+        body_font=body_font,
+        table_font=table_font,
+        # Заголовок КП
+        title_text=title_text,
+        template_company_name=template_company_name,
         # Кольори елементів PDF
         format_bg_color=format_bg_color,
         table_header_bg_color=table_header_bg_color,
@@ -2927,14 +2953,22 @@ def generate_template_preview(
             primary_color=design.get('primary_color', '#FF5A00'),
             secondary_color=design.get('secondary_color', '#ffffff'),
             text_color=design.get('text_color', '#333333'),
-            font_family=design.get('font_family', 'Arial, sans-serif'),
+            font_family=design.get('font_family', 'Inter, Arial, sans-serif'),
+            # Шрифти для різних елементів
+            title_font=design.get('title_font', 'Montserrat, Arial, sans-serif'),
+            header_font=design.get('header_font', 'Montserrat, Arial, sans-serif'),
+            body_font=design.get('body_font', 'Inter, Arial, sans-serif'),
+            table_font=design.get('table_font', 'Inter, Arial, sans-serif'),
+            # Заголовок КП
+            title_text=design.get('title_text', 'КОМЕРЦІЙНА ПРОПОЗИЦІЯ'),
+            template_company_name=design.get('company_name', 'ДЗИҐА КЕЙТЕРІНҐ'),
             # Кольори елементів PDF
             format_bg_color=design.get('format_bg_color', '#FF8C00'),
             table_header_bg_color=design.get('table_header_bg_color', '#FFA500'),
             category_bg_color=design.get('category_bg_color', '#FFB84D'),
             summary_bg_color=design.get('summary_bg_color', '#F3F4F6'),
             total_bg_color=design.get('total_bg_color', '#FF8C00'),
-            company_name=sample_data.get('company_name', 'Назва компанії'),
+            company_name=sample_data.get('company_name', 'ДЗИҐА КЕЙТЕРІНҐ'),
             created_date=sample_data.get('created_date', ''),
             event_date=sample_data.get('event_date', ''),
             template=template_config_obj,

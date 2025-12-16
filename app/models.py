@@ -87,7 +87,17 @@ class Template(Base):
     primary_color = Column(String, nullable=True)    # Основний колір (кнопки, заголовки)
     secondary_color = Column(String, nullable=True)  # Другорядний колір / фони блоків
     text_color = Column(String, nullable=True)       # Основний колір тексту
-    font_family = Column(String, nullable=True)      # Назва шрифту (CSS font-family)
+    font_family = Column(String, nullable=True)      # Назва шрифту (CSS font-family) - legacy
+    
+    # Заголовок КП (редагований текст)
+    title_text = Column(String, nullable=True, default="КОМЕРЦІЙНА ПРОПОЗИЦІЯ")
+    company_name = Column(String, nullable=True, default="ДЗИҐА КЕЙТЕРІНҐ")
+    
+    # Шрифти для різних елементів
+    title_font = Column(String, nullable=True)       # Шрифт заголовка "КОМЕРЦІЙНА ПРОПОЗИЦІЯ..."
+    header_font = Column(String, nullable=True)      # Шрифт секцій (ФУРШЕТ, ОБЛАДНАННЯ...)
+    body_font = Column(String, nullable=True)        # Шрифт основного тексту
+    table_font = Column(String, nullable=True)       # Шрифт таблиці меню
     
     # Кольори елементів PDF
     format_bg_color = Column(String, nullable=True)       # Фон формату (ФУРШЕТ 13:30-14:30)

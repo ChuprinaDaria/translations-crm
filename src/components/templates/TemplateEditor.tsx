@@ -17,6 +17,24 @@ interface TemplateEditorProps {
   onClose: () => void;
 }
 
+// Список доступних шрифтів Google Fonts
+const AVAILABLE_FONTS = [
+  { name: "Montserrat", value: "Montserrat, Arial, sans-serif" },
+  { name: "Inter", value: "Inter, Arial, sans-serif" },
+  { name: "Roboto", value: "Roboto, Arial, sans-serif" },
+  { name: "Open Sans", value: "Open Sans, Arial, sans-serif" },
+  { name: "Playfair Display", value: "Playfair Display, Georgia, serif" },
+  { name: "Oswald", value: "Oswald, Arial, sans-serif" },
+  { name: "Lora", value: "Lora, Georgia, serif" },
+  { name: "Raleway", value: "Raleway, Arial, sans-serif" },
+  { name: "PT Sans", value: "PT Sans, Arial, sans-serif" },
+  { name: "Nunito", value: "Nunito, Arial, sans-serif" },
+  { name: "Source Sans 3", value: "Source Sans 3, Arial, sans-serif" },
+  { name: "Merriweather", value: "Merriweather, Georgia, serif" },
+  { name: "Poppins", value: "Poppins, Arial, sans-serif" },
+  { name: "Ubuntu", value: "Ubuntu, Arial, sans-serif" },
+];
+
 type TemplateDesign = {
   name: string;
   description: string;
@@ -27,6 +45,14 @@ type TemplateDesign = {
   font_family: string;
   logo_image: File | string | null;
   header_image: File | string | null;
+  // Заголовок КП
+  title_text: string;
+  company_name: string;
+  // Шрифти для різних елементів
+  title_font: string;
+  header_font: string;
+  body_font: string;
+  table_font: string;
   // Кольори елементів PDF
   format_bg_color: string;
   table_header_bg_color: string;
@@ -307,21 +333,86 @@ function DesignTab({
         </div>
       </div>
 
-      {/* Шрифт */}
+      {/* Заголовок КП */}
       <div>
-        <label className="block text-sm font-medium text-gray-900 mb-2">
-          Шрифт
-        </label>
-        <select
-          value={design.font_family}
-          onChange={(e) => setDesign({ ...design, font_family: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-        >
-          <option value="Inter, sans-serif">Inter (сучасний)</option>
-          <option value="Roboto, Arial, sans-serif">Roboto (класичний)</option>
-          <option value="'Playfair Display', serif">Playfair Display (елегантний)</option>
-          <option value="'Open Sans', sans-serif">Open Sans (універсальний)</option>
-        </select>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Заголовок КП</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Текст заголовка</label>
+            <input
+              type="text"
+              value={design.title_text}
+              onChange={(e) => setDesign({ ...design, title_text: e.target.value })}
+              placeholder="КОМЕРЦІЙНА ПРОПОЗИЦІЯ"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Назва компанії</label>
+            <input
+              type="text"
+              value={design.company_name}
+              onChange={(e) => setDesign({ ...design, company_name: e.target.value })}
+              placeholder="ДЗИҐА КЕЙТЕРІНҐ"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Шрифти */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Шрифти</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Заголовок (КОМЕРЦІЙНА ПРОПОЗИЦІЯ)</label>
+            <select
+              value={design.title_font}
+              onChange={(e) => setDesign({ ...design, title_font: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            >
+              {AVAILABLE_FONTS.map((font) => (
+                <option key={font.value} value={font.value}>{font.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Секції (ФУРШЕТ, ОБЛАДНАННЯ...)</label>
+            <select
+              value={design.header_font}
+              onChange={(e) => setDesign({ ...design, header_font: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            >
+              {AVAILABLE_FONTS.map((font) => (
+                <option key={font.value} value={font.value}>{font.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Основний текст</label>
+            <select
+              value={design.body_font}
+              onChange={(e) => setDesign({ ...design, body_font: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            >
+              {AVAILABLE_FONTS.map((font) => (
+                <option key={font.value} value={font.value}>{font.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Таблиця меню</label>
+            <select
+              value={design.table_font}
+              onChange={(e) => setDesign({ ...design, table_font: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+            >
+              {AVAILABLE_FONTS.map((font) => (
+                <option key={font.value} value={font.value}>{font.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Зображення */}
@@ -554,6 +645,14 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     secondary_color: template?.secondary_color || "#FFFFFF",
     text_color: template?.text_color || "#1A1A1A",
     font_family: template?.font_family || "Inter, sans-serif",
+    // Заголовок КП
+    title_text: template?.title_text || "КОМЕРЦІЙНА ПРОПОЗИЦІЯ",
+    company_name: template?.company_name || "ДЗИҐА КЕЙТЕРІНҐ",
+    // Шрифти для різних елементів
+    title_font: template?.title_font || "Montserrat, Arial, sans-serif",
+    header_font: template?.header_font || "Montserrat, Arial, sans-serif",
+    body_font: template?.body_font || "Inter, Arial, sans-serif",
+    table_font: template?.table_font || "Inter, Arial, sans-serif",
     // Зображення
     logo_image: null as File | null,
     header_image: null as File | null,

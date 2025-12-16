@@ -944,6 +944,14 @@ export interface Template {
   secondary_color?: string | null;
   text_color?: string | null;
   font_family?: string | null;
+  // Заголовок КП
+  title_text?: string | null;
+  company_name?: string | null;
+  // Шрифти для різних елементів
+  title_font?: string | null;
+  header_font?: string | null;
+  body_font?: string | null;
+  table_font?: string | null;
   // Кольори елементів PDF
   format_bg_color?: string | null;
   table_header_bg_color?: string | null;
@@ -1000,6 +1008,20 @@ export interface TemplateCreate {
   secondary_color?: string;
   text_color?: string;
   font_family?: string;
+  // Заголовок КП
+  title_text?: string;
+  company_name?: string;
+  // Шрифти
+  title_font?: string;
+  header_font?: string;
+  body_font?: string;
+  table_font?: string;
+  // Кольори елементів PDF
+  format_bg_color?: string;
+  table_header_bg_color?: string;
+  category_bg_color?: string;
+  summary_bg_color?: string;
+  total_bg_color?: string;
   // Налаштування відображення
   show_item_photo?: boolean;
   show_item_weight?: boolean;
@@ -1038,6 +1060,20 @@ export interface TemplateUpdate {
   secondary_color?: string;
   text_color?: string;
   font_family?: string;
+  // Заголовок КП
+  title_text?: string;
+  company_name?: string;
+  // Шрифти
+  title_font?: string;
+  header_font?: string;
+  body_font?: string;
+  table_font?: string;
+  // Кольори елементів PDF
+  format_bg_color?: string;
+  table_header_bg_color?: string;
+  category_bg_color?: string;
+  summary_bg_color?: string;
+  total_bg_color?: string;
   // Налаштування відображення
   show_item_photo?: boolean;
   show_item_weight?: boolean;

@@ -304,7 +304,17 @@ class TemplateBase(BaseModel):
     primary_color: Optional[str] = None      # Основний колір (акценти, заголовки)
     secondary_color: Optional[str] = None    # Другорядний колір (фони блоків)
     text_color: Optional[str] = None         # Основний колір тексту
-    font_family: Optional[str] = None        # CSS font-family для основного тексту
+    font_family: Optional[str] = None        # CSS font-family для основного тексту (legacy)
+    
+    # Заголовок КП
+    title_text: Optional[str] = "КОМЕРЦІЙНА ПРОПОЗИЦІЯ"
+    company_name: Optional[str] = "ДЗИҐА КЕЙТЕРІНҐ"
+    
+    # Шрифти для різних елементів
+    title_font: Optional[str] = None         # Шрифт заголовка
+    header_font: Optional[str] = None        # Шрифт секцій (ФУРШЕТ, ОБЛАДНАННЯ...)
+    body_font: Optional[str] = None          # Шрифт основного тексту
+    table_font: Optional[str] = None         # Шрифт таблиці меню
     
     # Кольори елементів PDF
     format_bg_color: Optional[str] = None       # Фон формату (ФУРШЕТ 13:30-14:30)
@@ -374,6 +384,16 @@ class TemplateUpdate(BaseModel):
     secondary_color: Optional[str] = None
     text_color: Optional[str] = None
     font_family: Optional[str] = None
+    
+    # Заголовок КП
+    title_text: Optional[str] = None
+    company_name: Optional[str] = None
+    
+    # Шрифти для різних елементів
+    title_font: Optional[str] = None
+    header_font: Optional[str] = None
+    body_font: Optional[str] = None
+    table_font: Optional[str] = None
     
     # Кольори елементів PDF
     format_bg_color: Optional[str] = None
