@@ -193,7 +193,8 @@ function GalleryUploader({
             />
             <button
               onClick={() => handleDeletePhoto(index)}
-              className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm"
+              title="Видалити фото"
             >
               <Trash2 className="w-3 h-3" />
             </button>
