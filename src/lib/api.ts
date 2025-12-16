@@ -1041,6 +1041,8 @@ export interface TemplateCreate {
   footer_text?: string;
   page_orientation?: string;
   items_per_page?: number;
+  // Умови бронювання
+  booking_terms?: string;
 }
 
 export interface TemplateUpdate {
@@ -1093,6 +1095,8 @@ export interface TemplateUpdate {
   footer_text?: string;
   page_orientation?: string;
   items_per_page?: number;
+  // Умови бронювання
+  booking_terms?: string;
 }
 
 // Branding / Settings
@@ -1177,6 +1181,7 @@ export const templatesApi = {
     if (data.menu_title) formData.append('menu_title', data.menu_title);
     if (data.summary_title) formData.append('summary_title', data.summary_title);
     if (data.footer_text !== undefined) formData.append('footer_text', data.footer_text || '');
+    if (data.booking_terms !== undefined) formData.append('booking_terms', data.booking_terms || '');
     // Layout
     if (data.page_orientation) formData.append('page_orientation', data.page_orientation);
     if (data.items_per_page !== undefined) formData.append('items_per_page', String(data.items_per_page));
@@ -1224,6 +1229,7 @@ export const templatesApi = {
     if (data.menu_title !== undefined) formData.append('menu_title', data.menu_title || '');
     if (data.summary_title !== undefined) formData.append('summary_title', data.summary_title || '');
     if (data.footer_text !== undefined) formData.append('footer_text', data.footer_text || '');
+    if (data.booking_terms !== undefined) formData.append('booking_terms', data.booking_terms || '');
     // Layout
     if (data.page_orientation !== undefined) formData.append('page_orientation', data.page_orientation || '');
     if (data.items_per_page !== undefined) formData.append('items_per_page', String(data.items_per_page));

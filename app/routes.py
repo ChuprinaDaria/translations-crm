@@ -2362,6 +2362,22 @@ async def create_template(
     # Layout
     page_orientation: str = Form("portrait"),
     items_per_page: int = Form(20),
+    # Заголовок КП
+    title_text: str = Form(None),
+    company_name: str = Form(None),
+    # Шрифти
+    title_font: str = Form(None),
+    header_font: str = Form(None),
+    body_font: str = Form(None),
+    table_font: str = Form(None),
+    # Кольори PDF
+    format_bg_color: str = Form(None),
+    table_header_bg_color: str = Form(None),
+    category_bg_color: str = Form(None),
+    summary_bg_color: str = Form(None),
+    total_bg_color: str = Form(None),
+    # Умови бронювання
+    booking_terms: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -2505,6 +2521,17 @@ async def create_template(
         secondary_color=secondary_color or None,
         text_color=text_color or None,
         font_family=font_family or None,
+        title_text=title_text,
+        company_name=company_name,
+        title_font=title_font,
+        header_font=header_font,
+        body_font=body_font,
+        table_font=table_font,
+        format_bg_color=format_bg_color,
+        table_header_bg_color=table_header_bg_color,
+        category_bg_color=category_bg_color,
+        summary_bg_color=summary_bg_color,
+        total_bg_color=total_bg_color,
         show_item_photo=show_item_photo,
         show_item_weight=show_item_weight,
         show_item_quantity=show_item_quantity,
@@ -2523,6 +2550,7 @@ async def create_template(
         footer_text=footer_text,
         page_orientation=page_orientation,
         items_per_page=items_per_page,
+        booking_terms=booking_terms,
     )
     
     return crud.create_template(db, template_data)
@@ -2567,6 +2595,22 @@ async def update_template(
     # Layout
     page_orientation: str = Form(None),
     items_per_page: int = Form(None),
+    # Заголовок КП
+    title_text: str = Form(None),
+    company_name: str = Form(None),
+    # Шрифти
+    title_font: str = Form(None),
+    header_font: str = Form(None),
+    body_font: str = Form(None),
+    table_font: str = Form(None),
+    # Кольори PDF
+    format_bg_color: str = Form(None),
+    table_header_bg_color: str = Form(None),
+    category_bg_color: str = Form(None),
+    summary_bg_color: str = Form(None),
+    total_bg_color: str = Form(None),
+    # Умови бронювання
+    booking_terms: str = Form(None),
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -2699,6 +2743,17 @@ async def update_template(
         secondary_color=secondary_color,
         text_color=text_color,
         font_family=font_family,
+        title_text=title_text,
+        company_name=company_name,
+        title_font=title_font,
+        header_font=header_font,
+        body_font=body_font,
+        table_font=table_font,
+        format_bg_color=format_bg_color,
+        table_header_bg_color=table_header_bg_color,
+        category_bg_color=category_bg_color,
+        summary_bg_color=summary_bg_color,
+        total_bg_color=total_bg_color,
         show_item_photo=show_item_photo,
         show_item_weight=show_item_weight,
         show_item_quantity=show_item_quantity,
@@ -2717,6 +2772,7 @@ async def update_template(
         footer_text=footer_text,
         page_orientation=page_orientation,
         items_per_page=items_per_page,
+        booking_terms=booking_terms,
     )
     
     updated = crud.update_template(db, template_id, template_data)
