@@ -32,6 +32,8 @@ import {
 
 type RecipeType = "catering" | "box";
 
+const GROUP_UNIT = "__group__";
+
 type CalcFile = {
   id: number;
   filename: string;
@@ -149,9 +151,16 @@ export function RecipesManagement() {
         const data = await response.json();
         setFiles(data);
       } else {
+        const err = await response.json().catch(() => ({}));
+        toast.error(
+          err?.detail
+            ? `Не вдалося завантажити список файлів: ${err.detail}`
+            : "Не вдалося завантажити список файлів"
+        );
         setFiles([]);
       }
     } catch {
+      toast.error("Помилка завантаження списку файлів");
       setFiles([]);
     }
   };
@@ -310,7 +319,7 @@ export function RecipesManagement() {
       name: "",
       category: "",
       weight_per_portion: "",
-      recipe_type: "catering",
+      recipe_type: activeType,
       ingredients: [{ product_name: "", weight_per_portion: "", unit: "г" }],
       components: [],
     });
@@ -350,10 +359,13 @@ export function RecipesManagement() {
               .filter((i) => i.product_name.trim())
               .map((i) => ({
                 product_name: i.product_name.trim(),
-                weight_per_unit: i.weight_per_unit.trim()
-                  ? Number(i.weight_per_unit.replace(",", "."))
-                  : 0,
-                unit: i.unit?.trim() || "г",
+                    unit: i.unit?.trim() || "г",
+                    weight_per_unit:
+                      (i.unit?.trim() || "г") === GROUP_UNIT
+                        ? 0
+                        : i.weight_per_unit.trim()
+                          ? Number(i.weight_per_unit.replace(",", "."))
+                          : 0,
               })),
           }));
         // Дозволяємо також прямі інгредієнти для box (якщо треба)
@@ -361,20 +373,26 @@ export function RecipesManagement() {
           .filter((i) => i.product_name.trim())
           .map((i) => ({
             product_name: i.product_name.trim(),
-            weight_per_portion: i.weight_per_portion.trim()
-              ? Number(i.weight_per_portion.replace(",", "."))
-              : 0,
             unit: i.unit?.trim() || "г",
+            weight_per_portion:
+              (i.unit?.trim() || "г") === GROUP_UNIT
+                ? 0
+                : i.weight_per_portion.trim()
+                  ? Number(i.weight_per_portion.replace(",", "."))
+                  : 0,
           }));
       } else {
         payload.ingredients = (draft.ingredients || [])
           .filter((i) => i.product_name.trim())
           .map((i) => ({
             product_name: i.product_name.trim(),
-            weight_per_portion: i.weight_per_portion.trim()
-              ? Number(i.weight_per_portion.replace(",", "."))
-              : 0,
             unit: i.unit?.trim() || "г",
+            weight_per_portion:
+              (i.unit?.trim() || "г") === GROUP_UNIT
+                ? 0
+                : i.weight_per_portion.trim()
+                  ? Number(i.weight_per_portion.replace(",", "."))
+                  : 0,
           }));
         payload.components = [];
       }
@@ -651,54 +669,119 @@ export function RecipesManagement() {
                             <TableRow>
                               <TableCell colSpan={5} className="bg-gray-50 p-4">
                                 <div className="text-sm">
-                                  <h4 className="font-semibold mb-2">
-                                    Інгредієнти:
-                                  </h4>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h4 className="font-semibold">Інгредієнти:</h4>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openEdit(recipe);
+                                      }}
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                      Редагувати
+                                    </Button>
+                                  </div>
                                   {recipe.recipe_type === "box" ? (
-                                    recipe.components?.length ? (
-                                      <div className="space-y-3">
-                                        {recipe.components.map((c) => (
-                                          <div key={c.id} className="bg-white border rounded p-3">
-                                            <div className="flex justify-between">
-                                              <div className="font-semibold">{c.name}</div>
-                                              <div className="text-gray-500">
-                                                x{c.quantity_per_portion}
+                                    <div className="space-y-3">
+                                      {recipe.components?.length ? (
+                                        <div className="space-y-3">
+                                          {recipe.components.map((c) => (
+                                            <div key={c.id} className="bg-white border rounded p-3">
+                                              <div className="flex justify-between">
+                                                <div className="font-semibold">{c.name}</div>
+                                                <div className="text-gray-500">
+                                                  x{c.quantity_per_portion}
+                                                </div>
                                               </div>
+                                              {c.ingredients?.length ? (
+                                                <ul className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                                                  {c.ingredients.map((ing) => (
+                                                    <li
+                                                      key={ing.id}
+                                                      className={
+                                                        ing.unit === GROUP_UNIT
+                                                          ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                                          : "flex justify-between bg-gray-50 p-2 rounded border"
+                                                      }
+                                                    >
+                                                      {ing.unit === GROUP_UNIT ? (
+                                                        <span>{ing.product_name}</span>
+                                                      ) : (
+                                                        <>
+                                                          <span>{ing.product_name}</span>
+                                                          <span className="text-gray-500">
+                                                            {ing.weight_per_unit} {ing.unit}
+                                                          </span>
+                                                        </>
+                                                      )}
+                                                    </li>
+                                                  ))}
+                                                </ul>
+                                              ) : (
+                                                <p className="text-gray-500 mt-2">Інгредієнтів немає</p>
+                                              )}
                                             </div>
-                                            {c.ingredients?.length ? (
-                                              <ul className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                                                {c.ingredients.map((ing) => (
-                                                  <li
-                                                    key={ing.id}
-                                                    className="flex justify-between bg-gray-50 p-2 rounded border"
-                                                  >
+                                          ))}
+                                        </div>
+                                      ) : recipe.ingredients?.length ? null : (
+                                        <p className="text-gray-500">Компоненти не вказано</p>
+                                      )}
+
+                                      {recipe.ingredients?.length ? (
+                                        <div>
+                                          <div className="font-semibold text-gray-700">
+                                            Додаткові інгредієнти
+                                          </div>
+                                          <ul className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                                            {recipe.ingredients.map((ing) => (
+                                              <li
+                                                key={ing.id}
+                                                className={
+                                                  ing.unit === GROUP_UNIT
+                                                    ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                                    : "flex justify-between bg-white p-2 rounded border"
+                                                }
+                                              >
+                                                {ing.unit === GROUP_UNIT ? (
+                                                  <span>{ing.product_name}</span>
+                                                ) : (
+                                                  <>
                                                     <span>{ing.product_name}</span>
                                                     <span className="text-gray-500">
-                                                      {ing.weight_per_unit} {ing.unit}
+                                                      {ing.weight_per_portion} {ing.unit}
                                                     </span>
-                                                  </li>
-                                                ))}
-                                              </ul>
-                                            ) : (
-                                              <p className="text-gray-500 mt-2">Інгредієнтів немає</p>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-gray-500">Компоненти не вказано</p>
-                                    )
+                                                  </>
+                                                )}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   ) : recipe.ingredients.length > 0 ? (
                                     <ul className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                       {recipe.ingredients.map((ing) => (
                                         <li
                                           key={ing.id}
-                                          className="flex justify-between bg-white p-2 rounded border"
+                                          className={
+                                            ing.unit === GROUP_UNIT
+                                              ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                              : "flex justify-between bg-white p-2 rounded border"
+                                          }
                                         >
-                                          <span>{ing.product_name}</span>
-                                          <span className="text-gray-500">
-                                            {ing.weight_per_portion} {ing.unit}
-                                          </span>
+                                          {ing.unit === GROUP_UNIT ? (
+                                            <span>{ing.product_name}</span>
+                                          ) : (
+                                            <>
+                                              <span>{ing.product_name}</span>
+                                              <span className="text-gray-500">
+                                                {ing.weight_per_portion} {ing.unit}
+                                              </span>
+                                            </>
+                                          )}
                                         </li>
                                       ))}
                                     </ul>
@@ -844,23 +927,42 @@ export function RecipesManagement() {
 
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-semibold">Інгредієнти компонента</div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => {
-                            const next = [...draft.components];
-                            const nextIngs = [
-                              ...(next[cIdx].ingredients || []),
-                              { product_name: "", weight_per_unit: "", unit: "г" },
-                            ];
-                            next[cIdx] = { ...next[cIdx], ingredients: nextIngs };
-                            setDraft({ ...draft, components: next });
-                          }}
-                        >
-                          <Plus className="w-4 h-4" />
-                          Додати
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                              const next = [...draft.components];
+                              const nextIngs = [
+                                ...(next[cIdx].ingredients || []),
+                                { product_name: "", weight_per_unit: "", unit: "г" },
+                              ];
+                              next[cIdx] = { ...next[cIdx], ingredients: nextIngs };
+                              setDraft({ ...draft, components: next });
+                            }}
+                          >
+                            <Plus className="w-4 h-4" />
+                            Додати
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                              const next = [...draft.components];
+                              const nextIngs = [
+                                ...(next[cIdx].ingredients || []),
+                                { product_name: "", weight_per_unit: "0", unit: GROUP_UNIT },
+                              ];
+                              next[cIdx] = { ...next[cIdx], ingredients: nextIngs };
+                              setDraft({ ...draft, components: next });
+                            }}
+                          >
+                            <Plus className="w-4 h-4" />
+                            Підсекція
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -877,30 +979,36 @@ export function RecipesManagement() {
                               }}
                               placeholder="Інгредієнт"
                             />
-                            <Input
-                              value={ing.weight_per_unit}
-                              onChange={(e) => {
-                                const next = [...draft.components];
-                                const ings = [...next[cIdx].ingredients];
-                                ings[iIdx] = { ...ings[iIdx], weight_per_unit: e.target.value };
-                                next[cIdx] = { ...next[cIdx], ingredients: ings };
-                                setDraft({ ...draft, components: next });
-                              }}
-                              placeholder="г"
-                              className="w-28"
-                            />
-                            <Input
-                              value={ing.unit}
-                              onChange={(e) => {
-                                const next = [...draft.components];
-                                const ings = [...next[cIdx].ingredients];
-                                ings[iIdx] = { ...ings[iIdx], unit: e.target.value };
-                                next[cIdx] = { ...next[cIdx], ingredients: ings };
-                                setDraft({ ...draft, components: next });
-                              }}
-                              placeholder="од."
-                              className="w-20"
-                            />
+                            {ing.unit === GROUP_UNIT ? (
+                              <div className="text-sm text-gray-500 w-28 text-right">підсекція</div>
+                            ) : (
+                              <>
+                                <Input
+                                  value={ing.weight_per_unit}
+                                  onChange={(e) => {
+                                    const next = [...draft.components];
+                                    const ings = [...next[cIdx].ingredients];
+                                    ings[iIdx] = { ...ings[iIdx], weight_per_unit: e.target.value };
+                                    next[cIdx] = { ...next[cIdx], ingredients: ings };
+                                    setDraft({ ...draft, components: next });
+                                  }}
+                                  placeholder="г"
+                                  className="w-28"
+                                />
+                                <Input
+                                  value={ing.unit}
+                                  onChange={(e) => {
+                                    const next = [...draft.components];
+                                    const ings = [...next[cIdx].ingredients];
+                                    ings[iIdx] = { ...ings[iIdx], unit: e.target.value };
+                                    next[cIdx] = { ...next[cIdx], ingredients: ings };
+                                    setDraft({ ...draft, components: next });
+                                  }}
+                                  placeholder="од."
+                                  className="w-20"
+                                />
+                              </>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -919,28 +1027,117 @@ export function RecipesManagement() {
                       </div>
                     </div>
                   ))}
+
+                  <div className="border-t pt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold">Додаткові інгредієнти (опційно)</div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            ingredients: [
+                              ...(draft.ingredients || []),
+                              { product_name: "", weight_per_portion: "", unit: "г" },
+                            ],
+                          })
+                        }
+                      >
+                        <Plus className="w-4 h-4" />
+                        Додати
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2 mt-2">
+                      {(draft.ingredients || []).map((ing, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <Input
+                            value={ing.product_name}
+                            onChange={(e) => {
+                              const next = [...draft.ingredients];
+                              next[idx] = { ...next[idx], product_name: e.target.value };
+                              setDraft({ ...draft, ingredients: next });
+                            }}
+                            placeholder="Назва інгредієнта"
+                          />
+                          <Input
+                            value={ing.weight_per_portion}
+                            onChange={(e) => {
+                              const next = [...draft.ingredients];
+                              next[idx] = { ...next[idx], weight_per_portion: e.target.value };
+                              setDraft({ ...draft, ingredients: next });
+                            }}
+                            placeholder="г"
+                            className="w-28"
+                          />
+                          <Input
+                            value={ing.unit}
+                            onChange={(e) => {
+                              const next = [...draft.ingredients];
+                              next[idx] = { ...next[idx], unit: e.target.value };
+                              setDraft({ ...draft, ingredients: next });
+                            }}
+                            placeholder="од."
+                            className="w-20"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const next = [...draft.ingredients];
+                              next.splice(idx, 1);
+                              setDraft({ ...draft, ingredients: next });
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">Інгредієнти</div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() =>
-                        setDraft({
-                          ...draft,
-                          ingredients: [
-                            ...(draft.ingredients || []),
-                            { product_name: "", weight_per_portion: "", unit: "г" },
-                          ],
-                        })
-                      }
-                    >
-                      <Plus className="w-4 h-4" />
-                      Додати інгредієнт
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            ingredients: [
+                              ...(draft.ingredients || []),
+                              { product_name: "", weight_per_portion: "", unit: "г" },
+                            ],
+                          })
+                        }
+                      >
+                        <Plus className="w-4 h-4" />
+                        Додати інгредієнт
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            ingredients: [
+                              ...(draft.ingredients || []),
+                              { product_name: "", weight_per_portion: "0", unit: GROUP_UNIT },
+                            ],
+                          })
+                        }
+                      >
+                        <Plus className="w-4 h-4" />
+                        Підсекція
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -955,26 +1152,32 @@ export function RecipesManagement() {
                           }}
                           placeholder="Назва інгредієнта"
                         />
-                        <Input
-                          value={ing.weight_per_portion}
-                          onChange={(e) => {
-                            const next = [...draft.ingredients];
-                            next[idx] = { ...next[idx], weight_per_portion: e.target.value };
-                            setDraft({ ...draft, ingredients: next });
-                          }}
-                          placeholder="г"
-                          className="w-28"
-                        />
-                        <Input
-                          value={ing.unit}
-                          onChange={(e) => {
-                            const next = [...draft.ingredients];
-                            next[idx] = { ...next[idx], unit: e.target.value };
-                            setDraft({ ...draft, ingredients: next });
-                          }}
-                          placeholder="од."
-                          className="w-20"
-                        />
+                        {ing.unit === GROUP_UNIT ? (
+                          <div className="text-sm text-gray-500 w-28 text-right">підсекція</div>
+                        ) : (
+                          <>
+                            <Input
+                              value={ing.weight_per_portion}
+                              onChange={(e) => {
+                                const next = [...draft.ingredients];
+                                next[idx] = { ...next[idx], weight_per_portion: e.target.value };
+                                setDraft({ ...draft, ingredients: next });
+                              }}
+                              placeholder="г"
+                              className="w-28"
+                            />
+                            <Input
+                              value={ing.unit}
+                              onChange={(e) => {
+                                const next = [...draft.ingredients];
+                                next[idx] = { ...next[idx], unit: e.target.value };
+                                setDraft({ ...draft, ingredients: next });
+                              }}
+                              placeholder="од."
+                              className="w-20"
+                            />
+                          </>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"

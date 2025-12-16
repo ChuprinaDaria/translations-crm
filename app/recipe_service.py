@@ -36,6 +36,12 @@ EXCEL_ERRORS = {'#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#NUM
 # Максимальна довжина назви продукту в базі
 MAX_PRODUCT_NAME_LENGTH = 500
 
+# Спеціальна одиниця для "рядків-заголовків" всередині рецепту (підсекції/підстрави).
+# Такі рядки зберігаємо як інгредієнти з вагою 0, але:
+# - UI відображає їх як підзаголовки
+# - розрахунок закупки їх ігнорує
+GROUP_UNIT = "__group__"
+
 
 def is_cooking_step(text: str) -> bool:
     """
@@ -197,9 +203,15 @@ def import_calculations_file(
     }
     
     # Імпорт техкарт
-    if "калькуляции" in wb.sheetnames:
-        sheet = wb["калькуляции"]
-    else:
+    # У різних файлах назва листа може бути "калькуляции"/"калькуляції"/"калькуляціі" тощо.
+    sheet = None
+    preferred_names = {"калькуляции", "калькуляції", "калькуляціі", "калькуляции "}
+    for name in wb.sheetnames:
+        name_norm = str(name).strip().lower()
+        if name_norm in preferred_names or "калькуля" in name_norm:
+            sheet = wb[name]
+            break
+    if sheet is None:
         sheet = wb.worksheets[0]
     
     if recipe_type == "box":
@@ -222,6 +234,133 @@ def import_calculations_file(
     return result
 
 
+def _normalize_marker(value) -> Optional[str]:
+    """
+    Нормалізує маркер з Excel (колонка G):
+    - прибирає пробіли
+    - переводить у lower-case
+    Повертає None, якщо значення порожнє або не є строкою.
+    """
+    if value is None or not isinstance(value, str):
+        return None
+    s = value.strip().lower()
+    return s or None
+
+
+def _sheet_has_markers(sheet) -> bool:
+    """
+    Перевіряє, чи є в листі маркери 'point'/'in' у колонці G.
+    Якщо їх немає (як у файлах типу "Оновлена закупка 2024"), працюємо в markerless-режимі.
+    """
+    try:
+        max_row = sheet.max_row
+    except Exception:
+        return False
+    for row in range(1, max_row + 1):
+        v = sheet.cell(row=row, column=7).value
+        m = _normalize_marker(v)
+        if m in {MARKER_POINT, MARKER_IN}:
+            return True
+    return False
+
+
+def _is_header_row(col_b, col_c, col_d, col_e) -> bool:
+    """
+    Визначає заголовок таблиці.
+    """
+    header_tokens = {"вихід, грам", "назва", "продукти", "вага у грамах"}
+    for v in (col_b, col_c, col_d, col_e):
+        if isinstance(v, str) and v.strip().lower() in header_tokens:
+            return True
+    return False
+
+
+def _merged_rows_covering_a_to_e(sheet) -> set[int]:
+    """
+    Повертає множину номерів рядків, де є merge-діапазон, що покриває колонки A..E.
+    У файлі "Оновлена закупка 2024 (8)" такі рядки відповідають "зеленим" категоріям.
+    """
+    rows: set[int] = set()
+    try:
+        ranges = list(getattr(sheet, "merged_cells", []).ranges)
+    except Exception:
+        ranges = []
+    for rng in ranges:
+        try:
+            if rng.min_row == rng.max_row and rng.min_col <= 1 and rng.max_col >= 5:
+                rows.add(int(rng.min_row))
+        except Exception:
+            continue
+    return rows
+
+
+def _is_category_row(row_idx: int, merged_category_rows: set[int], col_a, col_b, col_c, col_d, col_e) -> bool:
+    """
+    Категорія — це "зелений" рядок (merge A:E), де фактично є тільки назва категорії,
+    а B/C/D/E — порожні.
+    """
+    if row_idx not in merged_category_rows:
+        return False
+    if not (col_a and isinstance(col_a, str) and col_a.strip()):
+        return False
+    if any(v not in (None, "") for v in (col_b, col_c, col_d, col_e)):
+        return False
+    return True
+
+
+def _is_point_category_row(marker: Optional[str], col_a, col_b, col_c, col_d, col_e) -> bool:
+    """
+    Частина файлів використовує `point` і для категорії, і для страви.
+    Категорія при цьому виглядає як: A = текст, а B/C/D/E порожні.
+    (Merge A:E — бажаний сигнал, але не завжди присутній.)
+    """
+    if marker != MARKER_POINT:
+        return False
+    if not (col_a and isinstance(col_a, str) and col_a.strip()):
+        return False
+    if any(v not in (None, "") for v in (col_b, col_c, col_d, col_e)):
+        return False
+    return True
+
+
+def _portion_weight_from_b_or_e(col_b, col_e) -> Optional[float]:
+    """
+    Визначає вагу порції (в грамах) для страви.
+
+    Правило:
+    - у "Оновлена закупка 2024" колонка B — "Вихід, грам", але інколи там буває "12шт."
+      (не грами). У такому випадку беремо вагу з колонки E.
+    """
+    parsed_b = parse_portion_weight(col_b)
+    e_val = safe_float(col_e, None)
+
+    # Якщо B — строка з ознаками "не грами" (шт/pcs/порц) — ігноруємо parsed_b.
+    if isinstance(col_b, str):
+        s = col_b.strip().lower()
+        if any(tok in s for tok in ("шт", "pcs", "pc", "порц", "порції", "порция")):
+            return e_val if e_val is not None else parsed_b
+
+    # Додаткова евристика: якщо B дає дуже мале число, а E — велике,
+    # то B, ймовірно, не вага в грамах (напр. "12шт.").
+    if parsed_b is not None and e_val is not None:
+        if parsed_b < 30 and e_val >= 100:
+            return e_val
+
+    return parsed_b if parsed_b is not None else e_val
+
+
+def _pick_weight_cell(col_e, col_f):
+    """
+    Деякі файли можуть містити вагу не в колонці E, а в F.
+    Беремо перше непорожнє значення.
+    """
+    if col_e not in (None, ""):
+        return col_e
+    if col_f not in (None, ""):
+        return col_f
+    return None
+
+
 def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
     """
     Імпортує техкарти для кейтерінгу (проста структура).
@@ -233,26 +372,49 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
     current_recipe = None
     current_category = None
     ingredient_index = 0
-    
+    merged_category_rows = _merged_rows_covering_a_to_e(sheet)
+
     for row in range(1, max_row + 1):
         col_a = sheet.cell(row=row, column=1).value
         col_b = sheet.cell(row=row, column=2).value
         col_c = sheet.cell(row=row, column=3).value
         col_d = sheet.cell(row=row, column=4).value
         col_e = sheet.cell(row=row, column=5).value
+        col_f = sheet.cell(row=row, column=6).value
         col_g = sheet.cell(row=row, column=7).value
+        marker = _normalize_marker(col_g)
         
-        # Пропускаємо заголовки
-        if col_c == "Назва" or col_c is None:
+        # Пропускаємо заголовки / порожні рядки
+        if _is_header_row(col_b, col_c, col_d, col_e):
+            continue
+        if all(v in (None, "") for v in (col_a, col_b, col_c, col_d, col_e, col_f, col_g)):
+            continue
+
+        # Категорія: зелений рядок (merge A:E)
+        if _is_category_row(row, merged_category_rows, col_a, col_b, col_c, col_d, col_e):
+            current_category = str(col_a).strip()
+            continue
+
+        # Категорія (fallback): marker 'point' + тільки A заповнена
+        if _is_point_category_row(marker, col_a, col_b, col_c, col_d, col_e):
+            current_category = str(col_a).strip()
             continue
         
-        # Якщо в колонці A є текст без числа і маркер 'point' - це категорія
-        if col_a and isinstance(col_a, str) and col_g == MARKER_POINT:
-            current_category = col_a
+        # Категорія (marker-based): A + marker 'point'
+        if col_a and isinstance(col_a, str) and marker == MARKER_POINT:
+            current_category = str(col_a).strip()
             continue
         
-        # Якщо є маркер 'point' і назва - це нова страва
-        if col_g == MARKER_POINT and col_c:
+        # Визначаємо "старт нової страви"
+        is_new_recipe = False
+        # Marker-based: marker 'point' + назва в C
+        if marker == MARKER_POINT and col_c not in (None, ""):
+            is_new_recipe = True
+        # Markerless: на рядку страви заповнені B, C, E; D зазвичай порожній
+        elif col_c not in (None, "") and col_b not in (None, "") and _pick_weight_cell(col_e, col_f) is not None and col_d in (None, ""):
+            is_new_recipe = True
+
+        if is_new_recipe and col_c:
             # Зберігаємо попередню страву
             if current_recipe:
                 try:
@@ -275,21 +437,44 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ).delete()
                 # Оновлюємо базові поля (вага/категорія) при повторному імпорті
                 existing.category = current_category
-                existing.weight_per_portion = parse_portion_weight(col_b) or safe_float(col_e)
+                existing.weight_per_portion = _portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f))
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
                     # В Excel вага порції зазвичай в колонці B (напр. "120/120").
                     # Колонка E на рядку страви часто дорівнює сумі інгредієнтів і дає завелику вагу.
-                    weight_per_portion=parse_portion_weight(col_b) or safe_float(col_e),
+                    weight_per_portion=_portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f)),
                     recipe_type="catering"
                 )
             ingredient_index = 0
             continue
-        
+
+        # Підсекція/підстрава всередині страви (напр. "Ростбіф" / "Маринад:").
+        # Це рядок з текстом у C, де D/E порожні; нижче йдуть інгредієнти у D/E.
+        weight_cell = _pick_weight_cell(col_e, col_f)
+        if (
+            current_recipe
+            and marker not in {MARKER_POINT, MARKER_IN}
+            and col_d in (None, "")
+            and isinstance(col_c, str)
+            and col_c.strip()
+            and weight_cell is None
+        ):
+            label = col_c.strip().rstrip(":").strip()
+            if label and not is_cooking_step(label):
+                group_row = models.RecipeIngredient(
+                    product_name=clean_product_name(label),
+                    weight_per_portion=0.0,
+                    unit=GROUP_UNIT,
+                    order_index=ingredient_index,
+                )
+                current_recipe.ingredients.append(group_row)
+                ingredient_index += 1
+            continue
+
         # Якщо немає маркера і є назва - це інгредієнт
-        if current_recipe and col_e is not None:
+        if current_recipe and weight_cell is not None:
             # У цьому Excel назва інгредієнта зазвичай в колонці D,
             # а колонка C може містити підзаголовки типу "Маринад:".
             raw_name = col_d if col_d not in [None, ""] else col_c
@@ -298,16 +483,40 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
 
             product_name = str(raw_name).strip()
 
-            # Пропускаємо підзаголовки груп інгредієнтів (напр. "Маринад:")
-            if raw_name == col_c and product_name.endswith(":"):
+            # Підзаголовки груп інгредієнтів (напр. "Маринад:") — зберігаємо як підсекцію
+            if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
+                label = product_name.rstrip(":").strip()
+                if label and not is_cooking_step(label):
+                    group_row = models.RecipeIngredient(
+                        product_name=clean_product_name(label),
+                        weight_per_portion=0.0,
+                        unit=GROUP_UNIT,
+                        order_index=ingredient_index,
+                    )
+                    current_recipe.ingredients.append(group_row)
+                    ingredient_index += 1
                 continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, None)
+            weight = safe_float(weight_cell, None)
             if weight is not None:
+                # Рядки-підзаголовки без двокрапки (напр. "Ростбіф") інколи мають 0 у вазі.
+                # У такому випадку зберігаємо як підсекцію, а не як інгредієнт.
+                if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
+                    label = product_name.rstrip(":").strip()
+                    if label and not is_cooking_step(label):
+                        group_row = models.RecipeIngredient(
+                            product_name=clean_product_name(label),
+                            weight_per_portion=0.0,
+                            unit=GROUP_UNIT,
+                            order_index=ingredient_index,
+                        )
+                        current_recipe.ingredients.append(group_row)
+                        ingredient_index += 1
+                    continue
                 ingredient = models.RecipeIngredient(
                     product_name=clean_product_name(product_name),
                     weight_per_portion=weight,
@@ -345,6 +554,7 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
     current_category = None
     component_index = 0
     ingredient_index = 0
+    merged_category_rows = _merged_rows_covering_a_to_e(sheet)
     
     for row in range(1, max_row + 1):
         col_a = sheet.cell(row=row, column=1).value
@@ -352,19 +562,33 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         col_c = sheet.cell(row=row, column=3).value
         col_d = sheet.cell(row=row, column=4).value
         col_e = sheet.cell(row=row, column=5).value
+        col_f = sheet.cell(row=row, column=6).value
         col_g = sheet.cell(row=row, column=7).value
+        marker = _normalize_marker(col_g)
         
-        # Пропускаємо заголовки
-        if col_c == "Назва" or col_c is None:
+        # Пропускаємо заголовки / порожні рядки
+        if _is_header_row(col_b, col_c, col_d, col_e):
+            continue
+        if all(v in (None, "") for v in (col_a, col_b, col_c, col_d, col_e, col_f, col_g)):
             continue
         
-        # Якщо в колонці A є текст без числа і маркер 'point' - це категорія
-        if col_a and isinstance(col_a, str) and col_g == MARKER_POINT:
-            current_category = col_a
+        # Категорія: зелений рядок (merge A:E)
+        if _is_category_row(row, merged_category_rows, col_a, col_b, col_c, col_d, col_e):
+            current_category = str(col_a).strip()
+            continue
+
+        # Категорія (fallback): marker 'point' + тільки A заповнена
+        if _is_point_category_row(marker, col_a, col_b, col_c, col_d, col_e):
+            current_category = str(col_a).strip()
+            continue
+
+        # Категорія (marker-based): A + marker 'point'
+        if col_a and isinstance(col_a, str) and marker == MARKER_POINT:
+            current_category = str(col_a).strip()
             continue
         
         # Якщо є маркер 'point' і назва - це нова страва (бокс)
-        if col_g == MARKER_POINT and col_c:
+        if marker == MARKER_POINT and col_c:
             # Зберігаємо попередню страву
             if current_recipe:
                 try:
@@ -391,12 +615,12 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ).delete()
                 # Оновлюємо базові поля при повторному імпорті
                 existing.category = current_category
-                existing.weight_per_portion = parse_portion_weight(col_b) or safe_float(col_e)
+                existing.weight_per_portion = _portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f))
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=parse_portion_weight(col_b) or safe_float(col_e),
+                    weight_per_portion=_portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f)),
                     recipe_type="box"
                 )
             
@@ -405,7 +629,7 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             continue
         
         # Якщо є маркер 'in' - це компонент боксу
-        if col_g == MARKER_IN and col_c and current_recipe:
+        if marker == MARKER_IN and col_c and current_recipe:
             current_component = models.RecipeComponent(
                 name=str(col_c).strip(),
                 quantity_per_portion=safe_float(col_a, 1.0) or 1.0,
@@ -416,23 +640,78 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             component_index += 1
             ingredient_index = 0
             continue
+
+        # Підсекція всередині компонента (або всередині боксу без компонента):
+        # текст у C, D/E порожні. Нижче йдуть інгредієнти у D/E.
+        weight_cell = _pick_weight_cell(col_e, col_f)
+        if (
+            marker not in {MARKER_POINT, MARKER_IN}
+            and col_d in (None, "")
+            and isinstance(col_c, str)
+            and col_c.strip()
+            and weight_cell is None
+        ):
+            label = col_c.strip().rstrip(":").strip()
+            if label and not is_cooking_step(label):
+                if current_component:
+                    group_row = models.RecipeComponentIngredient(
+                        product_name=clean_product_name(label),
+                        weight_per_unit=0.0,
+                        unit=GROUP_UNIT,
+                        order_index=ingredient_index,
+                    )
+                    current_component.ingredients.append(group_row)
+                    ingredient_index += 1
+                    continue
+                if current_recipe and not current_component:
+                    group_row = models.RecipeIngredient(
+                        product_name=clean_product_name(label),
+                        weight_per_portion=0.0,
+                        unit=GROUP_UNIT,
+                        order_index=ingredient_index,
+                    )
+                    current_recipe.ingredients.append(group_row)
+                    ingredient_index += 1
+                    continue
         
         # Якщо є компонент і є назва/вага - це інгредієнт компонента
-        if current_component and col_e is not None:
+        if current_component and weight_cell is not None:
             raw_name = col_d if col_d not in [None, ""] else col_c
             if raw_name in [None, ""]:
                 continue
             product_name = str(raw_name).strip()
 
-            if raw_name == col_c and product_name.endswith(":"):
+            if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
+                label = product_name.rstrip(":").strip()
+                if label and not is_cooking_step(label):
+                    group_row = models.RecipeComponentIngredient(
+                        product_name=clean_product_name(label),
+                        weight_per_unit=0.0,
+                        unit=GROUP_UNIT,
+                        order_index=ingredient_index,
+                    )
+                    current_component.ingredients.append(group_row)
+                    ingredient_index += 1
                 continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, None)
+            weight = safe_float(weight_cell, None)
             if weight is not None:
+                if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
+                    label = product_name.rstrip(":").strip()
+                    if label and not is_cooking_step(label):
+                        group_row = models.RecipeComponentIngredient(
+                            product_name=clean_product_name(label),
+                            weight_per_unit=0.0,
+                            unit=GROUP_UNIT,
+                            order_index=ingredient_index,
+                        )
+                        current_component.ingredients.append(group_row)
+                        ingredient_index += 1
+                    continue
                 ingredient = models.RecipeComponentIngredient(
                     product_name=clean_product_name(product_name),
                     weight_per_unit=weight,
@@ -443,21 +722,43 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ingredient_index += 1
         
         # Якщо немає компонента, але є страва і інгредієнт - додаємо як прямий інгредієнт
-        elif current_recipe and not current_component and col_e is not None:
+        elif current_recipe and not current_component and weight_cell is not None:
             raw_name = col_d if col_d not in [None, ""] else col_c
             if raw_name in [None, ""]:
                 continue
             product_name = str(raw_name).strip()
 
-            if raw_name == col_c and product_name.endswith(":"):
+            if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
+                label = product_name.rstrip(":").strip()
+                if label and not is_cooking_step(label):
+                    group_row = models.RecipeIngredient(
+                        product_name=clean_product_name(label),
+                        weight_per_portion=0.0,
+                        unit=GROUP_UNIT,
+                        order_index=ingredient_index,
+                    )
+                    current_recipe.ingredients.append(group_row)
+                    ingredient_index += 1
                 continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, None)
+            weight = safe_float(weight_cell, None)
             if weight is not None:
+                if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
+                    label = product_name.rstrip(":").strip()
+                    if label and not is_cooking_step(label):
+                        group_row = models.RecipeIngredient(
+                            product_name=clean_product_name(label),
+                            weight_per_portion=0.0,
+                            unit=GROUP_UNIT,
+                            order_index=ingredient_index,
+                        )
+                        current_recipe.ingredients.append(group_row)
+                        ingredient_index += 1
+                    continue
                 ingredient = models.RecipeIngredient(
                     product_name=clean_product_name(product_name),
                     weight_per_portion=weight,
@@ -723,6 +1024,8 @@ def _calculate_catering_products(
     Формула: вага_інгредієнта × кількість_порцій
     """
     for ingredient in recipe.ingredients:
+        if (ingredient.unit or "") == GROUP_UNIT:
+            continue
         total_weight = ingredient.weight_per_portion * quantity
         product_totals[ingredient.product_name]["quantity"] += total_weight
         product_totals[ingredient.product_name]["unit"] = ingredient.unit or "г"
@@ -741,6 +1044,8 @@ def _calculate_box_products(
         component_qty = component.quantity_per_portion or 1.0
         
         for ingredient in component.ingredients:
+            if (ingredient.unit or "") == GROUP_UNIT:
+                continue
             # Формула: вага × кількість_компонентів × кількість_порцій
             total_weight = ingredient.weight_per_unit * component_qty * quantity
             product_totals[ingredient.product_name]["quantity"] += total_weight
@@ -748,6 +1053,8 @@ def _calculate_box_products(
     
     # Також додаємо прямі інгредієнти (якщо є)
     for ingredient in recipe.ingredients:
+        if (ingredient.unit or "") == GROUP_UNIT:
+            continue
         total_weight = ingredient.weight_per_portion * quantity
         product_totals[ingredient.product_name]["quantity"] += total_weight
         product_totals[ingredient.product_name]["unit"] = ingredient.unit or "г"
