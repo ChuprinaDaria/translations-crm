@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, Form, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional, Any, List
@@ -35,6 +36,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 # Абсолютні шляхи до директорії `uploads` всередині модуля `app`
 BASE_DIR = Path(__file__).resolve().parent
 UPLOADS_DIR = BASE_DIR / "uploads"
+CALC_FILES_DIR = UPLOADS_DIR / "calculations_files"
 
 
 def get_db():
@@ -1475,11 +1477,36 @@ async def import_calculations(
         raise HTTPException(status_code=400, detail="recipe_type має бути 'catering' або 'box'")
     
     content = await file.read()
-    
+
+    # Зберігаємо файл на диск та в БД, щоб можна було показати в UI/скачати/видалити
     try:
+        CALC_FILES_DIR.mkdir(parents=True, exist_ok=True)
+        file_uuid = str(uuid.uuid4())
+        safe_ext = ".xlsx" if (file.filename or "").lower().endswith(".xlsx") else ".xls"
+        stored_rel = f"calculations_files/{file_uuid}{safe_ext}"
+        stored_abs = (UPLOADS_DIR / stored_rel).resolve()
+        stored_abs.write_bytes(content)
+
+        calc_file = models.CalculationsFile(
+            filename=file.filename or f"calculations{safe_ext}",
+            stored_path=stored_rel,
+            recipe_type=recipe_type,
+            size_bytes=len(content) if content else 0,
+        )
+        db.add(calc_file)
+        db.flush()
+
         result = import_calculations_file(db, content, recipe_type)
         return result
     except Exception as e:
+        db.rollback()
+        # пробуємо прибрати файл, якщо він був створений
+        try:
+            if "stored_abs" in locals() and stored_abs.exists():
+                stored_abs.unlink()
+        except Exception:
+            pass
+
         import traceback
         error_trace = traceback.format_exc()
         print(f"[IMPORT ERROR] {error_trace}")
@@ -1530,6 +1557,60 @@ def get_recipe(
     if not recipe:
         raise HTTPException(status_code=404, detail="Техкарта не знайдена")
     return recipe
+
+
+@router.get("/recipes/files", response_model=list[schema.CalculationsFile])
+def list_calculations_files(
+    recipe_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Список завантажених файлів калькуляцій (для UI)."""
+    q = db.query(models.CalculationsFile).order_by(models.CalculationsFile.id.desc())
+    if recipe_type in ["catering", "box"]:
+        q = q.filter(models.CalculationsFile.recipe_type == recipe_type)
+    return q.all()
+
+
+@router.get("/recipes/files/{file_id}/download")
+def download_calculations_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Скачати завантажений файл калькуляцій."""
+    rec = db.query(models.CalculationsFile).filter(models.CalculationsFile.id == file_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Файл не знайдено")
+    abs_path = (UPLOADS_DIR / rec.stored_path).resolve()
+    if not abs_path.exists():
+        raise HTTPException(status_code=404, detail="Файл відсутній на диску")
+    return FileResponse(
+        path=str(abs_path),
+        filename=rec.filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.delete("/recipes/files/{file_id}")
+def delete_calculations_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Видалити запис про файл та сам файл з диску."""
+    rec = db.query(models.CalculationsFile).filter(models.CalculationsFile.id == file_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Файл не знайдено")
+    abs_path = (UPLOADS_DIR / rec.stored_path).resolve()
+    try:
+        if abs_path.exists():
+            abs_path.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Не вдалося видалити файл: {e}")
+    db.delete(rec)
+    db.commit()
+    return {"success": True, "id": file_id}
 
 
 @router.post("/recipes", response_model=schema.Recipe)

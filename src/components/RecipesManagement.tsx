@@ -30,6 +30,16 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 
+type RecipeType = "catering" | "box";
+
+type CalcFile = {
+  id: number;
+  filename: string;
+  recipe_type: RecipeType;
+  size_bytes?: number | null;
+  created_at?: string | null;
+};
+
 interface RecipeIngredient {
   id: number;
   product_name: string;
@@ -90,6 +100,8 @@ type EditableRecipe = {
 
 export function RecipesManagement() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [activeType, setActiveType] = useState<RecipeType>("catering");
+  const [files, setFiles] = useState<CalcFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState("");
@@ -103,7 +115,7 @@ export function RecipesManagement() {
     setLoading(true);
     try {
       const token = tokenManager.getToken();
-      const response = await fetch(`${API_BASE_URL}/recipes`, {
+      const response = await fetch(`${API_BASE_URL}/recipes?recipe_type=${activeType}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -122,9 +134,32 @@ export function RecipesManagement() {
     }
   };
 
+  const loadFiles = async () => {
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(
+        `${API_BASE_URL}/recipes/files?recipe_type=${activeType}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setFiles(data);
+      } else {
+        setFiles([]);
+      }
+    } catch {
+      setFiles([]);
+    }
+  };
+
   useEffect(() => {
     loadRecipes();
-  }, []);
+    loadFiles();
+  }, [activeType]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -141,7 +176,9 @@ export function RecipesManagement() {
       formData.append("file", file);
 
       const token = tokenManager.getToken();
-      const response = await fetch(`${API_BASE_URL}/recipes/import`, {
+      const response = await fetch(
+        `${API_BASE_URL}/recipes/import?recipe_type=${activeType}`,
+        {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -159,6 +196,7 @@ export function RecipesManagement() {
           toast.warning(`Помилок: ${result.errors.length}`);
         }
         loadRecipes();
+        loadFiles();
       } else {
         const error = await response.json();
         toast.error(error.detail || "Помилка імпорту");
@@ -170,6 +208,52 @@ export function RecipesManagement() {
       setImporting(false);
       // Скидаємо input
       e.target.value = "";
+    }
+  };
+
+  const downloadCalcFile = async (f: CalcFile) => {
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(`${API_BASE_URL}/recipes/files/${f.id}/download`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Не вдалося скачати файл");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = f.filename || "calculations.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Помилка скачування");
+    }
+  };
+
+  const deleteCalcFile = async (f: CalcFile) => {
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(`${API_BASE_URL}/recipes/files/${f.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Не вдалося видалити файл");
+      }
+      toast.success("Файл видалено");
+      loadFiles();
+    } catch (e: any) {
+      toast.error(e?.message || "Помилка видалення");
     }
   };
 
@@ -362,6 +446,20 @@ export function RecipesManagement() {
             <CardTitle>Імпорт калькуляцій</CardTitle>
             <InfoTooltip content="Завантажте файл Excel з техкартами (формат 'Оновлена закупка 2024')" />
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={activeType === "catering" ? "default" : "outline"}
+              onClick={() => setActiveType("catering")}
+            >
+              Кейтерінг
+            </Button>
+            <Button
+              variant={activeType === "box" ? "default" : "outline"}
+              onClick={() => setActiveType("box")}
+            >
+              Бокси
+            </Button>
+          </div>
           <div className="flex items-center gap-4">
             <label className="cursor-pointer">
               <input
@@ -397,6 +495,63 @@ export function RecipesManagement() {
               <li>Лист "список продуктов" — словник продуктів для закупки</li>
             </ul>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>
+            Завантажені файли техкарт ({files.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {files.length === 0 ? (
+            <div className="text-sm text-gray-500">
+              Ще не було завантажених файлів для вкладки “{activeType === "catering" ? "Кейтерінг" : "Бокси"}”.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Назва файлу</TableHead>
+                  <TableHead className="w-32">Розмір</TableHead>
+                  <TableHead className="w-32 text-right">Дії</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {files.map((f) => (
+                  <TableRow key={f.id}>
+                    <TableCell className="whitespace-normal break-all">
+                      {f.filename}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {typeof f.size_bytes === "number"
+                        ? `${Math.round(f.size_bytes / 1024)} KB`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadCalcFile(f)}
+                        >
+                          Скачати
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteCalcFile(f)}
+                        >
+                          Видалити
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

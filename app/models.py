@@ -585,6 +585,22 @@ class RecipeComponentIngredient(Base):
     component = relationship("RecipeComponent", back_populates="ingredients")
 
 
+class CalculationsFile(Base):
+    """
+    Завантажений файл калькуляцій (техкарт).
+    Зберігаємо метадані + шлях до файлу на диску, щоб можна було показати в UI,
+    скачати та видалити.
+    """
+    __tablename__ = "calculations_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(500), nullable=False)  # оригінальна назва файлу
+    stored_path = Column(String(1000), nullable=False)  # відносний шлях у папці app/uploads
+    recipe_type = Column(String(20), default="catering", index=True)  # catering | box
+    size_bytes = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Product(Base):
     """
     Продукт для закупки (словник продуктів).

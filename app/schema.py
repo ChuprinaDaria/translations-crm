@@ -933,6 +933,18 @@ class CalcImportResult(BaseModel):
     recipe_type: str = "catering"
 
 
+class CalculationsFile(BaseModel):
+    """Метадані завантаженого файлу калькуляцій (техкарт)."""
+    id: int
+    filename: str
+    recipe_type: Literal["catering", "box"]
+    size_bytes: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class PurchaseCalculateResult(BaseModel):
     """Результат розрахунку закупки."""
     products: Dict[str, Dict[str, Any]]
