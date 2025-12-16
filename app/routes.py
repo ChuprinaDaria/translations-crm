@@ -1567,9 +1567,38 @@ def list_calculations_files(
 ):
     """Список завантажених файлів калькуляцій (для UI)."""
     q = db.query(models.CalculationsFile).order_by(models.CalculationsFile.id.desc())
+    # Фільтруємо тільки файли з валідним recipe_type (catering або box)
+    q = q.filter(models.CalculationsFile.recipe_type.in_(["catering", "box"]))
     if recipe_type in ["catering", "box"]:
         q = q.filter(models.CalculationsFile.recipe_type == recipe_type)
     return q.all()
+
+
+@router.post("/recipes/auto-link", response_model=schema.RecipeAutoLinkResult)
+def auto_link_recipes_to_items_endpoint(
+    recipe_type: Optional[str] = None,
+    threshold: float = 0.86,
+    update_item_weight: bool = True,
+    force_relink: bool = False,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Автоматично зв'язує позиції меню (items) з техкартами (recipes) по схожості назв.
+    Потрібно для швидкого розрахунку закупки по КП.
+    """
+    from recipe_service import auto_link_recipes_to_items
+
+    rt = recipe_type if recipe_type in ["catering", "box"] else None
+    result = auto_link_recipes_to_items(
+        db,
+        recipe_type=rt,
+        threshold=threshold,
+        update_item_weight=update_item_weight,
+        force_relink=force_relink,
+    )
+    db.commit()
+    return result
 
 
 @router.get("/recipes/files/{file_id}/download")
@@ -1628,6 +1657,7 @@ def create_recipe_endpoint(
         recipe_type=recipe_in.recipe_type,
         category=recipe_in.category,
         weight_per_portion=recipe_in.weight_per_portion,
+        notes=recipe_in.notes,
         ingredients=[i.model_dump() for i in (recipe_in.ingredients or [])],
         components=[c.model_dump() for c in (recipe_in.components or [])],
     )
@@ -1650,6 +1680,7 @@ def update_recipe_endpoint(
         recipe_type=recipe_in.recipe_type,
         category=recipe_in.category,
         weight_per_portion=recipe_in.weight_per_portion,
+        notes=recipe_in.notes,
         ingredients=[i.model_dump() for i in (recipe_in.ingredients or [])],
         components=[c.model_dump() for c in (recipe_in.components or [])],
     )

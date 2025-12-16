@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 import models
 import re
+from difflib import SequenceMatcher
 
 try:
     from openpyxl import load_workbook
@@ -41,6 +42,146 @@ MAX_PRODUCT_NAME_LENGTH = 500
 # - UI відображає їх як підзаголовки
 # - розрахунок закупки їх ігнорує
 GROUP_UNIT = "__group__"
+
+
+def _normalize_name_for_match(name: str) -> str:
+    """
+    Нормалізує назву для fuzzy-match:
+    - lower
+    - прибирає лапки та пунктуацію
+    - прибирає текст у дужках
+    - стискає пробіли
+    """
+    if not name:
+        return ""
+    s = str(name).strip().lower()
+    # прибираємо все в дужках
+    s = re.sub(r"\([^)]*\)", " ", s)
+    # уніфікуємо лапки
+    s = s.replace("“", "\"").replace("”", "\"").replace("«", "\"").replace("»", "\"").replace("’", "'")
+    # прибираємо пунктуацію, лишаємо букви/цифри/пробіли
+    s = re.sub(r"[^0-9a-zа-яіїєґ'\\s-]+", " ", s, flags=re.IGNORECASE)
+    s = re.sub(r"[-_]+", " ", s)
+    s = re.sub(r"\\s+", " ", s).strip()
+    return s
+
+
+def _tokenize(s: str) -> set[str]:
+    if not s:
+        return set()
+    toks = {t for t in s.split() if len(t) >= 3}
+    return toks
+
+
+def _similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def auto_link_recipes_to_items(
+    db: Session,
+    *,
+    recipe_type: Optional[Literal["catering", "box"]] = None,
+    threshold: float = 0.86,
+    update_item_weight: bool = True,
+    force_relink: bool = False,
+) -> Dict:
+    """
+    Автоматично лінкує техкарти (`recipes`) з позиціями меню (`items`) по схожості назв.
+
+    - Записує зв'язок через `Recipe.item_id`
+    - Опційно підтягуює `Item.weight`, якщо воно порожнє, з `Recipe.weight_per_portion`
+    """
+    result = {
+        "linked": 0,
+        "updated_item_weights": 0,
+        "skipped": 0,
+        "errors": [],
+    }
+
+    # Беремо всі items з назвою
+    items = db.query(models.Item).filter(models.Item.name.isnot(None)).all()
+
+    # Беремо всі recipes з назвою
+    rq = db.query(models.Recipe).filter(models.Recipe.name.isnot(None))
+    if recipe_type in ("catering", "box"):
+        rq = rq.filter(models.Recipe.recipe_type == recipe_type)
+    if not force_relink:
+        rq = rq.filter(models.Recipe.item_id.is_(None))
+    recipes = rq.all()
+
+    # Щоб не робити кілька рецептів на один item
+    used_item_ids = set(
+        i for (i,) in db.query(models.Recipe.item_id).filter(models.Recipe.item_id.isnot(None)).all()
+    )
+
+    # Індексуємо recipes по токенах
+    recipe_data = []
+    token_index: Dict[str, List[int]] = defaultdict(list)
+    for idx, r in enumerate(recipes):
+        norm = _normalize_name_for_match(r.name)
+        toks = _tokenize(norm)
+        recipe_data.append((r, norm, toks))
+        for t in toks:
+            token_index[t].append(idx)
+
+    for it in items:
+        try:
+            if not it.name:
+                result["skipped"] += 1
+                continue
+            if it.id in used_item_ids and not force_relink:
+                result["skipped"] += 1
+                continue
+
+            norm_it = _normalize_name_for_match(it.name)
+            toks_it = _tokenize(norm_it)
+            if not toks_it:
+                result["skipped"] += 1
+                continue
+
+            # Кандидати: recipes, що мають спільні токени
+            cand_idx = set()
+            for t in toks_it:
+                for ridx in token_index.get(t, []):
+                    cand_idx.add(ridx)
+            if not cand_idx:
+                result["skipped"] += 1
+                continue
+
+            best = None
+            best_score = 0.0
+            for ridx in cand_idx:
+                r, norm_r, toks_r = recipe_data[ridx]
+                # token-jaccard як додатковий сигнал
+                inter = len(toks_it & toks_r)
+                union = len(toks_it | toks_r) or 1
+                jacc = inter / union
+                score = max(_similarity(norm_it, norm_r), jacc)
+                if score > best_score:
+                    best_score = score
+                    best = r
+
+            if not best or best_score < threshold:
+                result["skipped"] += 1
+                continue
+
+            # Лінкуємо
+            best.item_id = it.id
+            used_item_ids.add(it.id)
+            result["linked"] += 1
+
+            # Підтягуємо weight в item (якщо пусто)
+            if update_item_weight and (it.weight is None or str(it.weight).strip() == "") and best.weight_per_portion:
+                w = float(best.weight_per_portion)
+                it.weight = str(int(w)) if abs(w - int(w)) < 1e-6 else str(w)
+                result["updated_item_weights"] += 1
+        except Exception as e:
+            result["errors"].append(f"Помилка лінку item '{getattr(it,'name',None)}': {e}")
+
+    db.flush()
+    return result
 
 
 def is_cooking_step(text: str) -> bool:
@@ -222,6 +363,16 @@ def import_calculations_file(
     
     result["recipes_imported"] = recipes_result["count"]
     result["errors"].extend(recipes_result["errors"])
+
+    # Після імпорту пробуємо автоматично зв'язати техкарти з позиціями меню (items)
+    try:
+        link_res = auto_link_recipes_to_items(db, recipe_type=recipe_type)
+        result["items_linked"] = link_res.get("linked", 0)
+        result["items_weight_updated"] = link_res.get("updated_item_weights", 0)
+        if link_res.get("errors"):
+            result["errors"].extend(link_res["errors"])
+    except Exception as e:
+        result["errors"].append(f"Auto-link items skipped/failed: {e}")
     
     # Імпорт продуктів
     if "список продуктов" in wb.sheetnames:
@@ -956,6 +1107,7 @@ def calculate_purchase_from_kps(
     
     # Збираємо страви та їх кількості
     dish_quantities: Dict[str, float] = defaultdict(float)
+    item_quantities: Dict[int, float] = defaultdict(float)
     
     for kp in kps:
         for kp_item in kp.items:
@@ -980,27 +1132,53 @@ def calculate_purchase_from_kps(
             
             qty = kp_item.quantity or 0
             dish_quantities[dish_name] += qty
+            if kp_item.item_id:
+                item_quantities[int(kp_item.item_id)] += qty
     
     # Розраховуємо продукти
     product_totals: Dict[str, Dict] = defaultdict(lambda: {"quantity": 0.0, "unit": "г"})
     dishes_without_recipe = []
     dishes_with_recipe = 0
-    
-    for dish_name, quantity in dish_quantities.items():
-        recipe = get_recipe_by_name(db, dish_name, calculation_type)
-        
-        # Якщо не знайшли за типом - шукаємо будь-яку
-        if not recipe:
-            recipe = get_recipe_by_name(db, dish_name)
-        
+
+    # 1) Швидкий шлях: по item_id (якщо техкарта зв'язана з item)
+    recipes_by_item_id: Dict[int, models.Recipe] = {}
+    if item_quantities:
+        q = (
+            db.query(models.Recipe)
+            .options(
+                joinedload(models.Recipe.ingredients),
+                joinedload(models.Recipe.components).joinedload(models.RecipeComponent.ingredients),
+            )
+            .filter(models.Recipe.item_id.in_(list(item_quantities.keys())))
+        )
+        if calculation_type in ("catering", "box"):
+            q = q.filter(models.Recipe.recipe_type == calculation_type)
+        for r in q.all():
+            if r.item_id is not None:
+                recipes_by_item_id[int(r.item_id)] = r
+
+    for item_id, quantity in item_quantities.items():
+        recipe = recipes_by_item_id.get(int(item_id))
         if recipe:
             dishes_with_recipe += 1
-            
             if recipe.recipe_type == "box" and recipe.components:
-                # Трирівнева структура для боксів
                 _calculate_box_products(recipe, quantity, product_totals)
             else:
-                # Проста структура для кейтерінгу
+                _calculate_catering_products(recipe, quantity, product_totals)
+
+    # 2) Fallback: по назві (для custom items або не зв'язаних items)
+    for dish_name, quantity in dish_quantities.items():
+        recipe = get_recipe_by_name(db, dish_name, calculation_type)
+        if not recipe:
+            recipe = get_recipe_by_name(db, dish_name)
+        if recipe:
+            # Не подвоюємо, якщо вже порахували по item_id (в такому разі item_id-страви теж мають dish_name)
+            if recipe.item_id and int(recipe.item_id) in item_quantities:
+                continue
+            dishes_with_recipe += 1
+            if recipe.recipe_type == "box" and recipe.components:
+                _calculate_box_products(recipe, quantity, product_totals)
+            else:
                 _calculate_catering_products(recipe, quantity, product_totals)
         else:
             dishes_without_recipe.append(dish_name)
@@ -1068,6 +1246,7 @@ def create_recipe(
     recipe_type: Literal["catering", "box"],
     category: Optional[str] = None,
     weight_per_portion: Optional[float] = None,
+    notes: Optional[str] = None,
     ingredients: Optional[List[Dict]] = None,
     components: Optional[List[Dict]] = None
 ) -> models.Recipe:
@@ -1087,7 +1266,8 @@ def create_recipe(
         name=name,
         recipe_type=recipe_type,
         category=category,
-        weight_per_portion=weight_per_portion
+        weight_per_portion=weight_per_portion,
+        notes=notes,
     )
     
     if ingredients:
@@ -1143,6 +1323,7 @@ def update_recipe(
     recipe_type: Literal["catering", "box"],
     category: Optional[str] = None,
     weight_per_portion: Optional[float] = None,
+    notes: Optional[str] = None,
     ingredients: Optional[List[Dict]] = None,
     components: Optional[List[Dict]] = None,
 ) -> Optional[models.Recipe]:
@@ -1158,6 +1339,7 @@ def update_recipe(
     recipe.category = category
     recipe.weight_per_portion = weight_per_portion
     recipe.recipe_type = recipe_type
+    recipe.notes = notes
 
     # Повністю замінюємо склад: очищаємо старі зв'язки (delete-orphan каскад)
     recipe.ingredients.clear()

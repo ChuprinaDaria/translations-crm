@@ -25,10 +25,12 @@ import { tokenManager, API_BASE_URL } from "../lib/api";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import { Textarea } from "./ui/textarea";
 
 type RecipeType = "catering" | "box";
 
@@ -68,6 +70,7 @@ interface Recipe {
   name: string;
   category: string | null;
   weight_per_portion: number | null;
+  notes?: string | null;
   recipe_type: "catering" | "box";
   ingredients: RecipeIngredient[];
   components: RecipeComponent[];
@@ -83,6 +86,7 @@ type EditableRecipe = {
   name: string;
   category: string;
   weight_per_portion: string;
+  notes: string;
   recipe_type: "catering" | "box";
   ingredients: Array<{
     product_name: string;
@@ -151,12 +155,18 @@ export function RecipesManagement() {
         const data = await response.json();
         setFiles(data);
       } else {
-        const err = await response.json().catch(() => ({}));
-        toast.error(
-          err?.detail
-            ? `Не вдалося завантажити список файлів: ${err.detail}`
-            : "Не вдалося завантажити список файлів"
-        );
+        let errorMessage = "Не вдалося завантажити список файлів";
+        try {
+          const err = await response.json();
+          if (err?.detail) {
+            errorMessage = `Не вдалося завантажити список файлів: ${typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)}`;
+          } else if (err?.message) {
+            errorMessage = `Не вдалося завантажити список файлів: ${err.message}`;
+          }
+        } catch {
+          // Якщо не вдалося розпарсити JSON, використовуємо стандартне повідомлення
+        }
+        toast.error(errorMessage);
         setFiles([]);
       }
     } catch {
@@ -294,6 +304,7 @@ export function RecipesManagement() {
         recipe.weight_per_portion === null || recipe.weight_per_portion === undefined
           ? ""
           : String(recipe.weight_per_portion),
+      notes: recipe.notes ? String(recipe.notes) : "",
       recipe_type: recipe.recipe_type || "catering",
       ingredients: (recipe.ingredients || []).map((i) => ({
         product_name: i.product_name || "",
@@ -319,6 +330,7 @@ export function RecipesManagement() {
       name: "",
       category: "",
       weight_per_portion: "",
+      notes: "",
       recipe_type: activeType,
       ingredients: [{ product_name: "", weight_per_portion: "", unit: "г" }],
       components: [],
@@ -343,6 +355,7 @@ export function RecipesManagement() {
         weight_per_portion: draft.weight_per_portion.trim()
           ? Number(draft.weight_per_portion.replace(",", "."))
           : null,
+        notes: draft.notes?.trim() ? draft.notes.trim() : null,
         recipe_type: draft.recipe_type,
         item_id: null,
       };
@@ -818,6 +831,9 @@ export function RecipesManagement() {
             <DialogTitle>
               {editingRecipeId === null ? "Нова техкарта" : "Редагування техкарти"}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Редагування техкарти: назва, категорія, вага, примітки та інгредієнти.
+            </DialogDescription>
           </DialogHeader>
 
           {draft && (
@@ -856,6 +872,16 @@ export function RecipesManagement() {
                   <div className="text-sm text-gray-600 mb-1">Тип</div>
                   <Input value={draft.recipe_type} disabled />
                 </div>
+              </div>
+
+              <div>
+                <div className="text-sm text-gray-600 mb-1">Примітки</div>
+                <Textarea
+                  value={draft.notes}
+                  onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                  placeholder="Будь-які примітки до техкарти..."
+                  className="min-h-24"
+                />
               </div>
 
               {draft.recipe_type === "box" ? (

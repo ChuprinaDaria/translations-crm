@@ -867,6 +867,7 @@ class RecipeBase(BaseModel):
     name: str
     category: Optional[str] = None
     weight_per_portion: Optional[float] = None
+    notes: Optional[str] = None
     item_id: Optional[int] = None
     recipe_type: Literal["catering", "box"] = "catering"
 
@@ -943,6 +944,13 @@ class CalculationsFile(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RecipeAutoLinkResult(BaseModel):
+    linked: int
+    updated_item_weights: int
+    skipped: int
+    errors: List[str] = []
 
 
 class PurchaseCalculateResult(BaseModel):

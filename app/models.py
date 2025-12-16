@@ -505,6 +505,7 @@ class Recipe(Base):
     name = Column(String(300), nullable=False, index=True)  # Назва страви
     category = Column(String(100), nullable=True, index=True)  # Категорія (холодні, гарячі, etc.)
     weight_per_portion = Column(Float, nullable=True)  # Вага однієї порції в грамах
+    notes = Column(Text, nullable=True)  # Примітки до техкарти (довільний текст)
     
     # Тип техкарти: 'catering' або 'box'
     recipe_type = Column(String(20), default="catering", index=True)
