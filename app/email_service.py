@@ -126,3 +126,66 @@ def send_kp_email(
         print(f"Error sending email: {e}")
         raise
 
+
+def send_password_reset_code(to_email: str, code: str) -> bool:
+    """
+    Відправляє код скидання пароля на email
+    
+    Args:
+        to_email: Email адреса отримувача
+        code: 6-значний код для скидання пароля
+    
+    Returns:
+        True якщо відправка успішна, False інакше
+    """
+    config = _load_smtp_config()
+    host = config["host"]
+    port = config["port"]
+    user = config["user"]
+    password = config["password"]
+    from_email = config["from_email"]
+    from_name = config["from_name"]
+
+    if not user or not password:
+        raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
+    
+    try:
+        # Створюємо повідомлення
+        msg = MIMEMultipart()
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = "Код для скидання пароля"
+        
+        # Тіло листа
+        body_text = f"""
+Шановний(а) користувачу!
+
+Ви запросили скидання пароля для вашого облікового запису.
+
+Ваш код для скидання пароля: {code}
+
+Цей код дійсний протягом 15 хвилин.
+
+Якщо ви не запитували скидання пароля, проігноруйте цей лист.
+
+З повагою,
+Команда BOX Catering
+
+---
+Це автоматичне повідомлення. Будь ласка, не відповідайте на цей email.
+"""
+        
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+        
+        # Відправляємо email
+        server = smtplib.SMTP(host, port)
+        server.starttls()
+        server.login(user, password)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Error sending password reset email: {e}")
+        raise
+

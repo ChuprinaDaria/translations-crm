@@ -10,6 +10,7 @@ import { authApi, tokenManager } from "../../lib/api";
 interface LoginFormProps {
   onSuccess: () => void;
   onSwitchToRegister: () => void;
+  onSwitchToForgotPassword?: () => void;
 }
 
 export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
@@ -105,16 +106,32 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
             )}
           </Button>
 
-          <div className="text-center text-sm">
-            <span className="text-gray-600">Немає акаунту? </span>
-            <button
-              type="button"
-              onClick={onSwitchToRegister}
-              className="text-[#FF5A00] hover:underline"
-              disabled={loading}
-            >
-              Зареєструватися
-            </button>
+          <div className="text-center text-sm space-y-2">
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSwitchToForgotPassword) {
+                    onSwitchToForgotPassword();
+                  }
+                }}
+                className="text-[#FF5A00] hover:underline"
+                disabled={loading}
+              >
+                Забули пароль?
+              </button>
+            </div>
+            <div>
+              <span className="text-gray-600">Немає акаунту? </span>
+              <button
+                type="button"
+                onClick={onSwitchToRegister}
+                className="text-[#FF5A00] hover:underline"
+                disabled={loading}
+              >
+                Зареєструватися
+              </button>
+            </div>
           </div>
         </form>
       </CardContent>

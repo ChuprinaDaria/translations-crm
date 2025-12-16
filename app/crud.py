@@ -704,6 +704,40 @@ def get_settings(db: Session, keys: list[str]) -> dict[str, str | None]:
     return {k: mapping.get(k) for k in keys}
 
 
+# Password Reset Code CRUD
+def create_password_reset_code(db: Session, email: str, code: str, expires_at: datetime) -> models.PasswordResetCode:
+    """Створює код скидання пароля"""
+    reset_code = models.PasswordResetCode(
+        email=email,
+        code=code,
+        expires_at=expires_at,
+        used=False
+    )
+    db.add(reset_code)
+    db.commit()
+    db.refresh(reset_code)
+    return reset_code
+
+
+def get_valid_reset_code(db: Session, email: str, code: str) -> models.PasswordResetCode | None:
+    """Отримує валідний (не використаний, не прострочений) код скидання"""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    
+    return db.query(models.PasswordResetCode).filter(
+        models.PasswordResetCode.email == email,
+        models.PasswordResetCode.code == code,
+        models.PasswordResetCode.used == False,
+        models.PasswordResetCode.expires_at > now
+    ).first()
+
+
+def mark_reset_code_as_used(db: Session, reset_code: models.PasswordResetCode):
+    """Позначає код як використаний"""
+    reset_code.used = True
+    db.commit()
+
+
 def get_smtp_settings(db: Session) -> dict[str, str | None]:
     keys = [
         "smtp_host",

@@ -120,6 +120,21 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class VerifyResetCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 class KPBase(BaseModel):
     title: str
     people_count: int

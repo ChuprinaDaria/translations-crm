@@ -2300,6 +2300,86 @@ def login(payload: schema.LoginRequest, db: Session = Depends(get_db)):
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
 
+
+@router.post("/auth/forgot-password")
+def forgot_password(
+    request: schema.ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Запит на скидання пароля. Відправляє email з 6-значним кодом.
+    """
+    import random
+    from datetime import datetime, timezone, timedelta
+    from email_service import send_password_reset_code
+    
+    # Перевіряємо чи існує користувач з таким email
+    user = crud_user.get_user_by_email(db, request.email)
+    if not user:
+        # Не розкриваємо чи існує користувач (security best practice)
+        return {"message": "Якщо email існує, код скидання пароля відправлено на вашу пошту"}
+    
+    # Генеруємо 6-значний код
+    code = str(random.randint(100000, 999999))
+    
+    # Код дійсний 15 хвилин
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    # Створюємо запис коду в БД
+    crud.create_password_reset_code(db, request.email, code, expires_at)
+    
+    # Відправляємо email
+    try:
+        send_password_reset_code(request.email, code)
+    except Exception as e:
+        print(f"Error sending password reset email: {e}")
+        raise HTTPException(status_code=500, detail="Помилка відправки email. Перевірте налаштування SMTP.")
+    
+    return {"message": "Якщо email існує, код скидання пароля відправлено на вашу пошту"}
+
+
+@router.post("/auth/verify-reset-code")
+def verify_reset_code(
+    request: schema.VerifyResetCodeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Перевіряє код скидання пароля.
+    """
+    reset_code = crud.get_valid_reset_code(db, request.email, request.code)
+    if not reset_code:
+        raise HTTPException(status_code=400, detail="Невірний або прострочений код")
+    
+    return {"message": "Код валідний"}
+
+
+@router.post("/auth/reset-password")
+def reset_password(
+    request: schema.ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Встановлює новий пароль після перевірки коду.
+    """
+    # Перевіряємо код
+    reset_code = crud.get_valid_reset_code(db, request.email, request.code)
+    if not reset_code:
+        raise HTTPException(status_code=400, detail="Невірний або прострочений код")
+    
+    # Знаходимо користувача
+    user = crud_user.get_user_by_email(db, request.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Користувач не знайдений")
+    
+    # Оновлюємо пароль
+    crud_user.update_user_password(db, user, request.new_password)
+    
+    # Позначаємо код як використаний
+    crud.mark_reset_code_as_used(db, reset_code)
+    
+    return {"message": "Пароль успішно змінено"}
+
+
 # Template endpoints
 @router.get("/templates", response_model=list[schema.Template])
 def get_templates(db: Session = Depends(get_db), user = Depends(get_current_user)):

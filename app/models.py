@@ -73,6 +73,17 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
+
+class PasswordResetCode(Base):
+    __tablename__ = "password_reset_codes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, index=True)
+    code = Column(String(6), nullable=False)  # 6-значний код
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class Template(Base):
     __tablename__ = "templates"
 

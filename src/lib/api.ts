@@ -22,6 +22,21 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface VerifyResetCodeRequest {
+  email: string;
+  code: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  new_password: string;
+}
+
 export interface RegisterRequest {
   email: string;
   password: string;
@@ -527,6 +542,30 @@ export const authApi = {
     }
     
     // Case 5: Unexpected response format
+    console.error('[Auth] Unexpected response format:', typeof response, response);
+    throw new Error('Invalid token response format');
+  },
+
+  async forgotPassword(data: ForgotPasswordRequest): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async verifyResetCode(data: VerifyResetCodeRequest): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/auth/verify-reset-code', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async resetPassword(data: ResetPasswordRequest): Promise<{ message: string }> {
+    return apiFetch<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
     console.error('[Auth] Unexpected response format:', response);
     throw new Error('Invalid token response: unexpected format');
   },
