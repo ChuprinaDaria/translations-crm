@@ -33,6 +33,7 @@ const AVAILABLE_FONTS = [
   { name: "Merriweather", value: "Merriweather, Georgia, serif" },
   { name: "Poppins", value: "Poppins, Arial, sans-serif" },
   { name: "Ubuntu", value: "Ubuntu, Arial, sans-serif" },
+  { name: "Gilroy", value: "Gilroy, Arial, sans-serif" },
 ];
 
 type TemplateDesign = {
@@ -658,9 +659,9 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     header_font: template?.header_font || "Montserrat, Arial, sans-serif",
     body_font: template?.body_font || "Inter, Arial, sans-serif",
     table_font: template?.table_font || "Inter, Arial, sans-serif",
-    // Зображення
-    logo_image: null as File | null,
-    header_image: null as File | null,
+    // Зображення (зберігаємо URL якщо вже завантажено, інакше null для нового файлу)
+    logo_image: (template?.preview_image_url ? template.preview_image_url : null) as File | string | null,
+    header_image: (template?.header_image_url ? template.header_image_url : null) as File | string | null,
     // Кольори елементів PDF
     format_bg_color: template?.format_bg_color || "#FF8C00",
     table_header_bg_color: template?.table_header_bg_color || "#FFA500",
@@ -747,8 +748,11 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       // 2. Підготовка даних для збереження
       const templateData = {
         ...formData,
-        header_image: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : undefined),
-        logo_image: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
+        // Якщо є новий завантажений файл - використовуємо його URL, інакше зберігаємо існуючий URL
+        header_image: uploadedImages.header ? undefined : (typeof formData.header_image === "string" ? formData.header_image : undefined),
+        header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url || undefined)),
+        logo_image: uploadedImages.logo ? undefined : (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
+        preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url || undefined)),
       };
 
       // 3. Збереження через callback

@@ -28,6 +28,15 @@ export function ImageUploader({
   );
   const [isDragging, setIsDragging] = useState(false);
 
+  // Оновлюємо preview коли currentImage змінюється (наприклад, при завантаженні з сервера)
+  useEffect(() => {
+    if (typeof currentImage === "string") {
+      setPreview(currentImage);
+    } else if (currentImage === null) {
+      setPreview(null);
+    }
+  }, [currentImage]);
+
   const parseSize = (size: string): number => {
     const num = parseInt(size);
     return num * 1024 * 1024; // MB to bytes
