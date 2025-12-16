@@ -2244,37 +2244,9 @@ def delete_menu(menu_id: int, db: Session = Depends(get_db), user = Depends(get_
 
 ############################################################
 # Clients
+# Note: Client endpoints are defined later in the file (around line 3396)
+# to provide extended functionality with questionnaires and stats
 ############################################################
-
-@router.get("/clients", response_model=list[schema.Client])
-def list_clients(db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_clients(db)
-
-
-@router.get("/clients/{client_id}", response_model=schema.Client)
-def get_client(client_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    client = crud.get_client(db, client_id)
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    return client
-
-
-@router.post("/clients", response_model=schema.Client)
-def create_client(client_in: schema.ClientCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.create_client(db, client_in)
-
-
-@router.put("/clients/{client_id}", response_model=schema.Client)
-def update_client(
-    client_id: int,
-    client_in: schema.ClientUpdate,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user),
-):
-    updated = crud.update_client(db, client_id, client_in)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Client not found")
-    return updated
 
 
 @router.post("/auth/register", response_model=schema.UserOut)
