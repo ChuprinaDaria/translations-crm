@@ -1037,9 +1037,10 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     formatted_weight_per_person = f"{calculated_weight_per_person:.0f} г" if calculated_weight_per_person else None
     
     # Обробляємо фото галереї (конвертуємо в file:// URLs для WeasyPrint)
+    # Беремо фото з шаблону (а не з КП)
     gallery_photos_src = []
-    if getattr(kp, "gallery_photos", None):
-        for photo_url in kp.gallery_photos:
+    if selected_template and getattr(selected_template, "gallery_photos", None):
+        for photo_url in selected_template.gallery_photos:
             if photo_url:
                 try:
                     # Якщо це вже абсолютний URL або data URL, залишаємо як є
@@ -2941,6 +2942,98 @@ async def upload_template_image(
     return {"url": f"/uploads/templates/{filename}"}
 
 
+@router.post("/templates/{template_id}/upload-gallery-photo")
+async def upload_template_gallery_photo(
+    template_id: int,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Завантажує фото до галереї шаблону (максимум 9 фото).
+    """
+    template = crud.get_template(db, template_id)
+    if not template:
+        raise HTTPException(404, "Template not found")
+    
+    # Валідація типу файлу
+    if photo.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Недопустимий тип файлу. Дозволені: JPEG, PNG, WebP, GIF"
+        )
+    
+    # Перевіряємо, чи не перевищено ліміт фото
+    current_photos = template.gallery_photos or []
+    if len(current_photos) >= 9:
+        raise HTTPException(400, "Максимум 9 фото для шаблону")
+    
+    # Створюємо унікальне ім'я файлу
+    ext = Path(photo.filename).suffix.lower() if photo.filename else ".jpg"
+    unique_filename = f"template_{template_id}_gallery_{len(current_photos) + 1}_{uuid.uuid4().hex[:8]}{ext}"
+    
+    # Створюємо директорію для фото галереї шаблонів
+    gallery_dir = UPLOADS_DIR / "template-gallery"
+    gallery_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = gallery_dir / unique_filename
+    
+    # Зберігаємо файл
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(photo.file, buffer)
+    
+    # Додаємо шлях до фото в БД
+    relative_path = f"uploads/template-gallery/{unique_filename}"
+    current_photos.append(relative_path)
+    template.gallery_photos = current_photos
+    
+    db.commit()
+    db.refresh(template)
+    
+    return {
+        "status": "success",
+        "photo_url": relative_path,
+        "gallery_photos": template.gallery_photos
+    }
+
+
+@router.delete("/templates/{template_id}/gallery-photo/{photo_index}")
+def delete_template_gallery_photo(
+    template_id: int,
+    photo_index: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """
+    Видаляє фото з галереї шаблону.
+    """
+    template = crud.get_template(db, template_id)
+    if not template:
+        raise HTTPException(404, "Template not found")
+    
+    current_photos = template.gallery_photos or []
+    
+    if photo_index < 0 or photo_index >= len(current_photos):
+        raise HTTPException(400, "Invalid photo index")
+    
+    # Видаляємо файл з диска
+    photo_path = current_photos[photo_index]
+    full_path = Path("app") / photo_path
+    if full_path.exists():
+        full_path.unlink()
+    
+    # Видаляємо з масиву
+    current_photos.pop(photo_index)
+    template.gallery_photos = current_photos
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "gallery_photos": template.gallery_photos
+    }
+
+
 # ==================== CLIENTS ====================
 
 @router.get("/clients")
@@ -3769,11 +3862,35 @@ def create_checklist(
     user = Depends(get_current_user)
 ):
     """Створити новий чекліст"""
+    client_id = checklist_data.client_id
+    
     # Якщо вказано client_id, перевіряємо чи існує клієнт
-    if checklist_data.client_id:
-        client = db.query(models.Client).filter(models.Client.id == checklist_data.client_id).first()
+    if client_id:
+        client = db.query(models.Client).filter(models.Client.id == client_id).first()
         if not client:
             raise HTTPException(404, "Client not found")
+    else:
+        # Автоматично створюємо або знаходимо клієнта на основі контактних даних
+        if checklist_data.contact_phone:
+            # Шукаємо існуючого клієнта по телефону
+            existing_client = db.query(models.Client).filter(
+                models.Client.phone == checklist_data.contact_phone
+            ).first()
+            
+            if existing_client:
+                client_id = existing_client.id
+            elif checklist_data.contact_name:
+                # Створюємо нового клієнта
+                new_client = models.Client(
+                    name=checklist_data.contact_name,
+                    phone=checklist_data.contact_phone,
+                    email=checklist_data.contact_email,
+                    source="checklist"  # Джерело - чекліст
+                )
+                db.add(new_client)
+                db.commit()
+                db.refresh(new_client)
+                client_id = new_client.id
     
     # Парсимо дату якщо вона є
     event_date = None
@@ -3793,6 +3910,7 @@ def create_checklist(
     # Створюємо чекліст
     data = checklist_data.dict(exclude_unset=True)
     data['event_date'] = event_date
+    data['client_id'] = client_id  # Прив'язуємо до клієнта
     
     new_checklist = models.Checklist(**data)
     
@@ -3836,6 +3954,31 @@ def update_checklist(
                     continue
         except Exception:
             update_data['event_date'] = None
+    
+    # Якщо немає client_id, але є контактні дані - створюємо/знаходимо клієнта
+    if not checklist.client_id and not update_data.get('client_id'):
+        contact_phone = update_data.get('contact_phone') or checklist.contact_phone
+        contact_name = update_data.get('contact_name') or checklist.contact_name
+        contact_email = update_data.get('contact_email') or checklist.contact_email
+        
+        if contact_phone:
+            existing_client = db.query(models.Client).filter(
+                models.Client.phone == contact_phone
+            ).first()
+            
+            if existing_client:
+                update_data['client_id'] = existing_client.id
+            elif contact_name:
+                new_client = models.Client(
+                    name=contact_name,
+                    phone=contact_phone,
+                    email=contact_email,
+                    source="checklist"
+                )
+                db.add(new_client)
+                db.commit()
+                db.refresh(new_client)
+                update_data['client_id'] = new_client.id
     
     for key, value in update_data.items():
         setattr(checklist, key, value)

@@ -122,6 +122,9 @@ class Template(Base):
     # Layout налаштування
     page_orientation = Column(String, default="portrait")  # portrait або landscape
     items_per_page = Column(Integer, default=20)
+    
+    # Галерея фото (до 9 фото, відображаються по 3 в рядок)
+    gallery_photos = Column(JSON, nullable=True)  # Масив шляхів до фото галереї
 
     kps = relationship("KP", back_populates="template")
 
@@ -355,6 +358,9 @@ class Client(Base):
     yearly_photographer_used = Column(Boolean, default=False)
     yearly_robot_used = Column(Boolean, default=False)
     bonus_year = Column(Integer, default=lambda: datetime.now().year)  # Рік для бонусів
+    
+    # Джерело створення клієнта
+    source = Column(String(50), nullable=True, default="manual")  # manual/checklist/kp/import
     
     # Мета дані
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -333,6 +333,9 @@ class TemplateBase(BaseModel):
     # Layout налаштування
     page_orientation: Optional[str] = "portrait"  # portrait або landscape
     items_per_page: Optional[int] = 20
+    
+    # Галерея фото (до 9 фото, по 3 в рядок)
+    gallery_photos: Optional[List[str]] = None
 
 
 class TemplateCreate(TemplateBase):
@@ -389,6 +392,9 @@ class TemplateUpdate(BaseModel):
     # Layout
     page_orientation: Optional[str] = None
     items_per_page: Optional[int] = None
+    
+    # Галерея фото
+    gallery_photos: Optional[List[str]] = None
 
 
 class Template(TemplateBase):

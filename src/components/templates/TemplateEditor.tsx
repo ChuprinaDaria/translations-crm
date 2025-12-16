@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { X, Save, Palette, FileText, Settings } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { X, Save, Palette, FileText, Settings, Image, Upload, Trash2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -8,7 +8,8 @@ import { ColorPicker } from "./ColorPicker";
 import { ImageUploader } from "./ImageUploader";
 import { TemplatePreview } from "./TemplatePreview";
 import { DraggableSectionList } from "./DraggableSectionList";
-import type { Template as ApiTemplate } from "../../lib/api";
+import { toast } from "sonner";
+import { templatesApi, getImageUrl, type Template as ApiTemplate } from "../../lib/api";
 
 interface TemplateEditorProps {
   template?: ApiTemplate | null;
@@ -45,7 +46,165 @@ type TemplateDesign = {
   footer_text: string;
   page_orientation: string;
   items_per_page: number;
+  gallery_photos: string[];
 };
+
+// Компонент для завантаження галереї фото (9 фото по 3 в рядок)
+function GalleryUploader({
+  templateId,
+  photos,
+  onPhotosChange,
+}: {
+  templateId?: number;
+  photos: string[];
+  onPhotosChange: (photos: string[]) => void;
+}) {
+  const [uploading, setUploading] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    if (photos.length >= 9) {
+      toast.error("Максимум 9 фото");
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Валідація типу файлу
+    if (!file.type.startsWith("image/")) {
+      toast.error("Дозволені лише зображення");
+      return;
+    }
+
+    // Валідація розміру (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Файл занадто великий (максимум 5MB)");
+      return;
+    }
+
+    if (!templateId) {
+      // Якщо шаблон ще не збережений - показуємо попередження
+      toast.error("Спочатку збережіть шаблон, потім додайте фото галереї");
+      return;
+    }
+
+    setUploading(photos.length);
+
+    try {
+      const result = await templatesApi.uploadGalleryPhoto(templateId, file);
+      onPhotosChange(result.gallery_photos);
+      toast.success("Фото додано");
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      toast.error("Помилка завантаження фото");
+    } finally {
+      setUploading(null);
+      // Очищаємо input для можливості повторного вибору того ж файлу
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleDeletePhoto = async (index: number) => {
+    if (!templateId) return;
+
+    try {
+      const result = await templatesApi.deleteGalleryPhoto(templateId, index);
+      onPhotosChange(result.gallery_photos);
+      toast.success("Фото видалено");
+    } catch (error) {
+      console.error("Error deleting photo:", error);
+      toast.error("Помилка видалення фото");
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-900">
+          Галерея фото ({photos.length}/9)
+        </h3>
+        <span className="text-xs text-gray-500">3 фото в рядок</span>
+      </div>
+      <p className="text-xs text-gray-500 mb-4">
+        До 9 фото для відображення в кінці PDF (по 3 в рядок)
+      </p>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {/* Сітка 3x3 */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Існуючі фото */}
+        {photos.map((photo, index) => (
+          <div
+            key={index}
+            className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group"
+          >
+            <img
+              src={getImageUrl(photo)}
+              alt={`Gallery ${index + 1}`}
+              className="w-full h-full object-cover"
+            />
+            <button
+              onClick={() => handleDeletePhoto(index)}
+              className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+            <div className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded">
+              {index + 1}
+            </div>
+          </div>
+        ))}
+
+        {/* Слот для завантаження */}
+        {photos.length < 9 && (
+          <button
+            onClick={handleUploadClick}
+            disabled={uploading !== null}
+            className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {uploading !== null ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-orange-500 border-t-transparent" />
+            ) : (
+              <>
+                <Plus className="w-6 h-6 text-gray-400" />
+                <span className="text-xs text-gray-500">Додати</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Порожні слоти */}
+        {Array.from({ length: Math.max(0, 8 - photos.length) }).map((_, i) => (
+          <div
+            key={`empty-${i}`}
+            className="aspect-square border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center"
+          >
+            <Image className="w-6 h-6 text-gray-300" />
+          </div>
+        ))}
+      </div>
+
+      {!templateId && (
+        <p className="text-xs text-amber-600 mt-3 p-2 bg-amber-50 rounded">
+          💡 Збережіть шаблон, щоб додати фото галереї
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Компонент DesignTab
 function DesignTab({
@@ -169,9 +328,11 @@ function DesignTab({
 function ContentTab({
   design,
   setDesign,
+  templateId,
 }: {
   design: TemplateDesign;
   setDesign: (d: TemplateDesign) => void;
+  templateId?: number;
 }) {
   return (
     <div className="p-6 space-y-6">
@@ -213,6 +374,13 @@ function ContentTab({
           onChange={(newSections) => setDesign({ ...design, menu_sections: newSections })}
         />
       </div>
+
+      {/* Галерея фото */}
+      <GalleryUploader
+        templateId={templateId}
+        photos={design.gallery_photos}
+        onPhotosChange={(photos) => setDesign({ ...design, gallery_photos: photos })}
+      />
 
       {/* Футер */}
       <div>
@@ -364,6 +532,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     // Layout
     page_orientation: template?.page_orientation || "portrait",
     items_per_page: template?.items_per_page || 20,
+    // Галерея фото
+    gallery_photos: template?.gallery_photos || [],
   });
 
   const uploadImages = async () => {
@@ -520,7 +690,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
               <DesignTab design={formData} setDesign={setFormData} />
             )}
             {activeTab === "content" && (
-              <ContentTab design={formData} setDesign={setFormData} />
+              <ContentTab design={formData} setDesign={setFormData} templateId={template?.id} />
             )}
             {activeTab === "structure" && (
               <StructureTab design={formData} setDesign={setFormData} />

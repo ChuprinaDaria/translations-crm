@@ -957,6 +957,8 @@ export interface Template {
   show_transport_block?: boolean;
   // Секції меню
   menu_sections?: string[];
+  // Галерея фото
+  gallery_photos?: string[];
   // Текстові налаштування
   menu_title?: string;
   summary_title?: string;
@@ -1186,6 +1188,28 @@ export const templatesApi = {
     return apiFetch<{ status: string }>(`/templates/${templateId}`, {
       method: 'DELETE',
     });
+  },
+
+  async uploadGalleryPhoto(templateId: number, photo: File): Promise<{ status: string; photo_url: string; gallery_photos: string[] }> {
+    const formData = new FormData();
+    formData.append('photo', photo);
+    
+    return apiFetch<{ status: string; photo_url: string; gallery_photos: string[] }>(
+      `/templates/${templateId}/upload-gallery-photo`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+  },
+
+  async deleteGalleryPhoto(templateId: number, photoIndex: number): Promise<{ status: string; gallery_photos: string[] }> {
+    return apiFetch<{ status: string; gallery_photos: string[] }>(
+      `/templates/${templateId}/gallery-photo/${photoIndex}`,
+      {
+        method: 'DELETE',
+      }
+    );
   }
 };
 
