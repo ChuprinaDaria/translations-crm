@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -7,11 +7,7 @@ import {
   User,
   Calendar,
   MapPin,
-  Users,
-  DollarSign,
-  Utensils,
-  MessageSquare,
-  Truck,
+  FileText,
   Loader2,
   Save,
   X
@@ -32,6 +28,7 @@ import {
 } from "../ui/select";
 import { toast } from "sonner";
 import { checklistsApi, Checklist, ChecklistCreate, ChecklistUpdate } from "../../lib/api";
+import { useChecklistForm } from "../../hooks/useChecklistForm";
 
 interface ChecklistWizardBoxProps {
   checklist?: Checklist | null;
@@ -40,12 +37,10 @@ interface ChecklistWizardBoxProps {
 }
 
 const STEPS = [
-  { id: 1, title: "Контакт", icon: User },
-  { id: 2, title: "Подія", icon: Calendar },
-  { id: 3, title: "Локація", icon: MapPin },
-  { id: 4, title: "Деталі", icon: Users },
-  { id: 5, title: "Страви", icon: Utensils },
-  { id: 6, title: "Додатково", icon: MessageSquare },
+  { id: 0, title: "Контакт", icon: User },
+  { id: 1, title: "Подія", icon: Calendar },
+  { id: 2, title: "Локація", icon: MapPin },
+  { id: 3, title: "Деталі", icon: FileText },
 ];
 
 const EVENT_REASONS = [
@@ -62,80 +57,72 @@ const EVENT_REASONS = [
 ];
 
 export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWizardBoxProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Form state
-  const [formData, setFormData] = useState<ChecklistCreate>({
-    checklist_type: "box",
-    contact_name: "",
-    contact_phone: "",
-    contact_email: "",
-    event_date: "",
-    event_format: "Доставка боксів",
-    event_reason: "",
-    order_number: "",
-    delivery_time: "",
-    event_duration: "",
-    needs_courier: false,
-    personnel_notes: "",
-    location_address: "",
-    location_floor: "",
-    location_elevator: false,
-    guest_count: undefined,
-    budget: "",
-    budget_amount: undefined,
-    food_hot: false,
-    food_cold: false,
-    food_salads: false,
-    food_garnish: false,
-    food_sweet: false,
-    food_vegetarian: false,
-    food_vegan: false,
-    food_preference: "",
-    food_notes: "",
-    general_comment: "",
-    drinks_notes: "",
-    alcohol_notes: "",
-    discount_notes: "",
-    surcharge_notes: "",
-    status: "draft",
+  // Використовуємо hook форми з валідацією та автозбереженням
+  const { formData, errors, updateField, validate, validateTab, resetForm } = useChecklistForm({
+    checklist,
+    checklistType: "box",
+    onAutoSave: async (data) => {
+      // Автозбереження як чернетка
+      if (checklist?.id) {
+        try {
+          await checklistsApi.update(checklist.id, { ...data, status: "draft" } as ChecklistUpdate);
+          setLastAutoSaveTime(new Date());
+        } catch (error) {
+          console.error("Auto-save error:", error);
+        }
+      }
+    },
+    autoSaveDelay: 1000,
   });
 
-  useEffect(() => {
-    if (checklist) {
-      setFormData({
-        ...formData,
-        ...checklist,
-        checklist_type: "box",
-      });
-    }
-  }, [checklist]);
-
-  const updateField = (field: keyof ChecklistCreate, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
   const handleNext = () => {
-    if (currentStep < STEPS.length) {
+    // Валідація перед переходом на наступний таб
+    if (!validateTab(currentStep)) {
+      toast.error("Заповніть обов'язкові поля");
+      return;
+    }
+    
+    if (currentStep < STEPS.length - 1) {
       setCurrentStep(prev => prev + 1);
     }
   };
 
   const handlePrev = () => {
-    if (currentStep > 1) {
+    if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
     }
   };
 
+  const handleTabClick = (stepIndex: number) => {
+    // Перевіряємо валідацію всіх попередніх табів
+    for (let i = 0; i < stepIndex; i++) {
+      if (!validateTab(i)) {
+        toast.error("Спочатку заповніть попередні обов'язкові поля");
+        return;
+      }
+    }
+    setCurrentStep(stepIndex);
+  };
+
   const handleSave = async () => {
+    // Повна валідація перед збереженням
+    if (!validate()) {
+      toast.error("Будь ласка, виправте помилки у формі");
+      return;
+    }
+
     try {
       setIsSaving(true);
       
       if (checklist?.id) {
-        await checklistsApi.update(checklist.id, formData as ChecklistUpdate);
+        await checklistsApi.update(checklist.id, { ...formData, status: "in_progress" } as ChecklistUpdate);
       } else {
-        await checklistsApi.create(formData);
+        await checklistsApi.create({ ...formData, status: "in_progress" });
       }
       
       onSave();
@@ -147,22 +134,38 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
     }
   };
 
-  const progress = (currentStep / STEPS.length) * 100;
+  const handleSaveDraft = async () => {
+    try {
+      setIsSaving(true);
+      
+      if (checklist?.id) {
+        await checklistsApi.update(checklist.id, { ...formData, status: "draft" } as ChecklistUpdate);
+      } else {
+        await checklistsApi.create({ ...formData, status: "draft" });
+      }
+      
+      toast.success("Чернетку збережено");
+      onSave();
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      toast.error("Помилка збереження чернетки");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const progress = ((currentStep + 1) / STEPS.length) * 100;
 
   const renderStep = () => {
     switch (currentStep) {
+      case 0:
+        return <StepContact formData={formData} updateField={updateField} errors={errors} />;
       case 1:
-        return <StepContact formData={formData} updateField={updateField} />;
+        return <StepEvent formData={formData} updateField={updateField} errors={errors} />;
       case 2:
-        return <StepEvent formData={formData} updateField={updateField} />;
+        return <StepLocation formData={formData} updateField={updateField} errors={errors} />;
       case 3:
-        return <StepLocation formData={formData} updateField={updateField} />;
-      case 4:
-        return <StepDetails formData={formData} updateField={updateField} />;
-      case 5:
-        return <StepFood formData={formData} updateField={updateField} />;
-      case 6:
-        return <StepAdditional formData={formData} updateField={updateField} />;
+        return <StepDetails formData={formData} updateField={updateField} errors={errors} />;
       default:
         return null;
     }
@@ -181,7 +184,14 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
               <h2 className="text-2xl font-bold">
                 {checklist ? "Редагування чекліста" : "Новий чекліст на доставку боксів"}
               </h2>
-              <p className="text-amber-100">Крок {currentStep} з {STEPS.length}</p>
+              <p className="text-amber-100">
+                Крок {currentStep + 1} з {STEPS.length}
+                {lastAutoSaveTime && (
+                  <span className="ml-3 text-xs">
+                    Автозбереження: {lastAutoSaveTime.toLocaleTimeString("uk-UA")}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           <Button
@@ -206,7 +216,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
       {/* Step indicators */}
       <div className="px-8 py-5 border-b bg-gray-50 overflow-x-auto flex-shrink-0">
         <div className="flex gap-3 min-w-max">
-          {STEPS.map((step, idx) => {
+          {STEPS.map((step) => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
             const isCompleted = currentStep > step.id;
@@ -214,7 +224,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
             return (
               <button
                 key={step.id}
-                onClick={() => setCurrentStep(step.id)}
+                onClick={() => handleTabClick(step.id)}
                 className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl transition-all font-medium ${
                   isActive
                     ? "bg-amber-500 text-white shadow-lg scale-105"
@@ -247,20 +257,20 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
         <Button
           variant="outline"
           size="lg"
-          onClick={currentStep === 1 ? onCancel : handlePrev}
-          className="px-6"
+          onClick={currentStep === 0 ? onCancel : handlePrev}
+          className="px-6 min-h-[44px]"
         >
           <ChevronLeft className="w-5 h-5 mr-2" />
-          {currentStep === 1 ? "Скасувати" : "Назад"}
+          {currentStep === 0 ? "Скасувати" : "Назад"}
         </Button>
         
         <div className="flex gap-3">
           <Button
             variant="outline"
             size="lg"
-            onClick={handleSave}
+            onClick={handleSaveDraft}
             disabled={isSaving}
-            className="px-6"
+            className="px-6 min-h-[44px]"
           >
             {isSaving ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -270,11 +280,11 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
             Зберегти чернетку
           </Button>
           
-          {currentStep < STEPS.length ? (
+          {currentStep < STEPS.length - 1 ? (
             <Button
               size="lg"
               onClick={handleNext}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-8 shadow-lg"
+              className="bg-amber-500 hover:bg-amber-600 text-white px-8 shadow-lg min-h-[44px]"
             >
               Далі
               <ChevronRight className="w-5 h-5 ml-2" />
@@ -284,7 +294,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
               size="lg"
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-green-500 hover:bg-green-600 text-white px-8 shadow-lg"
+              className="bg-green-500 hover:bg-green-600 text-white px-8 shadow-lg min-h-[44px]"
             >
               {isSaving ? (
                 <>
@@ -309,9 +319,10 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
 interface StepProps {
   formData: ChecklistCreate;
   updateField: (field: keyof ChecklistCreate, value: any) => void;
+  errors: Record<string, string | undefined>;
 }
 
-function StepContact({ formData, updateField }: StepProps) {
+function StepContact({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
@@ -326,25 +337,35 @@ function StepContact({ formData, updateField }: StepProps) {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="contact_name">Ім'я контакту *</Label>
+          <Label htmlFor="contact_name">
+            Ім'я контакту <span className="text-red-500">*</span>
+          </Label>
           <Input
             id="contact_name"
             value={formData.contact_name || ""}
             onChange={(e) => updateField("contact_name", e.target.value)}
             placeholder="Прізвище Ім'я"
-            className="h-12"
+            className={`h-12 ${errors.contact_name ? "border-red-500" : ""}`}
           />
+          {errors.contact_name && (
+            <p className="text-xs text-red-600">{errors.contact_name}</p>
+          )}
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="contact_phone">Телефон *</Label>
+          <Label htmlFor="contact_phone">
+            Телефон <span className="text-red-500">*</span>
+          </Label>
           <Input
             id="contact_phone"
             value={formData.contact_phone || ""}
             onChange={(e) => updateField("contact_phone", e.target.value)}
             placeholder="+380 XX XXX XX XX"
-            className="h-12"
+            className={`h-12 ${errors.contact_phone ? "border-red-500" : ""}`}
           />
+          {errors.contact_phone && (
+            <p className="text-xs text-red-600">{errors.contact_phone}</p>
+          )}
         </div>
         
         <div className="space-y-2 md:col-span-2">
@@ -355,15 +376,18 @@ function StepContact({ formData, updateField }: StepProps) {
             value={formData.contact_email || ""}
             onChange={(e) => updateField("contact_email", e.target.value)}
             placeholder="email@example.com"
-            className="h-12"
+            className={`h-12 ${errors.contact_email ? "border-red-500" : ""}`}
           />
+          {errors.contact_email && (
+            <p className="text-xs text-red-600">{errors.contact_email}</p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function StepEvent({ formData, updateField }: StepProps) {
+function StepEvent({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
@@ -378,14 +402,19 @@ function StepEvent({ formData, updateField }: StepProps) {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="event_date">Дата заходу *</Label>
+          <Label htmlFor="event_date">
+            Дата заходу <span className="text-red-500">*</span>
+          </Label>
           <Input
             id="event_date"
             type="date"
             value={formData.event_date || ""}
             onChange={(e) => updateField("event_date", e.target.value)}
-            className="h-12"
+            className={`h-12 ${errors.event_date ? "border-red-500" : ""}`}
           />
+          {errors.event_date && (
+            <p className="text-xs text-red-600">{errors.event_date}</p>
+          )}
         </div>
         
         <div className="space-y-2">
@@ -455,7 +484,7 @@ function StepEvent({ formData, updateField }: StepProps) {
   );
 }
 
-function StepLocation({ formData, updateField }: StepProps) {
+function StepLocation({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
@@ -534,74 +563,7 @@ function StepLocation({ formData, updateField }: StepProps) {
   );
 }
 
-function StepDetails({ formData, updateField }: StepProps) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <Users className="w-5 h-5 text-amber-600" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Деталі замовлення</h3>
-          <p className="text-sm text-gray-500">Кількість гостей та бюджет</p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="border-2 border-amber-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="w-5 h-5 text-amber-600" />
-              Кількість гостей
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="number"
-              value={formData.guest_count || ""}
-              onChange={(e) => updateField("guest_count", parseInt(e.target.value) || undefined)}
-              placeholder="0"
-              className="h-14 text-2xl font-bold text-center"
-            />
-            <p className="text-sm text-gray-500 text-center mt-2">осіб</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-green-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600" />
-              Бюджет
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="number"
-              value={formData.budget_amount || ""}
-              onChange={(e) => updateField("budget_amount", parseFloat(e.target.value) || undefined)}
-              placeholder="0"
-              className="h-14 text-2xl font-bold text-center"
-            />
-            <p className="text-sm text-gray-500 text-center mt-2">грн</p>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="budget_notes">Коментар до бюджету</Label>
-        <Textarea
-          id="budget_notes"
-          value={formData.budget || ""}
-          onChange={(e) => updateField("budget", e.target.value)}
-          placeholder="Напр.: до 500 грн на особу, або загальний бюджет..."
-          rows={2}
-        />
-      </div>
-    </div>
-  );
-}
-
-function StepFood({ formData, updateField }: StepProps) {
+function StepDetails({ formData, updateField, errors }: StepProps) {
   const foodOptions = [
     { key: "food_hot", label: "Гарячі страви", emoji: "🍲" },
     { key: "food_cold", label: "Холодні закуски", emoji: "🥗" },
@@ -613,87 +575,131 @@ function StepFood({ formData, updateField }: StepProps) {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <Utensils className="w-5 h-5 text-amber-600" />
+    <div className="space-y-8">
+      {/* Деталі замовлення */}
+      <div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <FileText className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Деталі замовлення</h3>
+            <p className="text-sm text-gray-500">Кількість гостей, бюджет та побажання</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Побажання щодо страв</h3>
-          <p className="text-sm text-gray-500">Оберіть категорії страв</p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {foodOptions.map((option) => (
-          <label
-            key={option.key}
-            className={`flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
-              formData[option.key as keyof ChecklistCreate]
-                ? "border-amber-500 bg-amber-50"
-                : "border-gray-200 hover:border-amber-300"
-            }`}
-          >
-            <span className="text-3xl mb-2">{option.emoji}</span>
-            <span className="text-sm font-medium text-gray-700">{option.label}</span>
-            <Checkbox
-              checked={formData[option.key as keyof ChecklistCreate] as boolean || false}
-              onCheckedChange={(checked) => updateField(option.key as keyof ChecklistCreate, checked)}
-              className="mt-2"
-            />
-          </label>
-        ))}
-      </div>
-      
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>Перевага: м'ясне чи рибне?</Label>
-          <Select
-            value={formData.food_preference || ""}
-            onValueChange={(v) => updateField("food_preference", v)}
-          >
-            <SelectTrigger className="h-12">
-              <SelectValue placeholder="Оберіть перевагу" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="meat">Більше м'ясного 🥩</SelectItem>
-              <SelectItem value="fish">Більше рибного 🐟</SelectItem>
-              <SelectItem value="mixed">Збалансовано</SelectItem>
-              <SelectItem value="none">Без переваг</SelectItem>
-            </SelectContent>
-          </Select>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <Card className="border-2 border-amber-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="w-5 h-5 text-amber-600" />
+                Кількість гостей
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Input
+                type="number"
+                value={formData.guest_count || ""}
+                onChange={(e) => updateField("guest_count", parseInt(e.target.value) || undefined)}
+                placeholder="0"
+                className="h-14 text-2xl font-bold text-center"
+              />
+              <p className="text-sm text-gray-500 text-center mt-2">осіб</p>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-2 border-green-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Package className="w-5 h-5 text-green-600" />
+                Бюджет
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Input
+                type="number"
+                value={formData.budget_amount || ""}
+                onChange={(e) => updateField("budget_amount", parseFloat(e.target.value) || undefined)}
+                placeholder="0"
+                className="h-14 text-2xl font-bold text-center"
+              />
+              <p className="text-sm text-gray-500 text-center mt-2">грн</p>
+            </CardContent>
+          </Card>
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="food_notes">Додаткові побажання щодо меню</Label>
+          <Label htmlFor="budget_notes">Коментар до бюджету</Label>
           <Textarea
-            id="food_notes"
-            value={formData.food_notes || ""}
-            onChange={(e) => updateField("food_notes", e.target.value)}
-            placeholder="Алергії, обмеження, особливі побажання..."
-            rows={3}
+            id="budget_notes"
+            value={formData.budget || ""}
+            onChange={(e) => updateField("budget", e.target.value)}
+            placeholder="Напр.: до 500 грн на особу, або загальний бюджет..."
+            rows={2}
           />
         </div>
       </div>
-    </div>
-  );
-}
 
-function StepAdditional({ formData, updateField }: StepProps) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <MessageSquare className="w-5 h-5 text-amber-600" />
+      {/* Побажання щодо страв */}
+      <div>
+        <h4 className="text-base font-semibold text-gray-900 mb-4">Побажання щодо страв</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {foodOptions.map((option) => (
+            <label
+              key={option.key}
+              className={`flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                formData[option.key as keyof ChecklistCreate]
+                  ? "border-amber-500 bg-amber-50"
+                  : "border-gray-200 hover:border-amber-300"
+              }`}
+            >
+              <span className="text-3xl mb-2">{option.emoji}</span>
+              <span className="text-sm font-medium text-gray-700 text-center">{option.label}</span>
+              <Checkbox
+                checked={formData[option.key as keyof ChecklistCreate] as boolean || false}
+                onCheckedChange={(checked) => updateField(option.key as keyof ChecklistCreate, checked)}
+                className="mt-2"
+              />
+            </label>
+          ))}
         </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Додаткова інформація</h3>
-          <p className="text-sm text-gray-500">Напої, знижки та коментарі</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Перевага: м'ясне чи рибне?</Label>
+            <Select
+              value={formData.food_preference || ""}
+              onValueChange={(v) => updateField("food_preference", v)}
+            >
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Оберіть перевагу" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="meat">Більше м'ясного 🥩</SelectItem>
+                <SelectItem value="fish">Більше рибного 🐟</SelectItem>
+                <SelectItem value="mixed">Збалансовано</SelectItem>
+                <SelectItem value="none">Без переваг</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="food_notes">Додаткові побажання</Label>
+            <Textarea
+              id="food_notes"
+              value={formData.food_notes || ""}
+              onChange={(e) => updateField("food_notes", e.target.value)}
+              placeholder="Алергії, обмеження..."
+              rows={2}
+            />
+          </div>
         </div>
       </div>
-      
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      {/* Додаткова інформація */}
+      <div>
+        <h4 className="text-base font-semibold text-gray-900 mb-4">Додаткова інформація</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="space-y-2">
             <Label htmlFor="drinks_notes">Напої</Label>
             <Textarea
@@ -701,7 +707,7 @@ function StepAdditional({ formData, updateField }: StepProps) {
               value={formData.drinks_notes || ""}
               onChange={(e) => updateField("drinks_notes", e.target.value)}
               placeholder="Чай, кава, соки, вода..."
-              rows={3}
+              rows={2}
             />
           </div>
           
@@ -712,12 +718,12 @@ function StepAdditional({ formData, updateField }: StepProps) {
               value={formData.alcohol_notes || ""}
               onChange={(e) => updateField("alcohol_notes", e.target.value)}
               placeholder="Вино, шампанське, пиво..."
-              rows={3}
+              rows={2}
             />
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="space-y-2">
             <Label htmlFor="discount_notes">Знижка</Label>
             <Input
@@ -748,12 +754,12 @@ function StepAdditional({ formData, updateField }: StepProps) {
             value={formData.general_comment || ""}
             onChange={(e) => updateField("general_comment", e.target.value)}
             placeholder="Будь-яка додаткова інформація..."
-            rows={4}
+            rows={3}
           />
         </div>
       </div>
-      
-      {/* Summary Preview */}
+
+      {/* Підсумок */}
       <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -789,4 +795,5 @@ function StepAdditional({ formData, updateField }: StepProps) {
     </div>
   );
 }
+
 

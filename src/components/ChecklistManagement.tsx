@@ -203,7 +203,7 @@ export function ChecklistManagement() {
           <Button
             onClick={() => handleCreateNew("box")}
             size="lg"
-            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg hover:shadow-xl transition-all px-6"
+            className="!bg-gradient-to-r !from-amber-500 !to-amber-600 hover:!from-amber-600 hover:!to-amber-700 !text-white shadow-lg hover:shadow-xl transition-all px-6"
           >
             <Package className="w-5 h-5 mr-2" />
             Новий бокс
@@ -211,7 +211,7 @@ export function ChecklistManagement() {
           <Button
             onClick={() => handleCreateNew("catering")}
             size="lg"
-            className="bg-gradient-to-r from-[#FF5A00] to-orange-600 hover:from-[#FF5A00]/90 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transition-all px-6"
+            className="!bg-gradient-to-r !from-[#FF5A00] !to-orange-600 hover:!from-[#FF5A00]/90 hover:!to-orange-700 !text-white shadow-lg hover:shadow-xl transition-all px-6"
           >
             <ChefHat className="w-5 h-5 mr-2" />
             Новий кейтеринг
@@ -353,7 +353,7 @@ export function ChecklistManagement() {
 
       {/* Wizard Dialog - Full Screen */}
       <Dialog open={showWizard} onOpenChange={setShowWizard}>
-        <DialogContent className="max-w-7xl w-[95vw] h-[95vh] p-0 gap-0">
+        <DialogContent className="!max-w-7xl w-[95vw] h-[95vh] max-h-[95vh] p-0 gap-0 overflow-hidden">
           <DialogHeader className="sr-only">
             <DialogTitle>
               {editingChecklist ? "Редагування чекліста" : 
@@ -528,7 +528,7 @@ function ChecklistList({
                   e.stopPropagation();
                   onEdit(checklist);
                 }}
-                className="flex-1"
+                className="flex-1 border-2 border-orange-500 text-orange-500 hover:bg-orange-50 min-h-[44px]"
               >
                 <Edit className="w-4 h-4 mr-1" />
                 Редагувати
@@ -541,7 +541,7 @@ function ChecklistList({
                     e.stopPropagation();
                     onCreateKP(checklist.id);
                   }}
-                  className={type === "box" ? "bg-amber-500 hover:bg-amber-600" : "bg-[#FF5A00] hover:bg-[#FF5A00]/90"}
+                  className="bg-orange-500 text-white hover:bg-orange-600 min-h-[44px]"
                 >
                   <ArrowRight className="w-4 h-4 mr-1" />
                   КП
@@ -555,7 +555,7 @@ function ChecklistList({
                   e.stopPropagation();
                   onDelete(checklist.id);
                 }}
-                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                className="text-gray-400 hover:text-red-500 hover:bg-red-50 min-h-[44px]"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

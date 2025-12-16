@@ -3,7 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <title>{{ kp.title or 'Комерційна пропозиція' }}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        /* === КОЛЬОРОВА СХЕМА === */
+        :root {
+            --orange-format: #FF8C00;      /* Для блоку "ФУРШЕТ 13:30-14:30" */
+            --orange-categories: #FFB84D;   /* Для категорій страв (БРОШЕТИ, ГАРНІРИ...) */
+            --orange-header: #FFA500;       /* Для шапки таблиці (НАЗВА, ФОТО, ВАГА...) */
+            --orange-text: #FF8C00;         /* Для акцентів (ціни, кнопки) */
+            --text-dark: #333333;
+            --text-gray: #666666;
+            --border-light: #E5E5E5;
+            --bg-gray: #666666;
+        }
+        
         @page {
             size: {% if template_config and template_config.page_orientation == 'landscape' %}A4 landscape{% else %}A4{% endif %};
             margin: 10mm;
@@ -15,37 +31,53 @@
             box-sizing: border-box;
         }
         
+        /* === ШРИФТИ === */
         body {
-            font-family: {{ font_family or 'Arial, sans-serif' }};
-            color: {{ text_color or '#333333' }};
+            font-family: 'Inter', Arial, sans-serif;
+            font-weight: 400;
+            color: var(--text-dark);
             background-color: #ffffff;
-            line-height: 1.3;
+            line-height: 1.4;
             font-size: 10pt;
+        }
+        
+        /* Заголовки */
+        h1, h2, .format-title, .category-title, .section-header {
+            font-family: 'Montserrat', Arial, sans-serif;
+            font-weight: 700;
+        }
+        
+        /* Жирний акцент */
+        .header-info strong, .price, .table-header, .client-info-label {
+            font-family: 'Inter', Arial, sans-serif;
+            font-weight: 600;
         }
         
         .container {
             max-width: 100%;
         }
         
-        /* Шапка - завантажується користувачем */
+        /* === ШАПКА - завантажується користувачем === */
         .header-image {
             width: 100%;
             height: auto;
             margin-bottom: 0;
         }
         
-        /* Головний заголовок КП */
+        /* === ГОЛОВНИЙ ЗАГОЛОВОК КП === */
         .main-title {
             text-align: center;
             padding: 5mm 0;
         }
         
         .main-title h1 {
+            font-family: 'Montserrat', Arial, sans-serif;
             font-size: 18pt;
-            font-weight: bold;
-            color: {{ primary_color or '#FF5A00' }};
+            font-weight: 700;
+            color: var(--orange-text);
             text-transform: uppercase;
             margin-bottom: 3mm;
+            letter-spacing: 0.5px;
         }
         
         .manager-info {
@@ -60,12 +92,13 @@
         
         .manager-info-cell {
             display: table-cell;
-            color: {{ primary_color or '#FF5A00' }};
+            color: var(--orange-text);
             font-size: 10pt;
+            font-weight: 500;
             padding: 0 5mm;
         }
         
-        /* Блок інформації про клієнта */
+        /* === БЛОК ІНФОРМАЦІЇ ПРО КЛІЄНТА === */
         .client-info {
             display: table;
             width: 100%;
@@ -90,34 +123,39 @@
         }
         
         .client-info-label {
-            font-weight: bold;
-            color: #333;
+            font-weight: 600;
+            color: var(--text-dark);
         }
         
         .client-info-value {
-            font-weight: bold;
+            font-weight: 600;
         }
         
-        /* Великий помаранчевий хедер секції */
+        /* === БЛОК ФОРМАТУ ЗАХОДУ (ФУРШЕТ 13:30-14:30) === */
         .section-header {
-            background: {{ primary_color or '#FF5A00' }};
+            background: var(--orange-format);
             color: white;
+            font-family: 'Montserrat', Arial, sans-serif;
             font-size: 16pt;
-            font-weight: bold;
+            font-weight: 700;
             text-align: center;
-            padding: 3mm;
+            padding: 4mm;
             margin-top: 5mm;
+            margin-bottom: 0;  /* Без відступу до шапки таблиці */
             text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
-        /* Хедер таблиці */
+        /* === ШАПКА ТАБЛИЦІ (НАЗВА, ФОТО, ВАГА...) === */
         .table-header {
             display: table;
             width: 100%;
-            background: {{ primary_color or '#FF5A00' }};
+            background: var(--orange-header);
             color: white;
+            font-family: 'Inter', Arial, sans-serif;
             font-size: 9pt;
-            font-weight: bold;
+            font-weight: 600;
+            margin-top: 0;
         }
         
         .table-header-row {
@@ -126,10 +164,15 @@
         
         .table-header-cell {
             display: table-cell;
-            padding: 2mm;
+            padding: 2.5mm 2mm;
             text-align: center;
             vertical-align: middle;
             border-right: 1px solid rgba(255,255,255,0.3);
+            text-transform: lowercase;
+        }
+        
+        .table-header-cell:first-child {
+            text-transform: uppercase;
         }
         
         .table-header-cell:last-child {
@@ -139,6 +182,7 @@
         .table-header-cell.name-col {
             text-align: left;
             width: 35%;
+            padding-left: 3mm;
         }
         
         .table-header-cell.photo-col {
@@ -149,27 +193,31 @@
             width: 12.5%;
         }
         
-        /* Категорія страв - пілюля */
-        .category-pill {
-            background: {{ primary_color or '#FF5A00' }};
-            color: white;
-            font-weight: bold;
-            text-align: center;
-            padding: 2mm 5mm;
-            margin: 3mm auto;
-            border-radius: 20px;
-            text-transform: uppercase;
-            font-size: 10pt;
-            display: table;
-            width: auto;
-            min-width: 50%;
+        /* === КАТЕГОРІЯ СТРАВ - НА ВСЮ ШИРИНУ === */
+        .category-row {
+            width: 100%;
+            margin: 5mm 0 3mm 0;
         }
         
-        /* Рядок страви */
+        .category-pill {
+            background: var(--orange-categories);
+            color: white;
+            font-family: 'Montserrat', Arial, sans-serif;
+            font-weight: 700;
+            text-align: center;
+            padding: 3mm 0;
+            width: 100%;
+            border-radius: 15px;
+            text-transform: uppercase;
+            font-size: 11pt;
+            letter-spacing: 0.5px;
+        }
+        
+        /* === РЯДОК СТРАВИ === */
         .item-row {
             display: table;
             width: 100%;
-            border-bottom: 1px solid #E5E5E5;
+            border-bottom: 1px solid var(--border-light);
         }
         
         .item-row-inner {
@@ -186,6 +234,7 @@
         .item-cell.name-col {
             width: 35%;
             text-align: left;
+            padding-left: 3mm;
         }
         
         .item-cell.photo-col {
@@ -205,9 +254,9 @@
             border-radius: 2mm;
         }
         
-        /* Сірий блок підсумків */
+        /* === СІРИЙ БЛОК ПІДСУМКІВ === */
         .summary-gray {
-            background: #666666;
+            background: var(--bg-gray);
             color: white;
             padding: 3mm 5mm;
             margin-top: 2mm;
@@ -219,21 +268,22 @@
         }
         
         .summary-gray-bold {
-            font-weight: bold;
+            font-weight: 600;
             font-size: 11pt;
         }
         
-        /* Фінальний підсумок */
+        /* === ФІНАЛЬНИЙ ПІДСУМОК === */
         .final-summary {
-            background: #666666;
+            background: var(--bg-gray);
             color: white;
             padding: 4mm 5mm;
             margin-top: 5mm;
         }
         
         .final-summary-main {
+            font-family: 'Montserrat', Arial, sans-serif;
             font-size: 14pt;
-            font-weight: bold;
+            font-weight: 700;
             padding: 2mm 0;
         }
         
@@ -242,11 +292,11 @@
             padding: 1mm 0;
         }
         
-        /* Таблиця сервісу */
+        /* === ТАБЛИЦЯ СЕРВІСУ === */
         .service-row {
             display: table;
             width: 100%;
-            border-bottom: 1px solid #E5E5E5;
+            border-bottom: 1px solid var(--border-light);
         }
         
         .service-cell {
@@ -266,15 +316,16 @@
             text-align: right;
         }
         
-        /* Умови бронювання */
+        /* === УМОВИ БРОНЮВАННЯ === */
         .booking-terms {
             margin-top: 8mm;
             padding: 0 3mm;
         }
         
         .booking-terms-title {
+            font-family: 'Montserrat', Arial, sans-serif;
             font-size: 12pt;
-            font-weight: bold;
+            font-weight: 700;
             text-align: center;
             margin-bottom: 3mm;
             text-transform: uppercase;
@@ -293,14 +344,14 @@
         
         .booking-terms-item:before {
             content: "• ";
-            color: {{ primary_color or '#FF5A00' }};
+            color: var(--orange-text);
         }
         
         .booking-terms-bold {
-            font-weight: bold;
+            font-weight: 600;
         }
         
-        /* Галерея */
+        /* === ГАЛЕРЕЯ === */
         .gallery {
             margin-top: 8mm;
             page-break-inside: avoid;
@@ -328,13 +379,19 @@
             border-radius: 2mm;
         }
         
-        /* Футер */
+        /* === ФУТЕР === */
         .footer {
             margin-top: 8mm;
             padding-top: 3mm;
             text-align: center;
             font-size: 9pt;
-            color: #666;
+            color: var(--text-gray);
+        }
+        
+        /* === ЦІНИ - АКЦЕНТНИЙ КОЛІР === */
+        .price-accent {
+            color: var(--orange-text);
+            font-weight: 600;
         }
     </style>
 </head>
@@ -361,7 +418,7 @@
         <div class="client-info">
             <div class="client-info-row">
                 <div class="client-info-col">
-                    <div class="client-info-line"><span class="client-info-label">Заявник:</span> {{ kp.client_name or '—' }}</div>
+                    <div class="client-info-line"><span class="client-info-label">Замовник:</span> {{ kp.client_name or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Номер телефону:</span> {{ kp.client_phone or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Пошта:</span> {{ kp.client_email or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Формат:</span> {{ kp.event_format or '—' }}</div>
@@ -370,9 +427,9 @@
                 <div class="client-info-col">
                     <div class="client-info-line">Тривалість заходу: <span class="client-info-value">{{ kp.event_time or '—' }}</span></div>
                     <div class="client-info-line">Кількість гостей: <span class="client-info-value">{{ people_count or kp.people_count or '—' }}</span></div>
-                    <div class="client-info-line">Вихід г/людина: <span class="client-info-value">{{ weight_per_person or '—' }}</span></div>
-                    <div class="client-info-line">Вихід грн/людину: <span class="client-info-value">{% if kp.price_per_person %}{{ "%.0f"|format(kp.price_per_person) }} грн{% else %}—{% endif %}</span></div>
-                    <div class="client-info-line">Всього до сплати: <span class="client-info-value" style="color: {{ primary_color or '#FF5A00' }};">{{ grand_total_formatted or '—' }}</span></div>
+                    <div class="client-info-line">Вихід г/людина: <span class="client-info-value">{{ weight_per_person or '—' }} грам</span></div>
+                    <div class="client-info-line">Вихід грн/людина: <span class="client-info-value">{% if kp.price_per_person %}{{ "%.0f"|format(kp.price_per_person) }} грн{% else %}—{% endif %}</span></div>
+                    <div class="client-info-line">Всього до сплати: <span class="client-info-value price-accent">{{ grand_total_formatted or '—' }}</span></div>
                 </div>
             </div>
         </div>
@@ -381,7 +438,7 @@
         {% if formats %}
         {% for fmt in formats %}
         
-        <!-- Хедер формату -->
+        <!-- Хедер формату (ФУРШЕТ 13:30-14:30) -->
         <div class="section-header">
             {{ fmt.name if fmt.name else "МЕНЮ" }}{% if formats|length > 1 %} {{ loop.index }}{% endif %}
         </div>
@@ -403,8 +460,8 @@
         {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
         
         {% if section_items %}
-        <!-- Категорія -->
-        <div style="text-align: center;">
+        <!-- Категорія - НА ВСЮ ШИРИНУ -->
+        <div class="category-row">
             <div class="category-pill">{{ section }}</div>
         </div>
         
@@ -430,7 +487,7 @@
         <!-- Страви без категорії -->
         {% set uncategorized = fmt['items'] | rejectattr('category_name') | list %}
         {% if uncategorized %}
-        <div style="text-align: center;">
+        <div class="category-row">
             <div class="category-pill">ІНШІ СТРАВИ</div>
         </div>
         {% for item in uncategorized %}
@@ -479,7 +536,20 @@
             </div>
         </div>
         
-        <!-- TODO: Тут будуть рядки обладнання коли додамо equipment_items -->
+        <!-- Рядки обладнання -->
+        {% if equipment_items %}
+        {% for eq_item in equipment_items %}
+        <div class="item-row">
+            <div class="item-row-inner">
+                <div class="item-cell name-col">{{ eq_item.name }}</div>
+                <div class="item-cell value-col">{{ "%.2f"|format(eq_item.rental_price) if eq_item.rental_price else '—' }} ₴</div>
+                <div class="item-cell value-col">{{ "%.2f"|format(eq_item.loss_price) if eq_item.loss_price else '—' }} ₴</div>
+                <div class="item-cell value-col">{{ eq_item.quantity }}</div>
+                <div class="item-cell value-col">{{ "%.2f"|format(eq_item.total) if eq_item.total else '—' }} ₴</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
         
         <div class="summary-gray">
             <div class="summary-gray-line summary-gray-bold">ДО СПЛАТИ ЗА ОБЛАДНАННЯ: {{ equipment_total }}</div>
@@ -492,12 +562,20 @@
         
         <div class="table-header">
             <div class="table-header-row">
-                <div class="table-header-cell" style="width: 75%; text-align: left;">Позиція</div>
+                <div class="table-header-cell" style="width: 75%; text-align: left; padding-left: 3mm;">Позиція</div>
                 <div class="table-header-cell" style="width: 25%; text-align: right;">сума</div>
             </div>
         </div>
         
-        <!-- TODO: Тут будуть рядки сервісу коли додамо service_items -->
+        <!-- Рядки сервісу -->
+        {% if service_items %}
+        {% for srv_item in service_items %}
+        <div class="service-row">
+            <div class="service-cell name-col">{{ srv_item.name }}</div>
+            <div class="service-cell value-col">{{ "%.2f"|format(srv_item.total) if srv_item.total else '—' }} ₴</div>
+        </div>
+        {% endfor %}
+        {% endif %}
         
         <div class="summary-gray">
             <div class="summary-gray-line summary-gray-bold">ДО СПЛАТИ ЗА СЕРВІС: {{ service_total }}</div>

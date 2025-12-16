@@ -2048,7 +2048,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                 </div>
               )}
 
-              {/* Вибір чекліста або анкети клієнта для автозаповнення КП */}
+              {/* Вибір чекліста клієнта для автозаповнення КП */}
               {clientSelectionMode === "existing" && selectedClientId && (
                 <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center justify-between gap-2">
@@ -2056,7 +2056,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       <Clipboard className="w-4 h-4 text-blue-600" />
                       Оберіть чекліст клієнта
                     </Label>
-                    {(Object.keys(checklistAutofill).length > 0 || Object.keys(questionnaireAutofill).length > 0) && (
+                    {Object.keys(checklistAutofill).length > 0 && (
                       <Button
                         type="button"
                         variant="outline"
@@ -2064,8 +2064,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         className="h-8 text-xs"
                         onClick={() => {
                           clearChecklistData();
-                          setSelectedQuestionnaireId(null);
-                          setQuestionnaireAutofill({});
                         }}
                       >
                         Очистити дані
@@ -2073,118 +2071,60 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     )}
                   </div>
 
-                  {clientChecklists.length === 0 && clientQuestionnaires.length === 0 ? (
+                  {clientChecklists.length === 0 ? (
                     <div className="space-y-2">
                       <p className="text-xs text-gray-600">
-                        У цього клієнта ще немає чеклістів або анкет.
+                        У цього клієнта ще немає чеклістів. Спочатку створіть чекліст у розділі "Чеклісти".
                       </p>
                     </div>
                   ) : (
                     <>
-                      {/* Вибір чекліста (пріоритет) */}
-                      {clientChecklists.length > 0 && (
-                        <Select
-                          value={selectedChecklistId?.toString() || ""}
-                          onValueChange={(value) => {
-                            const clId = parseInt(value, 10);
-                            const cl = clientChecklists.find((c) => c.id === clId) || null;
-                            applyChecklistToKP(cl);
-                          }}
-                        >
-                          <SelectTrigger className="h-10">
-                            <SelectValue placeholder="Оберіть чекліст клієнта" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {clientChecklists.map((cl) => {
-                              const dateLabel = cl.event_date || cl.created_at || "";
-                              const formattedDate = dateLabel
-                                ? new Date(dateLabel).toLocaleDateString("uk-UA", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    year: "numeric"
-                                  })
-                                : "";
-                              const typeLabel = cl.checklist_type === "box" ? "🎁 Бокси" : "🍽️ Кейтеринг";
-                              const eventFormat = cl.event_format || "";
-                              const guestCount = cl.guest_count ? `${cl.guest_count} гостей` : "";
-                              return (
-                                <SelectItem key={cl.id} value={cl.id.toString()}>
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {typeLabel} {formattedDate ? `від ${formattedDate}` : `#${cl.id}`}
+                      <Select
+                        value={selectedChecklistId?.toString() || ""}
+                        onValueChange={(value) => {
+                          const clId = parseInt(value, 10);
+                          const cl = clientChecklists.find((c) => c.id === clId) || null;
+                          applyChecklistToKP(cl);
+                        }}
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Оберіть чекліст клієнта" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clientChecklists.map((cl) => {
+                            const dateLabel = cl.event_date || cl.created_at || "";
+                            const formattedDate = dateLabel
+                              ? new Date(dateLabel).toLocaleDateString("uk-UA", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric"
+                                })
+                              : "";
+                            const typeLabel = cl.checklist_type === "box" ? "🎁 Бокси" : "🍽️ Кейтеринг";
+                            const eventFormat = cl.event_format || "";
+                            const guestCount = cl.guest_count ? `${cl.guest_count} гостей` : "";
+                            return (
+                              <SelectItem key={cl.id} value={cl.id.toString()}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {typeLabel} {formattedDate ? `від ${formattedDate}` : `#${cl.id}`}
+                                  </span>
+                                  {(eventFormat || guestCount) && (
+                                    <span className="text-xs text-gray-500">
+                                      {eventFormat && guestCount ? `${eventFormat}, ${guestCount}` : eventFormat || guestCount}
                                     </span>
-                                    {(eventFormat || guestCount) && (
-                                      <span className="text-xs text-gray-500">
-                                        {eventFormat && guestCount ? `${eventFormat}, ${guestCount}` : eventFormat || guestCount}
-                                      </span>
-                                    )}
-                                  </div>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      
-                      {/* Fallback на анкети якщо немає чеклістів */}
-                      {clientChecklists.length === 0 && clientQuestionnaires.length > 0 && (
-                        <>
-                          <p className="text-xs text-amber-600 mb-2">
-                            💡 Немає чеклістів - використовуємо анкети
-                          </p>
-                          <Select
-                            value={selectedQuestionnaireId?.toString() || ""}
-                            onValueChange={(value) => {
-                              const qId = parseInt(value, 10);
-                              const q = clientQuestionnaires.find((qq) => qq.id === qId) || null;
-                              applyQuestionnaireToKP(q);
-                            }}
-                          >
-                            <SelectTrigger className="h-10">
-                              <SelectValue placeholder="Оберіть анкету клієнта" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clientQuestionnaires.map((q) => {
-                                const dateLabel = q.event_date || q.created_at || "";
-                                const formattedDate = dateLabel
-                                  ? new Date(dateLabel).toLocaleDateString("uk-UA", {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      year: "numeric"
-                                    })
-                                  : "";
-                                const eventType = q.event_type || "";
-                                const guestCount = q.guest_count ? `${q.guest_count} гостей` : "";
-                                return (
-                                  <SelectItem key={q.id} value={q.id.toString()}>
-                                    <div className="flex flex-col">
-                                      <span className="font-medium">
-                                        {formattedDate ? `Анкета від ${formattedDate}` : `Анкета #${q.id}`}
-                                      </span>
-                                      {(eventType || guestCount) && (
-                                        <span className="text-xs text-gray-500">
-                                          {eventType && guestCount ? `${eventType}, ${guestCount}` : eventType || guestCount}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                        </>
-                      )}
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
                       
                       {selectedChecklistId && (
                         <p className="text-xs text-emerald-700 flex items-center gap-1">
                           <Check className="w-3 h-3" />
                           Дані з чекліста будуть автоматично заповнені у відповідних полях
-                        </p>
-                      )}
-                      {selectedQuestionnaireId && !selectedChecklistId && (
-                        <p className="text-xs text-emerald-700 flex items-center gap-1">
-                          <Clipboard className="w-3 h-3" />
-                          Дані з анкети будуть автоматично заповнені у відповідних полях
                         </p>
                       )}
                     </>
