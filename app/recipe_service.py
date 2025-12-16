@@ -29,6 +29,45 @@ except ImportError as e:
 MARKER_POINT = "point"  # Маркер початку страви
 MARKER_IN = "in"        # Маркер компонента боксу
 
+# Список помилок Excel, які потрібно ігнорувати
+EXCEL_ERRORS = {'#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#NUM!', '#ERROR!'}
+
+
+def safe_float(value, default: float = 0.0) -> Optional[float]:
+    """
+    Безпечно конвертує значення в float, ігноруючи помилки Excel.
+    
+    Args:
+        value: Значення з клітинки Excel
+        default: Значення за замовчуванням якщо конвертація неможлива
+    
+    Returns:
+        float або None
+    """
+    if value is None:
+        return None
+    
+    # Якщо це вже число - повертаємо
+    if isinstance(value, (int, float)):
+        return float(value)
+    
+    # Конвертуємо в строку для перевірки
+    str_value = str(value).strip()
+    
+    # Перевіряємо на помилки Excel
+    if str_value.upper() in EXCEL_ERRORS or str_value.startswith('#'):
+        return default
+    
+    # Якщо порожня строка
+    if not str_value:
+        return None
+    
+    # Спробуємо конвертувати
+    try:
+        return float(str_value.replace(',', '.'))
+    except (ValueError, TypeError):
+        return default
+
 
 # ============ Імпорт техкарт ============
 
@@ -145,7 +184,7 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=float(col_e) if col_e else None,
+                    weight_per_portion=safe_float(col_e),
                     recipe_type="catering"
                 )
             ingredient_index = 0
@@ -153,8 +192,8 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
         
         # Якщо немає маркера і є назва - це інгредієнт
         if current_recipe and col_c and col_e:
-            try:
-                weight = float(col_e) if col_e else 0
+            weight = safe_float(col_e, 0)
+            if weight is not None:
                 ingredient = models.RecipeIngredient(
                     product_name=str(col_c).strip(),
                     weight_per_portion=weight,
@@ -163,8 +202,6 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
                 )
                 current_recipe.ingredients.append(ingredient)
                 ingredient_index += 1
-            except (ValueError, TypeError) as e:
-                result["errors"].append(f"Помилка парсингу інгредієнта '{col_c}': {str(e)}")
     
     # Зберігаємо останню страву
     if current_recipe:
@@ -236,7 +273,7 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=float(col_e) if col_e else None,
+                    weight_per_portion=safe_float(col_e),
                     recipe_type="box"
                 )
             
@@ -248,7 +285,7 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         if col_g == MARKER_IN and col_c and current_recipe:
             current_component = models.RecipeComponent(
                 name=str(col_c).strip(),
-                quantity_per_portion=float(col_a) if col_a and isinstance(col_a, (int, float)) else 1.0,
+                quantity_per_portion=safe_float(col_a, 1.0) or 1.0,
                 order_index=component_index
             )
             current_recipe.components.append(current_component)
@@ -259,8 +296,8 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         
         # Якщо є компонент і є назва/вага - це інгредієнт компонента
         if current_component and col_c and col_e:
-            try:
-                weight = float(col_e) if col_e else 0
+            weight = safe_float(col_e, 0)
+            if weight is not None:
                 ingredient = models.RecipeComponentIngredient(
                     product_name=str(col_c).strip(),
                     weight_per_unit=weight,
@@ -269,13 +306,11 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 )
                 current_component.ingredients.append(ingredient)
                 ingredient_index += 1
-            except (ValueError, TypeError) as e:
-                result["errors"].append(f"Помилка парсингу інгредієнта '{col_c}': {str(e)}")
         
         # Якщо немає компонента, але є страва і інгредієнт - додаємо як прямий інгредієнт
         elif current_recipe and not current_component and col_c and col_e:
-            try:
-                weight = float(col_e) if col_e else 0
+            weight = safe_float(col_e, 0)
+            if weight is not None:
                 ingredient = models.RecipeIngredient(
                     product_name=str(col_c).strip(),
                     weight_per_portion=weight,
@@ -284,8 +319,6 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 )
                 current_recipe.ingredients.append(ingredient)
                 ingredient_index += 1
-            except (ValueError, TypeError) as e:
-                result["errors"].append(f"Помилка парсингу інгредієнта '{col_c}': {str(e)}")
     
     # Зберігаємо останню страву
     if current_recipe:
