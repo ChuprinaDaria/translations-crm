@@ -274,6 +274,12 @@ export function TemplatePreview({
     design?.logo_image,
     design?.header_image,
     design?.background_image,
+    // Кольори елементів PDF
+    design?.format_bg_color,
+    design?.table_header_bg_color,
+    design?.category_bg_color,
+    design?.summary_bg_color,
+    design?.total_bg_color,
     JSON.stringify(design?.menu_sections), // Для правильної реакції на зміни масиву
     design?.show_item_photo,
     design?.show_item_weight,
@@ -285,6 +291,8 @@ export function TemplatePreview({
     design?.summary_title,
     design?.footer_text,
     design?.page_orientation,
+    design?.booking_terms,
+    JSON.stringify(design?.gallery_photos),
   ]);
 
   // Конвертуємо File в base64 data URL
