@@ -355,7 +355,7 @@ export function ChecklistManagement() {
       <Dialog open={showWizard} onOpenChange={setShowWizard}>
         <DialogContent 
           hideClose 
-          className="max-w-[100vw] w-[100vw] h-[100vh] max-h-[100vh] p-0 gap-0 overflow-hidden !rounded-none !border-0"
+          className="!max-w-[100vw] !w-[100vw] !h-[100vh] !max-h-[100vh] !p-0 !gap-0 overflow-hidden !rounded-none !border-0 !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%]"
         >
           <DialogHeader className="sr-only">
             <DialogTitle>
