@@ -357,8 +357,11 @@ async function apiFetch<T>(
   
   console.log(`[API] ${options.method || 'GET'} ${endpoint}`);
   
+  // Якщо body є FormData, не встановлюємо Content-Type (браузер сам додасть multipart/form-data з boundary)
+  const isFormData = options.body instanceof FormData;
+  
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string> || {}),
   };
 
