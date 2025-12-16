@@ -826,3 +826,76 @@ def delete_recipe(db: Session, recipe_id: int) -> bool:
         db.commit()
         return True
     return False
+
+
+def update_recipe(
+    db: Session,
+    recipe_id: int,
+    *,
+    name: str,
+    recipe_type: Literal["catering", "box"],
+    category: Optional[str] = None,
+    weight_per_portion: Optional[float] = None,
+    ingredients: Optional[List[Dict]] = None,
+    components: Optional[List[Dict]] = None,
+) -> Optional[models.Recipe]:
+    """
+    Оновлює техкарту та повністю замінює її інгредієнти/компоненти.
+    Використовується для ручного редагування з фронтенду.
+    """
+    recipe = get_recipe_by_id(db, recipe_id)
+    if not recipe:
+        return None
+
+    recipe.name = name
+    recipe.category = category
+    recipe.weight_per_portion = weight_per_portion
+    recipe.recipe_type = recipe_type
+
+    # Повністю замінюємо склад: очищаємо старі зв'язки (delete-orphan каскад)
+    recipe.ingredients.clear()
+    recipe.components.clear()
+    db.flush()
+
+    # Додаємо прямі інгредієнти (для catering або як додаткові для box)
+    if ingredients:
+        for idx, ing_data in enumerate(ingredients):
+            if not ing_data.get("product_name"):
+                continue
+            ingredient = models.RecipeIngredient(
+                product_name=clean_product_name(str(ing_data["product_name"]).strip()),
+                weight_per_portion=float(ing_data.get("weight_per_portion") or 0),
+                unit=ing_data.get("unit", "г") or "г",
+                order_index=idx,
+            )
+            recipe.ingredients.append(ingredient)
+
+    # Додаємо компоненти (тільки для box)
+    if components and recipe_type == "box":
+        for comp_idx, comp_data in enumerate(components):
+            comp_name = (comp_data.get("name") or "").strip()
+            if not comp_name:
+                continue
+
+            component = models.RecipeComponent(
+                name=comp_name,
+                quantity_per_portion=float(comp_data.get("quantity_per_portion") or 1.0),
+                order_index=comp_idx,
+            )
+
+            for ing_idx, ing_data in enumerate(comp_data.get("ingredients", []) or []):
+                if not ing_data.get("product_name"):
+                    continue
+                component_ingredient = models.RecipeComponentIngredient(
+                    product_name=clean_product_name(str(ing_data["product_name"]).strip()),
+                    weight_per_unit=float(ing_data.get("weight_per_unit") or 0),
+                    unit=ing_data.get("unit", "г") or "г",
+                    order_index=ing_idx,
+                )
+                component.ingredients.append(component_ingredient)
+
+            recipe.components.append(component)
+
+    db.commit()
+    db.refresh(recipe)
+    return recipe

@@ -1522,6 +1522,51 @@ def get_recipe(
     return recipe
 
 
+@router.post("/recipes", response_model=schema.Recipe)
+def create_recipe_endpoint(
+    recipe_in: schema.RecipeCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Створити техкарту вручну (з фронтенду)."""
+    from recipe_service import create_recipe
+
+    return create_recipe(
+        db,
+        name=recipe_in.name,
+        recipe_type=recipe_in.recipe_type,
+        category=recipe_in.category,
+        weight_per_portion=recipe_in.weight_per_portion,
+        ingredients=[i.model_dump() for i in (recipe_in.ingredients or [])],
+        components=[c.model_dump() for c in (recipe_in.components or [])],
+    )
+
+
+@router.put("/recipes/{recipe_id}", response_model=schema.Recipe)
+def update_recipe_endpoint(
+    recipe_id: int,
+    recipe_in: schema.RecipeCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Оновити техкарту вручну (замінює інгредієнти/компоненти)."""
+    from recipe_service import update_recipe
+
+    updated = update_recipe(
+        db,
+        recipe_id,
+        name=recipe_in.name,
+        recipe_type=recipe_in.recipe_type,
+        category=recipe_in.category,
+        weight_per_portion=recipe_in.weight_per_portion,
+        ingredients=[i.model_dump() for i in (recipe_in.ingredients or [])],
+        components=[c.model_dump() for c in (recipe_in.components or [])],
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
+    return updated
+
+
 @router.delete("/recipes/{recipe_id}")
 def delete_recipe_endpoint(
     recipe_id: int,
