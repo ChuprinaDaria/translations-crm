@@ -176,18 +176,20 @@ function GalleryUploader({
         className="hidden"
       />
 
-      {/* Компактна сітка 3x3 - максимум 300px ширина */}
-      <div className="grid grid-cols-3 gap-2 max-w-[300px]">
+      {/* Компактна сітка 3x3 */}
+      <div className="grid grid-cols-3 gap-2" style={{ maxWidth: '280px' }}>
         {/* Існуючі фото */}
         {photos.map((photo, index) => (
           <div
             key={index}
-            className="relative w-[90px] h-[90px] bg-gray-100 rounded-lg overflow-hidden group"
+            className="relative bg-gray-100 rounded-lg overflow-hidden group"
+            style={{ width: '85px', height: '85px' }}
           >
             <img
               src={getImageUrl(photo)}
               alt={`Gallery ${index + 1}`}
-              className="w-full h-full object-cover"
+              className="object-cover"
+              style={{ width: '85px', height: '85px' }}
             />
             <button
               onClick={() => handleDeletePhoto(index)}
@@ -206,7 +208,8 @@ function GalleryUploader({
           <button
             onClick={handleUploadClick}
             disabled={uploading !== null}
-            className="w-[90px] h-[90px] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ width: '85px', height: '85px' }}
           >
             {uploading !== null ? (
               <div className="animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent" />
@@ -223,7 +226,8 @@ function GalleryUploader({
         {Array.from({ length: Math.max(0, 8 - photos.length) }).map((_, i) => (
           <div
             key={`empty-${i}`}
-            className="w-[90px] h-[90px] border border-dashed border-gray-200 rounded-lg flex items-center justify-center"
+            className="border border-dashed border-gray-200 rounded-lg flex items-center justify-center"
+            style={{ width: '85px', height: '85px' }}
           >
             <Image className="w-4 h-4 text-gray-300" />
           </div>
