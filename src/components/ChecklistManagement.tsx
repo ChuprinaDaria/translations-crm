@@ -230,43 +230,43 @@ export function ChecklistManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-300 hover:shadow-xl transition-all cursor-pointer">
+        <Card className="hover:shadow-lg transition-all cursor-pointer border border-gray-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-amber-700 font-semibold mb-2">Бокси</p>
-                <p className="text-4xl font-bold text-amber-900">{stats.box_count}</p>
+                <p className="text-sm text-gray-600 font-medium mb-1">Бокси</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.box_count}</p>
               </div>
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-lg">
-                <Package className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 rounded-xl bg-orange-100 flex items-center justify-center">
+                <Package className="w-7 h-7 text-[#FF5A00]" />
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 hover:shadow-xl transition-all cursor-pointer">
+        <Card className="hover:shadow-lg transition-all cursor-pointer border border-gray-200 bg-orange-50">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-orange-700 font-semibold mb-2">Кейтеринг</p>
-                <p className="text-4xl font-bold text-orange-900">{stats.catering_count}</p>
+                <p className="text-sm text-gray-600 font-medium mb-1">Кейтеринг</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.catering_count}</p>
               </div>
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FF5A00] to-orange-500 flex items-center justify-center shadow-lg">
-                <ChefHat className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 rounded-xl bg-orange-100 flex items-center justify-center">
+                <ChefHat className="w-7 h-7 text-[#FF5A00]" />
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 hover:shadow-xl transition-all cursor-pointer">
+        <Card className="hover:shadow-lg transition-all cursor-pointer border border-gray-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-700 font-semibold mb-2">Всього</p>
-                <p className="text-4xl font-bold text-blue-900">{stats.total}</p>
+                <p className="text-sm text-gray-600 font-medium mb-1">Всього</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
               </div>
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-blue-500 flex items-center justify-center shadow-lg">
-                <FileText className="w-8 h-8 text-white" />
+              <div className="w-14 h-14 rounded-xl bg-orange-100 flex items-center justify-center">
+                <FileText className="w-7 h-7 text-[#FF5A00]" />
               </div>
             </div>
           </CardContent>
