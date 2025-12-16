@@ -159,6 +159,22 @@ export function useChecklistForm({
     return cleaned.length === 12 && cleaned.startsWith("380");
   };
 
+  // Отримати повідомлення про помилку телефону
+  const getPhoneErrorMessage = (phone: string): string => {
+    const cleaned = phone.replace(/\D/g, "");
+    if (!cleaned.startsWith("380")) {
+      return "Номер має починатися з +380";
+    }
+    if (cleaned.length < 12) {
+      const missing = 12 - cleaned.length;
+      return `Не вистачає ${missing} цифр${missing === 1 ? 'и' : ''}`;
+    }
+    if (cleaned.length > 12) {
+      return "Забагато цифр у номері";
+    }
+    return "Невірний формат телефону";
+  };
+
   // Валідація всієї форми
   const validate = (): boolean => {
     const newErrors: ValidationErrors = {};
@@ -171,7 +187,7 @@ export function useChecklistForm({
     if (!formData.contact_phone || formData.contact_phone.trim() === "") {
       newErrors.contact_phone = "Телефон обов'язковий";
     } else if (!validatePhone(formData.contact_phone)) {
-      newErrors.contact_phone = "Невірний формат телефону";
+      newErrors.contact_phone = getPhoneErrorMessage(formData.contact_phone);
     }
 
     if (!formData.event_date || formData.event_date.trim() === "") {
@@ -199,7 +215,7 @@ export function useChecklistForm({
         if (!formData.contact_phone || formData.contact_phone.trim() === "") {
           newErrors.contact_phone = "Телефон обов'язковий";
         } else if (!validatePhone(formData.contact_phone)) {
-          newErrors.contact_phone = "Невірний формат телефону";
+          newErrors.contact_phone = getPhoneErrorMessage(formData.contact_phone);
         }
         if (formData.contact_email && !validateEmail(formData.contact_email)) {
           newErrors.contact_email = "Невірний формат email";

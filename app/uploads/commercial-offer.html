@@ -442,7 +442,7 @@
                     <div class="client-info-line"><span class="client-info-label">Замовник:</span> {{ kp.client_name or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Номер телефону:</span> {{ kp.client_phone or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Пошта:</span> {{ kp.client_email or '—' }}</div>
-                    <div class="client-info-line"><span class="client-info-label">Формат:</span> {{ kp.event_format or '—' }}</div>
+                    <div class="client-info-line"><span class="client-info-label">Формат:</span> {{ event_format_display or kp.event_format or '—' }}</div>
                     <div class="client-info-line"><span class="client-info-label">Місце проведення:</span> {{ kp.event_location or '—' }}</div>
                 </div>
                 <div class="client-info-col">

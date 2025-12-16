@@ -32,6 +32,60 @@ MARKER_IN = "in"        # Маркер компонента боксу
 # Список помилок Excel, які потрібно ігнорувати
 EXCEL_ERRORS = {'#REF!', '#N/A', '#VALUE!', '#DIV/0!', '#NAME?', '#NULL!', '#NUM!', '#ERROR!'}
 
+# Максимальна довжина назви продукту в базі
+MAX_PRODUCT_NAME_LENGTH = 500
+
+
+def is_cooking_step(text: str) -> bool:
+    """
+    Перевіряє, чи є текст кроком приготування, а не назвою інгредієнта.
+    
+    Кроки приготування зазвичай:
+    - Починаються з цифри та крапки (1., 2., 3.)
+    - Містять дієслова у наказовому способі (Змішайте, Додайте, Подавайте)
+    - Довші за 100 символів
+    """
+    if not text or not isinstance(text, str):
+        return False
+    
+    text = text.strip()
+    
+    # Перевірка на крок з номером (1., 2., 3. і т.д.)
+    import re
+    if re.match(r'^\d+\.\s', text):
+        return True
+    
+    # Перевірка на довгий текст з дієсловами приготування
+    cooking_verbs = [
+        'змішайте', 'додайте', 'подавайте', 'запікайте', 'варіть', 
+        'смажте', 'нарізати', 'нарізайте', 'залиште', 'охолодіть',
+        'перемішайте', 'помістіть', 'сформуйте', 'обверніть', 'викладіть',
+        'накрийте', 'зачекайте', 'дайте', 'поставте'
+    ]
+    
+    text_lower = text.lower()
+    if len(text) > 100 and any(verb in text_lower for verb in cooking_verbs):
+        return True
+    
+    return False
+
+
+def clean_product_name(name: str) -> str:
+    """
+    Очищає та обрізає назву продукту для збереження в базі.
+    """
+    if not name:
+        return ""
+    
+    # Видаляємо зайві пробіли
+    cleaned = str(name).strip()
+    
+    # Обрізаємо до максимальної довжини
+    if len(cleaned) > MAX_PRODUCT_NAME_LENGTH:
+        cleaned = cleaned[:MAX_PRODUCT_NAME_LENGTH - 3] + "..."
+    
+    return cleaned
+
 
 def safe_float(value, default: float = 0.0) -> Optional[float]:
     """
@@ -192,10 +246,16 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
         
         # Якщо немає маркера і є назва - це інгредієнт
         if current_recipe and col_c and col_e:
+            product_name = str(col_c).strip()
+            
+            # Пропускаємо кроки приготування
+            if is_cooking_step(product_name):
+                continue
+            
             weight = safe_float(col_e, 0)
             if weight is not None:
                 ingredient = models.RecipeIngredient(
-                    product_name=str(col_c).strip(),
+                    product_name=clean_product_name(product_name),
                     weight_per_portion=weight,
                     unit="г",
                     order_index=ingredient_index
@@ -296,10 +356,16 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         
         # Якщо є компонент і є назва/вага - це інгредієнт компонента
         if current_component and col_c and col_e:
+            product_name = str(col_c).strip()
+            
+            # Пропускаємо кроки приготування
+            if is_cooking_step(product_name):
+                continue
+            
             weight = safe_float(col_e, 0)
             if weight is not None:
                 ingredient = models.RecipeComponentIngredient(
-                    product_name=str(col_c).strip(),
+                    product_name=clean_product_name(product_name),
                     weight_per_unit=weight,
                     unit="г",
                     order_index=ingredient_index
@@ -309,10 +375,16 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         
         # Якщо немає компонента, але є страва і інгредієнт - додаємо як прямий інгредієнт
         elif current_recipe and not current_component and col_c and col_e:
+            product_name = str(col_c).strip()
+            
+            # Пропускаємо кроки приготування
+            if is_cooking_step(product_name):
+                continue
+            
             weight = safe_float(col_e, 0)
             if weight is not None:
                 ingredient = models.RecipeIngredient(
-                    product_name=str(col_c).strip(),
+                    product_name=clean_product_name(product_name),
                     weight_per_portion=weight,
                     unit="г",
                     order_index=ingredient_index

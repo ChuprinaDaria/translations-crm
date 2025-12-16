@@ -899,7 +899,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setClientPhone(kp.client_phone || "");
         setCoordinatorName(kp.coordinator_name || "");
         setCoordinatorPhone(kp.coordinator_phone || "");
-        setTransportTotal(kp.transport_total?.toString() || "");
+        // transport_total розбиваємо на дві частини (equipment і personnel)
+        // Якщо є тільки загальна сума - ставимо всю в equipment
+        if (kp.transport_total) {
+          setTransportEquipmentTotal(kp.transport_total.toString());
+          setTransportPersonnelTotal("");
+        }
         setSelectedTemplateId(kp.template_id || null);
         setSelectedDiscountId(kp.discount_id || null); // Deprecated
         setSelectedCashbackId(kp.cashback_id || null);
@@ -2999,9 +3004,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             <div className="space-y-1">
                               <Label>Підкатегорія (для знижки)</Label>
                               <Select
-                                value={item.subcategoryId?.toString() || ""}
+                                value={item.subcategoryId?.toString() || "__none__"}
                                 onValueChange={(value) => {
-                                  const subcategoryId = value ? parseInt(value) : undefined;
+                                  const subcategoryId = value && value !== "__none__" ? parseInt(value) : undefined;
                                   setEquipmentItems(prev =>
                                     prev.map(i =>
                                       i.id === item.id
@@ -3015,7 +3020,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                   <SelectValue placeholder="Оберіть" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">Не вказано</SelectItem>
+                                  <SelectItem value="__none__">Не вказано</SelectItem>
                                   {equipmentSubcategories.map((sub) => (
                                     <SelectItem key={sub.id} value={sub.id.toString()}>
                                       {sub.name}
@@ -4049,9 +4054,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <div className="space-y-2">
                             <Label htmlFor="discount-menu-select">Знижка на меню</Label>
                             <Select
-                              value={discountMenuId?.toString() || ""}
+                              value={discountMenuId?.toString() || "__none__"}
                               onValueChange={(value) => {
-                                const id = value ? parseInt(value) : null;
+                                const id = value && value !== "__none__" ? parseInt(value) : null;
                                 setDiscountMenuId(id);
                               }}
                             >
@@ -4059,7 +4064,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 <SelectValue placeholder="Оберіть знижку на меню" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Без знижки</SelectItem>
+                                <SelectItem value="__none__">Без знижки</SelectItem>
                                 {benefits
                                   .filter((b) => b.type === "discount" && b.is_active)
                                   .map((benefit) => (
@@ -4074,9 +4079,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <div className="space-y-2">
                             <Label htmlFor="discount-equipment-select">Знижка на обладнання (загальна)</Label>
                             <Select
-                              value={discountEquipmentId?.toString() || ""}
+                              value={discountEquipmentId?.toString() || "__none__"}
                               onValueChange={(value) => {
-                                const id = value ? parseInt(value) : null;
+                                const id = value && value !== "__none__" ? parseInt(value) : null;
                                 setDiscountEquipmentId(id);
                                 // Якщо вибрано загальну знижку, очищаємо знижки по підкатегоріях
                                 if (id) {
@@ -4088,7 +4093,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 <SelectValue placeholder="Оберіть знижку на обладнання" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Без знижки</SelectItem>
+                                <SelectItem value="__none__">Без знижки</SelectItem>
                                 {benefits
                                   .filter((b) => b.type === "discount" && b.is_active)
                                   .map((benefit) => (
@@ -4118,7 +4123,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                         <Select
                                           value={discountEquipmentSubcategories[sub.id]?.toString() || ""}
                                           onValueChange={(value) => {
-                                            const id = value ? parseInt(value) : null;
+                                            const id = value && value !== "__none__" ? parseInt(value) : null;
                                             setDiscountEquipmentSubcategories(prev => {
                                               const next = { ...prev };
                                               if (id) {
@@ -4134,7 +4139,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                             <SelectValue placeholder="—" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="">Без знижки</SelectItem>
+                                            <SelectItem value="__none__">Без знижки</SelectItem>
                                             {benefits
                                               .filter((b) => b.type === "discount" && b.is_active)
                                               .map((benefit) => (
@@ -4156,9 +4161,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <div className="space-y-2">
                             <Label htmlFor="discount-service-select">Знижка на сервіс</Label>
                             <Select
-                              value={discountServiceId?.toString() || ""}
+                              value={discountServiceId?.toString() || "__none__"}
                               onValueChange={(value) => {
-                                const id = value ? parseInt(value) : null;
+                                const id = value && value !== "__none__" ? parseInt(value) : null;
                                 setDiscountServiceId(id);
                               }}
                             >
@@ -4166,7 +4171,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                 <SelectValue placeholder="Оберіть знижку на сервіс" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Без знижки</SelectItem>
+                                <SelectItem value="__none__">Без знижки</SelectItem>
                                 {benefits
                                   .filter((b) => b.type === "discount" && b.is_active)
                                   .map((benefit) => (
@@ -4529,8 +4534,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     }
                   }
                   
-                  const transportTotalNum = parseFloat(transportTotal || "0") || 0;
-                  const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalNum;
+                  const transportTotalPreviewCalc = (parseFloat(transportEquipmentTotal || "0") || 0) + (parseFloat(transportPersonnelTotal || "0") || 0);
+                  const totalBeforeCashback = finalFoodPrice + finalEquipmentTotal + finalServiceTotal + transportTotalPreviewCalc;
                   const cashbackAmount = selectedCashbackId
                     ? (() => {
                         const cashbackBenefit = benefits.find((b) => b.id === selectedCashbackId);

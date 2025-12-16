@@ -1090,6 +1090,28 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     if selected_template and getattr(selected_template, "booking_terms", None):
         booking_terms = selected_template.booking_terms
     
+    # Парсимо event_format якщо це JSON
+    event_format_display = None
+    if kp.event_format:
+        try:
+            import json
+            parsed = json.loads(kp.event_format)
+            if isinstance(parsed, list):
+                # Формуємо читабельний рядок з масиву форматів
+                parts = []
+                for fmt in parsed:
+                    if isinstance(fmt, dict):
+                        part = fmt.get("format", "")
+                        if fmt.get("time"):
+                            part += f" ({fmt['time']})"
+                        if part:
+                            parts.append(part)
+                event_format_display = ", ".join(parts) if parts else kp.event_format
+            else:
+                event_format_display = kp.event_format
+        except (json.JSONDecodeError, TypeError):
+            event_format_display = kp.event_format
+    
     html_content = template.render(
         kp=kp,
         people_count=effective_people_count,
@@ -1144,6 +1166,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         gallery_photos=gallery_photos_src,
         # Умови бронювання
         booking_terms=booking_terms,
+        # Форматований формат заходу (якщо був JSON)
+        event_format_display=event_format_display,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -3958,6 +3982,19 @@ def get_checklist_by_id(
     return result
 
 
+def normalize_phone(phone: str) -> str:
+    """Нормалізує телефон - видаляє всі символи крім цифр"""
+    if not phone:
+        return phone
+    # Залишаємо тільки цифри
+    import re
+    digits = re.sub(r'\D', '', phone)
+    # Повертаємо у форматі +380XXXXXXXXX
+    if digits.startswith('380'):
+        return '+' + digits
+    return '+380' + digits[-9:] if len(digits) >= 9 else '+' + digits
+
+
 @router.post("/checklists")
 def create_checklist(
     checklist_data: schema.ChecklistCreate,
@@ -3967,6 +4004,9 @@ def create_checklist(
     """Створити новий чекліст"""
     client_id = checklist_data.client_id
     
+    # Нормалізуємо телефон для пошуку та збереження
+    normalized_phone = normalize_phone(checklist_data.contact_phone) if checklist_data.contact_phone else None
+    
     # Якщо вказано client_id, перевіряємо чи існує клієнт
     if client_id:
         client = db.query(models.Client).filter(models.Client.id == client_id).first()
@@ -3974,19 +4014,29 @@ def create_checklist(
             raise HTTPException(404, "Client not found")
     else:
         # Автоматично створюємо або знаходимо клієнта на основі контактних даних
-        if checklist_data.contact_phone:
-            # Шукаємо існуючого клієнта по телефону
+        if normalized_phone:
+            # Шукаємо існуючого клієнта по нормалізованому телефону
+            # Порівнюємо точне співпадіння (телефони вже нормалізовані при збереженні)
             existing_client = db.query(models.Client).filter(
-                models.Client.phone == checklist_data.contact_phone
+                models.Client.phone == normalized_phone
             ).first()
+            
+            # Альтернативний пошук - по цифрах (якщо в базі є старі записи з різним форматом)
+            if not existing_client:
+                from sqlalchemy import func
+                # Витягуємо тільки цифри для порівняння
+                phone_digits = normalized_phone.replace('+', '')
+                existing_client = db.query(models.Client).filter(
+                    func.regexp_replace(models.Client.phone, r'\D', '', 'g') == phone_digits
+                ).first()
             
             if existing_client:
                 client_id = existing_client.id
             elif checklist_data.contact_name:
-                # Створюємо нового клієнта
+                # Створюємо нового клієнта з нормалізованим телефоном
                 new_client = models.Client(
                     name=checklist_data.contact_name,
-                    phone=checklist_data.contact_phone,
+                    phone=normalized_phone,
                     email=checklist_data.contact_email,
                     source="checklist"  # Джерело - чекліст
                 )
@@ -4064,17 +4114,29 @@ def update_checklist(
         contact_name = update_data.get('contact_name') or checklist.contact_name
         contact_email = update_data.get('contact_email') or checklist.contact_email
         
-        if contact_phone:
+        # Нормалізуємо телефон
+        normalized_phone = normalize_phone(contact_phone) if contact_phone else None
+        
+        if normalized_phone:
+            # Шукаємо по точному співпадінню
             existing_client = db.query(models.Client).filter(
-                models.Client.phone == contact_phone
+                models.Client.phone == normalized_phone
             ).first()
+            
+            # Альтернативний пошук по цифрах
+            if not existing_client:
+                from sqlalchemy import func
+                phone_digits = normalized_phone.replace('+', '')
+                existing_client = db.query(models.Client).filter(
+                    func.regexp_replace(models.Client.phone, r'\D', '', 'g') == phone_digits
+                ).first()
             
             if existing_client:
                 update_data['client_id'] = existing_client.id
             elif contact_name:
                 new_client = models.Client(
                     name=contact_name,
-                    phone=contact_phone,
+                    phone=normalized_phone,
                     email=contact_email,
                     source="checklist"
                 )

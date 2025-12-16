@@ -555,7 +555,7 @@ class RecipeIngredient(Base):
     id = Column(Integer, primary_key=True, index=True)
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
     
-    product_name = Column(String(300), nullable=False, index=True)  # Назва продукту
+    product_name = Column(String(500), nullable=False, index=True)  # Назва продукту
     weight_per_portion = Column(Float, nullable=False)  # Вага на 1 порцію в грамах
     unit = Column(String(50), default="г")  # Одиниця виміру
     order_index = Column(Integer, default=0)  # Порядок відображення
@@ -576,7 +576,7 @@ class RecipeComponentIngredient(Base):
     id = Column(Integer, primary_key=True, index=True)
     component_id = Column(Integer, ForeignKey("recipe_components.id", ondelete="CASCADE"), nullable=False)
     
-    product_name = Column(String(300), nullable=False, index=True)  # Назва продукту
+    product_name = Column(String(500), nullable=False, index=True)  # Назва продукту
     weight_per_unit = Column(Float, nullable=False)  # Вага на 1 одиницю компонента в грамах
     unit = Column(String(50), default="г")  # Одиниця виміру
     order_index = Column(Integer, default=0)  # Порядок відображення
