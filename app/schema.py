@@ -306,6 +306,13 @@ class TemplateBase(BaseModel):
     text_color: Optional[str] = None         # Основний колір тексту
     font_family: Optional[str] = None        # CSS font-family для основного тексту
     
+    # Кольори елементів PDF
+    format_bg_color: Optional[str] = None       # Фон формату (ФУРШЕТ 13:30-14:30)
+    table_header_bg_color: Optional[str] = None # Фон шапки таблиці
+    category_bg_color: Optional[str] = None     # Фон категорій страв
+    summary_bg_color: Optional[str] = None      # Фон "ДО СПЛАТИ ЗА..."
+    total_bg_color: Optional[str] = None        # Фон "ВСЬОГО ДО СПЛАТИ"
+    
     # Налаштування відображення колонок у таблиці меню
     show_item_photo: Optional[bool] = True
     show_item_weight: Optional[bool] = True
@@ -367,6 +374,13 @@ class TemplateUpdate(BaseModel):
     secondary_color: Optional[str] = None
     text_color: Optional[str] = None
     font_family: Optional[str] = None
+    
+    # Кольори елементів PDF
+    format_bg_color: Optional[str] = None
+    table_header_bg_color: Optional[str] = None
+    category_bg_color: Optional[str] = None
+    summary_bg_color: Optional[str] = None
+    total_bg_color: Optional[str] = None
     
     # Налаштування відображення колонок
     show_item_photo: Optional[bool] = None

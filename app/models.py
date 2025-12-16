@@ -88,6 +88,13 @@ class Template(Base):
     secondary_color = Column(String, nullable=True)  # Другорядний колір / фони блоків
     text_color = Column(String, nullable=True)       # Основний колір тексту
     font_family = Column(String, nullable=True)      # Назва шрифту (CSS font-family)
+    
+    # Кольори елементів PDF
+    format_bg_color = Column(String, nullable=True)       # Фон формату (ФУРШЕТ 13:30-14:30)
+    table_header_bg_color = Column(String, nullable=True) # Фон шапки таблиці (НАЗВА, ФОТО...)
+    category_bg_color = Column(String, nullable=True)     # Фон категорій страв
+    summary_bg_color = Column(String, nullable=True)      # Фон "ДО СПЛАТИ ЗА..."
+    total_bg_color = Column(String, nullable=True)        # Фон "ВСЬОГО ДО СПЛАТИ"
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

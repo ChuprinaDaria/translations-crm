@@ -944,6 +944,12 @@ export interface Template {
   secondary_color?: string | null;
   text_color?: string | null;
   font_family?: string | null;
+  // Кольори елементів PDF
+  format_bg_color?: string | null;
+  table_header_bg_color?: string | null;
+  category_bg_color?: string | null;
+  summary_bg_color?: string | null;
+  total_bg_color?: string | null;
   // Налаштування відображення колонок
   show_item_photo?: boolean;
   show_item_weight?: boolean;

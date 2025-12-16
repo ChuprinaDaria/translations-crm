@@ -27,7 +27,13 @@ type TemplateDesign = {
   font_family: string;
   logo_image: File | string | null;
   header_image: File | string | null;
-  background_image: File | string | null;
+  // Кольори елементів PDF
+  format_bg_color: string;
+  table_header_bg_color: string;
+  category_bg_color: string;
+  summary_bg_color: string;
+  total_bg_color: string;
+  // Налаштування таблиці
   show_item_photo: boolean;
   show_item_weight: boolean;
   show_item_quantity: boolean;
@@ -245,15 +251,15 @@ function DesignTab({
         />
       </div>
 
-      {/* Кольорова палітра */}
+      {/* Основні кольори */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Кольорова палітра</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Основні кольори</h3>
         <div className="space-y-4">
           <ColorPicker
             label="Основний колір (акценти, заголовки)"
             value={design.primary_color}
             onChange={(color) => setDesign({ ...design, primary_color: color })}
-            presets={["#FF5A00", "#2563EB", "#10B981", "#8B5CF6", "#F59E0B"]}
+            presets={["#FF5A00", "#FF8C00", "#2563EB", "#10B981", "#8B5CF6"]}
           />
           <ColorPicker
             label="Колір тексту"
@@ -261,11 +267,42 @@ function DesignTab({
             onChange={(color) => setDesign({ ...design, text_color: color })}
             presets={["#1A1A1A", "#374151", "#6B7280", "#000000"]}
           />
+        </div>
+      </div>
+
+      {/* Кольори елементів PDF */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Кольори елементів PDF</h3>
+        <div className="space-y-4">
           <ColorPicker
-            label="Колір фону"
-            value={design.secondary_color}
-            onChange={(color) => setDesign({ ...design, secondary_color: color })}
-            presets={["#FFFFFF", "#F9FAFB", "#FEF3F2", "#FFFBEB"]}
+            label="Фон формату заходу (ФУРШЕТ 13:30-14:30)"
+            value={design.format_bg_color}
+            onChange={(color) => setDesign({ ...design, format_bg_color: color })}
+            presets={["#FF8C00", "#FF5A00", "#FFA500", "#2563EB", "#10B981"]}
+          />
+          <ColorPicker
+            label="Фон шапки таблиці (НАЗВА, ФОТО, ВАГА...)"
+            value={design.table_header_bg_color}
+            onChange={(color) => setDesign({ ...design, table_header_bg_color: color })}
+            presets={["#FFA500", "#FF8C00", "#FFB84D", "#2563EB", "#10B981"]}
+          />
+          <ColorPicker
+            label="Фон категорій страв (ХОЛОДНІ ЗАКУСКИ...)"
+            value={design.category_bg_color}
+            onChange={(color) => setDesign({ ...design, category_bg_color: color })}
+            presets={["#FFB84D", "#FFA500", "#FFCC80", "#93C5FD", "#6EE7B7"]}
+          />
+          <ColorPicker
+            label="Фон підсумку (ДО СПЛАТИ ЗА...)"
+            value={design.summary_bg_color}
+            onChange={(color) => setDesign({ ...design, summary_bg_color: color })}
+            presets={["#F3F4F6", "#E5E7EB", "#FEF3C7", "#DBEAFE", "#D1FAE5"]}
+          />
+          <ColorPicker
+            label="Фон ВСЬОГО ДО СПЛАТИ"
+            value={design.total_bg_color}
+            onChange={(color) => setDesign({ ...design, total_bg_color: color })}
+            presets={["#FF8C00", "#FF5A00", "#FFA500", "#2563EB", "#10B981"]}
           />
         </div>
       </div>
@@ -308,16 +345,6 @@ function DesignTab({
           onRemove={() => setDesign({ ...design, header_image: null })}
           helperText="Широка картинка шапки • Максимум 2MB"
           aspectRatio="21:9"
-          maxSize="2MB"
-        />
-
-        <ImageUploader
-          label="Фонове зображення (опціонально)"
-          currentImage={design.background_image}
-          onUpload={(file) => setDesign({ ...design, background_image: file })}
-          onRemove={() => setDesign({ ...design, background_image: null })}
-          helperText="Буде розміщено як watermark • Максимум 2MB"
-          aspectRatio="free"
           maxSize="2MB"
         />
       </div>
@@ -522,7 +549,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     name: template?.name || "",
     description: template?.description || "",
     is_default: template?.is_default || false,
-    // Дизайн
+    // Основні кольори
     primary_color: template?.primary_color || "#FF5A00",
     secondary_color: template?.secondary_color || "#FFFFFF",
     text_color: template?.text_color || "#1A1A1A",
@@ -530,7 +557,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     // Зображення
     logo_image: null as File | null,
     header_image: null as File | null,
-    background_image: null as File | null,
+    // Кольори елементів PDF
+    format_bg_color: template?.format_bg_color || "#FF8C00",
+    table_header_bg_color: template?.table_header_bg_color || "#FFA500",
+    category_bg_color: template?.category_bg_color || "#FFB84D",
+    summary_bg_color: template?.summary_bg_color || "#F3F4F6",
+    total_bg_color: template?.total_bg_color || "#FF8C00",
     // Структура таблиці
     show_item_photo: template?.show_item_photo ?? true,
     show_item_weight: template?.show_item_weight ?? true,
@@ -563,7 +595,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
   const uploadImages = async () => {
     const uploads: Record<string, string> = {};
 
-    for (const type of ["header", "background", "logo"]) {
+    for (const type of ["header", "logo"]) {
       const imageKey = `${type}_image` as keyof typeof formData;
       const file = formData[imageKey];
 
@@ -612,7 +644,6 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       const templateData = {
         ...formData,
         header_image: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : undefined),
-        background_image: uploadedImages.background || (typeof formData.background_image === "string" ? formData.background_image : undefined),
         logo_image: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
       };
 

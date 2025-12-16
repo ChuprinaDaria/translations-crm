@@ -997,11 +997,24 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             "item_count": data["item_count"],
         })
 
+    # Кольори елементів PDF (дефолтні)
+    format_bg_color = "#FF8C00"
+    table_header_bg_color = "#FFA500"
+    category_bg_color = "#FFB84D"
+    summary_bg_color = "#F3F4F6"
+    total_bg_color = "#FF8C00"
+    
     if selected_template:
         primary_color = getattr(selected_template, "primary_color", None) or primary_color
         secondary_color = getattr(selected_template, "secondary_color", None) or secondary_color
         text_color = getattr(selected_template, "text_color", None) or text_color
         font_family = getattr(selected_template, "font_family", None) or font_family
+        # Кольори елементів PDF з шаблону
+        format_bg_color = getattr(selected_template, "format_bg_color", None) or format_bg_color
+        table_header_bg_color = getattr(selected_template, "table_header_bg_color", None) or table_header_bg_color
+        category_bg_color = getattr(selected_template, "category_bg_color", None) or category_bg_color
+        summary_bg_color = getattr(selected_template, "summary_bg_color", None) or summary_bg_color
+        total_bg_color = getattr(selected_template, "total_bg_color", None) or total_bg_color
         
         # Оновлюємо конфігурацію з налаштувань шаблону
         # ВАЖЛИВО: menu_sections тепер завжди приходять з реальних категорій страв
@@ -1080,6 +1093,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         secondary_color=secondary_color,
         text_color=text_color,
         font_family=font_family,
+        # Кольори елементів PDF
+        format_bg_color=format_bg_color,
+        table_header_bg_color=table_header_bg_color,
+        category_bg_color=category_bg_color,
+        summary_bg_color=summary_bg_color,
+        total_bg_color=total_bg_color,
         company_name=company_name,
         created_date=created_date,
         event_date=event_date,
@@ -2894,6 +2913,12 @@ def generate_template_preview(
             secondary_color=design.get('secondary_color', '#ffffff'),
             text_color=design.get('text_color', '#333333'),
             font_family=design.get('font_family', 'Arial, sans-serif'),
+            # Кольори елементів PDF
+            format_bg_color=design.get('format_bg_color', '#FF8C00'),
+            table_header_bg_color=design.get('table_header_bg_color', '#FFA500'),
+            category_bg_color=design.get('category_bg_color', '#FFB84D'),
+            summary_bg_color=design.get('summary_bg_color', '#F3F4F6'),
+            total_bg_color=design.get('total_bg_color', '#FF8C00'),
             company_name=sample_data.get('company_name', 'Назва компанії'),
             created_date=sample_data.get('created_date', ''),
             event_date=sample_data.get('event_date', ''),

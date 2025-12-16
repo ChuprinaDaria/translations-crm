@@ -8,13 +8,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* === КОЛЬОРОВА СХЕМА === */
+        /* === КОЛЬОРОВА СХЕМА (динамічна з шаблону) === */
         :root {
-            --orange-format: #FF8C00;      /* Для блоку "ФУРШЕТ 13:30-14:30" */
-            --orange-categories: #FFB84D;   /* Для категорій страв (БРОШЕТИ, ГАРНІРИ...) */
-            --orange-header: #FFA500;       /* Для шапки таблиці (НАЗВА, ФОТО, ВАГА...) */
-            --orange-text: #FF8C00;         /* Для акцентів (ціни, кнопки) */
-            --text-dark: #333333;
+            --orange-format: {{ format_bg_color or '#FF8C00' }};      /* Фон формату (ФУРШЕТ 13:30-14:30) */
+            --orange-categories: {{ category_bg_color or '#FFB84D' }};   /* Фон категорій страв */
+            --orange-header: {{ table_header_bg_color or '#FFA500' }};   /* Фон шапки таблиці */
+            --orange-text: {{ primary_color or '#FF8C00' }};         /* Для акцентів (ціни) */
+            --summary-bg: {{ summary_bg_color or '#F3F4F6' }};       /* Фон "ДО СПЛАТИ ЗА..." */
+            --total-bg: {{ total_bg_color or '#FF8C00' }};           /* Фон "ВСЬОГО ДО СПЛАТИ" */
+            --text-dark: {{ text_color or '#333333' }};
             --text-gray: #666666;
             --border-light: #E5E5E5;
             --bg-gray: #666666;
@@ -254,10 +256,10 @@
             border-radius: 2mm;
         }
         
-        /* === СІРИЙ БЛОК ПІДСУМКІВ === */
+        /* === БЛОК ПІДСУМКІВ (ДО СПЛАТИ ЗА...) === */
         .summary-gray {
-            background: var(--bg-gray);
-            color: white;
+            background: var(--summary-bg);
+            color: #333333;
             padding: 3mm 5mm;
             margin-top: 2mm;
         }
@@ -274,7 +276,7 @@
         
         /* === ФІНАЛЬНИЙ ПІДСУМОК === */
         .final-summary {
-            background: var(--orange-format);
+            background: var(--total-bg);
             color: white;
             padding: 4mm 5mm;
             margin-top: 5mm;
