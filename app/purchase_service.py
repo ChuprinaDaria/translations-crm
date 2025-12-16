@@ -51,17 +51,29 @@ def _style_header_row(ws, row: int, fill=None, num_cols: int = 7):
 
 def _auto_column_width(ws, min_width: int = 10, max_width: int = 50):
     """Автоматично підлаштовує ширину колонок."""
-    for column_cells in ws.columns:
+    for col_idx, column_cells in enumerate(ws.columns, start=1):
         max_length = 0
-        column = column_cells[0].column_letter
+        # Знаходимо першу не-merged комірку для отримання column_letter
+        column_letter = None
+        for cell in column_cells:
+            # Перевіряємо, чи це не MergedCell
+            if hasattr(cell, 'column_letter'):
+                column_letter = cell.column_letter
+                break
+        
+        # Якщо не знайшли, використовуємо get_column_letter з індексу
+        if column_letter is None:
+            column_letter = get_column_letter(col_idx)
+        
         for cell in column_cells:
             try:
-                if cell.value:
+                # Пропускаємо MergedCell - вони не мають value
+                if hasattr(cell, 'value') and cell.value:
                     max_length = max(max_length, len(str(cell.value)))
             except:
                 pass
         adjusted_width = min(max(max_length + 2, min_width), max_width)
-        ws.column_dimensions[column].width = adjusted_width
+        ws.column_dimensions[column_letter].width = adjusted_width
 
 
 def _load_kps_with_items(db: Session, kp_ids: List[int]) -> List[models.KP]:
