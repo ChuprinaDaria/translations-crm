@@ -2878,9 +2878,11 @@ def generate_template_preview(
         
         # Умови бронювання для прев'ю
         booking_terms_preview = design.get('booking_terms', None)
+        print(f"[PREVIEW] booking_terms: {booking_terms_preview[:100] if booking_terms_preview else 'None'}...")
         
         # Галерея фото для прев'ю
         gallery_photos_preview = design.get('gallery_photos', [])
+        print(f"[PREVIEW] gallery_photos from design: {gallery_photos_preview}")
         gallery_photos_src = []
         if gallery_photos_preview:
             for photo_url in gallery_photos_preview:
@@ -2888,12 +2890,22 @@ def generate_template_preview(
                     try:
                         if photo_url.startswith('http') or photo_url.startswith('data:') or photo_url.startswith('file://'):
                             gallery_photos_src.append(photo_url)
+                            print(f"[PREVIEW] Photo URL (direct): {photo_url[:80]}...")
                         else:
+                            # Спробуємо різні варіанти шляхів
                             photo_path = (BASE_DIR / photo_url).resolve()
+                            print(f"[PREVIEW] Trying path: {photo_path}, exists: {photo_path.exists()}")
                             if photo_path.exists():
                                 gallery_photos_src.append(f"file://{photo_path}")
-                    except Exception:
-                        pass
+                            else:
+                                # Спробуємо з app/ директорії
+                                alt_path = (BASE_DIR / "app" / photo_url).resolve()
+                                print(f"[PREVIEW] Trying alt path: {alt_path}, exists: {alt_path.exists()}")
+                                if alt_path.exists():
+                                    gallery_photos_src.append(f"file://{alt_path}")
+                    except Exception as e:
+                        print(f"[PREVIEW] Error processing photo {photo_url}: {e}")
+        print(f"[PREVIEW] Final gallery_photos_src: {gallery_photos_src}")
         
         html_content = template.render(
             kp=sample_kp,
