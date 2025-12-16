@@ -1870,7 +1870,8 @@ async def upload_kp_gallery_photo(
         )
     
     # Перевіряємо, чи не перевищено ліміт фото
-    current_photos = kp.gallery_photos or []
+    # ВАЖЛИВО: для JSON-полів SQLAlchemy in-place зміни списку можуть не трекатись.
+    current_photos = list(kp.gallery_photos or [])
     if len(current_photos) >= 9:
         raise HTTPException(400, "Максимум 9 фото для КП")
     
@@ -1916,7 +1917,8 @@ def delete_kp_gallery_photo(
     if not kp:
         raise HTTPException(404, "KP not found")
     
-    current_photos = kp.gallery_photos or []
+    # ВАЖЛИВО: працюємо з копією (див. коментар вище)
+    current_photos = list(kp.gallery_photos or [])
     if photo_index < 0 or photo_index >= len(current_photos):
         raise HTTPException(400, "Невірний індекс фото")
     
@@ -3316,7 +3318,9 @@ async def upload_template_gallery_photo(
         )
     
     # Перевіряємо, чи не перевищено ліміт фото
-    current_photos = template.gallery_photos or []
+    # ВАЖЛИВО: для JSON-полів SQLAlchemy in-place зміни списку можуть не трекатись.
+    # Тому завжди працюємо з копією списку й присвоюємо новий об'єкт.
+    current_photos = list(template.gallery_photos or [])
     if len(current_photos) >= 9:
         raise HTTPException(400, "Максимум 9 фото для шаблону")
     
@@ -3363,7 +3367,8 @@ def delete_template_gallery_photo(
     if not template:
         raise HTTPException(404, "Template not found")
     
-    current_photos = template.gallery_photos or []
+    # ВАЖЛИВО: працюємо з копією (див. коментар вище)
+    current_photos = list(template.gallery_photos or [])
     
     if photo_index < 0 or photo_index >= len(current_photos):
         raise HTTPException(400, "Invalid photo index")
