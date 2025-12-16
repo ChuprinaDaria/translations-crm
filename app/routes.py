@@ -1389,6 +1389,11 @@ def export_purchase_excel(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[PURCHASE EXPORT ERROR] {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Помилка генерації закупки: {str(e)}")
 
     safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
     if not safe_filename or safe_filename == '.xlsx':
@@ -1422,6 +1427,11 @@ def export_service_excel(
         excel_bytes, filename = generate_service_excel(db, export_in.kp_ids)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[SERVICE EXPORT ERROR] {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Помилка генерації Excel для сервісу: {str(e)}")
 
     safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
     if not safe_filename or safe_filename == '.xlsx':
