@@ -1580,6 +1580,7 @@ def auto_link_recipes_to_items_endpoint(
     threshold: float = 0.86,
     update_item_weight: bool = True,
     force_relink: bool = False,
+    create_missing_items: bool = False,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -1596,6 +1597,7 @@ def auto_link_recipes_to_items_endpoint(
         threshold=threshold,
         update_item_weight=update_item_weight,
         force_relink=force_relink,
+        create_missing_items=create_missing_items,
     )
     db.commit()
     return result

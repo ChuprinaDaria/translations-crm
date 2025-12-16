@@ -948,6 +948,7 @@ class CalculationsFile(BaseModel):
 
 class RecipeAutoLinkResult(BaseModel):
     linked: int
+    created_items: int = 0
     updated_item_weights: int
     skipped: int
     errors: List[str] = []

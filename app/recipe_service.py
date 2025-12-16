@@ -86,6 +86,8 @@ def auto_link_recipes_to_items(
     threshold: float = 0.86,
     update_item_weight: bool = True,
     force_relink: bool = False,
+    create_missing_items: bool = False,
+    created_items_active: bool = True,
 ) -> Dict:
     """
     Автоматично лінкує техкарти (`recipes`) з позиціями меню (`items`) по схожості назв.
@@ -95,10 +97,34 @@ def auto_link_recipes_to_items(
     """
     result = {
         "linked": 0,
+        "created_items": 0,
         "updated_item_weights": 0,
         "skipped": 0,
         "errors": [],
     }
+
+    def _get_or_create_category(name: str) -> models.Category:
+        existing = db.query(models.Category).filter(models.Category.name.ilike(name)).first()
+        if existing:
+            return existing
+        cat = models.Category(name=name)
+        db.add(cat)
+        db.flush()
+        return cat
+
+    def _get_or_create_subcategory(category_id: int, name: str) -> models.Subcategory:
+        existing = (
+            db.query(models.Subcategory)
+            .filter(models.Subcategory.category_id == category_id)
+            .filter(models.Subcategory.name.ilike(name))
+            .first()
+        )
+        if existing:
+            return existing
+        sub = models.Subcategory(name=name, category_id=category_id)
+        db.add(sub)
+        db.flush()
+        return sub
 
     # Беремо всі items з назвою
     items = db.query(models.Item).filter(models.Item.name.isnot(None)).all()
@@ -179,6 +205,55 @@ def auto_link_recipes_to_items(
                 result["updated_item_weights"] += 1
         except Exception as e:
             result["errors"].append(f"Помилка лінку item '{getattr(it,'name',None)}': {e}")
+
+    # Якщо в меню немає страви, але в техкартах є — створюємо Item автоматично
+    if create_missing_items:
+        try:
+            # базова категорія для техкарт
+            base_cat = _get_or_create_category("Техкарти")
+
+            # existing item names for quick exact-ish check
+            existing_item_norm = {
+                _normalize_name_for_match(i.name): i.id for i in db.query(models.Item).filter(models.Item.name.isnot(None)).all()
+            }
+
+            # беремо рецепти, які ще не зв'язані (або всі, якщо force_relink)
+            rq2 = db.query(models.Recipe).filter(models.Recipe.name.isnot(None))
+            if recipe_type in ("catering", "box"):
+                rq2 = rq2.filter(models.Recipe.recipe_type == recipe_type)
+            if not force_relink:
+                rq2 = rq2.filter(models.Recipe.item_id.is_(None))
+
+            for r in rq2.all():
+                norm_r = _normalize_name_for_match(r.name)
+                if not norm_r:
+                    continue
+                # якщо вже існує item з такою ж нормалізованою назвою — не дублюємо
+                if norm_r in existing_item_norm:
+                    continue
+
+                sub_name = (r.category or "").strip() or "Без категорії"
+                sub = _get_or_create_subcategory(base_cat.id, sub_name)
+
+                # створюємо item
+                new_item = models.Item(
+                    name=str(r.name).strip(),
+                    description=(getattr(r, "notes", None) or None),
+                    price=0.0,
+                    weight=str(int(r.weight_per_portion)) if r.weight_per_portion and abs(float(r.weight_per_portion) - int(float(r.weight_per_portion))) < 1e-6 else (str(r.weight_per_portion) if r.weight_per_portion else None),
+                    unit="г",
+                    photo_url=None,
+                    active=created_items_active,
+                    subcategory_id=sub.id,
+                )
+                db.add(new_item)
+                db.flush()
+
+                r.item_id = new_item.id
+                existing_item_norm[norm_r] = new_item.id
+                result["created_items"] += 1
+        except Exception as e:
+            result["errors"].append(f"Auto-create items failed: {e}")
 
     db.flush()
     return result
@@ -366,8 +441,9 @@ def import_calculations_file(
 
     # Після імпорту пробуємо автоматично зв'язати техкарти з позиціями меню (items)
     try:
-        link_res = auto_link_recipes_to_items(db, recipe_type=recipe_type)
+        link_res = auto_link_recipes_to_items(db, recipe_type=recipe_type, create_missing_items=True)
         result["items_linked"] = link_res.get("linked", 0)
+        result["items_created"] = link_res.get("created_items", 0)
         result["items_weight_updated"] = link_res.get("updated_item_weights", 0)
         if link_res.get("errors"):
             result["errors"].extend(link_res["errors"])
