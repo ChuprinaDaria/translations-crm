@@ -18,6 +18,7 @@ from collections import defaultdict
 from sqlalchemy.orm import Session, joinedload
 
 import models
+import re
 
 try:
     from openpyxl import load_workbook
@@ -123,6 +124,42 @@ def safe_float(value, default: float = 0.0) -> Optional[float]:
         return default
 
 
+def parse_portion_weight(value) -> Optional[float]:
+    """
+    Парсить "вагу порції" з колонки B в Excel.
+
+    У файлі "Оновлена закупка 2024" вага порції часто вказана як рядок типу:
+    - "120/120" (сума частин)
+    - "200/25"
+    - "150"
+    - інколи діапазон "120-130"
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    s = str(value).strip()
+    if not s:
+        return None
+
+    # Дістаємо всі числа (з десятковими, комами)
+    nums = [float(x.replace(",", ".")) for x in re.findall(r"\d+(?:[.,]\d+)?", s)]
+    if not nums:
+        return None
+
+    # Якщо кілька частин порції — сумуємо
+    if "/" in s or "+" in s:
+        return float(sum(nums))
+
+    # Якщо діапазон — беремо середнє
+    if "-" in s and len(nums) == 2:
+        return float((nums[0] + nums[1]) / 2.0)
+
+    # Інакше — перше число
+    return float(nums[0])
+
+
 # ============ Імпорт техкарт ============
 
 def import_calculations_file(
@@ -199,7 +236,9 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
     
     for row in range(1, max_row + 1):
         col_a = sheet.cell(row=row, column=1).value
+        col_b = sheet.cell(row=row, column=2).value
         col_c = sheet.cell(row=row, column=3).value
+        col_d = sheet.cell(row=row, column=4).value
         col_e = sheet.cell(row=row, column=5).value
         col_g = sheet.cell(row=row, column=7).value
         
@@ -234,25 +273,40 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
                 db.query(models.RecipeIngredient).filter(
                     models.RecipeIngredient.recipe_id == existing.id
                 ).delete()
+                # Оновлюємо базові поля (вага/категорія) при повторному імпорті
+                existing.category = current_category
+                existing.weight_per_portion = parse_portion_weight(col_b) or safe_float(col_e)
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=safe_float(col_e),
+                    # В Excel вага порції зазвичай в колонці B (напр. "120/120").
+                    # Колонка E на рядку страви часто дорівнює сумі інгредієнтів і дає завелику вагу.
+                    weight_per_portion=parse_portion_weight(col_b) or safe_float(col_e),
                     recipe_type="catering"
                 )
             ingredient_index = 0
             continue
         
         # Якщо немає маркера і є назва - це інгредієнт
-        if current_recipe and col_c and col_e:
-            product_name = str(col_c).strip()
+        if current_recipe and col_e is not None:
+            # У цьому Excel назва інгредієнта зазвичай в колонці D,
+            # а колонка C може містити підзаголовки типу "Маринад:".
+            raw_name = col_d if col_d not in [None, ""] else col_c
+            if raw_name in [None, ""]:
+                continue
+
+            product_name = str(raw_name).strip()
+
+            # Пропускаємо підзаголовки груп інгредієнтів (напр. "Маринад:")
+            if raw_name == col_c and product_name.endswith(":"):
+                continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, 0)
+            weight = safe_float(col_e, None)
             if weight is not None:
                 ingredient = models.RecipeIngredient(
                     product_name=clean_product_name(product_name),
@@ -294,7 +348,9 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
     
     for row in range(1, max_row + 1):
         col_a = sheet.cell(row=row, column=1).value
+        col_b = sheet.cell(row=row, column=2).value
         col_c = sheet.cell(row=row, column=3).value
+        col_d = sheet.cell(row=row, column=4).value
         col_e = sheet.cell(row=row, column=5).value
         col_g = sheet.cell(row=row, column=7).value
         
@@ -329,11 +385,18 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 db.query(models.RecipeComponent).filter(
                     models.RecipeComponent.recipe_id == existing.id
                 ).delete()
+                # Також чистимо прямі інгредієнти (якщо були)
+                db.query(models.RecipeIngredient).filter(
+                    models.RecipeIngredient.recipe_id == existing.id
+                ).delete()
+                # Оновлюємо базові поля при повторному імпорті
+                existing.category = current_category
+                existing.weight_per_portion = parse_portion_weight(col_b) or safe_float(col_e)
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=safe_float(col_e),
+                    weight_per_portion=parse_portion_weight(col_b) or safe_float(col_e),
                     recipe_type="box"
                 )
             
@@ -355,14 +418,20 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             continue
         
         # Якщо є компонент і є назва/вага - це інгредієнт компонента
-        if current_component and col_c and col_e:
-            product_name = str(col_c).strip()
+        if current_component and col_e is not None:
+            raw_name = col_d if col_d not in [None, ""] else col_c
+            if raw_name in [None, ""]:
+                continue
+            product_name = str(raw_name).strip()
+
+            if raw_name == col_c and product_name.endswith(":"):
+                continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, 0)
+            weight = safe_float(col_e, None)
             if weight is not None:
                 ingredient = models.RecipeComponentIngredient(
                     product_name=clean_product_name(product_name),
@@ -374,14 +443,20 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ingredient_index += 1
         
         # Якщо немає компонента, але є страва і інгредієнт - додаємо як прямий інгредієнт
-        elif current_recipe and not current_component and col_c and col_e:
-            product_name = str(col_c).strip()
+        elif current_recipe and not current_component and col_e is not None:
+            raw_name = col_d if col_d not in [None, ""] else col_c
+            if raw_name in [None, ""]:
+                continue
+            product_name = str(raw_name).strip()
+
+            if raw_name == col_c and product_name.endswith(":"):
+                continue
             
             # Пропускаємо кроки приготування
             if is_cooking_step(product_name):
                 continue
             
-            weight = safe_float(col_e, 0)
+            weight = safe_float(col_e, None)
             if weight is not None:
                 ingredient = models.RecipeIngredient(
                     product_name=clean_product_name(product_name),
