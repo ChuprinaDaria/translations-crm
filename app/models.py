@@ -280,7 +280,7 @@ class KPItem(Base):
     # Поля для custom items (коли item_id = None)
     name = Column(String, nullable=True)
     price = Column(Float, nullable=True)
-    weight = Column(String, nullable=True)  # Може бути число або рядок типу "150/75"
+    weight = Column(Float, nullable=True)  # Вага в грамах (число)
     unit = Column(String, nullable=True)
 
     kp = relationship("KP", back_populates="items")
