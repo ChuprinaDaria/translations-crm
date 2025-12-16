@@ -1420,6 +1420,9 @@ async def import_calculations(
         result = import_calculations_file(db, content, recipe_type)
         return result
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[IMPORT ERROR] {error_trace}")
         raise HTTPException(status_code=400, detail=f"Помилка імпорту: {str(e)}")
 
 

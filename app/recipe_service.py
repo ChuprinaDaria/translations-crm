@@ -333,11 +333,18 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
 
 def _import_products_from_sheet(db: Session, sheet) -> Dict:
     """Імпортує продукти з листа 'список продуктов'."""
-    result = {"count": 0, "errors": []}
+    result = {"count": 0, "errors": [], "skipped": 0}
     
     max_row = sheet.max_row
     current_category = None
     current_subcategory = None
+    
+    # Отримуємо всі існуючі продукти одразу (для швидкості)
+    existing_products = set(
+        name for (name,) in db.query(models.Product.name).all()
+    )
+    # Також тримаємо список нових продуктів з цього імпорту
+    added_in_this_import = set()
     
     for row in range(1, max_row + 1):
         col_a = sheet.cell(row=row, column=1).value
@@ -361,20 +368,24 @@ def _import_products_from_sheet(db: Session, sheet) -> Dict:
                     current_subcategory = col_a
                 continue
         
-        # Це продукт
-        existing = db.query(models.Product).filter(models.Product.name == col_a).first()
-        if not existing:
-            product = models.Product(
-                name=col_a,
-                category=current_category,
-                subcategory=current_subcategory,
-                unit="г"
-            )
-            try:
-                db.add(product)
-                result["count"] += 1
-            except Exception as e:
-                result["errors"].append(f"Помилка збереження продукту '{col_a}': {str(e)}")
+        # Пропускаємо якщо продукт вже існує або вже додано в цьому імпорті
+        if col_a in existing_products or col_a in added_in_this_import:
+            result["skipped"] += 1
+            continue
+        
+        # Це новий продукт
+        product = models.Product(
+            name=col_a,
+            category=current_category,
+            subcategory=current_subcategory,
+            unit="г"
+        )
+        try:
+            db.add(product)
+            added_in_this_import.add(col_a)
+            result["count"] += 1
+        except Exception as e:
+            result["errors"].append(f"Помилка збереження продукту '{col_a}': {str(e)}")
     
     return result
 
