@@ -132,14 +132,14 @@ function GalleryUploader({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-gray-900">
           Галерея фото ({photos.length}/9)
         </h3>
-        <span className="text-xs text-gray-500">3 фото в рядок</span>
+        <span className="text-xs text-gray-500">3×3</span>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
-        До 9 фото для відображення в кінці PDF (по 3 в рядок)
+      <p className="text-xs text-gray-500 mb-3">
+        Фото для PDF (по 3 в рядок)
       </p>
 
       <input
@@ -150,13 +150,13 @@ function GalleryUploader({
         className="hidden"
       />
 
-      {/* Сітка 3x3 */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Компактна сітка 3x3 - максимум 300px ширина */}
+      <div className="grid grid-cols-3 gap-2 max-w-[300px]">
         {/* Існуючі фото */}
         {photos.map((photo, index) => (
           <div
             key={index}
-            className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group"
+            className="relative w-[90px] h-[90px] bg-gray-100 rounded-lg overflow-hidden group"
           >
             <img
               src={getImageUrl(photo)}
@@ -165,11 +165,11 @@ function GalleryUploader({
             />
             <button
               onClick={() => handleDeletePhoto(index)}
-              className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
             >
               <Trash2 className="w-3 h-3" />
             </button>
-            <div className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded">
+            <div className="absolute bottom-0.5 left-0.5 bg-black/50 text-white text-[9px] px-1 py-0.5 rounded">
               {index + 1}
             </div>
           </div>
@@ -180,33 +180,33 @@ function GalleryUploader({
           <button
             onClick={handleUploadClick}
             disabled={uploading !== null}
-            className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-[90px] h-[90px] border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-1 hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading !== null ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-orange-500 border-t-transparent" />
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent" />
             ) : (
               <>
-                <Plus className="w-6 h-6 text-gray-400" />
-                <span className="text-xs text-gray-500">Додати</span>
+                <Plus className="w-5 h-5 text-gray-400" />
+                <span className="text-[10px] text-gray-500">Додати</span>
               </>
             )}
           </button>
         )}
 
-        {/* Порожні слоти */}
+        {/* Порожні слоти - тільки якщо менше 9 фото */}
         {Array.from({ length: Math.max(0, 8 - photos.length) }).map((_, i) => (
           <div
             key={`empty-${i}`}
-            className="aspect-square border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center"
+            className="w-[90px] h-[90px] border border-dashed border-gray-200 rounded-lg flex items-center justify-center"
           >
-            <Image className="w-6 h-6 text-gray-300" />
+            <Image className="w-4 h-4 text-gray-300" />
           </div>
         ))}
       </div>
 
       {!templateId && (
-        <p className="text-xs text-amber-600 mt-3 p-2 bg-amber-50 rounded">
-          💡 Збережіть шаблон, щоб додати фото галереї
+        <p className="text-xs text-amber-600 mt-2 p-2 bg-amber-50 rounded">
+          💡 Збережіть шаблон, щоб додати фото
         </p>
       )}
     </div>
