@@ -233,6 +233,11 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [transportEquipmentTotal, setTransportEquipmentTotal] = useState<string>("");
   const [transportPersonnelTotal, setTransportPersonnelTotal] = useState<string>("");
   const [equipmentLossOrBreakagePrice, setEquipmentLossOrBreakagePrice] = useState<string>("");
+
+  // Derived totals (must be in component scope; used in JSX)
+  const transportEquipmentTotalNum = parseFloat(transportEquipmentTotal || "0") || 0;
+  const transportPersonnelTotalNum = parseFloat(transportPersonnelTotal || "0") || 0;
+  const transportTotalNum = transportEquipmentTotalNum + transportPersonnelTotalNum;
   // Кілька форматів заходу (Welcome drink, Фуршет тощо)
   const [eventFormats, setEventFormats] = useState<UIEventFormat[]>([]);
   // Кастомні страви (додані вручну) - мають негативні ID
