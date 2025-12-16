@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -255,45 +255,31 @@ export function TemplatePreview({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Debounced генерація preview
+  // Серіалізований design для порівняння змін
+  const designJson = useMemo(() => {
+    if (!design) return '';
+    // Виключаємо File об'єкти з серіалізації (вони окремо обробляються)
+    const { logo_image, header_image, background_image, ...rest } = design;
+    return JSON.stringify({
+      ...rest,
+      // Для файлів використовуємо тільки тип (File або string)
+      logo_image_type: logo_image instanceof File ? 'file' : typeof logo_image,
+      header_image_type: header_image instanceof File ? 'file' : typeof header_image,
+      background_image_type: background_image instanceof File ? 'file' : typeof background_image,
+    });
+  }, [design]);
+
+  // Debounced генерація preview - реагує на будь-які зміни в design
   useEffect(() => {
-    if (!design) return; // Не генеруємо якщо немає design
+    if (!design || !designJson) return;
     
     const timer = setTimeout(() => {
       generatePreview();
-    }, 1000); // 1 секунда затримки
+    }, 800); // 0.8 секунди затримки для плавності
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    design?.name,
-    design?.primary_color,
-    design?.text_color,
-    design?.secondary_color,
-    design?.font_family,
-    design?.logo_image,
-    design?.header_image,
-    design?.background_image,
-    // Кольори елементів PDF
-    design?.format_bg_color,
-    design?.table_header_bg_color,
-    design?.category_bg_color,
-    design?.summary_bg_color,
-    design?.total_bg_color,
-    JSON.stringify(design?.menu_sections), // Для правильної реакції на зміни масиву
-    design?.show_item_photo,
-    design?.show_item_weight,
-    design?.show_item_quantity,
-    design?.show_item_price,
-    design?.show_item_total,
-    design?.show_item_description,
-    design?.menu_title,
-    design?.summary_title,
-    design?.footer_text,
-    design?.page_orientation,
-    design?.booking_terms,
-    JSON.stringify(design?.gallery_photos),
-  ]);
+  }, [designJson]);
 
   // Конвертуємо File в base64 data URL
   const fileToDataURL = (file: File): Promise<string> => {
