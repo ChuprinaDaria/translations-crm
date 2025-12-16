@@ -105,6 +105,9 @@ def create_subcategory(db: Session, name: str, category_id: int):
 
 def get_subcategories(db: Session, category_id: int = None):
     query = db.query(models.Subcategory)
+    # Захист від битих рядків: інколи в БД є підкатегорії з category_id = NULL,
+    # що ламає ResponseModel (schema.Subcategory очікує int).
+    query = query.filter(models.Subcategory.category_id.isnot(None))
     if category_id:
         query = query.filter(models.Subcategory.category_id == category_id)
     return query.all()
