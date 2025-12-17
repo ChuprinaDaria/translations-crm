@@ -260,13 +260,15 @@ export function MenuManagement() {
         photo: itemPhotoFile || undefined,
       };
       const updatedItem = await itemsApi.updateItem(editingItem.id, payload);
-      setItems(items.map(item => item.id === editingItem.id ? updatedItem : item));
+      // Оновлюємо список страв
+      await loadData();
       setIsEditItemModalOpen(false);
       setEditingItem(null);
       resetItemForm();
       toast.success("Страву оновлено!");
     } catch (error: any) {
       toast.error(error.data?.detail || "Помилка оновлення");
+      console.error("Error updating item:", error);
     } finally {
       setLoading(false);
     }
@@ -304,6 +306,8 @@ export function MenuManagement() {
       setCategories([...categories, newCategory]);
       setIsCreateCategoryModalOpen(false);
       setCategoryFormData({ name: "" });
+      // Оновлюємо дані для отримання актуального списку
+      await loadData();
       toast.success("Категорію створено!");
     } catch (error: any) {
       toast.error(error.data?.detail || "Помилка створення");
@@ -349,8 +353,9 @@ export function MenuManagement() {
       setIsCreateSubcategoryModalOpen(false);
       setSubcategoryFormData({ name: "", category_id: 0 });
       setSelectedCategoryForSubcategory(null);
+      // Оновлюємо дані для отримання актуального списку
+      await loadData();
       toast.success("Підкатегорію створено!");
-      loadData(); // Reload to get updated data
     } catch (error: any) {
       toast.error(error.data?.detail || "Помилка створення");
     } finally {
@@ -1419,11 +1424,32 @@ export function MenuManagement() {
                 <Label htmlFor="price">Ціна (₴) *</Label>
                 <Input
                   id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={itemFormData.price}
-                  onChange={(e) => setItemFormData({...itemFormData, price: parseFloat(e.target.value) || 0})}
+                  type="text"
+                  inputMode="decimal"
+                  value={itemFormData.price === 0 ? '' : itemFormData.price}
+                  onFocus={(e) => {
+                    // При фокусі - виділяємо весь текст для заміни
+                    e.target.select();
+                  }}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Дозволяємо тільки цифри, крапку та кому
+                    if (value === '' || /^[0-9]*[.,]?[0-9]*$/.test(value)) {
+                      // Замінюємо кому на крапку
+                      const normalizedValue = value.replace(',', '.');
+                      const numValue = normalizedValue === '' ? 0 : parseFloat(normalizedValue);
+                      if (!isNaN(numValue) && numValue >= 0) {
+                        setItemFormData({...itemFormData, price: numValue});
+                      } else if (normalizedValue === '') {
+                        setItemFormData({...itemFormData, price: 0});
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // При втраті фокусу - округлюємо до 2 знаків після коми
+                    const value = parseFloat(e.target.value.replace(',', '.')) || 0;
+                    setItemFormData({...itemFormData, price: Math.round(value * 100) / 100});
+                  }}
                   required
                 />
               </div>
