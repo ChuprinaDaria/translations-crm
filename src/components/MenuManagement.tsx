@@ -220,7 +220,8 @@ export function MenuManagement() {
         photo: itemPhotoFile || undefined,
       };
       const newItem = await itemsApi.createItem(payload);
-      setItems([...items, newItem]);
+      // Оновлюємо список страв
+      await loadData();
       setIsCreateItemModalOpen(false);
       resetItemForm();
       toast.success("Страву створено!");
