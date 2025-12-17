@@ -107,20 +107,18 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
           </Button>
 
           <div className="text-center text-sm mt-4 space-y-3">
-            <div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onSwitchToForgotPassword) {
-                    onSwitchToForgotPassword();
-                  }
-                }}
-                className="text-[#FF5A00] hover:underline font-medium disabled:opacity-100 disabled:cursor-pointer"
-                disabled={loading}
-              >
-                Забули пароль?
-              </button>
-            </div>
+            {onSwitchToForgotPassword && (
+              <div>
+                <button
+                  type="button"
+                  onClick={onSwitchToForgotPassword}
+                  className="text-[#FF5A00] hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading}
+                >
+                  Забули пароль?
+                </button>
+              </div>
+            )}
             <div>
               <span className="text-gray-600">Немає акаунту? </span>
               <button
