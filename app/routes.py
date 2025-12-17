@@ -81,7 +81,9 @@ def get_current_user_db(
 
 @router.get("/items", response_model=list[schema.Item])
 def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_items(db, skip=skip, limit=limit)
+    items = crud.get_items(db, skip=skip, limit=limit)
+    # Фільтруємо items з None name, щоб уникнути помилок валідації
+    return [item for item in items if item.name is not None]
 
 
 @router.get("/items/{item_id}", response_model=schema.Item)
@@ -2168,7 +2170,9 @@ def delete_category(category_id: int, db: Session = Depends(get_db), user = Depe
 # Subcategories
 @router.get("/subcategories", response_model=list[schema.Subcategory])
 def get_subcategories(category_id: int = None, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_subcategories(db, category_id)
+    subcategories = crud.get_subcategories(db, category_id)
+    # Фільтруємо subcategories з None name, щоб уникнути помилок валідації
+    return [sc for sc in subcategories if sc.name is not None]
 
 @router.post("/subcategories", response_model=schema.Subcategory)
 def create_subcategory(subcategory: schema.SubcategoryCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
@@ -2207,7 +2211,9 @@ def update_user(
 
 @router.get("/menus", response_model=list[schema.Menu])
 def list_menus(db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_menus(db)
+    menus = crud.get_menus(db)
+    # Фільтруємо menus з None name, щоб уникнути помилок валідації
+    return [menu for menu in menus if menu.name is not None]
 
 
 @router.get("/menus/{menu_id}", response_model=schema.Menu)
@@ -2391,7 +2397,9 @@ def reset_password(
 # Template endpoints
 @router.get("/templates", response_model=list[schema.Template])
 def get_templates(db: Session = Depends(get_db), user = Depends(get_current_user)):
-    return crud.get_templates(db)
+    templates = crud.get_templates(db)
+    # Фільтруємо templates з None name, щоб уникнути помилок валідації
+    return [template for template in templates if template.name is not None]
 
 @router.get("/templates/{template_id}", response_model=schema.Template)
 def get_template(template_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
@@ -2928,7 +2936,9 @@ def list_benefits(
     user = Depends(get_current_user),
 ):
     """Отримати список рівнів знижок/кешбеку. Можна фільтрувати за типом та активністю."""
-    return crud.get_benefits(db, type_filter=type, active_only=active_only)
+    benefits = crud.get_benefits(db, type_filter=type, active_only=active_only)
+    # Фільтруємо benefits з None name, щоб уникнути помилок валідації
+    return [benefit for benefit in benefits if benefit.name is not None]
 
 
 @router.get("/benefits/{benefit_id}", response_model=schema.Benefit)
