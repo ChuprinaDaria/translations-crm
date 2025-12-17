@@ -261,13 +261,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
   return (
     <div
       className={cn(
-        "h-screen bg-[#F7F7F7] border-r border-gray-200 flex flex-col",
+        "h-screen bg-[#F7F7F7] border-r border-gray-200 flex flex-col overflow-hidden",
         !isMobile && "fixed left-0 top-0",
         !isMobile && (isCollapsed ? "w-20" : "w-[260px]"),
         isMobile && "w-full"
       )}
     >
-      <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
         {!isCollapsed && <span className="font-semibold text-gray-900">CRM Platform</span>}
         {!isMobile && (
           <button
@@ -283,7 +283,7 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
         )}
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-6 space-y-6">
           {filteredSections.map((section, idx) => (
             <div key={idx} className="px-3">
@@ -327,7 +327,7 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
         </div>
       </ScrollArea>
 
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-gray-200 p-3 flex-shrink-0">
         <Button
           variant="ghost"
           className={cn(

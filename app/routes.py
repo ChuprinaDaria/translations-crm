@@ -1545,20 +1545,6 @@ def get_recipes_stats(
     }
 
 
-@router.get("/recipes/{recipe_id}", response_model=schema.Recipe)
-def get_recipe(
-    recipe_id: int,
-    db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-):
-    """Отримати техкарту за ID."""
-    from recipe_service import get_recipe_by_id
-    recipe = get_recipe_by_id(db, recipe_id)
-    if not recipe:
-        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
-    return recipe
-
-
 @router.get("/recipes/files", response_model=list[schema.CalculationsFile])
 def list_calculations_files(
     recipe_type: Optional[str] = None,
@@ -1572,6 +1558,20 @@ def list_calculations_files(
     if recipe_type in ["catering", "box"]:
         q = q.filter(models.CalculationsFile.recipe_type == recipe_type)
     return q.all()
+
+
+@router.get("/recipes/{recipe_id}", response_model=schema.Recipe)
+def get_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Отримати техкарту за ID."""
+    from recipe_service import get_recipe_by_id
+    recipe = get_recipe_by_id(db, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
+    return recipe
 
 
 @router.post("/recipes/auto-link", response_model=schema.RecipeAutoLinkResult)
