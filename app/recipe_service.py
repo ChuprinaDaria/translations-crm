@@ -228,30 +228,59 @@ def auto_link_recipes_to_items(
                 norm_r = _normalize_name_for_match(r.name)
                 if not norm_r:
                     continue
-                # якщо вже існує item з такою ж нормалізованою назвою — не дублюємо
-                if norm_r in existing_item_norm:
-                    continue
+                
+                # Перевіряємо, чи існує item з такою ж нормалізованою назвою
+                existing_item_id = existing_item_norm.get(norm_r)
+                
+                if existing_item_id:
+                    # Якщо існує item з такою ж назвою, але техкарта не зв'язана,
+                    # то зв'язуємо техкарту з існуючим item (якщо він не зв'язаний з іншою техкартою)
+                    if existing_item_id not in used_item_ids:
+                        r.item_id = existing_item_id
+                        used_item_ids.add(existing_item_id)
+                        result["linked"] += 1
+                    # Якщо item вже зв'язаний з іншою техкартою, створюємо новий item
+                    else:
+                        sub_name = (r.category or "").strip() or "Без категорії"
+                        sub = _get_or_create_subcategory(base_cat.id, sub_name)
 
-                sub_name = (r.category or "").strip() or "Без категорії"
-                sub = _get_or_create_subcategory(base_cat.id, sub_name)
+                        new_item = models.Item(
+                            name=str(r.name).strip(),
+                            description=(getattr(r, "notes", None) or None),
+                            price=0.0,
+                            weight=str(int(r.weight_per_portion)) if r.weight_per_portion and abs(float(r.weight_per_portion) - int(float(r.weight_per_portion))) < 1e-6 else (str(r.weight_per_portion) if r.weight_per_portion else None),
+                            unit="г",
+                            photo_url=None,
+                            active=created_items_active,
+                            subcategory_id=sub.id,
+                        )
+                        db.add(new_item)
+                        db.flush()
 
-                # створюємо item
-                new_item = models.Item(
-                    name=str(r.name).strip(),
-                    description=(getattr(r, "notes", None) or None),
-                    price=0.0,
-                    weight=str(int(r.weight_per_portion)) if r.weight_per_portion and abs(float(r.weight_per_portion) - int(float(r.weight_per_portion))) < 1e-6 else (str(r.weight_per_portion) if r.weight_per_portion else None),
-                    unit="г",
-                    photo_url=None,
-                    active=created_items_active,
-                    subcategory_id=sub.id,
-                )
-                db.add(new_item)
-                db.flush()
+                        r.item_id = new_item.id
+                        existing_item_norm[norm_r] = new_item.id
+                        result["created_items"] += 1
+                else:
+                    # Якщо не існує item з такою назвою, створюємо новий
+                    sub_name = (r.category or "").strip() or "Без категорії"
+                    sub = _get_or_create_subcategory(base_cat.id, sub_name)
 
-                r.item_id = new_item.id
-                existing_item_norm[norm_r] = new_item.id
-                result["created_items"] += 1
+                    new_item = models.Item(
+                        name=str(r.name).strip(),
+                        description=(getattr(r, "notes", None) or None),
+                        price=0.0,
+                        weight=str(int(r.weight_per_portion)) if r.weight_per_portion and abs(float(r.weight_per_portion) - int(float(r.weight_per_portion))) < 1e-6 else (str(r.weight_per_portion) if r.weight_per_portion else None),
+                        unit="г",
+                        photo_url=None,
+                        active=created_items_active,
+                        subcategory_id=sub.id,
+                    )
+                    db.add(new_item)
+                    db.flush()
+
+                    r.item_id = new_item.id
+                    existing_item_norm[norm_r] = new_item.id
+                    result["created_items"] += 1
         except Exception as e:
             result["errors"].append(f"Auto-create items failed: {e}")
 
