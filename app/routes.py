@@ -1531,7 +1531,9 @@ def list_recipes(
     **Фільтри:**
     - recipe_type: 'catering', 'box' або None (всі)
     """
-    return get_all_recipes(db, recipe_type)
+    recipes = get_all_recipes(db, recipe_type)
+    # Фільтруємо техкарти з None name, щоб уникнути помилок валідації
+    return [r for r in recipes if r.name is not None]
 
 
 @router.get("/recipes/stats")
