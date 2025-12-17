@@ -550,6 +550,7 @@ class RecipeComponent(Base):
     
     name = Column(String(300), nullable=False)  # Назва компонента
     quantity_per_portion = Column(Float, default=1.0)  # Кількість на 1 порцію боксу
+    weight_per_portion = Column(Float, nullable=True)  # Вага компонента в грамах (з колонки B)
     order_index = Column(Integer, default=0)  # Порядок відображення
     
     # Відносини

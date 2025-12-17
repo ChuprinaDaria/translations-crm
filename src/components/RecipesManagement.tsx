@@ -54,7 +54,7 @@ interface RecipeIngredient {
 interface RecipeComponentIngredient {
   id: number;
   product_name: string;
-  weight_per_unit: number;
+  weight_per_unit: number;  // Для інгредієнтів - вага інгредієнта, для підсекцій (GROUP_UNIT) - вихід підсекції з колонки B
   unit: string;
 }
 
@@ -62,6 +62,7 @@ interface RecipeComponent {
   id: number;
   name: string;
   quantity_per_portion: number;
+  weight_per_portion?: number | null;
   ingredients: RecipeComponentIngredient[];
 }
 
@@ -96,6 +97,7 @@ type EditableRecipe = {
   components: Array<{
     name: string;
     quantity_per_portion: string;
+    weight_per_portion?: string;
     ingredients: Array<{
       product_name: string;
       weight_per_unit: string;
@@ -295,6 +297,77 @@ export function RecipesManagement() {
     return direct + fromComponents;
   };
 
+  // Розраховує суму ваги інгредієнтів (сирі інгредієнти ДО приготування)
+  const calculateIngredientsWeight = (recipe: Recipe): number => {
+    let total = 0;
+    
+    // Вага інгредієнтів страв (для catering або додаткових інгредієнтів боксів)
+    recipe.ingredients?.forEach((ing) => {
+      if (ing.unit !== GROUP_UNIT && ing.weight_per_portion) {
+        total += ing.weight_per_portion;
+      }
+    });
+    
+    // Вага інгредієнтів компонентів (для боксів)
+    recipe.components?.forEach((component) => {
+      const componentQty = component.quantity_per_portion || 1;
+      component.ingredients?.forEach((ing) => {
+        if (ing.unit !== GROUP_UNIT && ing.weight_per_unit) {
+          total += ing.weight_per_unit * componentQty;
+        }
+      });
+    });
+    
+    return total;
+  };
+
+  // Розраховує суму ваги інгредієнтів підсекції (всі інгредієнти після підсекції до наступної підсекції)
+  const calculateSubsectionIngredientsWeight = (
+    ingredients: RecipeIngredient[],
+    subsectionIndex: number
+  ): number => {
+    let total = 0;
+    for (let i = subsectionIndex + 1; i < ingredients.length; i++) {
+      const ing = ingredients[i];
+      if (ing.unit === GROUP_UNIT) {
+        // Зупиняємося на наступній підсекції
+        break;
+      }
+      if (ing.weight_per_portion) {
+        total += ing.weight_per_portion;
+      }
+    }
+    return total;
+  };
+
+  // Розраховує суму ваги інгредієнтів підсекції всередині компонента
+  const calculateComponentSubsectionIngredientsWeight = (
+    ingredients: RecipeComponentIngredient[],
+    subsectionIndex: number,
+    componentQty: number
+  ): number => {
+    let total = 0;
+    for (let i = subsectionIndex + 1; i < ingredients.length; i++) {
+      const ing = ingredients[i];
+      if (ing.unit === GROUP_UNIT) {
+        // Зупиняємося на наступній підсекції
+        break;
+      }
+      if (ing.weight_per_unit) {
+        total += ing.weight_per_unit * componentQty;
+      }
+    }
+    return total;
+  };
+
+  // Розраховує суму ваги інгредієнтів компонента
+  const calculateComponentIngredientsWeight = (component: RecipeComponent): number => {
+    const componentQty = component.quantity_per_portion || 1;
+    return component.ingredients
+      .filter((ing) => ing.unit !== GROUP_UNIT && ing.weight_per_unit)
+      .reduce((sum, ing) => sum + ing.weight_per_unit * componentQty, 0);
+  };
+
   const openEdit = (recipe: Recipe) => {
     setEditingRecipeId(recipe.id);
     setDraft({
@@ -314,6 +387,10 @@ export function RecipesManagement() {
       components: (recipe.components || []).map((c) => ({
         name: c.name || "",
         quantity_per_portion: String(c.quantity_per_portion ?? "1"),
+        weight_per_portion:
+          c.weight_per_portion === null || c.weight_per_portion === undefined
+            ? ""
+            : String(c.weight_per_portion),
         ingredients: (c.ingredients || []).map((i) => ({
           product_name: i.product_name || "",
           weight_per_unit: String(i.weight_per_unit ?? ""),
@@ -368,6 +445,9 @@ export function RecipesManagement() {
             quantity_per_portion: c.quantity_per_portion.trim()
               ? Number(c.quantity_per_portion.replace(",", "."))
               : 1,
+            weight_per_portion: c.weight_per_portion?.trim()
+              ? Number(c.weight_per_portion.replace(",", "."))
+              : null,
             ingredients: (c.ingredients || [])
               .filter((i) => i.product_name.trim())
               .map((i) => ({
@@ -375,7 +455,9 @@ export function RecipesManagement() {
                     unit: i.unit?.trim() || "г",
                     weight_per_unit:
                       (i.unit?.trim() || "г") === GROUP_UNIT
-                        ? 0
+                        ? (i.weight_per_unit.trim()
+                            ? Number(i.weight_per_unit.replace(",", "."))
+                            : 0)
                         : i.weight_per_unit.trim()
                           ? Number(i.weight_per_unit.replace(",", "."))
                           : 0,
@@ -389,7 +471,9 @@ export function RecipesManagement() {
             unit: i.unit?.trim() || "г",
             weight_per_portion:
               (i.unit?.trim() || "г") === GROUP_UNIT
-                ? 0
+                ? (i.weight_per_portion.trim()
+                    ? Number(i.weight_per_portion.replace(",", "."))
+                    : 0)
                 : i.weight_per_portion.trim()
                   ? Number(i.weight_per_portion.replace(",", "."))
                   : 0,
@@ -402,7 +486,9 @@ export function RecipesManagement() {
             unit: i.unit?.trim() || "г",
             weight_per_portion:
               (i.unit?.trim() || "г") === GROUP_UNIT
-                ? 0
+                ? (i.weight_per_portion.trim()
+                    ? Number(i.weight_per_portion.replace(",", "."))
+                    : 0)
                 : i.weight_per_portion.trim()
                   ? Number(i.weight_per_portion.replace(",", "."))
                   : 0,
@@ -636,7 +722,8 @@ export function RecipesManagement() {
                       <TableRow>
                         <TableHead className="w-10"></TableHead>
                         <TableHead>Назва страви</TableHead>
-                        <TableHead>Вага порції, г</TableHead>
+                        <TableHead>Вихід готової, г</TableHead>
+                        <TableHead>Вага інгредієнтів, г</TableHead>
                         <TableHead>Інгредієнтів</TableHead>
                         <TableHead className="w-24 text-right">Дії</TableHead>
                       </TableRow>
@@ -660,7 +747,12 @@ export function RecipesManagement() {
                               {recipe.name}
                             </TableCell>
                             <TableCell>
-                              {recipe.weight_per_portion || "—"}
+                              {recipe.weight_per_portion ? `${recipe.weight_per_portion} г` : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {calculateIngredientsWeight(recipe) > 0 
+                                ? `${Math.round(calculateIngredientsWeight(recipe))} г` 
+                                : "—"}
                             </TableCell>
                             <TableCell>{countIngredients(recipe)}</TableCell>
                             <TableCell className="text-right">
@@ -680,10 +772,20 @@ export function RecipesManagement() {
                           </TableRow>
                           {expandedRecipes.has(recipe.id) && (
                             <TableRow>
-                              <TableCell colSpan={5} className="bg-gray-50 p-4">
+                              <TableCell colSpan={6} className="bg-gray-50 p-4">
                                 <div className="text-sm">
                                   <div className="flex items-center justify-between mb-2">
-                                    <h4 className="font-semibold">Інгредієнти:</h4>
+                                    <div>
+                                      <h4 className="font-semibold">Інгредієнти:</h4>
+                                      <div className="flex gap-4 text-xs text-gray-600 mt-1">
+                                        {recipe.weight_per_portion && (
+                                          <span>Вихід готової страви: {recipe.weight_per_portion} г</span>
+                                        )}
+                                        {calculateIngredientsWeight(recipe) > 0 && (
+                                          <span>Вага інгредієнтів (сирі): {Math.round(calculateIngredientsWeight(recipe))} г</span>
+                                        )}
+                                      </div>
+                                    </div>
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -703,35 +805,56 @@ export function RecipesManagement() {
                                         <div className="space-y-3">
                                           {recipe.components.map((c) => (
                                             <div key={c.id} className="bg-white border rounded p-3">
-                                              <div className="flex justify-between">
+                                              <div className="flex justify-between items-center">
                                                 <div className="font-semibold">{c.name}</div>
-                                                <div className="text-gray-500">
-                                                  x{c.quantity_per_portion}
+                                                <div className="flex gap-3 text-gray-500 text-sm">
+                                                  {c.weight_per_portion && (
+                                                    <span>Вихід готового: {c.weight_per_portion} г</span>
+                                                  )}
+                                                  {calculateComponentIngredientsWeight(c) > 0 && (
+                                                    <span>Вага інгредієнтів: {Math.round(calculateComponentIngredientsWeight(c))} г</span>
+                                                  )}
+                                                  <span>x{c.quantity_per_portion}</span>
                                                 </div>
                                               </div>
                                               {c.ingredients?.length ? (
                                                 <ul className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                                                  {c.ingredients.map((ing) => (
-                                                    <li
-                                                      key={ing.id}
-                                                      className={
-                                                        ing.unit === GROUP_UNIT
-                                                          ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
-                                                          : "flex justify-between bg-gray-50 p-2 rounded border"
-                                                      }
-                                                    >
-                                                      {ing.unit === GROUP_UNIT ? (
-                                                        <span>{ing.product_name}</span>
-                                                      ) : (
-                                                        <>
-                                                          <span>{ing.product_name}</span>
-                                                          <span className="text-gray-500">
-                                                            {ing.weight_per_unit} {ing.unit}
-                                                          </span>
-                                                        </>
-                                                      )}
-                                                    </li>
-                                                  ))}
+                                                  {c.ingredients.map((ing, idx) => {
+                                                    const subsectionWeight = ing.unit === GROUP_UNIT
+                                                      ? calculateComponentSubsectionIngredientsWeight(c.ingredients, idx, c.quantity_per_portion || 1)
+                                                      : 0;
+                                                    return (
+                                                      <li
+                                                        key={ing.id}
+                                                        className={
+                                                          ing.unit === GROUP_UNIT
+                                                            ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                                            : "flex justify-between bg-gray-50 p-2 rounded border"
+                                                        }
+                                                      >
+                                                        {ing.unit === GROUP_UNIT ? (
+                                                          <div className="flex justify-between items-center w-full">
+                                                            <span>{ing.product_name}</span>
+                                                            <div className="flex gap-2 text-gray-500 text-sm">
+                                                              {ing.weight_per_unit && ing.weight_per_unit > 0 && (
+                                                                <span>Вихід готового: {ing.weight_per_unit} г</span>
+                                                              )}
+                                                              {subsectionWeight > 0 && (
+                                                                <span>Вага інгредієнтів: {Math.round(subsectionWeight)} г</span>
+                                                              )}
+                                                            </div>
+                                                          </div>
+                                                        ) : (
+                                                          <>
+                                                            <span>{ing.product_name}</span>
+                                                            <span className="text-gray-500">
+                                                              {ing.weight_per_unit} {ing.unit}
+                                                            </span>
+                                                          </>
+                                                        )}
+                                                      </li>
+                                                    );
+                                                  })}
                                                 </ul>
                                               ) : (
                                                 <p className="text-gray-500 mt-2">Інгредієнтів немає</p>
@@ -749,54 +872,84 @@ export function RecipesManagement() {
                                             Додаткові інгредієнти
                                           </div>
                                           <ul className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                                            {recipe.ingredients.map((ing) => (
-                                              <li
-                                                key={ing.id}
-                                                className={
-                                                  ing.unit === GROUP_UNIT
-                                                    ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
-                                                    : "flex justify-between bg-white p-2 rounded border"
-                                                }
-                                              >
-                                                {ing.unit === GROUP_UNIT ? (
-                                                  <span>{ing.product_name}</span>
-                                                ) : (
-                                                  <>
-                                                    <span>{ing.product_name}</span>
-                                                    <span className="text-gray-500">
-                                                      {ing.weight_per_portion} {ing.unit}
-                                                    </span>
-                                                  </>
-                                                )}
-                                              </li>
-                                            ))}
+                                            {recipe.ingredients.map((ing, idx) => {
+                                              const subsectionWeight = ing.unit === GROUP_UNIT
+                                                ? calculateSubsectionIngredientsWeight(recipe.ingredients, idx)
+                                                : 0;
+                                              return (
+                                                <li
+                                                  key={ing.id}
+                                                  className={
+                                                    ing.unit === GROUP_UNIT
+                                                      ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                                      : "flex justify-between bg-white p-2 rounded border"
+                                                  }
+                                                >
+                                                  {ing.unit === GROUP_UNIT ? (
+                                                    <div className="flex justify-between items-center w-full">
+                                                      <span>{ing.product_name}</span>
+                                                      <div className="flex gap-2 text-gray-500 text-sm">
+                                                        {ing.weight_per_portion && ing.weight_per_portion > 0 && (
+                                                          <span>Вихід готового: {ing.weight_per_portion} г</span>
+                                                        )}
+                                                        {subsectionWeight > 0 && (
+                                                          <span>Вага інгредієнтів: {Math.round(subsectionWeight)} г</span>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <>
+                                                      <span>{ing.product_name}</span>
+                                                      <span className="text-gray-500">
+                                                        {ing.weight_per_portion} {ing.unit}
+                                                      </span>
+                                                    </>
+                                                  )}
+                                                </li>
+                                              );
+                                            })}
                                           </ul>
                                         </div>
                                       ) : null}
                                     </div>
                                   ) : recipe.ingredients.length > 0 ? (
                                     <ul className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                      {recipe.ingredients.map((ing) => (
-                                        <li
-                                          key={ing.id}
-                                          className={
-                                            ing.unit === GROUP_UNIT
-                                              ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
-                                              : "flex justify-between bg-white p-2 rounded border"
-                                          }
-                                        >
-                                          {ing.unit === GROUP_UNIT ? (
-                                            <span>{ing.product_name}</span>
-                                          ) : (
-                                            <>
-                                              <span>{ing.product_name}</span>
-                                              <span className="text-gray-500">
-                                                {ing.weight_per_portion} {ing.unit}
-                                              </span>
-                                            </>
-                                          )}
-                                        </li>
-                                      ))}
+                                      {recipe.ingredients.map((ing, idx) => {
+                                        const subsectionWeight = ing.unit === GROUP_UNIT
+                                          ? calculateSubsectionIngredientsWeight(recipe.ingredients, idx)
+                                          : 0;
+                                        return (
+                                          <li
+                                            key={ing.id}
+                                            className={
+                                              ing.unit === GROUP_UNIT
+                                                ? "col-span-full bg-gray-100 p-2 rounded border font-semibold text-gray-800"
+                                                : "flex justify-between bg-white p-2 rounded border"
+                                            }
+                                          >
+                                            {ing.unit === GROUP_UNIT ? (
+                                              <div className="flex justify-between items-center w-full">
+                                                <span>{ing.product_name}</span>
+                                                <div className="flex gap-2 text-gray-500 text-sm">
+                                                  {ing.weight_per_portion && ing.weight_per_portion > 0 && (
+                                                    <span>Вихід готового: {ing.weight_per_portion} г</span>
+                                                  )}
+                                                  {subsectionWeight > 0 && (
+                                                    <span>Вага інгредієнтів: {Math.round(subsectionWeight)} г</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <span>{ing.product_name}</span>
+                                                <span className="text-gray-500">
+                                                  {ing.weight_per_portion} {ing.unit}
+                                                </span>
+                                              </>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
                                     </ul>
                                   ) : (
                                     <p className="text-gray-500">Інгредієнти не вказано</p>
@@ -938,6 +1091,19 @@ export function RecipesManagement() {
                           placeholder="К-сть"
                           className="w-28"
                         />
+                        <Input
+                          value={c.weight_per_portion || ""}
+                          onChange={(e) => {
+                            const next = [...draft.components];
+                            next[cIdx] = {
+                              ...next[cIdx],
+                              weight_per_portion: e.target.value,
+                            };
+                            setDraft({ ...draft, components: next });
+                          }}
+                          placeholder="Вихід (г)"
+                          className="w-32"
+                        />
                         <Button
                           variant="outline"
                           size="sm"
@@ -1006,7 +1172,21 @@ export function RecipesManagement() {
                               placeholder="Інгредієнт"
                             />
                             {ing.unit === GROUP_UNIT ? (
-                              <div className="text-sm text-gray-500 w-28 text-right">підсекція</div>
+                              <>
+                                <Input
+                                  value={ing.weight_per_unit}
+                                  onChange={(e) => {
+                                    const next = [...draft.components];
+                                    const ings = [...next[cIdx].ingredients];
+                                    ings[iIdx] = { ...ings[iIdx], weight_per_unit: e.target.value };
+                                    next[cIdx] = { ...next[cIdx], ingredients: ings };
+                                    setDraft({ ...draft, components: next });
+                                  }}
+                                  placeholder="Вихід (г)"
+                                  className="w-32"
+                                />
+                                <div className="text-sm text-gray-500 w-20 text-right">підсекція</div>
+                              </>
                             ) : (
                               <>
                                 <Input
@@ -1179,7 +1359,19 @@ export function RecipesManagement() {
                           placeholder="Назва інгредієнта"
                         />
                         {ing.unit === GROUP_UNIT ? (
-                          <div className="text-sm text-gray-500 w-28 text-right">підсекція</div>
+                          <>
+                            <Input
+                              value={ing.weight_per_portion}
+                              onChange={(e) => {
+                                const next = [...draft.ingredients];
+                                next[idx] = { ...next[idx], weight_per_portion: e.target.value };
+                                setDraft({ ...draft, ingredients: next });
+                              }}
+                              placeholder="Вихід (г)"
+                              className="w-32"
+                            />
+                            <div className="text-sm text-gray-500 w-20 text-right">підсекція</div>
+                          </>
                         ) : (
                           <>
                             <Input

@@ -860,6 +860,7 @@ class RecipeComponentBase(BaseModel):
     """Компонент боксу (позначений маркером 'in' в Excel)."""
     name: str
     quantity_per_portion: Optional[float] = 1.0  # Кількість на 1 порцію
+    weight_per_portion: Optional[float] = None  # Вага компонента в грамах (з колонки B)
     order_index: Optional[int] = 0
 
 

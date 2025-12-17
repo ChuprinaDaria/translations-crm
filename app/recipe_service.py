@@ -664,14 +664,15 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ).delete()
                 # Оновлюємо базові поля (вага/категорія) при повторному імпорті
                 existing.category = current_category
-                existing.weight_per_portion = _portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f))
+                # Вихід страви завжди в колонці B (не змішуємо з вагою інгредієнтів з колонки E)
+                existing.weight_per_portion = parse_portion_weight(col_b)
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    # В Excel вага порції зазвичай в колонці B (напр. "120/120").
-                    # Колонка E на рядку страви часто дорівнює сумі інгредієнтів і дає завелику вагу.
-                    weight_per_portion=_portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f)),
+                    # Вихід страви завжди в колонці B (напр. "120/120").
+                    # Колонка E - це вага інгредієнтів, не вихід страви.
+                    weight_per_portion=parse_portion_weight(col_b),
                     recipe_type="catering"
                 )
             ingredient_index = 0
@@ -690,9 +691,11 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
         ):
             label = col_c.strip().rstrip(":").strip()
             if label and not is_cooking_step(label):
+                # Вихід підсекції завжди в колонці B (не змішуємо з вагою інгредієнтів з колонки E)
+                group_weight = parse_portion_weight(col_b) or 0.0
                 group_row = models.RecipeIngredient(
                     product_name=clean_product_name(label),
-                    weight_per_portion=0.0,
+                    weight_per_portion=group_weight,
                     unit=GROUP_UNIT,
                     order_index=ingredient_index,
                 )
@@ -714,9 +717,11 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
             if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
                 label = product_name.rstrip(":").strip()
                 if label and not is_cooking_step(label):
+                    # Вихід підсекції завжди в колонці B
+                    group_weight = parse_portion_weight(col_b) or 0.0
                     group_row = models.RecipeIngredient(
                         product_name=clean_product_name(label),
-                        weight_per_portion=0.0,
+                        weight_per_portion=group_weight,
                         unit=GROUP_UNIT,
                         order_index=ingredient_index,
                     )
@@ -730,14 +735,16 @@ def _import_catering_recipes_from_sheet(db: Session, sheet) -> Dict:
             
             weight = safe_float(weight_cell, None)
             if weight is not None:
-                # Рядки-підзаголовки без двокрапки (напр. "Ростбіф") інколи мають 0 у вазі.
-                # У такому випадку зберігаємо як підсекцію, а не як інгредієнт.
+                # Рядки-підзаголовки без двокрапки (напр. "Ростбіф") інколи мають 0 у вазі в колонці E.
+                # У такому випадку зберігаємо як підсекцію, але вихід беремо з колонки B.
                 if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
                     label = product_name.rstrip(":").strip()
                     if label and not is_cooking_step(label):
+                        # Вихід підсекції завжди в колонці B
+                        group_weight = parse_portion_weight(col_b) or 0.0
                         group_row = models.RecipeIngredient(
                             product_name=clean_product_name(label),
-                            weight_per_portion=0.0,
+                            weight_per_portion=group_weight,
                             unit=GROUP_UNIT,
                             order_index=ingredient_index,
                         )
@@ -842,12 +849,14 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 ).delete()
                 # Оновлюємо базові поля при повторному імпорті
                 existing.category = current_category
-                existing.weight_per_portion = _portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f))
+                # Вихід страви завжди в колонці B (не змішуємо з вагою інгредієнтів з колонки E)
+                existing.weight_per_portion = parse_portion_weight(col_b)
             else:
                 current_recipe = models.Recipe(
                     name=str(col_c).strip(),
                     category=current_category,
-                    weight_per_portion=_portion_weight_from_b_or_e(col_b, _pick_weight_cell(col_e, col_f)),
+                    # Вихід страви завжди в колонці B (не змішуємо з вагою інгредієнтів з колонки E)
+                    weight_per_portion=parse_portion_weight(col_b),
                     recipe_type="box"
                 )
             
@@ -860,6 +869,8 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             current_component = models.RecipeComponent(
                 name=str(col_c).strip(),
                 quantity_per_portion=safe_float(col_a, 1.0) or 1.0,
+                # Вихід компонента завжди в колонці B (не змішуємо з вагою інгредієнтів з колонки E)
+                weight_per_portion=parse_portion_weight(col_b),
                 order_index=component_index
             )
             current_recipe.components.append(current_component)
@@ -880,10 +891,12 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
         ):
             label = col_c.strip().rstrip(":").strip()
             if label and not is_cooking_step(label):
+                # Вихід підсекції завжди в колонці B
+                group_weight = parse_portion_weight(col_b) or 0.0
                 if current_component:
                     group_row = models.RecipeComponentIngredient(
                         product_name=clean_product_name(label),
-                        weight_per_unit=0.0,
+                        weight_per_unit=group_weight,
                         unit=GROUP_UNIT,
                         order_index=ingredient_index,
                     )
@@ -893,7 +906,7 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 if current_recipe and not current_component:
                     group_row = models.RecipeIngredient(
                         product_name=clean_product_name(label),
-                        weight_per_portion=0.0,
+                        weight_per_portion=group_weight,
                         unit=GROUP_UNIT,
                         order_index=ingredient_index,
                     )
@@ -911,9 +924,11 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
                 label = product_name.rstrip(":").strip()
                 if label and not is_cooking_step(label):
+                    # Вихід підсекції завжди в колонці B
+                    group_weight = parse_portion_weight(col_b) or 0.0
                     group_row = models.RecipeComponentIngredient(
                         product_name=clean_product_name(label),
-                        weight_per_unit=0.0,
+                        weight_per_unit=group_weight,
                         unit=GROUP_UNIT,
                         order_index=ingredient_index,
                     )
@@ -930,9 +945,11 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
                     label = product_name.rstrip(":").strip()
                     if label and not is_cooking_step(label):
+                        # Вихід підсекції завжди в колонці B (не з колонки E, де вага інгредієнта)
+                        group_weight = parse_portion_weight(col_b) or 0.0
                         group_row = models.RecipeComponentIngredient(
                             product_name=clean_product_name(label),
-                            weight_per_unit=0.0,
+                            weight_per_unit=group_weight,
                             unit=GROUP_UNIT,
                             order_index=ingredient_index,
                         )
@@ -958,9 +975,11 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
             if raw_name == col_c and product_name.endswith(":") and col_d in [None, ""]:
                 label = product_name.rstrip(":").strip()
                 if label and not is_cooking_step(label):
+                    # Вихід підсекції завжди в колонці B
+                    group_weight = parse_portion_weight(col_b) or 0.0
                     group_row = models.RecipeIngredient(
                         product_name=clean_product_name(label),
-                        weight_per_portion=0.0,
+                        weight_per_portion=group_weight,
                         unit=GROUP_UNIT,
                         order_index=ingredient_index,
                     )
@@ -977,9 +996,11 @@ def _import_box_recipes_from_sheet(db: Session, sheet) -> Dict:
                 if (col_d in [None, ""]) and (raw_name == col_c) and float(weight) == 0.0:
                     label = product_name.rstrip(":").strip()
                     if label and not is_cooking_step(label):
+                        # Вихід підсекції завжди в колонці B (не з колонки E, де вага інгредієнта)
+                        group_weight = parse_portion_weight(col_b) or 0.0
                         group_row = models.RecipeIngredient(
                             product_name=clean_product_name(label),
-                            weight_per_portion=0.0,
+                            weight_per_portion=group_weight,
                             unit=GROUP_UNIT,
                             order_index=ingredient_index,
                         )
@@ -1276,10 +1297,14 @@ def _calculate_catering_products(
     """
     Розраховує продукти для кейтерінгу.
     Формула: вага_інгредієнта × кількість_порцій
+    
+    ВАЖЛИВО: Використовуємо вагу інгредієнтів з колонки E (сирі інгредієнти ДО приготування),
+    а НЕ вихід страви з колонки B (готовий вихід ПІСЛЯ приготування).
     """
     for ingredient in recipe.ingredients:
         if (ingredient.unit or "") == GROUP_UNIT:
             continue
+        # ingredient.weight_per_portion - це вага інгредієнта з колонки E (сирі інгредієнти)
         total_weight = ingredient.weight_per_portion * quantity
         product_totals[ingredient.product_name]["quantity"] += total_weight
         product_totals[ingredient.product_name]["unit"] = ingredient.unit or "г"
@@ -1293,6 +1318,9 @@ def _calculate_box_products(
     """
     Розраховує продукти для боксів.
     Формула: вага_інгредієнта × кількість_компонентів × кількість_порцій
+    
+    ВАЖЛИВО: Використовуємо вагу інгредієнтів з колонки E (сирі інгредієнти ДО приготування),
+    а НЕ вихід страви/компонента з колонки B (готовий вихід ПІСЛЯ приготування).
     """
     for component in recipe.components:
         component_qty = component.quantity_per_portion or 1.0
@@ -1300,6 +1328,7 @@ def _calculate_box_products(
         for ingredient in component.ingredients:
             if (ingredient.unit or "") == GROUP_UNIT:
                 continue
+            # ingredient.weight_per_unit - це вага інгредієнта з колонки E (сирі інгредієнти)
             # Формула: вага × кількість_компонентів × кількість_порцій
             total_weight = ingredient.weight_per_unit * component_qty * quantity
             product_totals[ingredient.product_name]["quantity"] += total_weight
@@ -1309,6 +1338,7 @@ def _calculate_box_products(
     for ingredient in recipe.ingredients:
         if (ingredient.unit or "") == GROUP_UNIT:
             continue
+        # ingredient.weight_per_portion - це вага інгредієнта з колонки E (сирі інгредієнти)
         total_weight = ingredient.weight_per_portion * quantity
         product_totals[ingredient.product_name]["quantity"] += total_weight
         product_totals[ingredient.product_name]["unit"] = ingredient.unit or "г"
