@@ -56,7 +56,8 @@ def update_item(db: Session, item_id: int, item_data: schemas.ItemUpdate):
     if not db_item:
         return None
 
-    update_data = item_data.dict(exclude_unset=True)
+    # Використовуємо model_dump з exclude_none=True, щоб не оновлювати поля зі значенням None
+    update_data = item_data.model_dump(exclude_none=True, exclude_unset=True)
 
     for key, value in update_data.items():
         setattr(db_item, key, value)

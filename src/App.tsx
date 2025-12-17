@@ -49,6 +49,24 @@ function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [editingKPId, setEditingKPId] = useState<number | null>(null);
 
+  // Load Gilroy font
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = "https://fonts.cdnfonts.com";
+    document.head.appendChild(link);
+    
+    const fontLink = document.createElement("link");
+    fontLink.href = "https://fonts.cdnfonts.com/css/gilroy";
+    fontLink.rel = "stylesheet";
+    document.head.appendChild(fontLink);
+    
+    return () => {
+      document.head.removeChild(link);
+      document.head.removeChild(fontLink);
+    };
+  }, []);
+
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = () => {

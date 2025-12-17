@@ -561,16 +561,22 @@ async def update_item(
         final_photo_url = current_item.photo_url
     
     # Створюємо об'єкт ItemUpdate
-    item_data = schema.ItemUpdate(
-        name=name,
-        description=description,
-        price=price,
-        weight=weight,
-        unit=unit,
-        subcategory_id=subcategory_id,
-        active=active,
-        photo_url=final_photo_url
-    )
+    # name обов'язкове поле, тому якщо воно None або порожнє, не передаємо його в оновлення
+    # (exclude_none=True в crud.update_item виключить None значення)
+    item_data_dict = {
+        'description': description,
+        'price': price,
+        'weight': weight,
+        'unit': unit,
+        'subcategory_id': subcategory_id,
+        'active': active,
+        'photo_url': final_photo_url
+    }
+    # Додаємо name тільки якщо воно передано і не порожнє
+    if name and isinstance(name, str) and name.strip():
+        item_data_dict['name'] = name.strip()
+    
+    item_data = schema.ItemUpdate(**item_data_dict)
     
     updated = crud.update_item(db, item_id, item_data)
     if not updated:
