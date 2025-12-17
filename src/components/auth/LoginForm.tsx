@@ -106,11 +106,15 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
             )}
           </Button>
 
-          <div className="text-center text-sm space-y-3 mt-4">
-            <div>
+          <div className="text-center text-sm mt-4">
+            <div className="mb-3">
               <button
                 type="button"
-                onClick={onSwitchToForgotPassword || (() => {})}
+                onClick={() => {
+                  if (onSwitchToForgotPassword) {
+                    onSwitchToForgotPassword();
+                  }
+                }}
                 className="text-[#FF5A00] hover:underline font-medium"
                 disabled={loading || !onSwitchToForgotPassword}
               >
