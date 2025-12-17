@@ -106,8 +106,8 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
             )}
           </Button>
 
-          <div className="text-center text-sm mt-4">
-            <div className="mb-3">
+          <div className="text-center text-sm mt-4 space-y-3">
+            <div>
               <button
                 type="button"
                 onClick={() => {
@@ -115,8 +115,8 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
                     onSwitchToForgotPassword();
                   }
                 }}
-                className="text-[#FF5A00] hover:underline font-medium"
-                disabled={loading || !onSwitchToForgotPassword}
+                className="text-[#FF5A00] hover:underline font-medium disabled:opacity-100 disabled:cursor-pointer"
+                disabled={loading}
               >
                 Забули пароль?
               </button>
