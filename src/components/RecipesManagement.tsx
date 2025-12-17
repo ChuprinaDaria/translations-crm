@@ -20,6 +20,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Link2,
 } from "lucide-react";
 import { tokenManager, API_BASE_URL } from "../lib/api";
 import {
@@ -118,6 +119,7 @@ export function RecipesManagement() {
   const [editingRecipeId, setEditingRecipeId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<EditableRecipe | null>(null);
+  const [linking, setLinking] = useState(false);
 
   const loadRecipes = async () => {
     setLoading(true);
@@ -275,6 +277,58 @@ export function RecipesManagement() {
       loadFiles();
     } catch (e: any) {
       toast.error(e?.message || "Помилка видалення");
+    }
+  };
+
+  const handleAutoLink = async () => {
+    setLinking(true);
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(
+        `${API_BASE_URL}/recipes/auto-link?recipe_type=${activeType}&create_missing_items=true&update_item_weight=true`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Не вдалося зв'язати техкарти зі стравами");
+      }
+
+      const result = await response.json();
+      const linked = result.linked || 0;
+      const created = result.created_items || 0;
+      const updated = result.updated_item_weights || 0;
+      const skipped = result.skipped || 0;
+
+      let message = `Зв'язано: ${linked} техкарт`;
+      if (created > 0) {
+        message += `, створено: ${created} страв`;
+      }
+      if (updated > 0) {
+        message += `, оновлено ваг: ${updated}`;
+      }
+      if (skipped > 0) {
+        message += `, пропущено: ${skipped}`;
+      }
+
+      toast.success(message);
+      
+      if (result.errors && result.errors.length > 0) {
+        console.warn("Помилки зв'язування:", result.errors);
+        toast.warning(`Помилок: ${result.errors.length}`);
+      }
+
+      loadRecipes();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Помилка зв'язування техкарт зі стравами");
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -686,6 +740,16 @@ export function RecipesManagement() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full md:w-64"
             />
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={handleAutoLink}
+              disabled={linking}
+              title="Автоматично зв'язати техкарти зі стравами за назвами"
+            >
+              <Link2 className="w-4 h-4" />
+              {linking ? "Зв'язування..." : "Зв'язати зі стравами"}
+            </Button>
             <Button
               variant="outline"
               className="flex items-center gap-2"
