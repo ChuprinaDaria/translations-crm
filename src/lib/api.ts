@@ -566,9 +566,6 @@ export const authApi = {
       body: JSON.stringify(data),
     });
   },
-    console.error('[Auth] Unexpected response format:', response);
-    throw new Error('Invalid token response: unexpected format');
-  },
 
   logout(): void {
     console.log('[Auth] Logging out...');
