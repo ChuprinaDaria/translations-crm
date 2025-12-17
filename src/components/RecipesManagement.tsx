@@ -601,13 +601,8 @@ export function RecipesManagement() {
     return acc;
   }, {} as Record<string, Recipe[]>);
 
-  console.log("🔥🔥🔥 RECIPES_COMPONENT_LOADED_V1 🔥🔥🔥");
-
   return (
     <div className="space-y-6">
-      <div style={{backgroundColor: "red", color: "white", padding: "20px", fontSize: "30px", zIndex: 9999, textAlign: "center", fontWeight: "bold"}}>
-        !!! ТЕСТ ОНОВЛЕННЯ - КНОПКА ЗВ'ЯЗУВАННЯ ДОДАНА !!!
-      </div>
       <div>
         <h1 className="text-2xl text-gray-900 mb-2">Техкарти (Калькуляції)</h1>
         <p className="text-gray-600">
@@ -754,7 +749,6 @@ export function RecipesManagement() {
             >
               <Link2 className="w-4 h-4" />
               {linking ? "Зв'язування..." : "Зв'язати зі стравами"}
-              <span>DEBUG_BUTTON_HERE</span>
             </Button>
             <Button
               variant="outline"
