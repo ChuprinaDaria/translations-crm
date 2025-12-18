@@ -1211,6 +1211,20 @@ export const templatesApi = {
     if (data.secondary_color) formData.append('secondary_color', data.secondary_color);
     if (data.text_color) formData.append('text_color', data.text_color);
     if (data.font_family) formData.append('font_family', data.font_family);
+    // Заголовок КП
+    if (data.title_text !== undefined) formData.append('title_text', data.title_text || '');
+    if (data.company_name !== undefined) formData.append('company_name', data.company_name || '');
+    // Шрифти
+    if (data.title_font !== undefined) formData.append('title_font', data.title_font || '');
+    if (data.header_font !== undefined) formData.append('header_font', data.header_font || '');
+    if (data.body_font !== undefined) formData.append('body_font', data.body_font || '');
+    if (data.table_font !== undefined) formData.append('table_font', data.table_font || '');
+    // Кольори PDF
+    if (data.format_bg_color !== undefined) formData.append('format_bg_color', data.format_bg_color || '');
+    if (data.table_header_bg_color !== undefined) formData.append('table_header_bg_color', data.table_header_bg_color || '');
+    if (data.category_bg_color !== undefined) formData.append('category_bg_color', data.category_bg_color || '');
+    if (data.summary_bg_color !== undefined) formData.append('summary_bg_color', data.summary_bg_color || '');
+    if (data.total_bg_color !== undefined) formData.append('total_bg_color', data.total_bg_color || '');
     // Налаштування відображення колонок
     if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
     if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
@@ -1259,6 +1273,20 @@ export const templatesApi = {
     if (data.secondary_color !== undefined) formData.append('secondary_color', data.secondary_color || '');
     if (data.text_color !== undefined) formData.append('text_color', data.text_color || '');
     if (data.font_family !== undefined) formData.append('font_family', data.font_family || '');
+    // Заголовок КП
+    if (data.title_text !== undefined) formData.append('title_text', data.title_text || '');
+    if (data.company_name !== undefined) formData.append('company_name', data.company_name || '');
+    // Шрифти
+    if (data.title_font !== undefined) formData.append('title_font', data.title_font || '');
+    if (data.header_font !== undefined) formData.append('header_font', data.header_font || '');
+    if (data.body_font !== undefined) formData.append('body_font', data.body_font || '');
+    if (data.table_font !== undefined) formData.append('table_font', data.table_font || '');
+    // Кольори PDF
+    if (data.format_bg_color !== undefined) formData.append('format_bg_color', data.format_bg_color || '');
+    if (data.table_header_bg_color !== undefined) formData.append('table_header_bg_color', data.table_header_bg_color || '');
+    if (data.category_bg_color !== undefined) formData.append('category_bg_color', data.category_bg_color || '');
+    if (data.summary_bg_color !== undefined) formData.append('summary_bg_color', data.summary_bg_color || '');
+    if (data.total_bg_color !== undefined) formData.append('total_bg_color', data.total_bg_color || '');
     // Налаштування відображення колонок
     if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
     if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
