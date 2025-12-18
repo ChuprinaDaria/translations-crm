@@ -582,9 +582,16 @@ async def update_item(
     
     item_data = schema.ItemUpdate(**item_data_dict)
     
+    # Логуємо дані для оновлення
+    print(f"[UPDATE_ITEM] ID: {item_id}, Data: {item_data_dict}")
+    
     updated = crud.update_item(db, item_id, item_data)
     if not updated:
         raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Логуємо результат
+    print(f"[UPDATE_ITEM] Updated item: id={updated.id}, name={updated.name}, price={updated.price}, subcategory_id={updated.subcategory_id}")
+    
     return updated
 
 

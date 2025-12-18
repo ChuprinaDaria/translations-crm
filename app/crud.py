@@ -58,12 +58,19 @@ def update_item(db: Session, item_id: int, item_data: schemas.ItemUpdate):
 
     # Використовуємо model_dump з exclude_none=True, щоб не оновлювати поля зі значенням None
     update_data = item_data.model_dump(exclude_none=True, exclude_unset=True)
+    
+    print(f"[CRUD] update_item: ID={item_id}, update_data={update_data}")
 
     for key, value in update_data.items():
+        old_value = getattr(db_item, key, None)
         setattr(db_item, key, value)
+        print(f"[CRUD] Updated {key}: {old_value} -> {value}")
 
     db.commit()
     db.refresh(db_item)
+    
+    print(f"[CRUD] Item after update: id={db_item.id}, name={db_item.name}, price={db_item.price}, subcategory_id={db_item.subcategory_id}")
+    
     return db_item
 
 

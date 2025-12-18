@@ -615,22 +615,41 @@ export const itemsApi = {
   async updateItem(itemId: number, data: Partial<ItemCreate>): Promise<Item> {
     // Endpoint завжди очікує multipart/form-data, тому завжди використовуємо FormData
     const formData = new FormData();
-    if (data.name) formData.append('name', data.name);
+    
+    // Завжди передаємо name, якщо воно є (обов'язкове поле)
+    if (data.name !== undefined && data.name !== null) {
+      formData.append('name', data.name);
+    }
     if (data.description !== undefined) formData.append('description', data.description || '');
-    if (data.price !== undefined) formData.append('price', data.price.toString());
-    if (data.weight !== undefined) {
+    if (data.price !== undefined && data.price !== null) {
+      formData.append('price', data.price.toString());
+    }
+    if (data.weight !== undefined && data.weight !== null) {
       // weight може бути числом або рядком, завжди перетворюємо на рядок
       formData.append('weight', String(data.weight));
     }
     if (data.unit !== undefined) formData.append('unit', data.unit || '');
-    if (data.subcategory_id !== undefined && data.subcategory_id !== null) {
+    if (data.subcategory_id !== undefined && data.subcategory_id !== null && data.subcategory_id !== 0) {
       formData.append('subcategory_id', data.subcategory_id.toString());
     }
     if (data.active !== undefined) formData.append('active', data.active.toString());
     if (data.photo) formData.append('photo', data.photo);
     if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
     
-    return apiFetchMultipart<Item>(`/items/${itemId}`, formData, 'PUT');
+    console.log(`[API] PUT /items/${itemId}`, {
+      name: data.name,
+      price: data.price,
+      subcategory_id: data.subcategory_id,
+      active: data.active,
+      hasPhoto: !!data.photo,
+      photo_url: data.photo_url
+    });
+    
+    const result = await apiFetchMultipart<Item>(`/items/${itemId}`, formData, 'PUT');
+    
+    console.log(`[API] Отримано оновлену страву:`, result);
+    
+    return result;
   },
 
   async deleteItem(itemId: number): Promise<string> {

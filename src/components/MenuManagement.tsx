@@ -135,10 +135,10 @@ export function MenuManagement() {
 
   // Load data
   useEffect(() => {
-    loadData();
+    loadData(true); // Показуємо toast при початковому завантаженні
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (showToast: boolean = false) => {
     setLoading(true);
     try {
       const [itemsData, categoriesData, subcategoriesData, menusData] = await Promise.all([
@@ -152,7 +152,10 @@ export function MenuManagement() {
       setCategories(categoriesData);
       setSubcategories(subcategoriesData);
       setMenus(menusData);
-      toast.success("Дані завантажено");
+      
+      if (showToast) {
+        toast.success("Дані завантажено");
+      }
     } catch (error: any) {
       toast.error("Помилка завантаження даних");
       console.error(error);
@@ -211,7 +214,7 @@ export function MenuManagement() {
       toast.error("Введіть назву страви");
       return;
     }
-    if (itemFormData.price <= 0) {
+    if (itemFormData.price === undefined || itemFormData.price === null || itemFormData.price <= 0) {
       toast.error("Ціна повинна бути більше 0");
       return;
     }
@@ -267,9 +270,21 @@ export function MenuManagement() {
         ...itemFormData,
         photo: itemPhotoFile || undefined,
       };
+      
+      console.log("Оновлення страви:", editingItem.id, payload);
       const updatedItem = await itemsApi.updateItem(editingItem.id, payload);
-      // Оновлюємо список страв
-      await loadData();
+      console.log("Оновлена страва отримана з API:", updatedItem);
+      
+      // Оновлюємо локально в списку
+      setItems(items.map(item => item.id === editingItem.id ? updatedItem : item));
+      
+      // Оновлюємо також категорії та підкатегорії, якщо потрібно
+      if (updatedItem.subcategory_id && updatedItem.subcategory) {
+        // Перезавантажуємо підкатегорії, щоб оновити зв'язки
+        const updatedSubcategories = await subcategoriesApi.getSubcategories();
+        setSubcategories(updatedSubcategories);
+      }
+      
       setIsEditItemModalOpen(false);
       setEditingItem(null);
       resetItemForm();
