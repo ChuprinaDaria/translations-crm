@@ -9,19 +9,29 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import io
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def find_header_row(df: pd.DataFrame) -> Optional[int]:
     """
-    Знаходить рядок з заголовками (шукає ключові слова: назва, ціна, вага).
-    Повертає індекс рядка або None.
+    Знаходить рядок з заголовками колонок.
+    Шукає рядок де одночасно є "назва" (або "страва") І "ціна" (або "вартість").
     """
-    keywords = ['назва', 'ціна', 'вага', 'вихід', 'страва', 'вартість', 'гр', 'кг']
-    
     for idx, row in df.iterrows():
-        row_str = ' '.join([str(val).lower() for val in row.values if pd.notna(val)])
-        if any(keyword in row_str for keyword in keywords):
+        row_values = [str(val).lower() for val in row.values if pd.notna(val)]
+        row_text = " ".join(row_values)
+        
+        # Шукаємо рядок де є одночасно "назва" (або "страва") І "ціна" (або "вартість")
+        has_name = any(kw in row_text for kw in ['назва', 'страва', 'блюдо'])
+        has_price = any(kw in row_text for kw in ['ціна', 'вартість', 'price'])
+        
+        if has_name and has_price:
+            print(f"[EXCEL_PARSER] Header знайдено в рядку {idx + 1}: {row_values[:5]}")
             return idx
+    
+    print("[EXCEL_PARSER] Header не знайдено (рядок з 'назва' та 'ціна' одночасно)")
     return None
 
 
@@ -64,12 +74,16 @@ def parse_price(value) -> Optional[float]:
     if pd.isna(value):
         return None
     
+    # Якщо вже число (int або float від pandas)
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 else None
+    
     price_str = str(value).strip()
     if not price_str or price_str == "":
         return None
     
-    clean_price_str = price_str.replace(',', '.').replace(' ', '').replace('грн', '').replace('₴', '').strip()
-    clean_price_str = re.sub(r'[^\d.-]', '', clean_price_str)
+    # Очищаємо від символів
+    clean_price_str = re.sub(r'[^\d.,-]', '', price_str).replace(',', '.')
     
     try:
         price = float(clean_price_str)
@@ -99,137 +113,121 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
     - Динамічно знаходить header row
     - Рядки без ціни = підкатегорії
     - Рядки з ціною = страви
-    
-    Args:
-        file_path: Шлях до Excel файлу
-        
-    Returns:
-        Список словників з полями: name, category, subcategory, price, weight
     """
+    print(f"[EXCEL_PARSER] Початок обробки файлу: {file_path}")
+    
     try:
         sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine='openpyxl')
+        print(f"[EXCEL_PARSER] Завантажено {len(sheets)} аркушів")
     except Exception as e:
-        raise ValueError(f"Не вдалося прочитати Excel файл: {e}")
+        error_msg = f"Не вдалося прочитати Excel файл: {e}"
+        print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}")
+        raise ValueError(error_msg)
     
     if not sheets:
+        print("[EXCEL_PARSER] ПОМИЛКА: Файл не містить жодних аркушів")
         raise ValueError("Файл не містить жодних аркушів")
     
     final_data = []
-    debug_info = []
 
     for sheet_name, df in sheets.items():
-        if df.empty:
-            continue
+        print(f"\n[EXCEL_PARSER] Обробка аркуша '{sheet_name}': {len(df)} рядків, {len(df.columns)} колонок")
         
-        debug_info.append(f"Аркуш '{sheet_name}': {len(df)} рядків, {len(df.columns)} колонок")
-        
-        # Видаляємо повністю порожні рядки
         df = df.dropna(how='all').reset_index(drop=True)
-        
-        if len(df) == 0:
-            debug_info.append(f"  - Аркуш '{sheet_name}' порожній")
+        if df.empty:
+            print(f"[EXCEL_PARSER] Аркуш '{sheet_name}' порожній після очищення")
             continue
         
-        # Знаходимо header row
-        header_row_idx = find_header_row(df)
+        # Показуємо перші рядки для діагностики
+        print(f"[EXCEL_PARSER] Перші 3 рядки:")
+        for i in range(min(3, len(df))):
+            row_preview = [str(df.iloc[i, j])[:30] if j < len(df.columns) else "" for j in range(min(5, len(df.columns)))]
+            print(f"  Рядок {i+1}: {row_preview}")
         
-        if header_row_idx is None:
-            # Якщо не знайдено header, вважаємо що дані з першого рядка
-            # або використовуємо просту логіку: колонка 0 = назва, колонка 1 = ціна
-            debug_info.append(f"  - Header не знайдено, використовуємо прості колонки")
-            mapping = {'name': 0, 'price': 1, 'weight': 2 if len(df.columns) > 2 else None}
+        header_idx = find_header_row(df)
+        
+        if header_idx is None:
+            print(f"[EXCEL_PARSER] Header не знайдено, спробуємо знайти колонки автоматично")
+            # Шукаємо колонки в перших 5 рядках
+            name_col, price_col, weight_col = None, None, None
+            
+            for check_idx in range(min(5, len(df))):
+                row_values = [str(v).strip().lower() for v in df.iloc[check_idx].values]
+                for i, val in enumerate(row_values):
+                    if name_col is None and any(kw in val for kw in ['назва', 'страва']):
+                        name_col = i
+                    if price_col is None and any(kw in val for kw in ['ціна', 'вартість', 'price']):
+                        price_col = i
+                    if weight_col is None and any(kw in val for kw in ['вага', 'вихід']):
+                        weight_col = i
+            
+            # Якщо не знайдено автоматично, використовуємо типові індекси для цього формату Excel
+            # Колонка 1 = Назва, колонка 4 = Ціна, колонка 2 = Вихід (вага)
+            if name_col is None:
+                name_col = 1  # За замовчуванням колонка 1 = Назва
+            if price_col is None:
+                price_col = 4  # За замовчуванням колонка 4 = Ціна
+            if weight_col is None:
+                weight_col = 2 if len(df.columns) > 2 else None  # За замовчуванням колонка 2 = Вихід
+            
+            print(f"[EXCEL_PARSER] Використовуємо колонки: name={name_col}, price={price_col}, weight={weight_col}")
             df_work = df
         else:
-            # Знаходимо мапінг колонок
-            result = find_column_mapping(df, header_row_idx)
-            mapping = result[0]
-            df_work = result[1]
-            debug_info.append(f"  - Header знайдено в рядку {header_row_idx + 1}, мапінг: {mapping}")
+            print(f"[EXCEL_PARSER] Header знайдено в рядку {header_idx + 1}")
+            row_values = [str(v).strip().lower() for v in df.iloc[header_idx].values]
+            
+            # Знаходимо індекси колонок
+            name_col = next((i for i, v in enumerate(row_values) if any(kw in v for kw in ['назва', 'страва'])), None)
+            price_col = next((i for i, v in enumerate(row_values) if any(kw in v for kw in ['ціна', 'вартість', 'price'])), None)
+            weight_col = next((i for i, v in enumerate(row_values) if any(kw in v for kw in ['вага', 'вихід'])), None)
+            
+            if name_col is None or price_col is None:
+                error_msg = f"Не знайдено обов'язкові колонки в header (рядок {header_idx + 1}). Знайдені колонки: {row_values[:10]}"
+                print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}")
+                raise ValueError(error_msg)
+            
+            df_work = df.iloc[header_idx + 1:].reset_index(drop=True)
+            print(f"[EXCEL_PARSER] Колонки: name={name_col}, price={price_col}, weight={weight_col}")
         
-        if not mapping.get('name'):
-            # Якщо не знайдено колонку з назвою, пропускаємо аркуш
-            debug_info.append(f"  - Не знайдено колонку з назвою страви")
-            continue
-        
-        name_col = mapping['name']
-        price_col = mapping.get('price')
-        weight_col = mapping.get('weight')
-        
-        # Назва аркуша = категорія
-        current_category = sheet_name
         current_subcategory = sheet_name
-        
         items_in_sheet = 0
         
-        for idx, row in df_work.iterrows():
-            # Отримуємо назву
-            try:
-                if isinstance(name_col, (int, str)) and name_col in row.index:
-                    name_value = row[name_col]
-                elif isinstance(name_col, int) and name_col < len(row):
-                    name_value = row.iloc[name_col]
-                else:
-                    continue
-            except (KeyError, IndexError):
+        for _, row in df_work.iterrows():
+            name_val = row.iloc[name_col] if name_col < len(row) else None
+            if pd.isna(name_val) or str(name_val).strip() == "":
                 continue
             
-            if pd.isna(name_value) or str(name_value).strip() == "":
-                continue
+            name = str(name_val).strip()
+            price_val = row.iloc[price_col] if price_col < len(row) else None
+            price = parse_price(price_val)
             
-            name = str(name_value).strip()
-            
-            # Отримуємо ціну
-            price = None
-            if price_col is not None:
-                try:
-                    if price_col in row.index:
-                        price = parse_price(row[price_col])
-                    elif isinstance(price_col, int) and price_col < len(row):
-                        price = parse_price(row.iloc[price_col])
-                except (KeyError, IndexError):
-                    pass
-            
-            # Якщо немає ціни - це підкатегорія
             if price is None:
                 current_subcategory = name
                 continue
             
-            # Отримуємо вагу (опціонально)
-            weight = None
-            if weight_col is not None:
-                try:
-                    if weight_col in row.index:
-                        weight = parse_weight(row[weight_col])
-                    elif isinstance(weight_col, int) and weight_col < len(row):
-                        weight = parse_weight(row.iloc[weight_col])
-                except (KeyError, IndexError):
-                    pass
-            
-            # Додаємо страву
-            item_data = {
+            item = {
                 "name": name,
-                "category": current_category,
+                "category": sheet_name,
                 "subcategory": current_subcategory,
                 "price": f"{price:.2f}"
             }
             
-            if weight:
-                item_data["weight"] = str(weight)
+            if weight_col is not None and weight_col < len(row):
+                w = row.iloc[weight_col]
+                if pd.notna(w):
+                    item["weight"] = str(w).strip()
             
-            final_data.append(item_data)
+            final_data.append(item)
             items_in_sheet += 1
         
-        debug_info.append(f"  - Знайдено страв: {items_in_sheet}")
+        print(f"[EXCEL_PARSER] Знайдено страв в аркуші '{sheet_name}': {items_in_sheet}")
 
+    print(f"\n[EXCEL_PARSER] Всього знайдено страв: {len(final_data)}")
+    
     if not final_data:
-        debug_msg = "Не знайдено жодної страви в Excel файлі.\n\n"
-        debug_msg += "Діагностика:\n" + "\n".join(debug_info)
-        debug_msg += "\n\nПеревірте:\n"
-        debug_msg += "1. Файл містить аркуші з даними\n"
-        debug_msg += "2. Є колонка з назвою (назва, страва, блюдо)\n"
-        debug_msg += "3. Є колонка з ціною (ціна, вартість)\n"
-        debug_msg += "4. Рядки без ціни вважаються підкатегоріями\n"
-        raise ValueError(debug_msg)
+        error_msg = "Не знайдено жодної страви в Excel файлі"
+        print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}")
+        raise ValueError(error_msg)
 
     return final_data
 

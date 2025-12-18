@@ -2155,14 +2155,22 @@ async def update_items_from_excel_endpoint(
         f.write(contents)
     
     try:
+        print(f"[UPDATE_EXCEL] Початок обробки файлу: {file.filename}, розмір: {temp_path.stat().st_size} bytes")
+        
         # Генеруємо дані для оновлення з Excel
         items_data = generate_menu_patch_from_excel(temp_path)
         
+        print(f"[UPDATE_EXCEL] Отримано {len(items_data)} страв для оновлення")
+        
         if not items_data:
-            raise HTTPException(status_code=400, detail="Не знайдено жодної страви в Excel файлі. Перевірте формат файлу: перша колонка - назва, друга - ціна")
+            error_msg = "Не знайдено жодної страви в Excel файлі. Перевірте формат файлу: перша колонка - назва, друга - ціна"
+            print(f"[UPDATE_EXCEL] ПОМИЛКА: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
         
         # Оновлюємо страви в БД
         stats = update_items_from_data(items_data, dry_run=False, db_session=db)
+        
+        print(f"[UPDATE_EXCEL] Оновлено страв: {stats['updated']}, знайдено: {stats['found']}")
         
         # Формуємо результат
         result = {
@@ -2182,13 +2190,13 @@ async def update_items_from_excel_endpoint(
     except ValueError as e:
         import traceback
         error_detail = str(e)
-        print(f"ValueError in update_items_from_excel: {error_detail}")
+        print(f"[UPDATE_EXCEL] ValueError: {error_detail}")
         print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=error_detail)
     except Exception as e:
         import traceback
         error_detail = f"Помилка обробки файлу: {str(e)}"
-        print(f"Exception in update_items_from_excel: {error_detail}")
+        print(f"[UPDATE_EXCEL] Exception: {error_detail}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_detail)
     finally:
