@@ -259,12 +259,29 @@ export function KPTemplates() {
       setEditingTemplate(null);
       loadTemplates();
     } catch (error: any) {
-      console.error(error);
-      const message =
-        error?.detail ||
-        error?.message ||
-        "Сталася помилка при збереженні шаблону";
-      toast.error(typeof message === "string" ? message : "Сталася помилка при збереженні шаблону");
+      console.error("Error saving template:", error);
+      
+      // Обробка помилок валідації (422) - detail може бути масивом
+      let errorMessage = "Сталася помилка при збереженні шаблону";
+      if (error?.data?.detail) {
+        if (Array.isArray(error.data.detail)) {
+          errorMessage = error.data.detail.map((err: any) => {
+            if (typeof err === 'string') return err;
+            if (err.msg) return `${err.loc?.join('.') || ''}: ${err.msg}`;
+            return JSON.stringify(err);
+          }).join(', ');
+        } else if (typeof error.data.detail === 'string') {
+          errorMessage = error.data.detail;
+        } else {
+          errorMessage = JSON.stringify(error.data.detail);
+        }
+      } else if (error?.detail) {
+        errorMessage = error.detail;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       throw error;
     }
   };

@@ -3436,7 +3436,7 @@ def generate_template_preview(
 async def upload_template_image(
     file: UploadFile = File(...),
     image_type: str = Form(...),  # 'logo' | 'header' | 'background'
-    current_user = Depends(get_current_user_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Завантажити зображення для шаблону.
@@ -3456,7 +3456,8 @@ async def upload_template_image(
     
     # Генеруємо унікальне ім'я файлу
     file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    filename = f"{image_type}_{current_user.id}_{int(datetime.now().timestamp())}.{file_extension}"
+    user_id = current_user.get("sub") if isinstance(current_user, dict) else current_user.id
+    filename = f"{image_type}_{user_id}_{int(datetime.now().timestamp())}.{file_extension}"
     filepath = templates_dir / filename
     
     # Зберігаємо файл

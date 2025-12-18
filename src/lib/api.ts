@@ -589,27 +589,26 @@ export const itemsApi = {
   },
 
   async createItem(data: ItemCreate): Promise<Item> {
-    // Якщо є файл фото, використовуємо multipart/form-data
-    if (data.photo) {
-      const formData = new FormData();
-      formData.append('name', data.name);
-      if (data.description) formData.append('description', data.description);
-      if (data.price !== undefined) formData.append('price', data.price.toString());
-      if (data.weight !== undefined) formData.append('weight', data.weight.toString());
-      if (data.unit) formData.append('unit', data.unit);
-      if (data.subcategory_id !== undefined) formData.append('subcategory_id', data.subcategory_id.toString());
-      if (data.active !== undefined) formData.append('active', data.active.toString());
-      if (data.photo) formData.append('photo', data.photo);
-      if (data.photo_url) formData.append('photo_url', data.photo_url);
-      
-      return apiFetchMultipart<Item>('/items', formData, 'POST');
-    }
+    // Endpoint завжди очікує multipart/form-data, тому завжди використовуємо FormData
+    const formData = new FormData();
     
-    // Інакше використовуємо JSON
-    return apiFetch<Item>('/items', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    formData.append('name', data.name);
+    if (data.description !== undefined) formData.append('description', data.description || '');
+    if (data.price !== undefined && data.price !== null) {
+      formData.append('price', data.price.toString());
+    }
+    if (data.weight !== undefined && data.weight !== null) {
+      formData.append('weight', String(data.weight));
+    }
+    if (data.unit !== undefined) formData.append('unit', data.unit || '');
+    if (data.subcategory_id !== undefined && data.subcategory_id !== null) {
+      formData.append('subcategory_id', data.subcategory_id.toString());
+    }
+    if (data.active !== undefined) formData.append('active', data.active.toString());
+    if (data.photo) formData.append('photo', data.photo);
+    if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
+    
+    return apiFetchMultipart<Item>('/items', formData, 'POST');
   },
 
   async updateItem(itemId: number, data: Partial<ItemCreate>): Promise<Item> {

@@ -236,7 +236,23 @@ export function MenuManagement() {
       resetItemForm();
       toast.success("Страву створено!");
     } catch (error: any) {
-      toast.error(error.data?.detail || "Помилка створення");
+      console.error("Error creating item:", error);
+      // Обробка помилок валідації (422) - detail може бути масивом
+      let errorMessage = "Помилка створення страви";
+      if (error.data?.detail) {
+        if (Array.isArray(error.data.detail)) {
+          errorMessage = error.data.detail.map((err: any) => {
+            if (typeof err === 'string') return err;
+            if (err.msg) return `${err.loc?.join('.') || ''}: ${err.msg}`;
+            return JSON.stringify(err);
+          }).join(', ');
+        } else if (typeof error.data.detail === 'string') {
+          errorMessage = error.data.detail;
+        } else {
+          errorMessage = JSON.stringify(error.data.detail);
+        }
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

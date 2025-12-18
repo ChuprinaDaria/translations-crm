@@ -709,10 +709,18 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         formDataUpload.append("file", file);
 
         try {
+          // Отримуємо токен для авторизації
+          const token = localStorage.getItem("token");
+          const headers: HeadersInit = {};
+          if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+          }
+          
           const response = await fetch(
             `/api/templates/upload-image?image_type=${type}`,
             {
               method: "POST",
+              headers,
               body: formDataUpload,
             }
           );
