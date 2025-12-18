@@ -338,6 +338,12 @@ class TemplateBase(BaseModel):
     summary_bg_color: Optional[str] = None      # Фон "ДО СПЛАТИ ЗА..."
     total_bg_color: Optional[str] = None        # Фон "ВСЬОГО ДО СПЛАТИ"
     
+    # Налаштування тексту категорій та страв
+    category_text_align: Optional[str] = "center"  # Вирівнювання тексту категорій: left, center, right
+    category_text_color: Optional[str] = None        # Колір тексту категорій
+    dish_text_align: Optional[str] = "left"          # Вирівнювання тексту страв: left, center, right
+    dish_text_color: Optional[str] = None            # Колір тексту страв
+    
     # Налаштування відображення колонок у таблиці меню
     show_item_photo: Optional[bool] = True
     show_item_weight: Optional[bool] = True
@@ -368,6 +374,9 @@ class TemplateBase(BaseModel):
     
     # Галерея фото (до 9 фото, по 3 в рядок)
     gallery_photos: Optional[List[str]] = None
+    
+    # Розділювач категорій страв (PNG зображення на всю ширину)
+    category_separator_image_url: Optional[str] = None
     
     # Умови бронювання
     booking_terms: Optional[str] = None
@@ -417,6 +426,12 @@ class TemplateUpdate(BaseModel):
     summary_bg_color: Optional[str] = None
     total_bg_color: Optional[str] = None
     
+    # Налаштування тексту категорій та страв
+    category_text_align: Optional[str] = None  # Вирівнювання тексту категорій: left, center, right
+    category_text_color: Optional[str] = None  # Колір тексту категорій
+    dish_text_align: Optional[str] = None      # Вирівнювання тексту страв: left, center, right
+    dish_text_color: Optional[str] = None     # Колір тексту страв
+    
     # Налаштування відображення колонок
     show_item_photo: Optional[bool] = None
     show_item_weight: Optional[bool] = None
@@ -447,6 +462,9 @@ class TemplateUpdate(BaseModel):
     
     # Галерея фото
     gallery_photos: Optional[List[str]] = None
+    
+    # Розділювач категорій страв
+    category_separator_image_url: Optional[str] = None
     
     # Умови бронювання
     booking_terms: Optional[str] = None

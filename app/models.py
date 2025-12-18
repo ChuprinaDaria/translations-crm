@@ -116,6 +116,11 @@ class Template(Base):
     category_bg_color = Column(String, nullable=True)     # Фон категорій страв
     summary_bg_color = Column(String, nullable=True)      # Фон "ДО СПЛАТИ ЗА..."
     total_bg_color = Column(String, nullable=True)        # Фон "ВСЬОГО ДО СПЛАТИ"
+    # Налаштування тексту категорій та страв
+    category_text_align = Column(String, default="center")  # Вирівнювання тексту категорій: left, center, right
+    category_text_color = Column(String, nullable=True)      # Колір тексту категорій
+    dish_text_align = Column(String, default="left")        # Вирівнювання тексту страв: left, center, right
+    dish_text_color = Column(String, nullable=True)         # Колір тексту страв
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -153,6 +158,9 @@ class Template(Base):
     
     # Галерея фото (до 9 фото, відображаються по 3 в рядок)
     gallery_photos = Column(JSON, nullable=True)  # Масив шляхів до фото галереї
+    
+    # Розділювач категорій страв (PNG зображення на всю ширину)
+    category_separator_image_url = Column(String, nullable=True)  # URL розділювача між категоріями страв
     
     # Умови бронювання (текст з пунктами)
     booking_terms = Column(Text, nullable=True)

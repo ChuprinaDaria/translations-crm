@@ -989,6 +989,7 @@ export interface Template {
   preview_image_url?: string;
   header_image_url?: string;
   background_image_url?: string;
+  category_separator_image_url?: string | null;
   is_default: boolean;
   // Налаштування теми
   primary_color?: string | null;
@@ -1009,6 +1010,11 @@ export interface Template {
   category_bg_color?: string | null;
   summary_bg_color?: string | null;
   total_bg_color?: string | null;
+  // Налаштування тексту категорій та страв
+  category_text_align?: string | null;
+  category_text_color?: string | null;
+  dish_text_align?: string | null;
+  dish_text_color?: string | null;
   // Налаштування відображення колонок
   show_item_photo?: boolean;
   show_item_weight?: boolean;

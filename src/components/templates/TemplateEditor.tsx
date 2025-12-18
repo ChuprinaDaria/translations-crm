@@ -46,6 +46,7 @@ type TemplateDesign = {
   font_family: string;
   logo_image: File | string | null;
   header_image: File | string | null;
+  category_separator_image: File | string | null;
   // Заголовок КП
   title_text: string;
   company_name: string;
@@ -60,6 +61,11 @@ type TemplateDesign = {
   category_bg_color: string;
   summary_bg_color: string;
   total_bg_color: string;
+  // Налаштування тексту категорій та страв
+  category_text_align: string;  // left, center, right
+  category_text_color: string;
+  dish_text_align: string;  // left, center, right
+  dish_text_color: string;
   // Налаштування таблиці
   show_item_photo: boolean;
   show_item_weight: boolean;
@@ -339,6 +345,108 @@ function DesignTab({
         </div>
       </div>
 
+      {/* Налаштування тексту категорій та страв */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Текст категорій та страв</h3>
+        <div className="space-y-4">
+          {/* Вирівнювання тексту категорій */}
+          <div>
+            <label className="block text-xs text-gray-600 mb-2">Вирівнювання тексту категорій</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, category_text_align: "left" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.category_text_align === "left"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Ліворуч
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, category_text_align: "center" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.category_text_align === "center"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                По центру
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, category_text_align: "right" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.category_text_align === "right"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Праворуч
+              </button>
+            </div>
+          </div>
+          
+          {/* Колір тексту категорій */}
+          <ColorPicker
+            label="Колір тексту категорій"
+            value={design.category_text_color}
+            onChange={(color) => setDesign({ ...design, category_text_color: color })}
+            presets={["#FFFFFF", "#000000", "#333333", "#FF8C00", "#2563EB"]}
+          />
+
+          {/* Вирівнювання тексту страв */}
+          <div>
+            <label className="block text-xs text-gray-600 mb-2">Вирівнювання тексту страв</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, dish_text_align: "left" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.dish_text_align === "left"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Ліворуч
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, dish_text_align: "center" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.dish_text_align === "center"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                По центру
+              </button>
+              <button
+                type="button"
+                onClick={() => setDesign({ ...design, dish_text_align: "right" })}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                  design.dish_text_align === "right"
+                    ? "bg-orange-500 text-white border-orange-500"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Праворуч
+              </button>
+            </div>
+          </div>
+
+          {/* Колір тексту страв */}
+          <ColorPicker
+            label="Колір тексту страв"
+            value={design.dish_text_color}
+            onChange={(color) => setDesign({ ...design, dish_text_color: color })}
+            presets={["#333333", "#000000", "#666666", "#FF8C00", "#2563EB"]}
+          />
+        </div>
+      </div>
+
       {/* Заголовок КП */}
       <div>
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Заголовок КП</h3>
@@ -442,6 +550,16 @@ function DesignTab({
           onRemove={() => setDesign({ ...design, header_image: null })}
           helperText="Широка картинка шапки • Максимум 2MB"
           aspectRatio="21:9"
+          maxSize="2MB"
+        />
+
+        <ImageUploader
+          label="Розділювач категорій страв (опціонально)"
+          currentImage={design.category_separator_image}
+          onUpload={(file) => setDesign({ ...design, category_separator_image: file })}
+          onRemove={() => setDesign({ ...design, category_separator_image: null })}
+          helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Максимум 2MB"
+          aspectRatio="auto"
           maxSize="2MB"
         />
       </div>
@@ -662,12 +780,18 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     // Зображення (зберігаємо URL якщо вже завантажено, інакше null для нового файлу)
     logo_image: (template?.preview_image_url ? template.preview_image_url : null) as File | string | null,
     header_image: (template?.header_image_url ? template.header_image_url : null) as File | string | null,
+    category_separator_image: (template?.category_separator_image_url ? template.category_separator_image_url : null) as File | string | null,
     // Кольори елементів PDF
     format_bg_color: template?.format_bg_color || "#FF8C00",
     table_header_bg_color: template?.table_header_bg_color || "#FFA500",
     category_bg_color: template?.category_bg_color || "#FFB84D",
     summary_bg_color: template?.summary_bg_color || "#F3F4F6",
     total_bg_color: template?.total_bg_color || "#FF8C00",
+    // Налаштування тексту категорій та страв
+    category_text_align: template?.category_text_align || "center",
+    category_text_color: template?.category_text_color || "#FFFFFF",
+    dish_text_align: template?.dish_text_align || "left",
+    dish_text_color: template?.dish_text_color || "#333333",
     // Структура таблиці
     show_item_photo: template?.show_item_photo ?? true,
     show_item_weight: template?.show_item_weight ?? true,
@@ -700,7 +824,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
   const uploadImages = async () => {
     const uploads: Record<string, string> = {};
 
-    for (const type of ["header", "logo"]) {
+    for (const type of ["header", "logo", "separator"]) {
       const imageKey = `${type}_image` as keyof typeof formData;
       const file = formData[imageKey];
 
@@ -737,6 +861,39 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       }
     }
 
+    // Обробка розділювача категорій
+    const separatorFile = formData.category_separator_image;
+    if (separatorFile instanceof File) {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", separatorFile);
+
+      try {
+        const token = localStorage.getItem("token");
+        const headers: HeadersInit = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(
+          `/api/templates/upload-image?image_type=separator`,
+          {
+            method: "POST",
+            headers,
+            body: formDataUpload,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload separator image`);
+        }
+
+        const data = await response.json();
+        uploads.separator = data.url;
+      } catch (error) {
+        console.error(`Error uploading separator image:`, error);
+      }
+    }
+
     return uploads;
   };
 
@@ -761,6 +918,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url || undefined)),
         logo_image: uploadedImages.logo ? undefined : (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
         preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url || undefined)),
+        category_separator_image: uploadedImages.separator ? undefined : (typeof formData.category_separator_image === "string" ? formData.category_separator_image : undefined),
+        category_separator_image_url: uploadedImages.separator || (typeof formData.category_separator_image === "string" ? formData.category_separator_image : (template?.category_separator_image_url || undefined)),
       };
 
       // 3. Збереження через callback

@@ -24,6 +24,12 @@
             --border-light: #E5E5E5;
             --bg-gray: #666666;
             
+            /* Налаштування тексту категорій та страв */
+            --category-text-align: {{ category_text_align or 'center' }};
+            --category-text-color: {{ category_text_color or 'white' }};
+            --dish-text-align: {{ dish_text_align or 'left' }};
+            --dish-text-color: {{ dish_text_color or 'var(--text-dark)' }};
+            
             /* Шрифти */
             --font-title: {{ title_font or 'Montserrat, Arial, sans-serif' }};
             --font-header: {{ header_font or 'Montserrat, Arial, sans-serif' }};
@@ -215,6 +221,19 @@
             width: 12.5%;
         }
         
+        /* === РОЗДІЛЮВАЧ КАТЕГОРІЙ === */
+        .category-separator {
+            width: 100%;
+            margin: 3mm 0;
+            display: block;
+        }
+        
+        .category-separator img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
         /* === КАТЕГОРІЯ СТРАВ - НА ВСЮ ШИРИНУ === */
         .category-row {
             width: 100%;
@@ -223,10 +242,10 @@
         
         .category-pill {
             background: var(--orange-categories);
-            color: white;
+            color: var(--category-text-color);
             font-family: 'Montserrat', Arial, sans-serif;
             font-weight: 700;
-            text-align: center;
+            text-align: var(--category-text-align);
             padding: 3mm 0;
             width: 100%;
             border-radius: 15px;
@@ -255,8 +274,9 @@
         
         .item-cell.name-col {
             width: 35%;
-            text-align: left;
+            text-align: var(--dish-text-align);
             padding-left: 3mm;
+            color: var(--dish-text-color);
         }
         
         .item-cell.photo-col {
@@ -486,6 +506,13 @@
         {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
         
         {% if section_items %}
+        <!-- Розділювач категорій (перед кожною категорією, крім першої) -->
+        {% if loop.index > 1 and category_separator_image_url %}
+        <div class="category-separator">
+            <img src="{{ category_separator_image_url }}" alt="Розділювач" />
+        </div>
+        {% endif %}
+        
         <!-- Категорія - НА ВСЮ ШИРИНУ -->
         <div class="category-row">
             <div class="category-pill">{{ section }}</div>

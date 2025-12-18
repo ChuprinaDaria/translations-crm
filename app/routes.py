@@ -806,6 +806,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     # Отримаємо шляхи до зображень шапки та фону (якщо задані в шаблоні)
     header_image_src = None
     background_image_src = None
+    category_separator_image_url = None
     if selected_template:
         if getattr(selected_template, "header_image_url", None):
             try:
@@ -821,6 +822,13 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
                     background_image_src = f"file://{bg_path}"
             except Exception:
                 background_image_src = None
+        if getattr(selected_template, "category_separator_image_url", None):
+            try:
+                separator_path = (BASE_DIR / selected_template.category_separator_image_url).resolve()
+                if separator_path.exists():
+                    category_separator_image_url = f"file://{separator_path}"
+            except Exception:
+                category_separator_image_url = None
     
     # Отримуємо назву компанії з налаштувань або використовуємо дефолтну
     company_name = crud.get_setting(db, "company_name") or "Дзиґа Кейтерінґ"
@@ -1026,6 +1034,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     summary_bg_color = "#F3F4F6"
     total_bg_color = "#FF8C00"
     
+    # Налаштування тексту категорій та страв (дефолтні)
+    category_text_align = "center"
+    category_text_color = None
+    dish_text_align = "left"
+    dish_text_color = None
+    
     # Шрифти (дефолтні)
     title_font = "Montserrat, Arial, sans-serif"
     header_font = "Montserrat, Arial, sans-serif"
@@ -1055,6 +1069,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         category_bg_color = getattr(selected_template, "category_bg_color", None) or category_bg_color
         summary_bg_color = getattr(selected_template, "summary_bg_color", None) or summary_bg_color
         total_bg_color = getattr(selected_template, "total_bg_color", None) or total_bg_color
+        
+        # Налаштування тексту категорій та страв з шаблону
+        category_text_align = getattr(selected_template, "category_text_align", None) or category_text_align
+        category_text_color = getattr(selected_template, "category_text_color", None) or category_text_color
+        dish_text_align = getattr(selected_template, "dish_text_align", None) or dish_text_align
+        dish_text_color = getattr(selected_template, "dish_text_color", None) or dish_text_color
         
         # Оновлюємо конфігурацію з налаштувань шаблону
         # ВАЖЛИВО: menu_sections тепер завжди приходять з реальних категорій страв
@@ -1151,6 +1171,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         logo_src=logo_src,
         header_image_src=header_image_src,
         background_image_src=background_image_src,
+        category_separator_image_url=category_separator_image_url,
         primary_color=primary_color,
         secondary_color=secondary_color,
         text_color=text_color,
@@ -1169,6 +1190,11 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         category_bg_color=category_bg_color,
         summary_bg_color=summary_bg_color,
         total_bg_color=total_bg_color,
+        # Налаштування тексту категорій та страв
+        category_text_align=category_text_align,
+        category_text_color=category_text_color,
+        dish_text_align=dish_text_align,
+        dish_text_color=dish_text_color,
         company_name=company_name,
         created_date=created_date,
         event_date=event_date,
@@ -2539,6 +2565,8 @@ async def create_template(
     header_image_url: str = Form(None),
     background_image: UploadFile = File(None),
     background_image_url: str = Form(None),
+    category_separator_image: UploadFile = File(None),
+    category_separator_image_url: str = Form(None),
     # Налаштування теми (за замовчуванням — брендовані значення)
     primary_color: str = Form("#FF5A00"),
     secondary_color: str = Form("#1a1a2e"),
@@ -2580,6 +2608,11 @@ async def create_template(
     category_bg_color: str = Form(None),
     summary_bg_color: str = Form(None),
     total_bg_color: str = Form(None),
+    # Налаштування тексту категорій та страв
+    category_text_align: str = Form("center"),  # left, center, right
+    category_text_color: str = Form(None),
+    dish_text_align: str = Form("left"),  # left, center, right
+    dish_text_color: str = Form(None),
     # Умови бронювання
     booking_terms: str = Form(None),
     db: Session = Depends(get_db),
@@ -2692,6 +2725,7 @@ async def create_template(
     # Обробка зображень шапки та фону
     final_header_url = header_image_url
     final_background_url = background_image_url
+    final_separator_url = category_separator_image_url
 
     if header_image:
         if header_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -2702,6 +2736,11 @@ async def create_template(
         if background_image.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(status_code=400, detail="Недопустимий тип файлу фону. Дозволені: JPEG, PNG, WebP, GIF")
         final_background_url = save_template_preview(background_image)
+
+    if category_separator_image:
+        if category_separator_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу розділювача. Дозволені: JPEG, PNG, WebP, GIF")
+        final_separator_url = save_template_preview(category_separator_image)
     
     # Створюємо об'єкт TemplateCreate
     # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
@@ -2721,6 +2760,7 @@ async def create_template(
         html_content=html_content,
         header_image_url=final_header_url,
         background_image_url=final_background_url,
+        category_separator_image_url=final_separator_url,
         primary_color=primary_color or None,
         secondary_color=secondary_color or None,
         text_color=text_color or None,
@@ -2736,6 +2776,10 @@ async def create_template(
         category_bg_color=category_bg_color if category_bg_color is not None else None,
         summary_bg_color=summary_bg_color if summary_bg_color is not None else None,
         total_bg_color=total_bg_color if total_bg_color is not None else None,
+        category_text_align=category_text_align if category_text_align is not None else "center",
+        category_text_color=category_text_color if category_text_color is not None else None,
+        dish_text_align=dish_text_align if dish_text_align is not None else "left",
+        dish_text_color=dish_text_color if dish_text_color is not None else None,
         show_item_photo=show_item_photo,
         show_item_weight=show_item_weight,
         show_item_quantity=show_item_quantity,
@@ -2773,6 +2817,8 @@ async def update_template(
     header_image_url: str = Form(None),
     background_image: UploadFile = File(None),
     background_image_url: str = Form(None),
+    category_separator_image: UploadFile = File(None),
+    category_separator_image_url: str = Form(None),
     primary_color: str = Form(None),
     secondary_color: str = Form(None),
     text_color: str = Form(None),
@@ -2813,6 +2859,11 @@ async def update_template(
     category_bg_color: str = Form(None),
     summary_bg_color: str = Form(None),
     total_bg_color: str = Form(None),
+    # Налаштування тексту категорій та страв
+    category_text_align: str = Form(None),  # left, center, right
+    category_text_color: str = Form(None),
+    dish_text_align: str = Form(None),  # left, center, right
+    dish_text_color: str = Form(None),
     # Умови бронювання
     booking_terms: str = Form(None),
     db: Session = Depends(get_db),
@@ -2905,6 +2956,7 @@ async def update_template(
     # Обробка зображень шапки та фону
     final_header_url = current_template.header_image_url
     final_background_url = current_template.background_image_url
+    final_separator_url = getattr(current_template, "category_separator_image_url", None)
 
     if header_image:
         if header_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -2924,6 +2976,15 @@ async def update_template(
         final_background_url = save_template_preview(background_image)
     elif background_image_url is not None:
         final_background_url = background_image_url or None
+
+    if category_separator_image:
+        if category_separator_image.content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="Недопустимий тип файлу розділювача. Дозволені: JPEG, PNG, WebP, GIF")
+        if getattr(current_template, "category_separator_image_url", None):
+            delete_old_preview(current_template.category_separator_image_url)
+        final_separator_url = save_template_preview(category_separator_image)
+    elif category_separator_image_url is not None:
+        final_separator_url = category_separator_image_url or None
 
     # Створюємо об'єкт TemplateUpdate
     # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
@@ -2958,6 +3019,10 @@ async def update_template(
         category_bg_color=category_bg_color if category_bg_color is not None else None,
         summary_bg_color=summary_bg_color if summary_bg_color is not None else None,
         total_bg_color=total_bg_color if total_bg_color is not None else None,
+        category_text_align=category_text_align if category_text_align is not None else None,
+        category_text_color=category_text_color if category_text_color is not None else None,
+        dish_text_align=dish_text_align if dish_text_align is not None else None,
+        dish_text_color=dish_text_color if dish_text_color is not None else None,
         show_item_photo=show_item_photo,
         show_item_weight=show_item_weight,
         show_item_quantity=show_item_quantity,
