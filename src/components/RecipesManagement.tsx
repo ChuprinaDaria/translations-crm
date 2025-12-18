@@ -1191,6 +1191,7 @@ export function RecipesManagement() {
                     </div>
                   ))}
                 </div>
+              </div>
               ))}
             </div>
           )}
