@@ -24,7 +24,7 @@ import {
 } from "./ui/dropdown-menu";
 import { InfoTooltip } from "./InfoTooltip";
 import { Skeleton } from "./ui/skeleton";
-import { itemsApi, categoriesApi, kpApi, type Item, type Category, type KP } from "../lib/api";
+import { itemsApi, categoriesApi, kpApi, clientsApi, questionnairesApi, usersApi, type Item, type Category, type KP, type Client, type ClientQuestionnaire, type User } from "../lib/api";
 import { toast } from "sonner";
 
 interface DashboardProps {
@@ -51,6 +51,38 @@ interface DashboardStats {
     medium: number;    // 50-200
     expensive: number; // > 200
   };
+  // Нові метрики
+  topClients: Array<{
+    clientId: number;
+    clientName: string;
+    totalSpent: number;
+    kpCount: number;
+  }>;
+  popularDishes: Array<{
+    itemId: number;
+    itemName: string;
+    usageCount: number;
+    totalRevenue: number;
+    categoryName?: string;
+  }>;
+  activeManagers: Array<{
+    managerId: number;
+    managerName: string;
+    kpCount: number;
+    questionnaireCount: number;
+    totalRevenue: number;
+  }>;
+  kpStatusStats: {
+    in_progress: number;
+    sent: number;
+    approved: number;
+    rejected: number;
+    completed: number;
+    draft: number;
+  };
+  totalRevenue: number;
+  averageCheck: number;
+  conversionRate: number; // від sent до approved
 }
 
 type KPStatus = "sent" | "approved" | "rejected" | "completed";
@@ -67,11 +99,17 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [items, categories, kps] = await Promise.all([
+      const [items, categories, kps, clientsData, questionnairesData, users] = await Promise.all([
         itemsApi.getItems(0, 1000),
         categoriesApi.getCategories(),
         kpApi.getKPs(),
+        clientsApi.getClients(0, 1000),
+        questionnairesApi.getAll(0, 1000),
+        usersApi.getUsers(),
       ]);
+
+      const clients = Array.isArray(clientsData) ? clientsData : clientsData.clients || [];
+      const questionnaires = questionnairesData.questionnaires || [];
 
       // Calculate statistics
       const totalItems = items.length;
@@ -113,6 +151,191 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         expensive: items.filter(i => i.price > 200).length
       };
 
+      // === НОВІ МЕТРИКИ ===
+
+      // 1. Топ клієнтів за фінансами
+      const clientRevenueMap = new Map<number | string, { name: string; total: number; count: number }>();
+      
+      // Створюємо мапу клієнтів для швидкого пошуку
+      const clientsMap = new Map<number, Client>();
+      clients.forEach(client => {
+        if (client.id) {
+          clientsMap.set(client.id, client);
+        }
+      });
+
+      // Збираємо дані з КП
+      kps.forEach(kp => {
+        const clientId = kp.client_id;
+        const clientName = kp.client_name || 'Без імені';
+        const total = kp.total_price || 0;
+        
+        if (clientId) {
+          // Якщо є client_id, використовуємо його як ключ
+          if (!clientRevenueMap.has(clientId)) {
+            const client = clientsMap.get(clientId);
+            clientRevenueMap.set(clientId, {
+              name: client?.name || clientName,
+              total: 0,
+              count: 0,
+            });
+          }
+          const client = clientRevenueMap.get(clientId)!;
+          client.total += total;
+          client.count += 1;
+        } else if (clientName && clientName !== 'Без імені') {
+          // Якщо немає client_id, але є ім'я, використовуємо ім'я як ключ
+          const key = `name_${clientName}`;
+          if (!clientRevenueMap.has(key)) {
+            clientRevenueMap.set(key, { name: clientName, total: 0, count: 0 });
+          }
+          const client = clientRevenueMap.get(key)!;
+          client.total += total;
+          client.count += 1;
+        }
+      });
+
+      // Додаємо дані з lifetime_spent клієнтів
+      clients.forEach(client => {
+        if (client.id) {
+          if (!clientRevenueMap.has(client.id)) {
+            clientRevenueMap.set(client.id, {
+              name: client.name,
+              total: client.lifetime_spent || 0,
+              count: client.total_orders || 0,
+            });
+          } else {
+            const existing = clientRevenueMap.get(client.id)!;
+            // Використовуємо більшу суму з lifetime_spent або суму з КП
+            existing.total = Math.max(existing.total, client.lifetime_spent || 0);
+            existing.count = Math.max(existing.count, client.total_orders || 0);
+          }
+        }
+      });
+
+      const topClients = Array.from(clientRevenueMap.entries())
+        .filter(([key]) => typeof key === 'number') // Фільтруємо тільки числові ID
+        .map(([clientId, data]) => ({
+          clientId: clientId as number,
+          clientName: data.name,
+          totalSpent: data.total,
+          kpCount: data.count,
+        }))
+        .sort((a, b) => b.totalSpent - a.totalSpent)
+        .slice(0, 10);
+
+      // 2. Найпопулярніші страви (по використанню та по фінансам)
+      const dishUsageMap = new Map<number, { name: string; count: number; revenue: number; categoryName?: string }>();
+      const itemMap = new Map<number, Item>();
+      items.forEach(item => itemMap.set(item.id, item));
+
+      kps.forEach(kp => {
+        kp.items?.forEach(kpItem => {
+          const itemId = kpItem.item_id;
+          if (!itemId) return; // Пропускаємо custom items без item_id
+          
+          const item = itemMap.get(itemId);
+          if (item) {
+            if (!dishUsageMap.has(itemId)) {
+              dishUsageMap.set(itemId, {
+                name: item.name,
+                count: 0,
+                revenue: 0,
+                categoryName: item.subcategory?.category?.name,
+              });
+            }
+            const dish = dishUsageMap.get(itemId)!;
+            const quantity = kpItem.quantity || 1;
+            dish.count += quantity;
+            // Приблизна виручка = кількість * ціна страви
+            const itemPrice = item.price || 0;
+            dish.revenue += itemPrice * quantity;
+          }
+        });
+      });
+
+      const popularDishes = Array.from(dishUsageMap.entries())
+        .map(([itemId, data]) => ({
+          itemId,
+          itemName: data.name,
+          usageCount: data.count,
+          totalRevenue: data.revenue,
+          categoryName: data.categoryName,
+        }))
+        .sort((a, b) => b.totalRevenue - a.totalRevenue) // Сортуємо по фінансам
+        .slice(0, 10);
+
+      // 3. Активні менеджери (КП та анкети)
+      const managerStatsMap = new Map<number, { name: string; kpCount: number; questionnaireCount: number; revenue: number }>();
+      const userMap = new Map<number, User>();
+      users.forEach(user => {
+        userMap.set(user.id, user);
+        const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+        managerStatsMap.set(user.id, { name: fullName, kpCount: 0, questionnaireCount: 0, revenue: 0 });
+      });
+
+      // Підрахунок КП по менеджерах
+      kps.forEach(kp => {
+        if (kp.created_by_id) {
+          const manager = managerStatsMap.get(kp.created_by_id);
+          if (manager) {
+            manager.kpCount += 1;
+            manager.revenue += kp.total_price || 0;
+          }
+        }
+      });
+
+      // Підрахунок анкет по менеджерах
+      questionnaires.forEach(q => {
+        if (q.manager_id) {
+          const manager = managerStatsMap.get(q.manager_id);
+          if (manager) {
+            manager.questionnaireCount += 1;
+          } else {
+            // Якщо менеджера немає в списку, додаємо
+            const user = userMap.get(q.manager_id);
+            if (user) {
+              const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
+              managerStatsMap.set(q.manager_id, { name: fullName, kpCount: 0, questionnaireCount: 1, revenue: 0 });
+            }
+          }
+        }
+      });
+
+      const activeManagers = Array.from(managerStatsMap.entries())
+        .map(([managerId, data]) => ({
+          managerId,
+          managerName: data.name,
+          kpCount: data.kpCount,
+          questionnaireCount: data.questionnaireCount,
+          totalRevenue: data.revenue,
+        }))
+        .filter(m => m.kpCount > 0 || m.questionnaireCount > 0)
+        .sort((a, b) => (b.kpCount + b.questionnaireCount) - (a.kpCount + a.questionnaireCount))
+        .slice(0, 10);
+
+      // 4. Статистика по статусах КП
+      const kpStatusStats = {
+        in_progress: kps.filter(kp => kp.status === 'in_progress').length,
+        sent: kps.filter(kp => kp.status === 'sent').length,
+        approved: kps.filter(kp => kp.status === 'approved').length,
+        rejected: kps.filter(kp => kp.status === 'rejected').length,
+        completed: kps.filter(kp => kp.status === 'completed').length,
+        draft: kps.filter(kp => kp.status === 'draft').length,
+      };
+
+      // 5. Загальна виручка та середній чек
+      const totalRevenue = kps.reduce((sum, kp) => sum + (kp.total_price || 0), 0);
+      const approvedKPs = kps.filter(kp => kp.status === 'approved' || kp.status === 'completed');
+      const averageCheck = approvedKPs.length > 0
+        ? approvedKPs.reduce((sum, kp) => sum + (kp.total_price || 0), 0) / approvedKPs.length
+        : 0;
+
+      // 6. Конверсія (від sent до approved)
+      const sentCount = kpStatusStats.sent;
+      const approvedCount = kpStatusStats.approved;
+      const conversionRate = sentCount > 0 ? (approvedCount / sentCount) * 100 : 0;
+
       setStats({
         totalItems,
         activeItems,
@@ -122,6 +345,13 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         averagePrice,
         categoriesBreakdown,
         priceRanges,
+        topClients,
+        popularDishes,
+        activeManagers,
+        kpStatusStats,
+        totalRevenue,
+        averageCheck,
+        conversionRate,
       });
 
       // Recent KP: беремо останні 5 за датою створення
@@ -403,6 +633,51 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         </Card>
       </div>
 
+      {/* Business KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Загальна виручка</p>
+                <p className="text-2xl">₴{stats.totalRevenue.toLocaleString('uk-UA')}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Середній чек</p>
+                <p className="text-2xl">₴{stats.averageCheck.toLocaleString('uk-UA', { maximumFractionDigits: 0 })}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Конверсія (sent → approved)</p>
+                <p className="text-2xl">{stats.conversionRate.toFixed(1)}%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Additional Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -569,6 +844,150 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Top Clients, Popular Dishes, Active Managers */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Топ клієнтів */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Топ клієнтів</CardTitle>
+            <InfoTooltip content="Клієнти з найбільшою сумою замовлень" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.topClients.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">Немає даних</p>
+              ) : (
+                stats.topClients.slice(0, 5).map((client, idx) => (
+                  <div key={client.clientId} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#FF5A00]/10 flex items-center justify-center text-sm font-semibold text-[#FF5A00]">
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{client.clientName}</p>
+                        <p className="text-xs text-gray-500">{client.kpCount} КП</p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      ₴{client.totalSpent.toLocaleString('uk-UA', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Найпопулярніші страви */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Найпопулярніші страви</CardTitle>
+            <InfoTooltip content="Страви з найбільшою виручкою" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.popularDishes.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">Немає даних</p>
+              ) : (
+                stats.popularDishes.slice(0, 5).map((dish, idx) => (
+                  <div key={dish.itemId} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-600">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{dish.itemName}</p>
+                          <p className="text-xs text-gray-500">
+                            {dish.usageCount} порцій
+                            {dish.categoryName && ` • ${dish.categoryName}`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 ml-2">
+                      ₴{dish.totalRevenue.toLocaleString('uk-UA', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Активні менеджери */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Активні менеджери</CardTitle>
+            <InfoTooltip content="Менеджери з найбільшою кількістю КП та анкет" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.activeManagers.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">Немає даних</p>
+              ) : (
+                stats.activeManagers.slice(0, 5).map((manager, idx) => (
+                  <div key={manager.managerId} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm font-semibold text-purple-600">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{manager.managerName}</p>
+                          <p className="text-xs text-gray-500">
+                            {manager.kpCount} КП • {manager.questionnaireCount} анкет
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 ml-2">
+                      ₴{manager.totalRevenue.toLocaleString('uk-UA', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Статистика по статусах КП */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Статистика КП по статусах</CardTitle>
+          <InfoTooltip content="Розподіл комерційних пропозицій за статусами" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="text-center p-4 rounded-lg bg-blue-50">
+              <p className="text-2xl font-bold text-blue-600">{stats.kpStatusStats.in_progress}</p>
+              <p className="text-xs text-gray-600 mt-1">В роботі</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-yellow-50">
+              <p className="text-2xl font-bold text-yellow-600">{stats.kpStatusStats.sent}</p>
+              <p className="text-xs text-gray-600 mt-1">Відправлено</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-green-50">
+              <p className="text-2xl font-bold text-green-600">{stats.kpStatusStats.approved}</p>
+              <p className="text-xs text-gray-600 mt-1">Затверджено</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-red-50">
+              <p className="text-2xl font-bold text-red-600">{stats.kpStatusStats.rejected}</p>
+              <p className="text-xs text-gray-600 mt-1">Відхилено</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-gray-50">
+              <p className="text-2xl font-bold text-gray-600">{stats.kpStatusStats.completed}</p>
+              <p className="text-xs text-gray-600 mt-1">Виконано</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-slate-50">
+              <p className="text-2xl font-bold text-slate-600">{stats.kpStatusStats.draft}</p>
+              <p className="text-xs text-gray-600 mt-1">Чернетка</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent KP */}
       <Card>

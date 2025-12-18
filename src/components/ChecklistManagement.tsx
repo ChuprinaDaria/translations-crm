@@ -12,7 +12,8 @@ import {
   Edit,
   FileText,
   ArrowRight,
-  Filter
+  Filter,
+  X
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -200,19 +201,19 @@ export function ChecklistManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border-2 border-gray-200">
+      <div className="flex flex-col gap-4 bg-gradient-to-r from-gray-50 to-gray-100 p-4 sm:p-6 rounded-xl border-2 border-gray-200">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Чекліст</h1>
-          <p className="text-gray-600 mt-2 text-base">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Чекліст</h1>
+          <p className="text-gray-600 mt-2 text-sm sm:text-base">
             Збір інформації для формування комерційних пропозицій
           </p>
         </div>
         
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Button
             onClick={() => handleCreateNew("box")}
             size="lg"
-            className="!bg-gradient-to-r !from-amber-500 !to-amber-600 hover:!from-amber-600 hover:!to-amber-700 !text-white shadow-lg hover:shadow-xl transition-all px-6"
+            className="!bg-gradient-to-r !from-amber-500 !to-amber-600 hover:!from-amber-600 hover:!to-amber-700 !text-white shadow-lg hover:shadow-xl transition-all w-full sm:w-auto px-6"
           >
             <Package className="w-5 h-5 mr-2" />
             Новий бокс
@@ -220,7 +221,7 @@ export function ChecklistManagement() {
           <Button
             onClick={() => handleCreateNew("catering")}
             size="lg"
-            className="!bg-gradient-to-r !from-[#FF5A00] !to-orange-600 hover:!from-[#FF5A00]/90 hover:!to-orange-700 !text-white shadow-lg hover:shadow-xl transition-all px-6"
+            className="!bg-gradient-to-r !from-[#FF5A00] !to-orange-600 hover:!from-[#FF5A00]/90 hover:!to-orange-700 !text-white shadow-lg hover:shadow-xl transition-all w-full sm:w-auto px-6"
           >
             <ChefHat className="w-5 h-5 mr-2" />
             Новий кейтеринг
@@ -275,18 +276,18 @@ export function ChecklistManagement() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "box" | "catering")}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-          <TabsList className="bg-gray-100">
+        <div className="flex flex-col gap-4 mb-4">
+          <TabsList className="bg-gray-100 w-full sm:w-auto">
             <TabsTrigger 
               value="box" 
-              className="data-[state=active]:bg-amber-500 data-[state=active]:text-white"
+              className="data-[state=active]:bg-amber-500 data-[state=active]:text-white flex-1 sm:flex-none"
             >
               <Package className="w-4 h-4 mr-2" />
               Бокси
             </TabsTrigger>
             <TabsTrigger 
               value="catering"
-              className="data-[state=active]:bg-[#FF5A00] data-[state=active]:text-white"
+              className="data-[state=active]:bg-[#FF5A00] data-[state=active]:text-white flex-1 sm:flex-none"
             >
               <ChefHat className="w-4 h-4 mr-2" />
               Кейтеринг
@@ -294,14 +295,14 @@ export function ChecklistManagement() {
           </TabsList>
           
           {/* Filters */}
-          <div className="flex gap-3">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Пошук..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64"
+                className="pl-10 w-full sm:w-64"
               />
               {searchQuery && (
                 <button
@@ -314,7 +315,7 @@ export function ChecklistManagement() {
             </div>
             
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Статус" />
               </SelectTrigger>

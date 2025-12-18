@@ -612,27 +612,31 @@ export function RecipesManagement() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-2">
-            <CardTitle>Імпорт калькуляцій</CardTitle>
-            <InfoTooltip content="Завантажте файл Excel з техкартами (формат 'Оновлена закупка 2024')" />
+        <CardHeader className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2">
+              <CardTitle>Імпорт калькуляцій</CardTitle>
+              <InfoTooltip content="Завантажте файл Excel з техкартами (формат 'Оновлена закупка 2024')" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={activeType === "catering" ? "default" : "outline"}
+                onClick={() => setActiveType("catering")}
+                className="flex-1 sm:flex-none"
+              >
+                Кейтерінг
+              </Button>
+              <Button
+                variant={activeType === "box" ? "default" : "outline"}
+                onClick={() => setActiveType("box")}
+                className="flex-1 sm:flex-none"
+              >
+                Бокси
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={activeType === "catering" ? "default" : "outline"}
-              onClick={() => setActiveType("catering")}
-            >
-              Кейтерінг
-            </Button>
-            <Button
-              variant={activeType === "box" ? "default" : "outline"}
-              onClick={() => setActiveType("box")}
-            >
-              Бокси
-            </Button>
-          </div>
-          <div className="flex items-center gap-4">
-            <label className="cursor-pointer">
+          <div className="flex items-center">
+            <label className="cursor-pointer w-full sm:w-auto">
               <input
                 type="file"
                 accept=".xlsx,.xls"
@@ -642,7 +646,7 @@ export function RecipesManagement() {
               />
               <Button
                 variant="outline"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
                 disabled={importing}
                 asChild
               >
@@ -678,81 +682,123 @@ export function RecipesManagement() {
         <CardContent>
           {files.length === 0 ? (
             <div className="text-sm text-gray-500">
-              Ще не було завантажених файлів для вкладки “{activeType === "catering" ? "Кейтерінг" : "Бокси"}”.
+              Ще не було завантажених файлів для вкладки "{activeType === "catering" ? "Кейтерінг" : "Бокси"}".
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Назва файлу</TableHead>
-                  <TableHead className="w-32">Розмір</TableHead>
-                  <TableHead className="w-32 text-right">Дії</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Назва файлу</TableHead>
+                      <TableHead className="w-32">Розмір</TableHead>
+                      <TableHead className="w-32 text-right">Дії</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {files.map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="whitespace-normal break-all">
+                          {f.filename}
+                        </TableCell>
+                        <TableCell className="text-gray-500">
+                          {typeof f.size_bytes === "number"
+                            ? `${Math.round(f.size_bytes / 1024)} KB`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadCalcFile(f)}
+                            >
+                              Скачати
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => deleteCalcFile(f)}
+                            >
+                              Видалити
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3">
                 {files.map((f) => (
-                  <TableRow key={f.id}>
-                    <TableCell className="whitespace-normal break-all">
-                      {f.filename}
-                    </TableCell>
-                    <TableCell className="text-gray-500">
-                      {typeof f.size_bytes === "number"
-                        ? `${Math.round(f.size_bytes / 1024)} KB`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => downloadCalcFile(f)}
-                        >
-                          Скачати
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteCalcFile(f)}
-                        >
-                          Видалити
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <div key={f.id} className="border rounded-lg p-4 space-y-3">
+                    <div>
+                      <h3 className="font-medium text-gray-900 break-words">
+                        {f.filename}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {typeof f.size_bytes === "number"
+                          ? `${Math.round(f.size_bytes / 1024)} KB`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadCalcFile(f)}
+                        className="flex-1"
+                      >
+                        Скачати
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteCalcFile(f)}
+                        className="flex-1"
+                      >
+                        Видалити
+                      </Button>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardHeader className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <CardTitle>
               Техкарти ({filteredRecipes.length})
             </CardTitle>
           </div>
-          <div className="flex w-full md:w-auto gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Input
               placeholder="Пошук по назві або категорії"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full md:w-64"
+              className="w-full sm:w-64"
             />
             <Button
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 w-full sm:w-auto"
               onClick={handleAutoLink}
               disabled={linking}
               title="Автоматично зв'язати техкарти зі стравами за назвами"
             >
               <Link2 className="w-4 h-4" />
-              {linking ? "Зв'язування..." : "Зв'язати зі стравами"}
+              <span className="hidden sm:inline">{linking ? "Зв'язування..." : "Зв'язати зі стравами"}</span>
+              <span className="sm:hidden">{linking ? "Зв'язування..." : "Зв'язати"}</span>
             </Button>
             <Button
               variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 w-full sm:w-auto"
               onClick={openCreate}
             >
               <Plus className="w-4 h-4" />
@@ -781,59 +827,62 @@ export function RecipesManagement() {
                   <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">
                     {category} ({categoryRecipes.length})
                   </h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10"></TableHead>
-                        <TableHead>Назва страви</TableHead>
-                        <TableHead>Вихід готової, г</TableHead>
-                        <TableHead>Вага інгредієнтів, г</TableHead>
-                        <TableHead>Інгредієнтів</TableHead>
-                        <TableHead className="w-24 text-right">Дії</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categoryRecipes.map((recipe) => (
-                        <>
-                          <TableRow
-                            key={recipe.id}
-                            className="cursor-pointer hover:bg-gray-50"
-                            onClick={() => toggleRecipeExpand(recipe.id)}
-                          >
-                            <TableCell>
-                              {expandedRecipes.has(recipe.id) ? (
-                                <ChevronDown className="w-4 h-4" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4" />
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {recipe.name}
-                            </TableCell>
-                            <TableCell>
-                              {recipe.weight_per_portion ? `${recipe.weight_per_portion} г` : "—"}
-                            </TableCell>
-                            <TableCell>
-                              {calculateIngredientsWeight(recipe) > 0 
-                                ? `${Math.round(calculateIngredientsWeight(recipe))} г` 
-                                : "—"}
-                            </TableCell>
-                            <TableCell>{countIngredients(recipe)}</TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-2"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEdit(recipe);
-                                }}
-                              >
-                                <Pencil className="w-4 h-4" />
-                                Редагувати
-                              </Button>
-                            </TableCell>
-                          </TableRow>
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-10"></TableHead>
+                          <TableHead>Назва страви</TableHead>
+                          <TableHead>Вихід готової, г</TableHead>
+                          <TableHead>Вага інгредієнтів, г</TableHead>
+                          <TableHead>Інгредієнтів</TableHead>
+                          <TableHead className="w-24 text-right">Дії</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {categoryRecipes.map((recipe) => (
+                          <>
+                            <TableRow
+                              key={recipe.id}
+                              className="cursor-pointer hover:bg-gray-50"
+                              onClick={() => toggleRecipeExpand(recipe.id)}
+                            >
+                              <TableCell>
+                                {expandedRecipes.has(recipe.id) ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {recipe.name}
+                              </TableCell>
+                              <TableCell>
+                                {recipe.weight_per_portion ? `${recipe.weight_per_portion} г` : "—"}
+                              </TableCell>
+                              <TableCell>
+                                {calculateIngredientsWeight(recipe) > 0 
+                                  ? `${Math.round(calculateIngredientsWeight(recipe))} г` 
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>{countIngredients(recipe)}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEdit(recipe);
+                                  }}
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                  Редагувати
+                                </Button>
+                              </TableCell>
+                            </TableRow>
                           {expandedRecipes.has(recipe.id) && (
                             <TableRow>
                               <TableCell colSpan={6} className="bg-gray-50 p-4">
@@ -1026,6 +1075,121 @@ export function RecipesManagement() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-4">
+                  {categoryRecipes.map((recipe) => (
+                    <div
+                      key={recipe.id}
+                      className="border rounded-lg p-4 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <button
+                              onClick={() => toggleRecipeExpand(recipe.id)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              {expandedRecipes.has(recipe.id) ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" />
+                              )}
+                            </button>
+                            <h3 className="font-medium text-gray-900">
+                              {recipe.name}
+                            </h3>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-gray-500">Вихід готової:</span>
+                              <span className="ml-2 text-gray-900">
+                                {recipe.weight_per_portion ? `${recipe.weight_per_portion} г` : "—"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Вага інгредієнтів:</span>
+                              <span className="ml-2 text-gray-900">
+                                {calculateIngredientsWeight(recipe) > 0 
+                                  ? `${Math.round(calculateIngredientsWeight(recipe))} г` 
+                                  : "—"}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-500">Інгредієнтів:</span>
+                              <span className="ml-2 text-gray-900">
+                                {countIngredients(recipe)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(recipe);
+                          }}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          <span className="hidden sm:inline">Редагувати</span>
+                        </Button>
+                      </div>
+                      {expandedRecipes.has(recipe.id) && (
+                        <div className="border-t pt-3 mt-3">
+                          <div className="text-sm space-y-3">
+                            <div>
+                              <h4 className="font-semibold mb-2">Інгредієнти:</h4>
+                              <div className="space-y-2 text-xs text-gray-600 mb-3">
+                                {recipe.weight_per_portion && (
+                                  <div>Вихід готової страви: {recipe.weight_per_portion} г</div>
+                                )}
+                                {calculateIngredientsWeight(recipe) > 0 && (
+                                  <div>Вага інгредієнтів (сирі): {Math.round(calculateIngredientsWeight(recipe))} г</div>
+                                )}
+                              </div>
+                            </div>
+                            {recipe.recipe_type === "box" ? (
+                              <div className="space-y-3">
+                                {recipe.components?.map((c) => (
+                                  <div key={c.id} className="bg-gray-50 border rounded p-3">
+                                    <div className="font-semibold mb-2">{c.name}</div>
+                                    {c.ingredients?.length > 0 && (
+                                      <ul className="space-y-1">
+                                        {c.ingredients.map((ing) => (
+                                          <li key={ing.id} className="flex justify-between text-sm">
+                                            <span>{ing.product_name}</span>
+                                            <span className="text-gray-500">
+                                              {ing.weight_per_unit} {ing.unit}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              recipe.ingredients?.length > 0 && (
+                                <ul className="space-y-1">
+                                  {recipe.ingredients.map((ing) => (
+                                    <li key={ing.id} className="flex justify-between text-sm bg-gray-50 p-2 rounded">
+                                      <span>{ing.product_name}</span>
+                                      <span className="text-gray-500">
+                                        {ing.weight_per_unit} {ing.unit}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

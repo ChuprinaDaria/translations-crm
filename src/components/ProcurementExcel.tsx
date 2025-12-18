@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { KP, kpApi, purchaseApi } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
   Table,
@@ -160,59 +161,62 @@ export function ProcurementExcel() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardHeader className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <CardTitle>КП для закупки</CardTitle>
             <InfoTooltip content="Виберіть один або кілька КП, які потрібно врахувати в закупці" />
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+          <div className="flex flex-col gap-3">
             <Input
               placeholder="Пошук по назві КП, клієнту або локації"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full md:w-64"
+              className="w-full"
             />
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter(v as KPStatusFilter)}
-            >
-              <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Статус КП" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Усі статуси</SelectItem>
-                <SelectItem value="in_progress">В роботі</SelectItem>
-                <SelectItem value="sent">Відправлено</SelectItem>
-                <SelectItem value="approved">Затверджено</SelectItem>
-                <SelectItem value="completed">Виконано</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full md:w-40"
-              />
-              <span className="hidden md:inline text-gray-500">—</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full md:w-40"
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as KPStatusFilter)}
+              >
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Статус КП" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Усі статуси</SelectItem>
+                  <SelectItem value="in_progress">В роботі</SelectItem>
+                  <SelectItem value="sent">Відправлено</SelectItem>
+                  <SelectItem value="approved">Затверджено</SelectItem>
+                  <SelectItem value="completed">Виконано</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full sm:w-40"
+                />
+                <span className="text-gray-500">—</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full sm:w-40"
+                />
+              </div>
             </div>
             <Button
               onClick={handleExport}
               disabled={exporting || selectedIds.length === 0}
-              className="whitespace-nowrap"
+              className="w-full sm:w-auto"
             >
-              {exporting ? "Формування..." : "Згенерувати Excel для закупки"}
+              {exporting ? "Формування..." : selectedIds.length > 0 ? `Згенерувати Excel (${selectedIds.length} КП)` : "Згенерувати Excel для закупки"}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto -mx-4 px-4">
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -291,6 +295,94 @@ export function ProcurementExcel() {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-4">
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">
+                Завантаження КП...
+              </div>
+            ) : filteredKps.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                Немає КП, які відповідають фільтрам
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    onCheckedChange={(checked) =>
+                      toggleSelectAllVisible(!!checked)
+                    }
+                    aria-label="Обрати всі видимі КП"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Обрати всі ({filteredKps.length})
+                  </span>
+                </div>
+                {filteredKps.map((kp) => (
+                  <div
+                    key={kp.id}
+                    className="border rounded-lg p-4 space-y-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={selectedIds.includes(kp.id)}
+                        onCheckedChange={(checked) =>
+                          toggleSelectOne(kp.id, !!checked)
+                        }
+                        aria-label={`Обрати КП ${kp.title}`}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 truncate">
+                              {kp.title}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              КП #{kp.id}
+                            </p>
+                          </div>
+                          <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded whitespace-nowrap">
+                            {kp.status || "—"}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 w-20">Клієнт:</span>
+                            <span className="text-gray-900 flex-1 truncate">
+                              {kp.client_name || "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 w-20">Дата:</span>
+                            <span className="text-gray-900">
+                              {kp.event_date
+                                ? new Date(kp.event_date).toLocaleDateString("uk-UA")
+                                : "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 w-20">Локація:</span>
+                            <span className="text-gray-900 flex-1 truncate">
+                              {kp.event_location || "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 w-20">Гостей:</span>
+                            <span className="text-gray-900">
+                              {kp.people_count ?? "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

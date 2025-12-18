@@ -261,10 +261,10 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
   return (
     <div
       className={cn(
-        "h-screen bg-[#F7F7F7] border-r border-gray-200 flex flex-col overflow-hidden",
-        !isMobile && "fixed left-0 top-0",
-        !isMobile && (isCollapsed ? "w-20" : "w-[260px]"),
-        isMobile && "w-full"
+        "bg-[#F7F7F7] border-r border-gray-200 flex flex-col overflow-hidden",
+        !isMobile && "h-screen fixed left-0 top-0",
+        isMobile && "h-full w-full",
+        !isMobile && (isCollapsed ? "w-20" : "w-[260px]")
       )}
     >
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
