@@ -150,16 +150,16 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }
       </div>
 
       {/* Step Indicators (Mobile-friendly) */}
-      <div className="max-w-4xl mx-auto px-4 py-4">
-        <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4 py-3 md:py-4">
+        <div className="flex items-center justify-between overflow-x-auto pb-2 scrollbar-hide -mx-2 sm:mx-0 px-2 sm:px-0">
           {steps.map((step, index) => (
             <button
               key={step.id}
               onClick={() => handleStepClick(index)}
               disabled={index > currentStep && !completedSteps.has(index - 1)}
               className={`
-                flex-shrink-0 flex flex-col items-center gap-1 px-2 min-w-[60px]
-                transition-all duration-200
+                flex-shrink-0 flex flex-col items-center gap-1 px-1.5 sm:px-2 min-w-[50px] sm:min-w-[60px]
+                transition-all duration-200 touch-manipulation
                 ${index === currentStep ? 'scale-110' : ''}
                 ${index <= currentStep || completedSteps.has(index - 1) 
                   ? 'opacity-100 cursor-pointer' 
@@ -168,24 +168,24 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }
             >
               <div
                 className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold
+                  w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-semibold
                   transition-all duration-200
                   ${index < currentStep || completedSteps.has(index)
                     ? 'bg-green-500 text-white'
                     : index === currentStep
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-[#FF5A00] text-white'
                     : 'bg-gray-300 text-gray-600'}
                 `}
               >
                 {index < currentStep || completedSteps.has(index) ? (
-                  <Check className="w-4 h-4" />
+                  <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                 ) : (
-                  index + 1
+                  <span className="text-xs sm:text-sm">{index + 1}</span>
                 )}
               </div>
               <span className={`
-                text-xs text-center leading-tight
-                ${index === currentStep ? 'font-semibold text-green-700' : 'text-gray-600'}
+                text-[10px] sm:text-xs text-center leading-tight px-0.5
+                ${index === currentStep ? 'font-semibold text-[#FF5A00]' : 'text-gray-600'}
               `}>
                 {step.title}
               </span>
@@ -195,54 +195,56 @@ export function QuestionnaireWizard({ steps, onSave, onCancel, autoSave, onRef }
       </div>
 
       {/* Current Step Content */}
-      <div className="max-w-4xl mx-auto px-4 pb-6">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-20 sm:pb-6">
         <Card className="shadow-sm">
-          <CardContent className="p-4 md:p-6">
+          <CardContent className="p-3 sm:p-4 md:p-6">
             {steps[currentStep].component}
           </CardContent>
         </Card>
       </div>
 
       {/* Navigation Buttons - Sticky Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <div className="flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-20 safe-area-inset-bottom">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3">
+          <div className="flex gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={currentStep === 0 ? onCancel : handlePrev}
-              className="flex-1 h-12 text-base"
+              className="flex-1 h-11 sm:h-12 text-sm sm:text-base"
               disabled={isSaving}
             >
-              <ChevronLeft className="w-5 h-5 mr-1" />
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-1" />
               {currentStep === 0 ? 'Скасувати' : 'Назад'}
             </Button>
             
             {currentStep === steps.length - 1 ? (
               <Button
                 onClick={onSave}
-                className="flex-1 h-12 text-base bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                className="flex-1 h-11 sm:h-12 text-sm sm:text-base bg-[#FF5A00] hover:bg-[#FF5A00]/90"
                 disabled={isSaving || !steps[currentStep].isValid()}
               >
                 {isSaving ? (
                   <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Збереження...
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 animate-spin" />
+                    <span className="hidden sm:inline">Збереження...</span>
+                    <span className="sm:hidden">Збереження...</span>
                   </>
                 ) : (
                   <>
-                    <Check className="w-5 h-5 mr-2" />
-                    Зберегти анкету
+                    <Check className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                    <span className="hidden sm:inline">Зберегти анкету</span>
+                    <span className="sm:hidden">Зберегти</span>
                   </>
                 )}
               </Button>
             ) : (
               <Button
                 onClick={handleNext}
-                className="flex-1 h-12 text-base bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                className="flex-1 h-11 sm:h-12 text-sm sm:text-base bg-[#FF5A00] hover:bg-[#FF5A00]/90"
                 disabled={!steps[currentStep].isValid()}
               >
                 Далі
-                <ChevronRight className="w-5 h-5 ml-1" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1" />
               </Button>
             )}
           </div>

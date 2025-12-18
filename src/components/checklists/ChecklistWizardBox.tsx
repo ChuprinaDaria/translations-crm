@@ -174,20 +174,20 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-amber-500 to-amber-600 px-4 md:px-8 py-4 md:py-6 flex-shrink-0 shadow-lg">
-        <div className="flex items-center justify-between text-white mb-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Package className="w-7 h-7" />
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-amber-500 to-amber-600 px-4 md:px-8 py-3 md:py-4 lg:py-6 flex-shrink-0 shadow-lg">
+        <div className="flex items-start sm:items-center justify-between text-white mb-3 md:mb-4 gap-3">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+            <div className="w-10 h-10 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
+              <Package className="w-5 h-5 md:w-7 md:h-7" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg md:text-xl lg:text-2xl font-bold truncate">
                 {checklist ? "Редагування чекліста" : "Новий чекліст на доставку боксів"}
               </h2>
-              <p className="text-amber-100">
+              <p className="text-amber-100 text-xs md:text-sm">
                 Крок {currentStep + 1} з {STEPS.length}
                 {lastAutoSaveTime && (
-                  <span className="ml-3 text-xs">
+                  <span className="hidden md:inline ml-3 text-xs">
                     Автозбереження: {lastAutoSaveTime.toLocaleTimeString("uk-UA")}
                   </span>
                 )}
@@ -198,7 +198,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
             variant="ghost"
             size="icon"
             onClick={onCancel}
-            className="text-white hover:bg-white/20"
+            className="text-white hover:bg-white/20 flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -214,8 +214,8 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
       </div>
 
       {/* Step indicators */}
-      <div className="px-8 py-5 border-b bg-gray-50 overflow-x-auto flex-shrink-0">
-        <div className="flex gap-3 min-w-max">
+      <div className="px-4 md:px-8 py-4 md:py-5 border-b bg-gray-50 overflow-x-auto flex-shrink-0">
+        <div className="flex gap-2 md:gap-3 min-w-max">
           {STEPS.map((step) => {
             const Icon = step.icon;
             const isActive = currentStep === step.id;
@@ -225,7 +225,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
               <button
                 key={step.id}
                 onClick={() => handleTabClick(step.id)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl transition-all font-medium ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl transition-all font-medium text-sm md:text-base ${
                   isActive
                     ? "bg-amber-500 text-white shadow-lg scale-105"
                     : isCompleted
@@ -233,12 +233,12 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
                     : "bg-white text-gray-500 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                <div className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
                   isCompleted ? "bg-green-500 text-white" : isActive ? "bg-white/20" : ""
                 }`}>
-                  {isCompleted ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                  {isCompleted ? <Check className="w-3 h-3 md:w-4 md:h-4" /> : <Icon className="w-3 h-3 md:w-4 md:h-4" />}
                 </div>
-                <span>{step.title}</span>
+                <span className="whitespace-nowrap">{step.title}</span>
               </button>
             );
           })}
@@ -246,65 +246,68 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-6">
         <div className="max-w-4xl mx-auto">
           {renderStep()}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="px-8 py-5 border-t bg-white flex justify-between items-center flex-shrink-0 shadow-lg">
+      <div className="px-4 md:px-8 py-4 md:py-5 border-t bg-white flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0 flex-shrink-0 shadow-lg">
         <Button
           variant="outline"
           size="lg"
           onClick={currentStep === 0 ? onCancel : handlePrev}
-          className="px-6 min-h-[44px]"
+          className="w-full sm:w-auto px-4 md:px-6 min-h-[44px] text-sm md:text-base"
         >
-          <ChevronLeft className="w-5 h-5 mr-2" />
+          <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 mr-2" />
           {currentStep === 0 ? "Скасувати" : "Назад"}
         </Button>
         
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
           <Button
             variant="outline"
             size="lg"
             onClick={handleSaveDraft}
             disabled={isSaving}
-            className="px-6 min-h-[44px]"
+            className="w-full sm:w-auto px-4 md:px-6 min-h-[44px] text-sm md:text-base"
           >
             {isSaving ? (
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              <Loader2 className="w-4 h-4 md:w-5 md:h-5 mr-2 animate-spin" />
             ) : (
-              <Save className="w-5 h-5 mr-2" />
+              <Save className="w-4 h-4 md:w-5 md:h-5 mr-2" />
             )}
-            Зберегти чернетку
+            <span className="hidden sm:inline">Зберегти чернетку</span>
+            <span className="sm:hidden">Чернетка</span>
           </Button>
           
           {currentStep < STEPS.length - 1 ? (
             <Button
               size="lg"
               onClick={handleNext}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-8 shadow-lg min-h-[44px]"
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-4 md:px-8 shadow-lg min-h-[44px] text-sm md:text-base"
             >
               Далі
-              <ChevronRight className="w-5 h-5 ml-2" />
+              <ChevronRight className="w-4 h-4 md:w-5 md:h-5 ml-2" />
             </Button>
           ) : (
             <Button
               size="lg"
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-green-500 hover:bg-green-600 text-white px-8 shadow-lg min-h-[44px]"
+              className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white px-4 md:px-8 shadow-lg min-h-[44px] text-sm md:text-base"
             >
               {isSaving ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Збереження...
+                  <Loader2 className="w-4 h-4 md:w-5 md:h-5 mr-2 animate-spin" />
+                  <span className="hidden sm:inline">Збереження...</span>
+                  <span className="sm:hidden">Збереження...</span>
                 </>
               ) : (
                 <>
-                  <Check className="w-5 h-5 mr-2" />
-                  Завершити і зберегти
+                  <Check className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                  <span className="hidden sm:inline">Завершити і зберегти</span>
+                  <span className="sm:hidden">Зберегти</span>
                 </>
               )}
             </Button>

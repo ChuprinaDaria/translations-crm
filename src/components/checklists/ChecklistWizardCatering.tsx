@@ -188,20 +188,20 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#FF5A00] to-orange-500 px-4 md:px-8 py-4 md:py-6 flex-shrink-0 shadow-lg">
-        <div className="flex items-center justify-between text-white mb-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-              <ChefHat className="w-7 h-7" />
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#FF5A00] to-orange-500 px-4 md:px-8 py-3 md:py-4 lg:py-6 flex-shrink-0 shadow-lg">
+        <div className="flex items-start sm:items-center justify-between text-white mb-3 md:mb-4 gap-3">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+            <div className="w-10 h-10 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
+              <ChefHat className="w-5 h-5 md:w-7 md:h-7" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg md:text-xl lg:text-2xl font-bold truncate">
                 {checklist ? "Редагування чекліста" : "Новий чекліст на кейтеринг"}
               </h2>
-              <p className="text-orange-100">
+              <p className="text-orange-100 text-xs md:text-sm">
                 Крок {currentStep + 1} з {STEPS.length}
                 {lastAutoSaveTime && (
-                  <span className="ml-3 text-xs">
+                  <span className="hidden md:inline ml-3 text-xs">
                     Автозбереження: {lastAutoSaveTime.toLocaleTimeString("uk-UA")}
                   </span>
                 )}
@@ -212,7 +212,7 @@ export function ChecklistWizardCatering({ checklist, onSave, onCancel }: Checkli
             variant="ghost"
             size="icon"
             onClick={onCancel}
-            className="text-white hover:bg-white/20"
+            className="text-white hover:bg-white/20 flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </Button>

@@ -2152,7 +2152,7 @@ async def update_items_from_excel_endpoint(
         items_data = generate_menu_patch_from_excel(temp_path)
         
         if not items_data:
-            raise HTTPException(status_code=400, detail="Не знайдено жодної страви в Excel файлі")
+            raise HTTPException(status_code=400, detail="Не знайдено жодної страви в Excel файлі. Перевірте формат файлу: перша колонка - назва, друга - ціна")
         
         # Оновлюємо страви в БД
         stats = update_items_from_data(items_data, dry_run=False, db_session=db)
@@ -2173,9 +2173,17 @@ async def update_items_from_excel_endpoint(
         return result
         
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        import traceback
+        error_detail = str(e)
+        print(f"ValueError in update_items_from_excel: {error_detail}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=400, detail=error_detail)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Помилка обробки файлу: {str(e)}")
+        import traceback
+        error_detail = f"Помилка обробки файлу: {str(e)}"
+        print(f"Exception in update_items_from_excel: {error_detail}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=error_detail)
     finally:
         # Видаляємо тимчасовий файл
         try:
