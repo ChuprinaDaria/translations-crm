@@ -613,27 +613,24 @@ export const itemsApi = {
   },
 
   async updateItem(itemId: number, data: Partial<ItemCreate>): Promise<Item> {
-    // Якщо є файл фото, використовуємо multipart/form-data
-    if (data.photo) {
-      const formData = new FormData();
-      if (data.name) formData.append('name', data.name);
-      if (data.description !== undefined) formData.append('description', data.description || '');
-      if (data.price !== undefined) formData.append('price', data.price.toString());
-      if (data.weight !== undefined) formData.append('weight', data.weight.toString());
-      if (data.unit) formData.append('unit', data.unit);
-      if (data.subcategory_id !== undefined) formData.append('subcategory_id', data.subcategory_id.toString());
-      if (data.active !== undefined) formData.append('active', data.active.toString());
-      if (data.photo) formData.append('photo', data.photo);
-      if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
-      
-      return apiFetchMultipart<Item>(`/items/${itemId}`, formData, 'PUT');
+    // Endpoint завжди очікує multipart/form-data, тому завжди використовуємо FormData
+    const formData = new FormData();
+    if (data.name) formData.append('name', data.name);
+    if (data.description !== undefined) formData.append('description', data.description || '');
+    if (data.price !== undefined) formData.append('price', data.price.toString());
+    if (data.weight !== undefined) {
+      // weight може бути числом або рядком, завжди перетворюємо на рядок
+      formData.append('weight', String(data.weight));
     }
+    if (data.unit !== undefined) formData.append('unit', data.unit || '');
+    if (data.subcategory_id !== undefined && data.subcategory_id !== null) {
+      formData.append('subcategory_id', data.subcategory_id.toString());
+    }
+    if (data.active !== undefined) formData.append('active', data.active.toString());
+    if (data.photo) formData.append('photo', data.photo);
+    if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
     
-    // Інакше використовуємо JSON
-    return apiFetch<Item>(`/items/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return apiFetchMultipart<Item>(`/items/${itemId}`, formData, 'PUT');
   },
 
   async deleteItem(itemId: number): Promise<string> {

@@ -8,6 +8,8 @@ import {
   type Menu,
   type MenuItemCreate,
   getImageUrl,
+  API_BASE_URL,
+  tokenManager,
 } from "../lib/api";
 import type { Item, Category, Subcategory } from "../lib/api";
 import { toast } from "sonner";
@@ -21,6 +23,7 @@ import {
   Tag,
   Loader2,
   ListChecks,
+  Upload,
 } from "lucide-react";
 
 import { Button } from "./ui/button";
@@ -116,6 +119,10 @@ export function MenuManagement() {
   const [itemPhotoFile, setItemPhotoFile] = useState<File | null>(null);
   const [itemPhotoPreview, setItemPhotoPreview] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("");
+  
+  // Excel upload for updating items
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false);
   
   // Form - Category
   const [categoryFormData, setCategoryFormData] = useState({ name: "" });
@@ -622,6 +629,145 @@ export function MenuManagement() {
 
         {/* TAB 1: ITEMS */}
         <TabsContent value="items" className="space-y-6">
+          {/* Header with actions */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Страви</h2>
+              <p className="text-sm text-gray-500">
+                Управління стравами меню
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {/* Excel Upload Button */}
+              <div className="relative">
+                <Input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setExcelFile(file);
+                  }}
+                  className="hidden"
+                  id="excel-upload-input"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    document.getElementById("excel-upload-input")?.click();
+                  }}
+                  disabled={isUploadingExcel}
+                  className="gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  {isUploadingExcel ? "Обробка..." : "Оновити з Excel"}
+                </Button>
+                {excelFile && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-700">{excelFile.name}</span>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            if (!excelFile) return;
+                            setIsUploadingExcel(true);
+                            try {
+                              const formData = new FormData();
+                              formData.append("file", excelFile);
+                              
+                              const token = tokenManager.getToken();
+                              const response = await fetch(
+                                `${API_BASE_URL}/items/update-from-excel`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    Authorization: `Bearer ${token}`,
+                                  },
+                                  body: formData,
+                                }
+                              );
+                              
+                              if (!response.ok) {
+                                const error = await response.json();
+                                throw new Error(error.detail || "Помилка оновлення");
+                              }
+                              
+                              const result = await response.json();
+                              
+                              toast.success(
+                                `Оновлено: ${result.updated} страв. Знайдено: ${result.found}, Створено категорій: ${result.created_categories}, підкатегорій: ${result.created_subcategories}`
+                              );
+                              
+                              if (result.not_found_count > 0) {
+                                toast.warning(
+                                  `Не знайдено страв: ${result.not_found_count}`
+                                );
+                              }
+                              
+                              if (result.errors_count > 0) {
+                                toast.error(`Помилок: ${result.errors_count}`);
+                              }
+                              
+                              // Перезавантажуємо дані
+                              await loadData();
+                              setExcelFile(null);
+                            } catch (error: any) {
+                              toast.error(error.message || "Помилка завантаження файлу");
+                            } finally {
+                              setIsUploadingExcel(false);
+                              // Скидаємо input
+                              const input = document.getElementById("excel-upload-input") as HTMLInputElement;
+                              if (input) input.value = "";
+                            }
+                          }}
+                          disabled={isUploadingExcel}
+                          className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                        >
+                          Завантажити
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setExcelFile(null);
+                            const input = document.getElementById("excel-upload-input") as HTMLInputElement;
+                            if (input) input.value = "";
+                          }}
+                        >
+                          Скасувати
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <Button
+                className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                onClick={() => {
+                  resetItemForm();
+                  setIsCreateItemModalOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Додати страву
+              </Button>
+            </div>
+          </div>
+          
+          {/* Info about Excel format */}
+          {!excelFile && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <p className="text-sm text-blue-700">
+                  <strong>Оновлення страв з Excel:</strong> Завантажте Excel файл з аркушами (категорії) та рядками (страви).
+                  Система оновить ціни, категорії та підкатегорії для існуючих страв по назві.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          
           {/* Filters */}
           <Card>
             <CardContent className="p-4">

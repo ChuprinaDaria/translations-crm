@@ -21,6 +21,8 @@ from decimal import Decimal
 from email_service import send_kp_email
 from telegram_service import send_kp_telegram
 from import_menu_csv import parse_menu_csv, import_to_db as import_menu_items
+from menu_patch_generator import generate_menu_patch_from_excel
+from update_items_from_file import update_items_from_data
 import loyalty_service
 from purchase_service import generate_purchase_excel
 from service_excel_service import generate_service_excel
@@ -480,7 +482,7 @@ async def create_item(
     name: str = Form(...),
     description: str = Form(None),
     price: float = Form(None),
-    weight: float = Form(None),
+    weight: str = Form(None),
     unit: str = Form(None),
     subcategory_id: int = Form(None),
     active: bool = Form(True),
@@ -524,7 +526,7 @@ async def update_item(
     name: str = Form(None),
     description: str = Form(None),
     price: float = Form(None),
-    weight: float = Form(None),
+    weight: str = Form(None),
     unit: str = Form(None),
     subcategory_id: int = Form(None),
     active: bool = Form(None),
@@ -2114,6 +2116,73 @@ async def import_menu_csv_endpoint(
     import_menu_items(items)
 
     return {"status": "success", "created": len(items)}
+
+
+@router.post("/items/update-from-excel")
+async def update_items_from_excel_endpoint(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Оновлює існуючі страви з Excel файлу.
+    
+    Обробляє Excel файл з аркушами (категорії) та рядками (страви):
+    - Назва аркуша = категорія
+    - Рядки без ціни = підкатегорії
+    - Рядки з ціною = страви
+    
+    Оновлює: ціну, категорію, підкатегорію для існуючих страв по назві.
+    """
+    # Перевіряємо формат файлу
+    if not (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
+        raise HTTPException(status_code=400, detail="Файл має бути у форматі Excel (.xlsx або .xls)")
+    
+    # Зберігаємо тимчасовий файл
+    imports_dir = UPLOADS_DIR / "imports"
+    imports_dir.mkdir(parents=True, exist_ok=True)
+    
+    temp_path = imports_dir / f"update_{uuid.uuid4().hex[:8]}_{file.filename}"
+    contents = await file.read()
+    with temp_path.open("wb") as f:
+        f.write(contents)
+    
+    try:
+        # Генеруємо дані для оновлення з Excel
+        items_data = generate_menu_patch_from_excel(temp_path)
+        
+        if not items_data:
+            raise HTTPException(status_code=400, detail="Не знайдено жодної страви в Excel файлі")
+        
+        # Оновлюємо страви в БД
+        stats = update_items_from_data(items_data, dry_run=False, db_session=db)
+        
+        # Формуємо результат
+        result = {
+            "status": "success",
+            "found": stats['found'],
+            "updated": stats['updated'],
+            "created_categories": stats['created_categories'],
+            "created_subcategories": stats['created_subcategories'],
+            "not_found_count": len(stats['not_found']),
+            "errors_count": len(stats['errors']),
+            "not_found": stats['not_found'][:50],  # Перші 50 для не перевантаження відповіді
+            "errors": stats['errors'][:20]  # Перші 20 помилок
+        }
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Помилка обробки файлу: {str(e)}")
+    finally:
+        # Видаляємо тимчасовий файл
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except Exception:
+            pass
 
 
 @router.get("/settings/telegram-accounts", response_model=list[schema.TelegramAccount])

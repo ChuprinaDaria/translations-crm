@@ -396,7 +396,7 @@ function App() {
           open={mobileMenuOpen}
           onOpenChange={setMobileMenuOpen}
         >
-          <SheetContent side="left" className="p-0 w-[260px] h-full flex flex-col">
+          <SheetContent side="left" className="p-0 w-[260px] h-full max-h-screen flex flex-col overflow-hidden">
             <SheetTitle className="sr-only">
               Навігаційне меню
             </SheetTitle>

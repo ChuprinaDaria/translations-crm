@@ -258,12 +258,56 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
 
   const filteredSections = filterSections(menuSections);
 
+  const menuContent = (
+    <div className="py-6 space-y-6">
+      {filteredSections.map((section, idx) => (
+        <div key={idx} className="px-3">
+          {!isCollapsed && (
+            <div className="px-3 mb-2 text-xs uppercase tracking-wider text-gray-500">
+              {section.title}
+            </div>
+          )}
+          <div className="space-y-1">
+            {section.items.map((item) => {
+              const isActive = activeItem === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onItemClick(item.id)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative",
+                    isActive
+                      ? "bg-[#FF5A00]/10 text-[#FF5A00] border-l-4 border-[#FF5A00] ml-0"
+                      : "hover:bg-gray-200/50 text-gray-700 hover:text-gray-900"
+                  )}
+                  title={isCollapsed ? item.label : undefined}
+                >
+                  <span className={cn(isActive ? "text-[#FF5A00]" : "text-gray-600")}>
+                    {item.icon}
+                  </span>
+                  {!isCollapsed && (
+                    <>
+                      <span className={cn("flex-1 text-left text-sm", isActive && "font-semibold")}>
+                        {item.label}
+                      </span>
+                      <InfoTooltip content={item.tooltip} />
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div
       className={cn(
         "bg-[#F7F7F7] border-r border-gray-200 flex flex-col overflow-hidden",
         !isMobile && "h-screen fixed left-0 top-0",
-        isMobile && "h-full w-full",
+        isMobile && "h-full w-full max-h-screen",
         !isMobile && (isCollapsed ? "w-20" : "w-[260px]")
       )}
     >
@@ -283,49 +327,15 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
         )}
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="py-6 space-y-6">
-          {filteredSections.map((section, idx) => (
-            <div key={idx} className="px-3">
-              {!isCollapsed && (
-                <div className="px-3 mb-2 text-xs uppercase tracking-wider text-gray-500">
-                  {section.title}
-                </div>
-              )}
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const isActive = activeItem === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onItemClick(item.id)}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative",
-                        isActive
-                          ? "bg-[#FF5A00]/10 text-[#FF5A00] border-l-4 border-[#FF5A00] ml-0"
-                          : "hover:bg-gray-200/50 text-gray-700 hover:text-gray-900"
-                      )}
-                      title={isCollapsed ? item.label : undefined}
-                    >
-                      <span className={cn(isActive ? "text-[#FF5A00]" : "text-gray-600")}>
-                        {item.icon}
-                      </span>
-                      {!isCollapsed && (
-                        <>
-                          <span className={cn("flex-1 text-left text-sm", isActive && "font-semibold")}>
-                            {item.label}
-                          </span>
-                          <InfoTooltip content={item.tooltip} />
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+      {isMobile ? (
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+          {menuContent}
         </div>
-      </ScrollArea>
+      ) : (
+        <ScrollArea className="flex-1 min-h-0">
+          {menuContent}
+        </ScrollArea>
+      )}
 
       <div className="border-t border-gray-200 p-3 flex-shrink-0">
         <Button
