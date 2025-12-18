@@ -689,29 +689,49 @@ export function MenuManagement() {
                               );
                               
                               if (!response.ok) {
-                                const error = await response.json();
+                                const error = await response.json().catch(() => ({ detail: "Невідома помилка" }));
                                 throw new Error(error.detail || "Помилка оновлення");
                               }
                               
                               const result = await response.json();
                               
-                              toast.success(
-                                `Оновлено: ${result.updated} страв. Знайдено: ${result.found}, Створено категорій: ${result.created_categories}, підкатегорій: ${result.created_subcategories}`
-                              );
+                              console.log("Результат оновлення:", result);
+                              
+                              // Формуємо детальне повідомлення
+                              let message = `Оновлено: ${result.updated || 0} страв`;
+                              if (result.found !== undefined) {
+                                message += `. Знайдено: ${result.found}`;
+                              }
+                              if (result.created_categories > 0) {
+                                message += `. Створено категорій: ${result.created_categories}`;
+                              }
+                              if (result.created_subcategories > 0) {
+                                message += `. Створено підкатегорій: ${result.created_subcategories}`;
+                              }
+                              
+                              toast.success(message);
                               
                               if (result.not_found_count > 0) {
                                 toast.warning(
-                                  `Не знайдено страв: ${result.not_found_count}`
+                                  `Не знайдено страв: ${result.not_found_count}${result.not_found && result.not_found.length > 0 ? ` (наприклад: ${result.not_found.slice(0, 3).join(", ")})` : ""}`
                                 );
                               }
                               
                               if (result.errors_count > 0) {
-                                toast.error(`Помилок: ${result.errors_count}`);
+                                const errorMessages = result.errors && result.errors.length > 0 
+                                  ? result.errors.slice(0, 2).join("; ")
+                                  : "";
+                                toast.error(`Помилок: ${result.errors_count}${errorMessages ? ` (${errorMessages})` : ""}`);
                               }
                               
                               // Перезавантажуємо дані
                               await loadData();
                               setExcelFile(null);
+                              
+                              // Очищаємо фільтри, щоб показати всі оновлені страви
+                              setSearchQuery("");
+                              setCategoryFilter("");
+                              setStatusFilter("");
                             } catch (error: any) {
                               toast.error(error.message || "Помилка завантаження файлу");
                             } finally {
