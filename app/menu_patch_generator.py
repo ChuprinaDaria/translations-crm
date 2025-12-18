@@ -25,21 +25,45 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
         Список словників з полями: name, category, subcategory, price
     """
     try:
-        sheets = pd.read_excel(file_path, sheet_name=None, header=None)
+        # Спробуємо прочитати файл з engine='openpyxl' для підтримки .xlsm
+        try:
+            sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine='openpyxl')
+        except Exception:
+            # Якщо не вдалося з openpyxl, спробуємо без engine
+            sheets = pd.read_excel(file_path, sheet_name=None, header=None)
     except Exception as e:
         raise ValueError(f"Не вдалося прочитати Excel файл: {e}")
     
+    if not sheets:
+        raise ValueError("Файл не містить жодних аркушів")
+    
     final_data = []
+    debug_info = []  # Для діагностики
 
     for sheet_name, df in sheets.items():
+        debug_info.append(f"Аркуш '{sheet_name}': {len(df)} рядків, {len(df.columns) if len(df) > 0 else 0} колонок")
+        
+        # Показуємо перші 3 рядки для діагностики
+        if len(df) > 0:
+            sample_rows = []
+            for i in range(min(3, len(df))):
+                row_data = [str(df.iloc[i, j]) if j < len(df.columns) else "" for j in range(min(5, len(df.columns)))]
+                sample_rows.append(f"    Рядок {i+1}: {', '.join(row_data[:3])}")
+            debug_info.extend(sample_rows)
+        
         # Видаляємо порожні рядки
         df = df.dropna(how='all').reset_index(drop=True)
+        
+        if len(df) == 0:
+            debug_info.append(f"  - Аркуш '{sheet_name}' порожній після видалення пустих рядків")
+            continue
         
         # Назва аркуша = категорія
         current_category = sheet_name
         current_subcategory = sheet_name  # Початкова підкатегорія = категорія
         
-        for _, row in df.iterrows():
+        items_in_sheet = 0
+        for idx, row in df.iterrows():
             # Перша колонка - назва страви/підкатегорії
             name_cell = row[0]
             
@@ -49,8 +73,14 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
             
             name = str(name_cell).strip()
             
+            # Перевіряємо, чи є друга колонка
+            if len(row) < 2:
+                # Немає другої колонки - це підкатегорія
+                current_subcategory = name
+                continue
+            
             # Друга колонка - ціна (якщо є)
-            price_cell = row[1] if len(row) > 1 else None
+            price_cell = row[1]
             
             # Якщо немає ціни або ціна порожня - це підкатегорія
             if pd.isna(price_cell) or str(price_cell).strip() == "":
@@ -60,10 +90,25 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
             # Якщо є ціна - це страва
             try:
                 # Очищаємо ціну від символів
-                clean_price_str = str(price_cell).replace(',', '.').replace(' ', '').replace('грн', '').replace('₴', '').strip()
+                price_str = str(price_cell).strip()
+                clean_price_str = price_str.replace(',', '.').replace(' ', '').replace('грн', '').replace('₴', '').strip()
+                
+                # Видаляємо всі символи крім цифр, крапки та мінуса
+                import re
+                clean_price_str = re.sub(r'[^\d.-]', '', clean_price_str)
+                
+                if not clean_price_str:
+                    # Порожня ціна після очищення - це підкатегорія
+                    current_subcategory = name
+                    continue
                 
                 # Спробуємо конвертувати в число
                 clean_price = float(clean_price_str)
+                
+                if clean_price <= 0:
+                    # Невірна ціна - це підкатегорія
+                    current_subcategory = name
+                    continue
                 
                 # Додаємо до результату
                 final_data.append({
@@ -72,10 +117,23 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
                     "subcategory": current_subcategory,
                     "price": f"{clean_price:.2f}"
                 })
-            except (ValueError, TypeError):
+                items_in_sheet += 1
+            except (ValueError, TypeError) as e:
                 # Якщо не вдалося розпарсити ціну, вважаємо це підкатегорією
                 current_subcategory = name
                 continue
+        
+        debug_info.append(f"  - Знайдено страв: {items_in_sheet}")
+
+    if not final_data:
+        # Повертаємо діагностичну інформацію
+        debug_msg = "Не знайдено жодної страви в Excel файлі.\n\n"
+        debug_msg += "Діагностика:\n" + "\n".join(debug_info)
+        debug_msg += "\n\nПеревірте:\n"
+        debug_msg += "1. Перша колонка (A) містить назви страв\n"
+        debug_msg += "2. Друга колонка (B) містить ціни (числа)\n"
+        debug_msg += "3. Рядки без ціни вважаються підкатегоріями\n"
+        raise ValueError(debug_msg)
 
     return final_data
 

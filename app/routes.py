@@ -2135,8 +2135,8 @@ async def update_items_from_excel_endpoint(
     Оновлює: ціну, категорію, підкатегорію для існуючих страв по назві.
     """
     # Перевіряємо формат файлу
-    if not (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
-        raise HTTPException(status_code=400, detail="Файл має бути у форматі Excel (.xlsx або .xls)")
+    if not (file.filename.endswith('.xlsx') or file.filename.endswith('.xls') or file.filename.endswith('.xlsm')):
+        raise HTTPException(status_code=400, detail="Файл має бути у форматі Excel (.xlsx, .xls або .xlsm)")
     
     # Зберігаємо тимчасовий файл
     imports_dir = UPLOADS_DIR / "imports"
