@@ -28,10 +28,10 @@ def find_header_row(df: pd.DataFrame) -> Optional[int]:
         has_price = any(kw in row_text for kw in ['ціна', 'вартість', 'price'])
         
         if has_name and has_price:
-            print(f"[EXCEL_PARSER] Header знайдено в рядку {idx + 1}: {row_values[:5]}")
+            print(f"[EXCEL_PARSER] Header знайдено в рядку {idx + 1}: {row_values[:5]}", flush=True)
             return idx
     
-    print("[EXCEL_PARSER] Header не знайдено (рядок з 'назва' та 'ціна' одночасно)")
+    print("[EXCEL_PARSER] Header не знайдено (рядок з 'назва' та 'ціна' одночасно)", flush=True)
     return None
 
 
@@ -114,11 +114,13 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
     - Рядки без ціни = підкатегорії
     - Рядки з ціною = страви
     """
-    print(f"[EXCEL_PARSER] Початок обробки файлу: {file_path}")
+    logger.info(f"[EXCEL_PARSER] Початок обробки файлу: {file_path}")
+    print(f"[EXCEL_PARSER] Початок обробки файлу: {file_path}", flush=True)
     
     try:
         sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine='openpyxl')
-        print(f"[EXCEL_PARSER] Завантажено {len(sheets)} аркушів")
+        logger.info(f"[EXCEL_PARSER] Завантажено {len(sheets)} аркушів")
+        print(f"[EXCEL_PARSER] Завантажено {len(sheets)} аркушів", flush=True)
     except Exception as e:
         error_msg = f"Не вдалося прочитати Excel файл: {e}"
         print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}")
@@ -131,23 +133,24 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
     final_data = []
 
     for sheet_name, df in sheets.items():
-        print(f"\n[EXCEL_PARSER] Обробка аркуша '{sheet_name}': {len(df)} рядків, {len(df.columns)} колонок")
+        logger.info(f"[EXCEL_PARSER] Обробка аркуша '{sheet_name}': {len(df)} рядків, {len(df.columns)} колонок")
+        print(f"\n[EXCEL_PARSER] Обробка аркуша '{sheet_name}': {len(df)} рядків, {len(df.columns)} колонок", flush=True)
         
         df = df.dropna(how='all').reset_index(drop=True)
         if df.empty:
-            print(f"[EXCEL_PARSER] Аркуш '{sheet_name}' порожній після очищення")
+            print(f"[EXCEL_PARSER] Аркуш '{sheet_name}' порожній після очищення", flush=True)
             continue
         
         # Показуємо перші рядки для діагностики
-        print(f"[EXCEL_PARSER] Перші 3 рядки:")
+        print(f"[EXCEL_PARSER] Перші 3 рядки:", flush=True)
         for i in range(min(3, len(df))):
             row_preview = [str(df.iloc[i, j])[:30] if j < len(df.columns) else "" for j in range(min(5, len(df.columns)))]
-            print(f"  Рядок {i+1}: {row_preview}")
+            print(f"  Рядок {i+1}: {row_preview}", flush=True)
         
         header_idx = find_header_row(df)
         
         if header_idx is None:
-            print(f"[EXCEL_PARSER] Header не знайдено, спробуємо знайти колонки автоматично")
+            print(f"[EXCEL_PARSER] Header не знайдено, спробуємо знайти колонки автоматично", flush=True)
             # Шукаємо колонки в перших 5 рядках
             name_col, price_col, weight_col = None, None, None
             
@@ -170,10 +173,10 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
             if weight_col is None:
                 weight_col = 2 if len(df.columns) > 2 else None  # За замовчуванням колонка 2 = Вихід
             
-            print(f"[EXCEL_PARSER] Використовуємо колонки: name={name_col}, price={price_col}, weight={weight_col}")
+            print(f"[EXCEL_PARSER] Використовуємо колонки: name={name_col}, price={price_col}, weight={weight_col}", flush=True)
             df_work = df
         else:
-            print(f"[EXCEL_PARSER] Header знайдено в рядку {header_idx + 1}")
+            print(f"[EXCEL_PARSER] Header знайдено в рядку {header_idx + 1}", flush=True)
             row_values = [str(v).strip().lower() for v in df.iloc[header_idx].values]
             
             # Знаходимо індекси колонок
@@ -183,11 +186,11 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
             
             if name_col is None or price_col is None:
                 error_msg = f"Не знайдено обов'язкові колонки в header (рядок {header_idx + 1}). Знайдені колонки: {row_values[:10]}"
-                print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}")
+                print(f"[EXCEL_PARSER] ПОМИЛКА: {error_msg}", flush=True)
                 raise ValueError(error_msg)
             
             df_work = df.iloc[header_idx + 1:].reset_index(drop=True)
-            print(f"[EXCEL_PARSER] Колонки: name={name_col}, price={price_col}, weight={weight_col}")
+            print(f"[EXCEL_PARSER] Колонки: name={name_col}, price={price_col}, weight={weight_col}", flush=True)
         
         current_subcategory = sheet_name
         items_in_sheet = 0
@@ -220,9 +223,10 @@ def generate_menu_patch_from_excel(file_path: Path) -> List[Dict[str, str]]:
             final_data.append(item)
             items_in_sheet += 1
         
-        print(f"[EXCEL_PARSER] Знайдено страв в аркуші '{sheet_name}': {items_in_sheet}")
+        print(f"[EXCEL_PARSER] Знайдено страв в аркуші '{sheet_name}': {items_in_sheet}", flush=True)
 
-    print(f"\n[EXCEL_PARSER] Всього знайдено страв: {len(final_data)}")
+    logger.info(f"[EXCEL_PARSER] Всього знайдено страв: {len(final_data)}")
+    print(f"\n[EXCEL_PARSER] Всього знайдено страв: {len(final_data)}", flush=True)
     
     if not final_data:
         error_msg = "Не знайдено жодної страви в Excel файлі"

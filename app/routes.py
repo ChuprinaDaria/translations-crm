@@ -5,6 +5,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional, Any, List
+import logging
+
+logger = logging.getLogger(__name__)
 
 from db import SessionLocal
 from datetime import datetime, timedelta
@@ -2155,16 +2158,22 @@ async def update_items_from_excel_endpoint(
         f.write(contents)
     
     try:
-        print(f"[UPDATE_EXCEL] Початок обробки файлу: {file.filename}, розмір: {temp_path.stat().st_size} bytes")
+        file_size = temp_path.stat().st_size
+        logger.info(f"[UPDATE_EXCEL] Початок обробки файлу: {file.filename}, розмір: {file_size} bytes")
+        print(f"[UPDATE_EXCEL] Початок обробки файлу: {file.filename}, розмір: {file_size} bytes", flush=True)
         
         # Генеруємо дані для оновлення з Excel
+        logger.info(f"[UPDATE_EXCEL] Виклик generate_menu_patch_from_excel для файлу: {temp_path}")
+        print(f"[UPDATE_EXCEL] Виклик generate_menu_patch_from_excel", flush=True)
+        
         items_data = generate_menu_patch_from_excel(temp_path)
         
-        print(f"[UPDATE_EXCEL] Отримано {len(items_data)} страв для оновлення")
+        logger.info(f"[UPDATE_EXCEL] Отримано {len(items_data)} страв для оновлення")
+        print(f"[UPDATE_EXCEL] Отримано {len(items_data)} страв для оновлення", flush=True)
         
         if not items_data:
             error_msg = "Не знайдено жодної страви в Excel файлі. Перевірте формат файлу: перша колонка - назва, друга - ціна"
-            print(f"[UPDATE_EXCEL] ПОМИЛКА: {error_msg}")
+            print(f"[UPDATE_EXCEL] ПОМИЛКА: {error_msg}", flush=True)
             raise HTTPException(status_code=400, detail=error_msg)
         
         # Оновлюємо страви в БД
@@ -2190,14 +2199,14 @@ async def update_items_from_excel_endpoint(
     except ValueError as e:
         import traceback
         error_detail = str(e)
-        print(f"[UPDATE_EXCEL] ValueError: {error_detail}")
-        print(traceback.format_exc())
+        print(f"[UPDATE_EXCEL] ValueError: {error_detail}", flush=True)
+        print(traceback.format_exc(), flush=True)
         raise HTTPException(status_code=400, detail=error_detail)
     except Exception as e:
         import traceback
         error_detail = f"Помилка обробки файлу: {str(e)}"
-        print(f"[UPDATE_EXCEL] Exception: {error_detail}")
-        print(traceback.format_exc())
+        print(f"[UPDATE_EXCEL] Exception: {error_detail}", flush=True)
+        print(traceback.format_exc(), flush=True)
         raise HTTPException(status_code=500, detail=error_detail)
     finally:
         # Видаляємо тимчасовий файл

@@ -692,6 +692,11 @@ export function MenuManagement() {
                               formData.append("file", excelFile);
                               
                               const token = tokenManager.getToken();
+                              
+                              // Створюємо AbortController для великого timeout (5 хвилин)
+                              const controller = new AbortController();
+                              const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 хвилин
+                              
                               const response = await fetch(
                                 `${API_BASE_URL}/items/update-from-excel`,
                                 {
@@ -700,8 +705,11 @@ export function MenuManagement() {
                                     Authorization: `Bearer ${token}`,
                                   },
                                   body: formData,
+                                  signal: controller.signal,
                                 }
                               );
+                              
+                              clearTimeout(timeoutId);
                               
                               if (!response.ok) {
                                 const error = await response.json().catch(() => ({ detail: "Невідома помилка" }));
