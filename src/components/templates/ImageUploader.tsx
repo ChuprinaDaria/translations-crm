@@ -10,6 +10,7 @@ interface ImageUploaderProps {
   aspectRatio?: string;
   maxSize?: string;
   helperText?: string;
+  compactPreview?: boolean; // Для компактного прев'ю (наприклад, для розділювача категорій)
 }
 
 export function ImageUploader({
@@ -20,6 +21,7 @@ export function ImageUploader({
   aspectRatio = "free",
   maxSize = "5MB",
   helperText,
+  compactPreview = false,
 }: ImageUploaderProps) {
   const inputId = `image-upload-${label.replace(/\s+/g, "-").toLowerCase()}-${Math.random().toString(36).substr(2, 9)}`;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,8 +106,12 @@ export function ImageUploader({
               <img
                 src={preview}
                 alt="Preview"
-                className="w-full h-40 object-cover"
-                style={{ maxWidth: '100%', height: '160px', display: 'block' }}
+                className={`w-full object-contain ${compactPreview ? 'h-16' : 'h-40 object-cover'}`}
+                style={{ 
+                  maxWidth: '100%', 
+                  height: compactPreview ? '64px' : '160px', 
+                  display: 'block' 
+                }}
               />
               {/* Overlay з кнопками при hover */}
               <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">

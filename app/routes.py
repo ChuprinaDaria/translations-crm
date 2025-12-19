@@ -3012,7 +3012,8 @@ async def update_template(
         final_header_url = save_template_preview(header_image)
     elif header_image_url is not None:
         # Можемо обнулити / змінити URL напряму
-        final_header_url = header_image_url or None
+        # Якщо передано порожній рядок - обнуляємо, інакше використовуємо значення
+        final_header_url = header_image_url if header_image_url else None
 
     if background_image:
         if background_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -3021,7 +3022,7 @@ async def update_template(
             delete_old_preview(current_template.background_image_url)
         final_background_url = save_template_preview(background_image)
     elif background_image_url is not None:
-        final_background_url = background_image_url or None
+        final_background_url = background_image_url if background_image_url else None
 
     if category_separator_image:
         if category_separator_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -3030,14 +3031,19 @@ async def update_template(
             delete_old_preview(current_template.category_separator_image_url)
         final_separator_url = save_template_preview(category_separator_image)
     elif category_separator_image_url is not None:
-        final_separator_url = category_separator_image_url or None
+        final_separator_url = category_separator_image_url if category_separator_image_url else None
 
     # Створюємо об'єкт TemplateUpdate
     # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
     menu_sections_list = None
-    if menu_sections:
+    if menu_sections is not None:
         try:
-            menu_sections_list = json.loads(menu_sections)
+            parsed = json.loads(menu_sections)
+            # Переконуємося, що це список
+            if isinstance(parsed, list):
+                menu_sections_list = parsed
+            else:
+                menu_sections_list = None
         except Exception:
             menu_sections_list = None
 
@@ -3050,6 +3056,7 @@ async def update_template(
         html_content=html_content,
         header_image_url=final_header_url,
         background_image_url=final_background_url,
+        category_separator_image_url=final_separator_url,
         primary_color=primary_color if primary_color is not None else None,
         secondary_color=secondary_color if secondary_color is not None else None,
         text_color=text_color if text_color is not None else None,

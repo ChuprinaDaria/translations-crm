@@ -1250,8 +1250,8 @@ export const templatesApi = {
     if (data.show_equipment_block !== undefined) formData.append('show_equipment_block', String(data.show_equipment_block));
     if (data.show_service_block !== undefined) formData.append('show_service_block', String(data.show_service_block));
     if (data.show_transport_block !== undefined) formData.append('show_transport_block', String(data.show_transport_block));
-    // Секції меню та тексти
-    if (data.menu_sections && data.menu_sections.length > 0) {
+    // Секції меню та тексти (завжди передаємо, навіть якщо порожній масив)
+    if (data.menu_sections !== undefined) {
       formData.append('menu_sections', JSON.stringify(data.menu_sections));
     }
     if (data.menu_title) formData.append('menu_title', data.menu_title);
@@ -1317,8 +1317,8 @@ export const templatesApi = {
     if (data.show_equipment_block !== undefined) formData.append('show_equipment_block', String(data.show_equipment_block));
     if (data.show_service_block !== undefined) formData.append('show_service_block', String(data.show_service_block));
     if (data.show_transport_block !== undefined) formData.append('show_transport_block', String(data.show_transport_block));
-    // Секції меню та тексти
-    if (data.menu_sections && data.menu_sections.length > 0) {
+    // Секції меню та тексти (завжди передаємо, навіть якщо порожній масив)
+    if (data.menu_sections !== undefined) {
       formData.append('menu_sections', JSON.stringify(data.menu_sections));
     }
     if (data.menu_title !== undefined) formData.append('menu_title', data.menu_title || '');

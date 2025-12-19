@@ -503,6 +503,7 @@ function DesignTab({
           helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Рекомендовано: 800px × 40px • Максимум 2MB • Додається ПЕРЕД кожною категорією страв"
           aspectRatio="auto"
           maxSize="2MB"
+          compactPreview={true}
         />
       </div>
     </div>
@@ -707,33 +708,33 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     description: template?.description || "",
     is_default: template?.is_default || false,
     // Основні кольори
-    primary_color: template?.primary_color || "#FF5A00",
-    secondary_color: template?.secondary_color || "#FFFFFF",
-    text_color: template?.text_color || "#1A1A1A",
-    font_family: template?.font_family || "Inter, sans-serif",
+    primary_color: template?.primary_color ?? "#FF5A00",
+    secondary_color: template?.secondary_color ?? "#FFFFFF",
+    text_color: template?.text_color ?? "#1A1A1A",
+    font_family: template?.font_family ?? "Inter, sans-serif",
     // Заголовок КП
-    title_text: template?.title_text || "КОМЕРЦІЙНА ПРОПОЗИЦІЯ",
-    company_name: template?.company_name || "ДЗИҐА КЕЙТЕРІНҐ",
+    title_text: template?.title_text ?? "КОМЕРЦІЙНА ПРОПОЗИЦІЯ",
+    company_name: template?.company_name ?? "ДЗИҐА КЕЙТЕРІНҐ",
     // Шрифти для різних елементів
-    title_font: template?.title_font || "Montserrat, Arial, sans-serif",
-    header_font: template?.header_font || "Montserrat, Arial, sans-serif",
-    body_font: template?.body_font || "Inter, Arial, sans-serif",
-    table_font: template?.table_font || "Inter, Arial, sans-serif",
+    title_font: template?.title_font ?? "Montserrat, Arial, sans-serif",
+    header_font: template?.header_font ?? "Montserrat, Arial, sans-serif",
+    body_font: template?.body_font ?? "Inter, Arial, sans-serif",
+    table_font: template?.table_font ?? "Inter, Arial, sans-serif",
     // Зображення (зберігаємо URL якщо вже завантажено, інакше null для нового файлу)
     logo_image: (template?.preview_image_url ? template.preview_image_url : null) as File | string | null,
     header_image: (template?.header_image_url ? template.header_image_url : null) as File | string | null,
     category_separator_image: (template?.category_separator_image_url ? template.category_separator_image_url : null) as File | string | null,
     // Кольори елементів PDF
-    format_bg_color: template?.format_bg_color || "#FF8C00",
-    table_header_bg_color: template?.table_header_bg_color || "#FFA500",
-    category_bg_color: template?.category_bg_color || "#FFB84D",
-    summary_bg_color: template?.summary_bg_color || "#F3F4F6",
-    total_bg_color: template?.total_bg_color || "#FF8C00",
+    format_bg_color: template?.format_bg_color ?? "#FF8C00",
+    table_header_bg_color: template?.table_header_bg_color ?? "#FFA500",
+    category_bg_color: template?.category_bg_color ?? "#FFB84D",
+    summary_bg_color: template?.summary_bg_color ?? "#F3F4F6",
+    total_bg_color: template?.total_bg_color ?? "#FF8C00",
     // Налаштування тексту категорій та страв
-    category_text_align: template?.category_text_align || "center",
-    category_text_color: template?.category_text_color || "#FFFFFF",
-    dish_text_align: template?.dish_text_align || "left",
-    dish_text_color: template?.dish_text_color || "#333333",
+    category_text_align: template?.category_text_align ?? "center",
+    category_text_color: template?.category_text_color !== undefined && template?.category_text_color !== null ? template.category_text_color : "#FFFFFF",
+    dish_text_align: template?.dish_text_align ?? "left",
+    dish_text_color: template?.dish_text_color !== undefined && template?.dish_text_color !== null ? template.dish_text_color : "#333333",
     // Структура таблиці
     show_item_photo: template?.show_item_photo ?? true,
     show_item_weight: template?.show_item_weight ?? true,
@@ -741,8 +742,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     show_item_price: template?.show_item_price ?? true,
     show_item_total: template?.show_item_total ?? true,
     show_item_description: template?.show_item_description ?? false,
-    // Секції меню
-    menu_sections: template?.menu_sections || ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"],
+    // Секції меню (зберігаємо порядок)
+    menu_sections: Array.isArray(template?.menu_sections) ? template.menu_sections : (template?.menu_sections ? [template.menu_sections] : ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]),
     // Підсумки
     show_weight_summary: template?.show_weight_summary ?? true,
     show_weight_per_person: template?.show_weight_per_person ?? true,
@@ -751,12 +752,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     show_transport_block: template?.show_transport_block ?? true,
     show_discount_block: template?.show_discount_block ?? false,
     // Тексти
-    menu_title: template?.menu_title || "Меню",
-    summary_title: template?.summary_title || "Підсумок",
-    footer_text: template?.footer_text || "",
+    menu_title: template?.menu_title ?? "Меню",
+    summary_title: template?.summary_title ?? "Підсумок",
+    footer_text: template?.footer_text ?? "",
     // Layout
-    page_orientation: template?.page_orientation || "portrait",
-    items_per_page: template?.items_per_page || 20,
+    page_orientation: template?.page_orientation ?? "portrait",
+    items_per_page: template?.items_per_page ?? 20,
     // Галерея фото
     gallery_photos: template?.gallery_photos || [],
     // Умови бронювання
