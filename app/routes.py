@@ -2955,6 +2955,7 @@ async def update_template(
             except Exception as e:
                 print(f"⚠ Warning: failed to read template file for preview '{template_path}': {e}")
 
+        # Завжди регенеруємо прев'ю при оновленні шаблону, якщо є HTML
         if html_for_preview:
             # Автоматично (пере)генеруємо прев'ю з актуального HTML.
             print(f"Regenerating automatic preview for template: {final_filename}")
@@ -2965,16 +2966,38 @@ async def update_template(
             auto_preview = generate_template_preview_image(
                 html_for_preview,
                 final_filename,
-                primary_color=primary_color or current_template.primary_color,
-                secondary_color=secondary_color or current_template.secondary_color,
-                text_color=text_color or current_template.text_color,
-                font_family=font_family or current_template.font_family,
+                primary_color=primary_color if primary_color is not None else current_template.primary_color,
+                secondary_color=secondary_color if secondary_color is not None else current_template.secondary_color,
+                text_color=text_color if text_color is not None else current_template.text_color,
+                font_family=font_family if font_family is not None else current_template.font_family,
             )
             if auto_preview:
                 final_preview_url = auto_preview
                 print(f"✓ Preview regenerated successfully: {auto_preview}")
             else:
                 print(f"⚠ Warning: Failed to regenerate preview for template {final_filename}")
+        elif template_path.exists():
+            # Якщо html_content не передано, але файл існує - читаємо його та регенеруємо прев'ю
+            try:
+                with template_path.open("r", encoding="utf-8") as f:
+                    html_for_preview = f.read()
+                if html_for_preview:
+                    print(f"Regenerating preview from template file: {final_filename}")
+                    if current_template.preview_image_url:
+                        delete_old_preview(current_template.preview_image_url)
+                    auto_preview = generate_template_preview_image(
+                        html_for_preview,
+                        final_filename,
+                        primary_color=primary_color if primary_color is not None else current_template.primary_color,
+                        secondary_color=secondary_color if secondary_color is not None else current_template.secondary_color,
+                        text_color=text_color if text_color is not None else current_template.text_color,
+                        font_family=font_family if font_family is not None else current_template.font_family,
+                    )
+                    if auto_preview:
+                        final_preview_url = auto_preview
+                        print(f"✓ Preview regenerated successfully: {auto_preview}")
+            except Exception as e:
+                print(f"⚠ Warning: failed to regenerate preview from file '{template_path}': {e}")
     
     # Обробка зображень шапки та фону
     final_header_url = current_template.header_image_url
@@ -3042,8 +3065,8 @@ async def update_template(
         category_bg_color=category_bg_color if category_bg_color is not None else None,
         summary_bg_color=summary_bg_color if summary_bg_color is not None else None,
         total_bg_color=total_bg_color if total_bg_color is not None else None,
-        category_text_align=category_text_align if category_text_align is not None else None,
-        category_text_color=category_text_color if category_text_color is not None else None,
+        category_text_align=category_text_align,
+        category_text_color=category_text_color,
         dish_text_align=dish_text_align if dish_text_align is not None else None,
         dish_text_color=dish_text_color if dish_text_color is not None else None,
         show_item_photo=show_item_photo,

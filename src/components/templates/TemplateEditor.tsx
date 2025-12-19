@@ -500,7 +500,7 @@ function DesignTab({
           currentImage={design.category_separator_image}
           onUpload={(file) => setDesign({ ...design, category_separator_image: file })}
           onRemove={() => setDesign({ ...design, category_separator_image: null })}
-          helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Максимум 2MB • Додається ПЕРЕД кожною категорією страв"
+          helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Рекомендовано: 800px × 40px • Максимум 2MB • Додається ПЕРЕД кожною категорією страв"
           aspectRatio="auto"
           maxSize="2MB"
         />
@@ -587,20 +587,6 @@ function ContentTab({
         photos={design.gallery_photos}
         onPhotosChange={(photos) => setDesign({ ...design, gallery_photos: photos })}
       />
-
-      {/* Логотип компанії */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Логотип компанії</h3>
-        <ImageUploader
-          label="Логотип компанії (внизу PDF, перед текстом)"
-          currentImage={design.logo_image}
-          onUpload={(file) => setDesign({ ...design, logo_image: file })}
-          onRemove={() => setDesign({ ...design, logo_image: null })}
-          helperText="Співвідношення 16:9 • Максимум 2MB • Відображається внизу PDF по центру перед текстом"
-          aspectRatio="16:9"
-          maxSize="2MB"
-        />
-      </div>
 
       {/* Футер */}
       <div>

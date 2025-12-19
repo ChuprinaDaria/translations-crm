@@ -247,7 +247,8 @@ export function KPTemplates() {
 
       if (editingTemplate) {
         const updated = await templatesApi.updateTemplate(editingTemplate.id, dataToSave);
-        setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        // Оновлюємо список шаблонів та перезавантажуємо для отримання оновленого прев'ю
+        await loadTemplates();
         toast.success("Шаблон оновлено");
       } else {
         const created = await templatesApi.createTemplate(dataToSave);
@@ -257,7 +258,6 @@ export function KPTemplates() {
 
       setIsEditorOpen(false);
       setEditingTemplate(null);
-      loadTemplates();
     } catch (error: any) {
       console.error("Error saving template:", error);
       
@@ -760,7 +760,7 @@ export function KPTemplates() {
               {template.preview_image_url ? (
                 <div className="mb-3 rounded-md border border-gray-200 overflow-hidden bg-gray-50">
                   <img
-                    src={getImageUrl(template.preview_image_url)}
+                    src={`${getImageUrl(template.preview_image_url)}?t=${template.updated_at || Date.now()}`}
                     alt={template.name}
                     className="w-full h-40 object-cover"
                     onError={(e) => {

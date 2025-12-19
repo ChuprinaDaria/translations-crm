@@ -226,12 +226,16 @@
             width: 100%;
             margin: 3mm 0;
             display: block;
+            max-height: 15mm; /* Обмежуємо висоту розділювача */
+            overflow: hidden;
         }
         
         .category-separator img {
             width: 100%;
             height: auto;
+            max-height: 15mm; /* Максимальна висота 15mm (≈57px) */
             display: block;
+            object-fit: contain;
         }
         
         /* === КАТЕГОРІЯ СТРАВ - НА ВСЮ ШИРИНУ === */
@@ -685,16 +689,11 @@
         {% endif %}
         
         <!-- Футер -->
+        {% if template_config and template_config.footer_text %}
         <div class="footer">
-            {% if logo_src %}
-            <div style="text-align: center; margin-bottom: 5mm;">
-                <img src="{{ logo_src }}" alt="Логотип" style="max-width: 200px; max-height: 60px; object-fit: contain;" />
-            </div>
-            {% endif %}
-            {% if template_config and template_config.footer_text %}
             <p>{{ template_config.footer_text }}</p>
-            {% endif %}
         </div>
+        {% endif %}
         
     </div>
 </body>

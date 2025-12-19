@@ -1231,6 +1231,11 @@ export const templatesApi = {
     if (data.category_bg_color !== undefined) formData.append('category_bg_color', data.category_bg_color || '');
     if (data.summary_bg_color !== undefined) formData.append('summary_bg_color', data.summary_bg_color || '');
     if (data.total_bg_color !== undefined) formData.append('total_bg_color', data.total_bg_color || '');
+    // Налаштування тексту категорій та страв
+    if (data.category_text_align !== undefined) formData.append('category_text_align', data.category_text_align || '');
+    if (data.category_text_color !== undefined) formData.append('category_text_color', data.category_text_color || '');
+    if (data.dish_text_align !== undefined) formData.append('dish_text_align', data.dish_text_align || '');
+    if (data.dish_text_color !== undefined) formData.append('dish_text_color', data.dish_text_color || '');
     // Налаштування відображення колонок
     if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
     if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
@@ -1293,6 +1298,11 @@ export const templatesApi = {
     if (data.category_bg_color !== undefined) formData.append('category_bg_color', data.category_bg_color || '');
     if (data.summary_bg_color !== undefined) formData.append('summary_bg_color', data.summary_bg_color || '');
     if (data.total_bg_color !== undefined) formData.append('total_bg_color', data.total_bg_color || '');
+    // Налаштування тексту категорій та страв
+    if (data.category_text_align !== undefined) formData.append('category_text_align', data.category_text_align || '');
+    if (data.category_text_color !== undefined) formData.append('category_text_color', data.category_text_color || '');
+    if (data.dish_text_align !== undefined) formData.append('dish_text_align', data.dish_text_align || '');
+    if (data.dish_text_color !== undefined) formData.append('dish_text_color', data.dish_text_color || '');
     // Налаштування відображення колонок
     if (data.show_item_photo !== undefined) formData.append('show_item_photo', String(data.show_item_photo));
     if (data.show_item_weight !== undefined) formData.append('show_item_weight', String(data.show_item_weight));
