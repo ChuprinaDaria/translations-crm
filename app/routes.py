@@ -3013,7 +3013,7 @@ async def update_template(
     elif header_image_url is not None:
         # Можемо обнулити / змінити URL напряму
         # Якщо передано порожній рядок - обнуляємо, інакше використовуємо значення
-        final_header_url = header_image_url if header_image_url else None
+        final_header_url = header_image_url.strip() if header_image_url and header_image_url.strip() else None
 
     if background_image:
         if background_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -3022,7 +3022,7 @@ async def update_template(
             delete_old_preview(current_template.background_image_url)
         final_background_url = save_template_preview(background_image)
     elif background_image_url is not None:
-        final_background_url = background_image_url if background_image_url else None
+        final_background_url = background_image_url.strip() if background_image_url and background_image_url.strip() else None
 
     if category_separator_image:
         if category_separator_image.content_type not in ALLOWED_IMAGE_TYPES:
@@ -3031,7 +3031,7 @@ async def update_template(
             delete_old_preview(current_template.category_separator_image_url)
         final_separator_url = save_template_preview(category_separator_image)
     elif category_separator_image_url is not None:
-        final_separator_url = category_separator_image_url if category_separator_image_url else None
+        final_separator_url = category_separator_image_url.strip() if category_separator_image_url and category_separator_image_url.strip() else None
 
     # Створюємо об'єкт TemplateUpdate
     # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список

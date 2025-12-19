@@ -767,8 +767,14 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
   const uploadImages = async () => {
     const uploads: Record<string, string> = {};
 
-    for (const type of ["header", "logo", "separator"]) {
-      const imageKey = `${type}_image` as keyof typeof formData;
+    // Мапінг типів зображень до ключів у formData
+    const imageMappings: Record<string, keyof typeof formData> = {
+      header: "header_image",
+      logo: "logo_image",
+      separator: "category_separator_image",
+    };
+
+    for (const [type, imageKey] of Object.entries(imageMappings)) {
       const file = formData[imageKey];
 
       if (file instanceof File) {
@@ -804,39 +810,6 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       }
     }
 
-    // Обробка розділювача категорій
-    const separatorFile = formData.category_separator_image;
-    if (separatorFile instanceof File) {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", separatorFile);
-
-      try {
-        const token = localStorage.getItem("token");
-        const headers: HeadersInit = {};
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-        
-        const response = await fetch(
-          `/api/templates/upload-image?image_type=separator`,
-          {
-            method: "POST",
-            headers,
-            body: formDataUpload,
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to upload separator image`);
-        }
-
-        const data = await response.json();
-        uploads.separator = data.url;
-      } catch (error) {
-        console.error(`Error uploading separator image:`, error);
-      }
-    }
-
     return uploads;
   };
 
@@ -858,11 +831,11 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         ...formData,
         // Якщо є новий завантажений файл - використовуємо його URL, інакше зберігаємо існуючий URL
         header_image: uploadedImages.header ? undefined : (typeof formData.header_image === "string" ? formData.header_image : undefined),
-        header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url || undefined)),
+        header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url ?? "")),
         logo_image: uploadedImages.logo ? undefined : (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
-        preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url || undefined)),
+        preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url ?? "")),
         category_separator_image: uploadedImages.separator ? undefined : (typeof formData.category_separator_image === "string" ? formData.category_separator_image : undefined),
-        category_separator_image_url: uploadedImages.separator || (typeof formData.category_separator_image === "string" ? formData.category_separator_image : (template?.category_separator_image_url || undefined)),
+        category_separator_image_url: uploadedImages.separator || (typeof formData.category_separator_image === "string" ? formData.category_separator_image : (template?.category_separator_image_url ?? "")),
       };
 
       // 3. Збереження через callback

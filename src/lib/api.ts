@@ -1277,8 +1277,10 @@ export const templatesApi = {
     if (data.html_content !== undefined) formData.append('html_content', data.html_content);
     if (data.header_image) formData.append('header_image', data.header_image);
     if (data.background_image) formData.append('background_image', data.background_image);
+    if (data.category_separator_image) formData.append('category_separator_image', data.category_separator_image);
     if (data.header_image_url !== undefined) formData.append('header_image_url', data.header_image_url || '');
     if (data.background_image_url !== undefined) formData.append('background_image_url', data.background_image_url || '');
+    if (data.category_separator_image_url !== undefined) formData.append('category_separator_image_url', data.category_separator_image_url || '');
     if (data.logo_image) formData.append('logo_image', data.logo_image);
     if (data.primary_color !== undefined) formData.append('primary_color', data.primary_color || '');
     if (data.secondary_color !== undefined) formData.append('secondary_color', data.secondary_color || '');
