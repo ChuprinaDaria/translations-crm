@@ -260,22 +260,26 @@ export function KPTemplates() {
       };
 
       // Шапка: якщо є новий файл - передаємо як файл, інакше як URL
-      if (headerFile) {
+      if (headerFile && headerFile instanceof File) {
+        // Тільки якщо користувач вибрав НОВИЙ файл
         templateData.header_image = headerFile;
-      } else if (headerImageUrl !== undefined) {
-        templateData.header_image_url = headerImageUrl || "";
+      } else if (headerImageUrl && !headerFile) {
+        // Існуючий URL — передаємо в правильне поле
+        templateData.header_image_url = headerImageUrl;
       }
 
       // Фон: якщо є новий файл - передаємо як файл, інакше як URL
-      if (backgroundFile) {
+      if (backgroundFile && backgroundFile instanceof File) {
+        // Тільки якщо користувач вибрав НОВИЙ файл
         templateData.background_image = backgroundFile;
-      } else if (backgroundImageUrl !== undefined) {
-        templateData.background_image_url = backgroundImageUrl || "";
+      } else if (backgroundImageUrl && !backgroundFile) {
+        // Існуючий URL — передаємо в правильне поле
+        templateData.background_image_url = backgroundImageUrl;
       }
 
       // Роздільовач: передаємо як URL (файл обробляється через uploadImage)
-      if (separatorImageUrl !== undefined) {
-        templateData.category_separator_image_url = separatorImageUrl || "";
+      if (separatorImageUrl !== undefined && separatorImageUrl !== "") {
+        templateData.category_separator_image_url = separatorImageUrl;
       }
 
       // Додаємо інші поля
