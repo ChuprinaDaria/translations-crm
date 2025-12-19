@@ -9,7 +9,7 @@ import { ImageUploader } from "./ImageUploader";
 import { TemplatePreview } from "./TemplatePreview";
 import { DraggableSectionList } from "./DraggableSectionList";
 import { toast } from "sonner";
-import { templatesApi, getImageUrl, type Template as ApiTemplate } from "../../lib/api";
+import { templatesApi, getImageUrl, tokenManager, type Template as ApiTemplate } from "../../lib/api";
 
 interface TemplateEditorProps {
   template?: ApiTemplate | null;
@@ -782,15 +782,18 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         formDataUpload.append("file", file);
 
         try {
-          // Отримуємо токен для авторизації
-          const token = localStorage.getItem("token");
+          // Отримуємо токен для авторизації через tokenManager
+          const token = tokenManager.getToken();
           const headers: HeadersInit = {};
           if (token) {
             headers["Authorization"] = `Bearer ${token}`;
           }
           
+          // Додаємо image_type до FormData (бекенд очікує Form параметр, а не query)
+          formDataUpload.append("image_type", type);
+          
           const response = await fetch(
-            `/api/templates/upload-image?image_type=${type}`,
+            `/api/templates/upload-image`,
             {
               method: "POST",
               headers,

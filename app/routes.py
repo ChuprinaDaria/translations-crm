@@ -3562,12 +3562,17 @@ def generate_template_preview(
 @router.post("/templates/upload-image")
 async def upload_template_image(
     file: UploadFile = File(...),
-    image_type: str = Form(...),  # 'logo' | 'header' | 'background'
+    image_type: str = Form(...),  # 'logo' | 'header' | 'background' | 'separator'
     current_user = Depends(get_current_user),
 ):
     """
     Завантажити зображення для шаблону.
     """
+    # ДОДАНО ДЛЯ ДІАГНОСТИКИ
+    print(f"🔐 Current user: {current_user}")
+    print(f"📁 Uploading {image_type} image: {file.filename}")
+    print(f"📦 File size: {file.size if hasattr(file, 'size') else 'unknown'} bytes")
+    
     # Валідація типу файлу
     if not file.content_type or not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Only images allowed")
