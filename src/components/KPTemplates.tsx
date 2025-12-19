@@ -309,7 +309,7 @@ export function KPTemplates() {
         footer_text: formData.footer_text,
         page_orientation: formData.page_orientation,
         items_per_page: formData.items_per_page,
-      };
+      });
       
       if (editingTemplate) {
         const updated = await templatesApi.updateTemplate(editingTemplate.id, templateData);
