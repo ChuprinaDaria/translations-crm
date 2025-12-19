@@ -1061,6 +1061,9 @@ export interface TemplateCreate {
   header_image?: File; // Шапка
   background_image?: File; // Фонове зображення
   logo_image?: File; // Логотип
+  header_image_url?: string; // URL завантаженого зображення шапки
+  background_image_url?: string; // URL завантаженого фонового зображення
+  category_separator_image_url?: string; // URL завантаженого зображення розділювача
   primary_color?: string;
   secondary_color?: string;
   text_color?: string;
@@ -1079,6 +1082,11 @@ export interface TemplateCreate {
   category_bg_color?: string;
   summary_bg_color?: string;
   total_bg_color?: string;
+  // Налаштування тексту категорій та страв
+  category_text_align?: string; // left, center, right
+  category_text_color?: string;
+  dish_text_align?: string; // left, center, right
+  dish_text_color?: string;
   // Налаштування відображення
   show_item_photo?: boolean;
   show_item_weight?: boolean;
@@ -1213,6 +1221,10 @@ export const templatesApi = {
     if (data.header_image) formData.append('header_image', data.header_image);
     if (data.background_image) formData.append('background_image', data.background_image);
     if (data.logo_image) formData.append('logo_image', data.logo_image);
+    // URL завантажених зображень
+    if (data.header_image_url !== undefined) formData.append('header_image_url', data.header_image_url || '');
+    if (data.background_image_url !== undefined) formData.append('background_image_url', data.background_image_url || '');
+    if (data.category_separator_image_url !== undefined) formData.append('category_separator_image_url', data.category_separator_image_url || '');
     if (data.primary_color) formData.append('primary_color', data.primary_color);
     if (data.secondary_color) formData.append('secondary_color', data.secondary_color);
     if (data.text_color) formData.append('text_color', data.text_color);

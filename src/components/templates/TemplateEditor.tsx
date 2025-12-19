@@ -835,6 +835,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
         // Якщо є новий завантажений файл - використовуємо його URL, інакше зберігаємо існуючий URL
         header_image: uploadedImages.header ? undefined : (typeof formData.header_image === "string" ? formData.header_image : undefined),
         header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url ?? "")),
+        background_image_url: template?.background_image_url ?? "",
         logo_image: uploadedImages.logo ? undefined : (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
         preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url ?? "")),
         category_separator_image: uploadedImages.separator ? undefined : (typeof formData.category_separator_image === "string" ? formData.category_separator_image : undefined),
