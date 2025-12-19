@@ -2989,6 +2989,11 @@ async def update_template(
     if not current_template:
         raise HTTPException(status_code=404, detail="Template not found")
     
+    # Ініціалізуємо змінні для URL зображень значеннями з БД
+    final_header_url = current_template.header_image_url
+    final_background_url = current_template.background_image_url
+    final_separator_url = getattr(current_template, "category_separator_image_url", None)
+    
     # Визначаємо фінальне ім'я файлу (якщо не передано нове — залишаємо старе)
     final_filename = filename or current_template.filename
     filename_was_generated = False
@@ -3113,10 +3118,6 @@ async def update_template(
                 print(f"⚠ Warning: failed to regenerate preview from file '{template_path}': {e}")
     
     # Обробка зображень шапки та фону
-    final_header_url = current_template.header_image_url
-    final_background_url = current_template.background_image_url
-    final_separator_url = getattr(current_template, "category_separator_image_url", None)
-
     if header_image:
         if header_image.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(status_code=400, detail="Недопустимий тип файлу шапки. Дозволені: JPEG, PNG, WebP, GIF")
