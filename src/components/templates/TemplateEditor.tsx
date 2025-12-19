@@ -830,17 +830,45 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       const uploadedImages = await uploadImages();
 
       // 2. Підготовка даних для збереження
-      const templateData = {
+      const templateData: any = {
         ...formData,
-        // Якщо є новий завантажений файл - використовуємо його URL, інакше зберігаємо існуючий URL
-        header_image: uploadedImages.header ? undefined : (typeof formData.header_image === "string" ? formData.header_image : undefined),
-        header_image_url: uploadedImages.header || (typeof formData.header_image === "string" ? formData.header_image : (template?.header_image_url ?? "")),
-        background_image_url: template?.background_image_url ?? "",
-        logo_image: uploadedImages.logo ? undefined : (typeof formData.logo_image === "string" ? formData.logo_image : undefined),
-        preview_image_url: uploadedImages.logo || (typeof formData.logo_image === "string" ? formData.logo_image : (template?.preview_image_url ?? "")),
-        category_separator_image: uploadedImages.separator ? undefined : (typeof formData.category_separator_image === "string" ? formData.category_separator_image : undefined),
-        category_separator_image_url: uploadedImages.separator || (typeof formData.category_separator_image === "string" ? formData.category_separator_image : (template?.category_separator_image_url ?? "")),
       };
+
+      // Шапка: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      if (uploadedImages.header) {
+        templateData.header_image_url = uploadedImages.header;
+      } else if (typeof formData.header_image === "string" && formData.header_image) {
+        templateData.header_image_url = formData.header_image;
+      } else if (template?.header_image_url) {
+        templateData.header_image_url = template.header_image_url;
+      }
+
+      // Фон: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      if (uploadedImages.background) {
+        templateData.background_image_url = uploadedImages.background;
+      } else if (typeof formData.background_image === "string" && formData.background_image) {
+        templateData.background_image_url = formData.background_image;
+      } else if (template?.background_image_url) {
+        templateData.background_image_url = template.background_image_url;
+      }
+
+      // Роздільовач: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      if (uploadedImages.separator) {
+        templateData.category_separator_image_url = uploadedImages.separator;
+      } else if (typeof formData.category_separator_image === "string" && formData.category_separator_image) {
+        templateData.category_separator_image_url = formData.category_separator_image;
+      } else if (template?.category_separator_image_url) {
+        templateData.category_separator_image_url = template.category_separator_image_url;
+      }
+
+      // Прев'ю: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      if (uploadedImages.logo) {
+        templateData.preview_image_url = uploadedImages.logo;
+      } else if (typeof formData.logo_image === "string" && formData.logo_image) {
+        templateData.preview_image_url = formData.logo_image;
+      } else if (template?.preview_image_url) {
+        templateData.preview_image_url = template.preview_image_url;
+      }
 
       // 3. Збереження через callback
       await onSave(templateData);

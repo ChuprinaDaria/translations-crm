@@ -1162,6 +1162,8 @@ export interface TemplateUpdate {
   items_per_page?: number;
   // Умови бронювання
   booking_terms?: string;
+  // Галерея фото
+  gallery_photos?: string[];
 }
 
 // Branding / Settings
@@ -1342,6 +1344,10 @@ export const templatesApi = {
     // Layout
     if (data.page_orientation !== undefined) formData.append('page_orientation', data.page_orientation || '');
     if (data.items_per_page !== undefined) formData.append('items_per_page', String(data.items_per_page));
+    // Галерея фото (завжди передаємо, навіть якщо порожній масив)
+    if (data.gallery_photos !== undefined) {
+      formData.append('gallery_photos', JSON.stringify(data.gallery_photos));
+    }
     
     return apiFetchMultipart<Template>(`/templates/${templateId}`, formData, 'PUT');
   },

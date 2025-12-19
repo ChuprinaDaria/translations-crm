@@ -251,17 +251,35 @@ export function KPTemplates() {
     const autoFilename = autoFilenameFromName(formData.name);
 
     try {
-      const templateData = {
+      // Підготовка даних для зображень: якщо є новий файл - передаємо як файл, інакше як URL
+      const templateData: any = {
         name: formData.name,
         description: formData.description,
         filename: autoFilename,
         is_default: formData.is_default,
-        header_image: headerFile || undefined,
-        background_image: backgroundFile || undefined,
-        // ВАЖЛИВО: передавати URL зображень!
-        header_image_url: headerImageUrl || (editingTemplate?.header_image_url || ""),
-        background_image_url: backgroundImageUrl || (editingTemplate?.background_image_url || ""),
-        category_separator_image_url: separatorImageUrl || (editingTemplate?.category_separator_image_url || ""),
+      };
+
+      // Шапка: якщо є новий файл - передаємо як файл, інакше як URL
+      if (headerFile) {
+        templateData.header_image = headerFile;
+      } else if (headerImageUrl !== undefined) {
+        templateData.header_image_url = headerImageUrl || "";
+      }
+
+      // Фон: якщо є новий файл - передаємо як файл, інакше як URL
+      if (backgroundFile) {
+        templateData.background_image = backgroundFile;
+      } else if (backgroundImageUrl !== undefined) {
+        templateData.background_image_url = backgroundImageUrl || "";
+      }
+
+      // Роздільовач: передаємо як URL (файл обробляється через uploadImage)
+      if (separatorImageUrl !== undefined) {
+        templateData.category_separator_image_url = separatorImageUrl || "";
+      }
+
+      // Додаємо інші поля
+      Object.assign(templateData, {
         primary_color: formData.primary_color,
         secondary_color: formData.secondary_color,
         text_color: formData.text_color,
@@ -548,16 +566,16 @@ export function KPTemplates() {
                         htmlFor="header-upload"
                         className="cursor-pointer flex flex-col items-center gap-2"
                       >
-                        {(headerPreview || editingTemplate?.header_image_url) ? (
+                        {(headerPreview || headerImageUrl || editingTemplate?.header_image_url) ? (
                           <div className="w-full">
                             <img
-                              src={headerPreview || editingTemplate?.header_image_url || ''}
+                              src={headerPreview || headerImageUrl || editingTemplate?.header_image_url || ''}
                               alt="Header preview"
                               className="w-full h-24 object-cover rounded mb-2"
                               style={{ maxWidth: '100%', maxHeight: '150px' }}
                             />
                             <p className="text-xs text-gray-500 truncate">
-                              {headerFile?.name || editingTemplate?.header_image_url?.split('/').pop() || 'Завантажено'}
+                              {headerFile?.name || headerImageUrl?.split('/').pop() || editingTemplate?.header_image_url?.split('/').pop() || 'Завантажено'}
                             </p>
                           </div>
                         ) : (
@@ -585,16 +603,16 @@ export function KPTemplates() {
                         htmlFor="background-upload"
                         className="cursor-pointer flex flex-col items-center gap-2"
                       >
-                        {(backgroundPreview || editingTemplate?.background_image_url) ? (
+                        {(backgroundPreview || backgroundImageUrl || editingTemplate?.background_image_url) ? (
                           <div className="w-full">
                             <img
-                              src={backgroundPreview || editingTemplate?.background_image_url || ''}
+                              src={backgroundPreview || backgroundImageUrl || editingTemplate?.background_image_url || ''}
                               alt="Background preview"
                               className="w-full h-24 object-cover rounded mb-2"
                               style={{ maxWidth: '100%', maxHeight: '150px' }}
                             />
                             <p className="text-xs text-gray-500 truncate">
-                              {backgroundFile?.name || editingTemplate?.background_image_url?.split('/').pop() || 'Завантажено'}
+                              {backgroundFile?.name || backgroundImageUrl?.split('/').pop() || editingTemplate?.background_image_url?.split('/').pop() || 'Завантажено'}
                             </p>
                           </div>
                         ) : (

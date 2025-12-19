@@ -2976,6 +2976,8 @@ async def update_template(
     dish_text_color: str = Form(None),
     # Умови бронювання
     booking_terms: str = Form(None),
+    # Галерея фото
+    gallery_photos: str = Form(None),  # JSON-рядок масиву URL
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
@@ -3161,6 +3163,19 @@ async def update_template(
         except Exception:
             menu_sections_list = None
 
+    # Якщо gallery_photos передані як JSON‑рядок – конвертуємо в список
+    gallery_photos_list = None
+    if gallery_photos is not None:
+        try:
+            parsed = json.loads(gallery_photos)
+            # Переконуємося, що це список
+            if isinstance(parsed, list):
+                gallery_photos_list = parsed
+            else:
+                gallery_photos_list = None
+        except Exception:
+            gallery_photos_list = None
+
     template_data = schema.TemplateUpdate(
         name=name,
         filename=final_filename if (filename or filename_was_generated) else None,
@@ -3209,6 +3224,7 @@ async def update_template(
         page_orientation=page_orientation,
         items_per_page=items_per_page,
         booking_terms=booking_terms,
+        gallery_photos=gallery_photos_list,
     )
     
     updated = crud.update_template(db, template_id, template_data)
