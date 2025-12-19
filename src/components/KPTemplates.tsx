@@ -68,6 +68,10 @@ export function KPTemplates() {
   const [headerPreview, setHeaderPreview] = useState<string | null>(null);
   const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
   const [separatorPreview, setSeparatorPreview] = useState<string | null>(null);
+  // URL завантажених зображень
+  const [headerImageUrl, setHeaderImageUrl] = useState<string>("");
+  const [separatorImageUrl, setSeparatorImageUrl] = useState<string>("");
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string>("");
 
   const loadTemplates = async () => {
     setIsLoading(true);
@@ -89,16 +93,17 @@ export function KPTemplates() {
   // Ініціалізуємо прев'ю зображень та поля дизайну при відкритті шаблону на редагування
   useEffect(() => {
     if (editingTemplate) {
-      // Ініціалізуємо прев'ю з існуючих URL
-      if (editingTemplate.header_image_url) {
-        setHeaderPreview(editingTemplate.header_image_url);
-      }
-      if (editingTemplate.category_separator_image_url) {
-        setSeparatorPreview(editingTemplate.category_separator_image_url);
-      }
-      if (editingTemplate.background_image_url) {
-        setBackgroundPreview(editingTemplate.background_image_url);
-      }
+      // Ініціалізуємо URL та прев'ю з існуючих даних
+      const headerUrl = editingTemplate.header_image_url || '';
+      const separatorUrl = editingTemplate.category_separator_image_url || '';
+      const backgroundUrl = editingTemplate.background_image_url || '';
+      
+      setHeaderImageUrl(headerUrl);
+      setHeaderPreview(headerUrl);
+      setSeparatorImageUrl(separatorUrl);
+      setSeparatorPreview(separatorUrl);
+      setBackgroundImageUrl(backgroundUrl);
+      setBackgroundPreview(backgroundUrl);
       // Ініціалізуємо поля дизайну
       setFormData((prev) => ({
         ...prev,
@@ -135,12 +140,15 @@ export function KPTemplates() {
         items_per_page: editingTemplate.items_per_page || 20,
       }));
     } else {
-      // Скидаємо прев'ю при закритті редактора
+      // Скидаємо прев'ю та URL при закритті редактора
       setHeaderPreview(null);
       setSeparatorPreview(null);
       setBackgroundPreview(null);
       setHeaderFile(null);
       setBackgroundFile(null);
+      setHeaderImageUrl("");
+      setSeparatorImageUrl("");
+      setBackgroundImageUrl("");
     }
   }, [editingTemplate]);
 
@@ -153,25 +161,38 @@ export function KPTemplates() {
     return slug ? `${slug}.html` : "";
   };
 
+  const uploadImage = async (file: File, type: 'header' | 'separator' | 'background') => {
+    try {
+      const result = await templatesApi.uploadTemplateImage(file, type);
+      const url = result.url; // наприклад "/uploads/templates/header_1_xxx.png"
+      
+      // Зберігаємо URL в state
+      if (type === 'header') {
+        setHeaderImageUrl(url);
+        setHeaderPreview(url);
+        setHeaderFile(file);
+      } else if (type === 'separator') {
+        setSeparatorImageUrl(url);
+        setSeparatorPreview(url);
+      } else if (type === 'background') {
+        setBackgroundImageUrl(url);
+        setBackgroundPreview(url);
+        setBackgroundFile(file);
+      }
+      
+      toast.success("Зображення завантажено");
+    } catch (error: any) {
+      console.error(`Error uploading ${type} image:`, error);
+      toast.error(`Помилка завантаження зображення: ${error?.message || 'Невідома помилка'}`);
+    }
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'header' | 'background') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (type === 'header') {
-      setHeaderFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setHeaderPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setBackgroundFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBackgroundPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    // Завантажуємо зображення через API
+    uploadImage(file, type);
   };
 
   const resetForm = () => {
@@ -213,6 +234,9 @@ export function KPTemplates() {
     setHeaderPreview(null);
     setSeparatorPreview(null);
     setBackgroundPreview(null);
+    setHeaderImageUrl("");
+    setSeparatorImageUrl("");
+    setBackgroundImageUrl("");
     setEditingTemplate(null);
     setIsAddDialogOpen(false);
   };
@@ -234,19 +258,19 @@ export function KPTemplates() {
         is_default: formData.is_default,
         header_image: headerFile || undefined,
         background_image: backgroundFile || undefined,
-        // URL зображень (якщо не завантажено новий файл, використовуємо існуючий URL)
-        header_image_url: headerFile ? undefined : (editingTemplate?.header_image_url || ""),
-        background_image_url: backgroundFile ? undefined : (editingTemplate?.background_image_url || ""),
-        category_separator_image_url: editingTemplate?.category_separator_image_url || "",
+        // ВАЖЛИВО: передавати URL зображень!
+        header_image_url: headerImageUrl || (editingTemplate?.header_image_url || ""),
+        background_image_url: backgroundImageUrl || (editingTemplate?.background_image_url || ""),
+        category_separator_image_url: separatorImageUrl || (editingTemplate?.category_separator_image_url || ""),
         primary_color: formData.primary_color,
         secondary_color: formData.secondary_color,
         text_color: formData.text_color,
         font_family: formData.font_family,
         // Налаштування тексту категорій та страв
-        category_text_align: formData.category_text_align,
-        category_text_color: formData.category_text_color,
-        dish_text_align: formData.dish_text_align,
-        dish_text_color: formData.dish_text_color,
+        category_text_align: formData.category_text_align || 'center',
+        category_text_color: formData.category_text_color || '#FFFFFF',
+        dish_text_align: formData.dish_text_align || 'left',
+        dish_text_color: formData.dish_text_color || '#333333',
         // Налаштування відображення
         show_item_photo: formData.show_item_photo,
         show_item_weight: formData.show_item_weight,

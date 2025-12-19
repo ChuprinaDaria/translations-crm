@@ -1372,6 +1372,14 @@ export const templatesApi = {
         method: 'DELETE',
       }
     );
+  },
+
+  async uploadTemplateImage(file: File, imageType: 'header' | 'separator' | 'background' | 'logo'): Promise<{ url: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('image_type', imageType);
+    
+    return apiFetchMultipart<{ url: string }>('/templates/upload-image', formData, 'POST');
   }
 };
 
