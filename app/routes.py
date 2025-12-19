@@ -177,6 +177,9 @@ def generate_template_preview_image(
     secondary_color: str | None = None,
     text_color: str | None = None,
     font_family: str | None = None,
+    header_image_url: str | None = None,
+    category_separator_image_url: str | None = None,
+    background_image_url: str | None = None,
 ) -> str:
     """
     Генерує прев'ю зображення з HTML шаблону.
@@ -187,6 +190,34 @@ def generate_template_preview_image(
         from io import BytesIO
         
         print(f"🔍 Starting preview generation for template: {filename}")
+        
+        # Конвертуємо URL зображень в file:// URL для WeasyPrint
+        header_image_src = None
+        if header_image_url:
+            try:
+                header_path = (BASE_DIR / header_image_url.lstrip('/')).resolve()
+                if header_path.exists():
+                    header_image_src = f"file://{header_path}"
+            except Exception:
+                pass
+        
+        category_separator_src = None
+        if category_separator_image_url:
+            try:
+                sep_path = (BASE_DIR / category_separator_image_url.lstrip('/')).resolve()
+                if sep_path.exists():
+                    category_separator_src = f"file://{sep_path}"
+            except Exception:
+                pass
+        
+        background_image_src = None
+        if background_image_url:
+            try:
+                bg_path = (BASE_DIR / background_image_url.lstrip('/')).resolve()
+                if bg_path.exists():
+                    background_image_src = f"file://{bg_path}"
+            except Exception:
+                pass
         
         # Генеруємо PDF з HTML (використовуємо тестові дані)
         # Важливо: дані повинні містити всі поля, які використовує HTML шаблон
@@ -339,8 +370,9 @@ def generate_template_preview_image(
             'created_date': '09.12.2025',
             'event_date': '20.12.2025',
             'logo_src': None,
-            'header_image_src': None,
-            'background_image_src': None,
+            'header_image_src': header_image_src,
+            'category_separator_image_url': category_separator_src,
+            'background_image_src': background_image_src,
         }
         
         # Додаткові дані для шаблону
@@ -2735,23 +2767,6 @@ async def create_template(
                 # Не падаємо, просто логуємо попередження
                 print(f"⚠ Warning: failed to read template file for preview '{template_path}': {e}")
 
-        if html_for_preview:
-            # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
-            # (незалежно від того, чи передано preview_image_url)
-            print(f"Generating automatic preview for template: {temp_filename}")
-            auto_preview = generate_template_preview_image(
-                html_for_preview,
-                temp_filename,
-                primary_color=primary_color,
-                secondary_color=secondary_color,
-                text_color=text_color,
-                font_family=font_family,
-            )
-            if auto_preview:
-                final_preview_url = auto_preview
-            else:
-                print(f"⚠ Warning: Failed to generate preview for template {temp_filename}")
-
     # Обробка зображень шапки та фону
     final_header_url = header_image_url
     final_background_url = background_image_url
@@ -2771,6 +2786,27 @@ async def create_template(
         if category_separator_image.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(status_code=400, detail="Недопустимий тип файлу розділювача. Дозволені: JPEG, PNG, WebP, GIF")
         final_separator_url = save_template_preview(category_separator_image)
+    
+    # Генеруємо прев'ю після обробки зображень (щоб мати актуальні URL)
+    if html_for_preview:
+        # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
+        # (незалежно від того, чи передано preview_image_url)
+        print(f"Generating automatic preview for template: {temp_filename}")
+        auto_preview = generate_template_preview_image(
+            html_for_preview,
+            temp_filename,
+            primary_color=primary_color,
+            secondary_color=secondary_color,
+            text_color=text_color,
+            font_family=font_family,
+            header_image_url=final_header_url,
+            category_separator_image_url=final_separator_url,
+            background_image_url=final_background_url,
+        )
+        if auto_preview:
+            final_preview_url = auto_preview
+        else:
+            print(f"⚠ Warning: Failed to generate preview for template {temp_filename}")
     
     # Створюємо об'єкт TemplateCreate
     # Якщо menu_sections передані як JSON‑рядок – конвертуємо в список
@@ -3041,6 +3077,9 @@ async def update_template(
                 secondary_color=secondary_color if secondary_color is not None else current_template.secondary_color,
                 text_color=text_color if text_color is not None else current_template.text_color,
                 font_family=font_family if font_family is not None else current_template.font_family,
+                header_image_url=final_header_url,
+                category_separator_image_url=final_separator_url,
+                background_image_url=final_background_url,
             )
             if auto_preview:
                 final_preview_url = auto_preview
@@ -3063,6 +3102,9 @@ async def update_template(
                         secondary_color=secondary_color if secondary_color is not None else current_template.secondary_color,
                         text_color=text_color if text_color is not None else current_template.text_color,
                         font_family=font_family if font_family is not None else current_template.font_family,
+                        header_image_url=final_header_url,
+                        category_separator_image_url=final_separator_url,
+                        background_image_url=final_background_url,
                     )
                     if auto_preview:
                         final_preview_url = auto_preview
@@ -3414,11 +3456,41 @@ def generate_template_preview(
         service_total = parse_amount(sample_data.get('service_total', 0))
         transport_total = parse_amount(sample_data.get('transport_total', 0))
         
+        # Читаємо URL зображень з design
+        header_image_url_from_design = design.get("header_image_url")
+        category_separator_image_url_from_design = design.get("category_separator_image_url")
+        background_image_url_from_design = design.get("background_image_url")
+        
         # Отримуємо зображення з design (можуть бути base64 data URLs або file:// шляхи)
         logo_src = design.get('logo_image') or None
         header_image_src = design.get('header_image') or None
         background_image_src = design.get('background_image') or None
         category_separator_image_url = design.get('category_separator_image') or None
+        
+        # Конвертуємо URL зображень в file:// URL для WeasyPrint
+        if header_image_url_from_design and not header_image_src:
+            try:
+                header_path = (BASE_DIR / header_image_url_from_design.lstrip('/')).resolve()
+                if header_path.exists():
+                    header_image_src = f"file://{header_path}"
+            except Exception:
+                pass
+        
+        if category_separator_image_url_from_design and not category_separator_image_url:
+            try:
+                sep_path = (BASE_DIR / category_separator_image_url_from_design.lstrip('/')).resolve()
+                if sep_path.exists():
+                    category_separator_image_url = f"file://{sep_path}"
+            except Exception:
+                pass
+        
+        if background_image_url_from_design and not background_image_src:
+            try:
+                bg_path = (BASE_DIR / background_image_url_from_design.lstrip('/')).resolve()
+                if bg_path.exists():
+                    background_image_src = f"file://{bg_path}"
+            except Exception:
+                pass
         
         # Перевіряємо, чи це base64 data URL, і якщо так, залишаємо як є (WeasyPrint підтримує)
         # Якщо це file:// шлях, також залишаємо як є
