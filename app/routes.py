@@ -2578,7 +2578,7 @@ def get_template(template_id: int, db: Session = Depends(get_db), user = Depends
 @router.post("/templates", response_model=schema.Template)
 async def create_template(
     name: str = Form(...),
-    filename: str = Form(...),
+    filename: str = Form(None),
     description: str = Form(None),
     is_default: bool = Form(False),
     preview_image: UploadFile = File(None),
@@ -2648,9 +2648,16 @@ async def create_template(
     - Клієнт завантажує готовий HTML‑файл у файлову систему (старий варіант, через filename).
     - Клієнт вставляє HTML напряму (html_content) — ми створюємо / перезаписуємо файл uploads/{filename}
       всередині директорії `app/uploads`.
+    - Якщо filename не передано або невалідний, автоматично генерується унікальний filename на основі ID.
     """
 
-    template_path = UPLOADS_DIR / filename
+    # Валідація filename: якщо не передано або невалідний, використовуємо тимчасовий
+    # Після створення в БД згенеруємо правильний на основі ID
+    if filename and filename not in ['-', '-.html', '.html', '']:
+        temp_filename = filename
+    else:
+        temp_filename = "temp_template.html"
+    template_path = UPLOADS_DIR / temp_filename
 
     # Якщо html_content передано – створюємо / перезаписуємо файл
     template_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2682,8 +2689,8 @@ async def create_template(
     # ВАЛІДАЦІЯ: перевіряємо, що шаблон можна завантажити через Jinja2
     try:
         env = Environment(loader=FileSystemLoader(str(UPLOADS_DIR)))
-        test_template = env.get_template(filename)
-        print(f"✓ Template validation passed: {filename}")
+        test_template = env.get_template(temp_filename)
+        print(f"✓ Template validation passed: {temp_filename}")
     except Exception as e:
         # Видаляємо файл, якщо валідація не пройшла
         if template_path.exists():
@@ -2693,7 +2700,7 @@ async def create_template(
         if "does not exist" in error_msg or "not found" in error_msg.lower():
             raise HTTPException(
                 status_code=400, 
-                detail=f"Template file not found: {filename}. Можливо, ваш HTML використовує extends або include з файлом, якого не існує в директорії uploads."
+                detail=f"Template file not found: {temp_filename}. Можливо, ваш HTML використовує extends або include з файлом, якого не існує в директорії uploads."
             )
         raise HTTPException(status_code=400, detail=f"Template validation error: {error_msg}")
     
@@ -2731,10 +2738,10 @@ async def create_template(
         if html_for_preview:
             # Автоматично генеруємо прев'ю з HTML, якщо немає окремого файлу прев'ю.
             # (незалежно від того, чи передано preview_image_url)
-            print(f"Generating automatic preview for template: {filename}")
+            print(f"Generating automatic preview for template: {temp_filename}")
             auto_preview = generate_template_preview_image(
                 html_for_preview,
-                filename,
+                temp_filename,
                 primary_color=primary_color,
                 secondary_color=secondary_color,
                 text_color=text_color,
@@ -2743,7 +2750,7 @@ async def create_template(
             if auto_preview:
                 final_preview_url = auto_preview
             else:
-                print(f"⚠ Warning: Failed to generate preview for template {filename}")
+                print(f"⚠ Warning: Failed to generate preview for template {temp_filename}")
 
     # Обробка зображень шапки та фону
     final_header_url = header_image_url
@@ -2776,7 +2783,7 @@ async def create_template(
 
     template_data = schema.TemplateCreate(
         name=name,
-        filename=filename,
+        filename=temp_filename,  # Тимчасовий filename, буде оновлено після створення
         description=description,
         preview_image_url=final_preview_url,
         is_default=is_default,
@@ -2824,7 +2831,51 @@ async def create_template(
         booking_terms=booking_terms,
     )
     
-    return crud.create_template(db, template_data)
+    # Створюємо шаблон в БД
+    new_template = crud.create_template(db, template_data)
+    
+    # Генеруємо унікальний filename на основі ID
+    final_filename = f"template_{new_template.id}.html"
+    final_template_path = UPLOADS_DIR / final_filename
+    
+    # Перейменовуємо файл з тимчасового на фінальний
+    if template_path.exists():
+        try:
+            # Якщо фінальний файл вже існує (малоймовірно, але на всяк випадок)
+            if final_template_path.exists() and final_template_path != template_path:
+                final_template_path.unlink()
+            template_path.rename(final_template_path)
+            print(f"✓ Template file renamed from {temp_filename} to {final_filename}")
+        except Exception as e:
+            print(f"⚠ Warning: Failed to rename template file: {e}")
+            # Якщо перейменування не вдалося, копіюємо базовий шаблон
+            base_template_path = UPLOADS_DIR / "commercial-offer.html"
+            if base_template_path.exists():
+                shutil.copy(base_template_path, final_template_path)
+                template_path.unlink()  # Видаляємо тимчасовий файл
+            else:
+                # Якщо базового шаблону немає, створюємо порожній
+                with final_template_path.open("w", encoding="utf-8") as f:
+                    f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+                template_path.unlink()
+    else:
+        # Якщо файл не існує, копіюємо базовий шаблон
+        base_template_path = UPLOADS_DIR / "commercial-offer.html"
+        if base_template_path.exists():
+            shutil.copy(base_template_path, final_template_path)
+            print(f"✓ Template file copied from base template to {final_filename}")
+        else:
+            # Якщо базового шаблону немає, створюємо порожній
+            with final_template_path.open("w", encoding="utf-8") as f:
+                f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+            print(f"✓ Empty template file created: {final_filename}")
+    
+    # Оновлюємо filename в БД
+    new_template.filename = final_filename
+    db.commit()
+    db.refresh(new_template)
+    
+    return new_template
 
 @router.put("/templates/{template_id}", response_model=schema.Template)
 async def update_template(
@@ -2904,6 +2955,26 @@ async def update_template(
     
     # Визначаємо фінальне ім'я файлу (якщо не передано нове — залишаємо старе)
     final_filename = filename or current_template.filename
+    filename_was_generated = False
+    
+    # Валідація filename: якщо невалідний, генеруємо новий
+    if not final_filename or final_filename in ['-', '-.html', '.html', '']:
+        final_filename = f"template_{template_id}.html"
+        filename_was_generated = True
+        print(f"⚠ Invalid filename detected, generating new: {final_filename}")
+        # Копіюємо базовий шаблон якщо файл не існує
+        final_template_path = UPLOADS_DIR / final_filename
+        if not final_template_path.exists():
+            base_template_path = UPLOADS_DIR / "commercial-offer.html"
+            if base_template_path.exists():
+                shutil.copy(base_template_path, final_template_path)
+                print(f"✓ Base template copied to {final_filename}")
+            else:
+                # Якщо базового шаблону немає, створюємо порожній
+                with final_template_path.open("w", encoding="utf-8") as f:
+                    f.write("<!-- KP template is empty. Please edit this template in the web UI. -->")
+                print(f"✓ Empty template file created: {final_filename}")
+    
     template_path = UPLOADS_DIR / final_filename
 
     # Оновлюємо файл шаблону:
@@ -3049,7 +3120,7 @@ async def update_template(
 
     template_data = schema.TemplateUpdate(
         name=name,
-        filename=final_filename if filename else None,
+        filename=final_filename if (filename or filename_was_generated) else None,
         description=description,
         preview_image_url=final_preview_url,
         is_default=is_default,

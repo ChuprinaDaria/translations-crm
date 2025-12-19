@@ -75,6 +75,15 @@ def send_kp_email(
     if not user or not password:
         raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
     
+    # Діагностика: виводимо налаштування (без пароля)
+    print(f"Attempting to send KP email via SMTP:")
+    print(f"  Host: {host}")
+    print(f"  Port: {port}")
+    print(f"  User: {user}")
+    print(f"  From: {from_email} ({from_name})")
+    print(f"  To: {to_email}")
+    print(f"  Subject: Комерційна пропозиція: {kp_title}")
+    
     try:
         # Створюємо повідомлення
         msg = MIMEMultipart()
@@ -115,15 +124,31 @@ def send_kp_email(
         msg.attach(attachment)
         
         # Відправляємо email
-        server = smtplib.SMTP(host, port)
+        print(f"Connecting to SMTP server {host}:{port}...")
+        server = smtplib.SMTP(host, port, timeout=10)
+        print(f"Starting TLS...")
         server.starttls()
+        print(f"Logging in as {user}...")
         server.login(user, password)
+        print(f"Sending message...")
         server.send_message(msg)
         server.quit()
+        print(f"Email sent successfully!")
         
         return True
+    except smtplib.SMTPException as e:
+        error_msg = f"SMTP error: {e}"
+        print(f"Error sending email: {error_msg}")
+        raise Exception(f"Помилка SMTP: {e}")
+    except OSError as e:
+        error_msg = f"Connection error: {e}"
+        print(f"Error sending email: {error_msg}")
+        print(f"  Host: {host}, Port: {port}")
+        print(f"  This usually means the hostname cannot be resolved or the server is unreachable.")
+        raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі.")
     except Exception as e:
-        print(f"Error sending email: {e}")
+        error_msg = f"Unexpected error: {e}"
+        print(f"Error sending email: {error_msg}")
         raise
 
 
@@ -150,6 +175,14 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
     
     try:
+        # Діагностика: виводимо налаштування (без пароля)
+        print(f"Attempting to send email via SMTP:")
+        print(f"  Host: {host}")
+        print(f"  Port: {port}")
+        print(f"  User: {user}")
+        print(f"  From: {from_email} ({from_name})")
+        print(f"  To: {to_email}")
+        
         # Створюємо повідомлення
         msg = MIMEMultipart()
         msg['From'] = f"{from_name} <{from_email}>"
@@ -178,14 +211,30 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
         
         # Відправляємо email
-        server = smtplib.SMTP(host, port)
+        print(f"Connecting to SMTP server {host}:{port}...")
+        server = smtplib.SMTP(host, port, timeout=10)
+        print(f"Starting TLS...")
         server.starttls()
+        print(f"Logging in as {user}...")
         server.login(user, password)
+        print(f"Sending message...")
         server.send_message(msg)
         server.quit()
+        print(f"Email sent successfully!")
         
         return True
+    except smtplib.SMTPException as e:
+        error_msg = f"SMTP error: {e}"
+        print(f"Error sending password reset email: {error_msg}")
+        raise Exception(f"Помилка SMTP: {e}")
+    except OSError as e:
+        error_msg = f"Connection error: {e}"
+        print(f"Error sending password reset email: {error_msg}")
+        print(f"  Host: {host}, Port: {port}")
+        print(f"  This usually means the hostname cannot be resolved or the server is unreachable.")
+        raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі.")
     except Exception as e:
-        print(f"Error sending password reset email: {e}")
+        error_msg = f"Unexpected error: {e}"
+        print(f"Error sending password reset email: {error_msg}")
         raise
 
