@@ -57,11 +57,17 @@ export function KPTemplates() {
     // Layout
     page_orientation: "portrait",
     items_per_page: 20,
+    // Налаштування тексту категорій та страв
+    category_text_align: "center",
+    category_text_color: "#FFFFFF",
+    dish_text_align: "left",
+    dish_text_color: "#333333",
   });
   const [headerFile, setHeaderFile] = useState<File | null>(null);
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
   const [headerPreview, setHeaderPreview] = useState<string | null>(null);
   const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
+  const [separatorPreview, setSeparatorPreview] = useState<string | null>(null);
 
   const loadTemplates = async () => {
     setIsLoading(true);
@@ -79,6 +85,64 @@ export function KPTemplates() {
   useEffect(() => {
     loadTemplates();
   }, []);
+
+  // Ініціалізуємо прев'ю зображень та поля дизайну при відкритті шаблону на редагування
+  useEffect(() => {
+    if (editingTemplate) {
+      // Ініціалізуємо прев'ю з існуючих URL
+      if (editingTemplate.header_image_url) {
+        setHeaderPreview(editingTemplate.header_image_url);
+      }
+      if (editingTemplate.category_separator_image_url) {
+        setSeparatorPreview(editingTemplate.category_separator_image_url);
+      }
+      if (editingTemplate.background_image_url) {
+        setBackgroundPreview(editingTemplate.background_image_url);
+      }
+      // Ініціалізуємо поля дизайну
+      setFormData((prev) => ({
+        ...prev,
+        name: editingTemplate.name || "",
+        description: editingTemplate.description || "",
+        is_default: editingTemplate.is_default || false,
+        primary_color: editingTemplate.primary_color || "#FF5A00",
+        secondary_color: editingTemplate.secondary_color || "#1a1a2e",
+        text_color: editingTemplate.text_color || "#333333",
+        font_family: editingTemplate.font_family || "Segoe UI, Tahoma, Geneva, Verdana, sans-serif",
+        category_text_align: editingTemplate.category_text_align || "center",
+        category_text_color: editingTemplate.category_text_color || "#FFFFFF",
+        dish_text_align: editingTemplate.dish_text_align || "left",
+        dish_text_color: editingTemplate.dish_text_color || "#333333",
+        show_item_photo: editingTemplate.show_item_photo ?? true,
+        show_item_weight: editingTemplate.show_item_weight ?? true,
+        show_item_quantity: editingTemplate.show_item_quantity ?? true,
+        show_item_price: editingTemplate.show_item_price ?? true,
+        show_item_total: editingTemplate.show_item_total ?? true,
+        show_item_description: editingTemplate.show_item_description ?? false,
+        show_weight_summary: editingTemplate.show_weight_summary ?? true,
+        show_weight_per_person: editingTemplate.show_weight_per_person ?? true,
+        show_discount_block: editingTemplate.show_discount_block ?? false,
+        show_equipment_block: editingTemplate.show_equipment_block ?? true,
+        show_service_block: editingTemplate.show_service_block ?? true,
+        show_transport_block: editingTemplate.show_transport_block ?? true,
+        menu_sections: Array.isArray(editingTemplate.menu_sections) 
+          ? editingTemplate.menu_sections 
+          : (editingTemplate.menu_sections ? [editingTemplate.menu_sections] : ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]),
+        menu_title: editingTemplate.menu_title || "Меню",
+        summary_title: editingTemplate.summary_title || "Підсумок",
+        footer_text: editingTemplate.footer_text || "",
+        page_orientation: editingTemplate.page_orientation || "portrait",
+        items_per_page: editingTemplate.items_per_page || 20,
+      }));
+    } else {
+      // Скидаємо прев'ю при закритті редактора
+      setHeaderPreview(null);
+      setSeparatorPreview(null);
+      setBackgroundPreview(null);
+      setHeaderFile(null);
+      setBackgroundFile(null);
+    }
+  }, [editingTemplate]);
 
   const autoFilenameFromName = (name: string) => {
     const slug = name
@@ -138,10 +202,16 @@ export function KPTemplates() {
       footer_text: "",
       page_orientation: "portrait",
       items_per_page: 20,
+      // Налаштування тексту категорій та страв
+      category_text_align: "center",
+      category_text_color: "#FFFFFF",
+      dish_text_align: "left",
+      dish_text_color: "#333333",
     });
     setHeaderFile(null);
     setBackgroundFile(null);
     setHeaderPreview(null);
+    setSeparatorPreview(null);
     setBackgroundPreview(null);
     setEditingTemplate(null);
     setIsAddDialogOpen(false);
@@ -164,10 +234,19 @@ export function KPTemplates() {
         is_default: formData.is_default,
         header_image: headerFile || undefined,
         background_image: backgroundFile || undefined,
+        // URL зображень (якщо не завантажено новий файл, використовуємо існуючий URL)
+        header_image_url: headerFile ? undefined : (editingTemplate?.header_image_url || ""),
+        background_image_url: backgroundFile ? undefined : (editingTemplate?.background_image_url || ""),
+        category_separator_image_url: editingTemplate?.category_separator_image_url || "",
         primary_color: formData.primary_color,
         secondary_color: formData.secondary_color,
         text_color: formData.text_color,
         font_family: formData.font_family,
+        // Налаштування тексту категорій та страв
+        category_text_align: formData.category_text_align,
+        category_text_color: formData.category_text_color,
+        dish_text_align: formData.dish_text_align,
+        dish_text_color: formData.dish_text_color,
         // Налаштування відображення
         show_item_photo: formData.show_item_photo,
         show_item_weight: formData.show_item_weight,
@@ -445,12 +524,13 @@ export function KPTemplates() {
                         htmlFor="header-upload"
                         className="cursor-pointer flex flex-col items-center gap-2"
                       >
-                        {headerPreview ? (
+                        {(headerPreview || editingTemplate?.header_image_url) ? (
                           <div className="w-full">
                             <img
-                              src={headerPreview}
+                              src={headerPreview || editingTemplate?.header_image_url || ''}
                               alt="Header preview"
                               className="w-full h-24 object-cover rounded mb-2"
+                              style={{ maxWidth: '100%', maxHeight: '150px' }}
                             />
                             <p className="text-xs text-gray-500 truncate">
                               {headerFile?.name || editingTemplate?.header_image_url?.split('/').pop() || 'Завантажено'}
@@ -459,7 +539,7 @@ export function KPTemplates() {
                         ) : (
                           <>
                             <Upload className="w-8 h-8 text-gray-400" />
-                            <span className="text-sm text-gray-600">Завантажити</span>
+                            <span className="text-sm text-gray-600">Завантажити шапку</span>
                           </>
                         )}
                       </label>
@@ -481,12 +561,13 @@ export function KPTemplates() {
                         htmlFor="background-upload"
                         className="cursor-pointer flex flex-col items-center gap-2"
                       >
-                        {backgroundPreview ? (
+                        {(backgroundPreview || editingTemplate?.background_image_url) ? (
                           <div className="w-full">
                             <img
-                              src={backgroundPreview}
+                              src={backgroundPreview || editingTemplate?.background_image_url || ''}
                               alt="Background preview"
                               className="w-full h-24 object-cover rounded mb-2"
+                              style={{ maxWidth: '100%', maxHeight: '150px' }}
                             />
                             <p className="text-xs text-gray-500 truncate">
                               {backgroundFile?.name || editingTemplate?.background_image_url?.split('/').pop() || 'Завантажено'}
@@ -495,7 +576,7 @@ export function KPTemplates() {
                         ) : (
                           <>
                             <Upload className="w-8 h-8 text-gray-400" />
-                            <span className="text-sm text-gray-600">Завантажити</span>
+                            <span className="text-sm text-gray-600">Завантажити фон</span>
                           </>
                         )}
                       </label>
