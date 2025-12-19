@@ -259,13 +259,14 @@ export function TemplatePreview({
   const designJson = useMemo(() => {
     if (!design) return '';
     // Виключаємо File об'єкти з серіалізації (вони окремо обробляються)
-    const { logo_image, header_image, background_image, ...rest } = design;
+    const { logo_image, header_image, background_image, category_separator_image, ...rest } = design;
     return JSON.stringify({
       ...rest,
       // Для файлів використовуємо тільки тип (File або string)
       logo_image_type: logo_image instanceof File ? 'file' : typeof logo_image,
       header_image_type: header_image instanceof File ? 'file' : typeof header_image,
       background_image_type: background_image instanceof File ? 'file' : typeof background_image,
+      category_separator_image_type: category_separator_image instanceof File ? 'file' : typeof category_separator_image,
     });
   }, [design]);
 
@@ -304,6 +305,9 @@ export function TemplatePreview({
     }
     if (designData.background_image instanceof File) {
       preparedDesign.background_image = await fileToDataURL(designData.background_image);
+    }
+    if (designData.category_separator_image instanceof File) {
+      preparedDesign.category_separator_image = await fileToDataURL(designData.category_separator_image);
     }
     
     return preparedDesign;

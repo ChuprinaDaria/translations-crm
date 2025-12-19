@@ -396,54 +396,6 @@ function DesignTab({
             onChange={(color) => setDesign({ ...design, category_text_color: color })}
             presets={["#FFFFFF", "#000000", "#333333", "#FF8C00", "#2563EB"]}
           />
-
-          {/* Вирівнювання тексту страв */}
-          <div>
-            <label className="block text-xs text-gray-600 mb-2">Вирівнювання тексту страв</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setDesign({ ...design, dish_text_align: "left" })}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
-                  design.dish_text_align === "left"
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                Ліворуч
-              </button>
-              <button
-                type="button"
-                onClick={() => setDesign({ ...design, dish_text_align: "center" })}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
-                  design.dish_text_align === "center"
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                По центру
-              </button>
-              <button
-                type="button"
-                onClick={() => setDesign({ ...design, dish_text_align: "right" })}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
-                  design.dish_text_align === "right"
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                Праворуч
-              </button>
-            </div>
-          </div>
-
-          {/* Колір тексту страв */}
-          <ColorPicker
-            label="Колір тексту страв"
-            value={design.dish_text_color}
-            onChange={(color) => setDesign({ ...design, dish_text_color: color })}
-            presets={["#333333", "#000000", "#666666", "#FF8C00", "#2563EB"]}
-          />
         </div>
       </div>
 
@@ -534,16 +486,6 @@ function DesignTab({
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Зображення</h3>
 
         <ImageUploader
-          label="Логотип компанії (лівий верхній кут)"
-          currentImage={design.logo_image}
-          onUpload={(file) => setDesign({ ...design, logo_image: file })}
-          onRemove={() => setDesign({ ...design, logo_image: null })}
-          helperText="Співвідношення 16:9 • Максимум 2MB"
-          aspectRatio="16:9"
-          maxSize="2MB"
-        />
-
-        <ImageUploader
           label="Зображення шапки (опціонально)"
           currentImage={design.header_image}
           onUpload={(file) => setDesign({ ...design, header_image: file })}
@@ -558,7 +500,7 @@ function DesignTab({
           currentImage={design.category_separator_image}
           onUpload={(file) => setDesign({ ...design, category_separator_image: file })}
           onRemove={() => setDesign({ ...design, category_separator_image: null })}
-          helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Максимум 2MB"
+          helperText="PNG зображення на всю ширину сторінки (вузьке, але широке) • Максимум 2MB • Додається ПЕРЕД кожною категорією страв"
           aspectRatio="auto"
           maxSize="2MB"
         />
@@ -645,6 +587,20 @@ function ContentTab({
         photos={design.gallery_photos}
         onPhotosChange={(photos) => setDesign({ ...design, gallery_photos: photos })}
       />
+
+      {/* Логотип компанії */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Логотип компанії</h3>
+        <ImageUploader
+          label="Логотип компанії (внизу PDF, перед текстом)"
+          currentImage={design.logo_image}
+          onUpload={(file) => setDesign({ ...design, logo_image: file })}
+          onRemove={() => setDesign({ ...design, logo_image: null })}
+          helperText="Співвідношення 16:9 • Максимум 2MB • Відображається внизу PDF по центру перед текстом"
+          aspectRatio="16:9"
+          maxSize="2MB"
+        />
+      </div>
 
       {/* Футер */}
       <div>

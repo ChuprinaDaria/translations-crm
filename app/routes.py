@@ -2075,25 +2075,44 @@ def get_smtp_settings(db: Session = Depends(get_db), user = Depends(get_current_
 
 @router.post("/settings/smtp")
 def update_smtp_settings(
-    host: str = Form(""),
-    port: str = Form(""),
-    user: str = Form(""),
-    password: str = Form(""),
-    from_email: str = Form(""),
-    from_name: str = Form(""),
+    host: str = Form(None),
+    port: str = Form(None),
+    user: str = Form(None),
+    password: str = Form(None),
+    from_email: str = Form(None),
+    from_name: str = Form(None),
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
     """
     Оновлює SMTP налаштування, які використовуються при відправці КП.
     """
-    crud.set_setting(db, "smtp_host", host)
-    crud.set_setting(db, "smtp_port", port)
-    crud.set_setting(db, "smtp_user", user)
-    crud.set_setting(db, "smtp_password", password)
-    crud.set_setting(db, "smtp_from_email", from_email)
-    crud.set_setting(db, "smtp_from_name", from_name)
-    return {"status": "success"}
+    try:
+        # Нормалізуємо значення (замінюємо None на порожній рядок)
+        host = host if host is not None else ""
+        port = port if port is not None else ""
+        user = user if user is not None else ""
+        password = password if password is not None else ""
+        from_email = from_email if from_email is not None else ""
+        from_name = from_name if from_name is not None else ""
+        
+        crud.set_setting(db, "smtp_host", host)
+        crud.set_setting(db, "smtp_port", port)
+        crud.set_setting(db, "smtp_user", user)
+        crud.set_setting(db, "smtp_password", password)
+        crud.set_setting(db, "smtp_from_email", from_email)
+        crud.set_setting(db, "smtp_from_name", from_name)
+        
+        return {"status": "success"}
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"❌ Error updating SMTP settings: {e}")
+        print(f"Full traceback:\n{error_traceback}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Помилка збереження SMTP налаштувань: {str(e)}"
+        )
 
 
 @router.get("/settings/telegram-config")
@@ -2473,8 +2492,12 @@ def forgot_password(
     try:
         send_password_reset_code(request.email, code)
     except Exception as e:
+        error_detail = str(e)
         print(f"Error sending password reset email: {e}")
-        raise HTTPException(status_code=500, detail="Помилка відправки email. Перевірте налаштування SMTP.")
+        # Якщо помилка містить деталі про підключення, показуємо їх
+        if "підключення" in error_detail.lower() or "connection" in error_detail.lower():
+            raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail=f"Помилка відправки email: {error_detail}. Перевірте налаштування SMTP.")
     
     return {"message": "Якщо email існує, код скидання пароля відправлено на вашу пошту"}
 
@@ -3294,6 +3317,7 @@ def generate_template_preview(
         logo_src = design.get('logo_image') or None
         header_image_src = design.get('header_image') or None
         background_image_src = design.get('background_image') or None
+        category_separator_image_url = design.get('category_separator_image') or None
         
         # Перевіряємо, чи це base64 data URL, і якщо так, залишаємо як є (WeasyPrint підтримує)
         # Якщо це file:// шлях, також залишаємо як є
@@ -3318,6 +3342,7 @@ def generate_template_preview(
         logo_src = process_image_src(logo_src)
         header_image_src = process_image_src(header_image_src)
         background_image_src = process_image_src(background_image_src)
+        category_separator_image_url = process_image_src(category_separator_image_url)
         
         # Готуємо формати для прев'ю (для простоти – один формат на основі sample_data.kp)
         sample_kp = sample_data.get('kp', {})
@@ -3455,6 +3480,13 @@ def generate_template_preview(
             category_bg_color=design.get('category_bg_color', '#FFB84D'),
             summary_bg_color=design.get('summary_bg_color', '#F3F4F6'),
             total_bg_color=design.get('total_bg_color', '#FF8C00'),
+            # Налаштування тексту категорій та страв
+            category_text_align=design.get('category_text_align', 'center'),
+            category_text_color=design.get('category_text_color', '#FFFFFF'),
+            dish_text_align=design.get('dish_text_align', 'left'),
+            dish_text_color=design.get('dish_text_color', '#333333'),
+            # Розділювач категорій
+            category_separator_image_url=category_separator_image_url,
             company_name=sample_data.get('company_name', 'ДЗИҐА КЕЙТЕРІНҐ'),
             created_date=sample_data.get('created_date', ''),
             event_date=sample_data.get('event_date', ''),

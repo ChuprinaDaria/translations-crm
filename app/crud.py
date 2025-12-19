@@ -687,15 +687,23 @@ def delete_telegram_account(db: Session, account_id: int):
 
 # App settings (SMTP, Telegram API, etc.)
 def set_setting(db: Session, key: str, value: str | None):
-    setting = db.query(models.AppSetting).filter(models.AppSetting.key == key).first()
-    if not setting:
-        setting = models.AppSetting(key=key, value=value or "")
-        db.add(setting)
-    else:
-        setting.value = value or ""
-    db.commit()
-    db.refresh(setting)
-    return setting
+    try:
+        # Нормалізуємо значення - завжди рядок, навіть якщо None
+        normalized_value = value if value is not None else ""
+        
+        setting = db.query(models.AppSetting).filter(models.AppSetting.key == key).first()
+        if not setting:
+            setting = models.AppSetting(key=key, value=normalized_value)
+            db.add(setting)
+        else:
+            setting.value = normalized_value
+        db.commit()
+        db.refresh(setting)
+        return setting
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error in set_setting for key '{key}': {e}")
+        raise
 
 
 def get_setting(db: Session, key: str) -> str | None:

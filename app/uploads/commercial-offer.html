@@ -506,8 +506,8 @@
         {% set section_items = fmt['items'] | selectattr('category_name', 'equalto', section) | list %}
         
         {% if section_items %}
-        <!-- Розділювач категорій (перед кожною категорією, крім першої) -->
-        {% if loop.index > 1 and category_separator_image_url %}
+        <!-- Розділювач категорій (перед кожною категорією) -->
+        {% if category_separator_image_url %}
         <div class="category-separator">
             <img src="{{ category_separator_image_url }}" alt="Розділювач" />
         </div>
@@ -685,11 +685,16 @@
         {% endif %}
         
         <!-- Футер -->
-        {% if template_config and template_config.footer_text %}
         <div class="footer">
+            {% if logo_src %}
+            <div style="text-align: center; margin-bottom: 5mm;">
+                <img src="{{ logo_src }}" alt="Логотип" style="max-width: 200px; max-height: 60px; object-fit: contain;" />
+            </div>
+            {% endif %}
+            {% if template_config and template_config.footer_text %}
             <p>{{ template_config.footer_text }}</p>
+            {% endif %}
         </div>
-        {% endif %}
         
     </div>
 </body>
