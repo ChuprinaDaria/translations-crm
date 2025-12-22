@@ -18,7 +18,7 @@ class Category(CategoryBase):
 # Subcategory schemas
 class SubcategoryBase(BaseModel):
     name: str
-    category_id: int
+    category_id: Optional[int] = None
 
 class SubcategoryCreate(SubcategoryBase):
     pass
