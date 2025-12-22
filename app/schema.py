@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from typing import Optional, List, Literal, Dict, Any, Union
 from datetime import datetime
 
@@ -943,8 +943,32 @@ class RecipeItemInfo(BaseModel):
     """Інформація про підв'язану страву."""
     id: int
     name: str
-    weight: Optional[str] = None
+    weight: Optional[Union[str, float, int]] = None
     unit: Optional[str] = None
+
+    @field_validator('weight', mode='before')
+    @classmethod
+    def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
+            return None
+        # Конвертуємо float/int в string
+        if isinstance(v, (float, int)):
+            # Якщо це ціле число, повертаємо без десяткової частини
+            if isinstance(v, float) and v.is_integer():
+                return str(int(v))
+            return str(v)
+        return str(v) if v else None
+
+    @field_validator('unit', mode='before')
+    @classmethod
+    def set_default_unit(cls, v):
+        # Якщо unit не вказано або порожній, автоматично ставимо "г"
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "г"
+        return v
 
     class Config:
         from_attributes = True
