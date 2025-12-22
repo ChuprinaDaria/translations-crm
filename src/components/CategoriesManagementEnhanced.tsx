@@ -187,6 +187,96 @@ export function CategoriesManagementEnhanced() {
     }
   };
 
+  // Toggle selection functions
+  const toggleCategorySelection = (categoryId: number) => {
+    setSelectedCategoryIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSubcategorySelection = (subcategoryId: number) => {
+    setSelectedSubcategoryIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subcategoryId)) {
+        newSet.delete(subcategoryId);
+      } else {
+        newSet.add(subcategoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // Bulk delete functions
+  const confirmBulkDeleteCategories = async () => {
+    if (selectedCategoryIds.size === 0) return;
+
+    try {
+      setActionLoading(true);
+      
+      // Перевіряємо, чи є підкатегорії в вибраних категоріях
+      const categoriesToDelete = categories.filter(cat => selectedCategoryIds.has(cat.id));
+      for (const category of categoriesToDelete) {
+        const categorySubcategories = subcategories.filter(sc => sc.category_id === category.id);
+        if (categorySubcategories.length > 0) {
+          toast.error(`Неможливо видалити категорію "${category.name}", яка має ${categorySubcategories.length} підкатегорій`);
+          setIsBulkDeleteCategoriesDialogOpen(false);
+          setSelectedCategoryIds(new Set());
+          return;
+        }
+      }
+      
+      const idsToDelete = Array.from(selectedCategoryIds);
+      await categoriesApi.bulkDeleteCategories(idsToDelete);
+      toast.success(`Видалено ${idsToDelete.length} категорій`);
+      setIsBulkDeleteCategoriesDialogOpen(false);
+      setSelectedCategoryIds(new Set());
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Помилка видалення категорій");
+      console.error("Error bulk deleting categories:", error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const confirmBulkDeleteSubcategories = async () => {
+    if (selectedSubcategoryIds.size === 0) return;
+
+    try {
+      setActionLoading(true);
+      
+      // Перевіряємо, чи є товари в вибраних підкатегоріях
+      const subcategoriesToDelete = subcategories.filter(sub => selectedSubcategoryIds.has(sub.id));
+      for (const subcategory of subcategoriesToDelete) {
+        const subcategoryItems = items.filter(item => item.subcategory_id === subcategory.id);
+        if (subcategoryItems.length > 0) {
+          toast.error(`Неможливо видалити підкатегорію "${subcategory.name}", яка має ${subcategoryItems.length} товарів`);
+          setIsBulkDeleteSubcategoriesDialogOpen(false);
+          setSelectedSubcategoryIds(new Set());
+          return;
+        }
+      }
+      
+      const idsToDelete = Array.from(selectedSubcategoryIds);
+      await subcategoriesApi.bulkDeleteSubcategories(idsToDelete);
+      toast.success(`Видалено ${idsToDelete.length} підкатегорій`);
+      setIsBulkDeleteSubcategoriesDialogOpen(false);
+      setSelectedSubcategoryIds(new Set());
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Помилка видалення підкатегорій");
+      console.error("Error bulk deleting subcategories:", error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Subcategory handlers
   const handleCreateSubcategory = (category: Category) => {
     resetSubcategoryForm();
@@ -377,13 +467,27 @@ export function CategoriesManagementEnhanced() {
       {!loading && categories.length > 0 && (
         <div className="space-y-4">
           {/* Bulk actions for categories */}
-          {selectedCategoryIds.size > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Checkbox
+                    checked={selectedCategoryIds.size === categories.length && categories.length > 0}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedCategoryIds(new Set(categories.map(c => c.id)));
+                      } else {
+                        setSelectedCategoryIds(new Set());
+                      }
+                    }}
+                  />
                   <span className="text-sm text-gray-600">
-                    Вибрано категорій: {selectedCategoryIds.size}
+                    {selectedCategoryIds.size > 0 
+                      ? `Вибрано категорій: ${selectedCategoryIds.size} з ${categories.length}`
+                      : `Всього категорій: ${categories.length}`}
                   </span>
+                </div>
+                {selectedCategoryIds.size > 0 && (
                   <Button
                     variant="destructive"
                     size="sm"
@@ -391,12 +495,12 @@ export function CategoriesManagementEnhanced() {
                     disabled={actionLoading}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Видалити вибрані
+                    Видалити вибрані ({selectedCategoryIds.size})
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                )}
+              </div>
+            </CardContent>
+          </Card>
           
           {categories.map(category => {
             const categorySubcategories = subcategories.filter(
@@ -449,15 +553,32 @@ export function CategoriesManagementEnhanced() {
                   {categorySubcategories.length > 0 && (
                     <div className="space-y-2 ml-12 mb-4">
                       {/* Bulk actions for subcategories in this category */}
-                      {Array.from(selectedSubcategoryIds).some(id => 
-                        categorySubcategories.some(sc => sc.id === id)
-                      ) && (
-                        <div className="flex items-center justify-between p-2 bg-yellow-50 rounded mb-2">
-                          <span className="text-xs text-gray-600">
-                            Вибрано підкатегорій: {
-                              categorySubcategories.filter(sc => selectedSubcategoryIds.has(sc.id)).length
+                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded mb-2">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={
+                              categorySubcategories.length > 0 &&
+                              categorySubcategories.every(sc => selectedSubcategoryIds.has(sc.id))
                             }
+                            onCheckedChange={(checked) => {
+                              setSelectedSubcategoryIds(prev => {
+                                const newSet = new Set(prev);
+                                if (checked) {
+                                  categorySubcategories.forEach(sc => newSet.add(sc.id));
+                                } else {
+                                  categorySubcategories.forEach(sc => newSet.delete(sc.id));
+                                }
+                                return newSet;
+                              });
+                            }}
+                          />
+                          <span className="text-xs text-gray-600">
+                            {categorySubcategories.filter(sc => selectedSubcategoryIds.has(sc.id)).length > 0
+                              ? `Вибрано: ${categorySubcategories.filter(sc => selectedSubcategoryIds.has(sc.id)).length} з ${categorySubcategories.length}`
+                              : `Всього: ${categorySubcategories.length}`}
                           </span>
+                        </div>
+                        {categorySubcategories.some(sc => selectedSubcategoryIds.has(sc.id)) && (
                           <Button
                             variant="destructive"
                             size="sm"
@@ -465,10 +586,10 @@ export function CategoriesManagementEnhanced() {
                             disabled={actionLoading}
                           >
                             <Trash2 className="h-3 w-3 mr-1" />
-                            Видалити
+                            Видалити вибрані
                           </Button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       
                       {categorySubcategories.map(subcategory => {
                         const subcategoryItemsCount = items.filter(
