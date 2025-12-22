@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import React, { useEffect, useState, type ChangeEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -12,6 +12,8 @@ import {
 import { Input } from "./ui/input";
 import { InfoTooltip } from "./InfoTooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "./ui/command";
 import { toast } from "sonner";
 import {
   Upload,
@@ -22,6 +24,8 @@ import {
   Plus,
   Trash2,
   Link2,
+  Check,
+  Search,
 } from "lucide-react";
 import { tokenManager, API_BASE_URL, itemsApi, type Item } from "../lib/api";
 import {
@@ -141,6 +145,7 @@ export function RecipesManagement() {
   const [showLinkWarning, setShowLinkWarning] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [linkingItem, setLinkingItem] = useState<{ recipeId: number; itemId: number | null } | null>(null);
+  const [itemSearchOpen, setItemSearchOpen] = useState<{ [recipeId: number]: boolean }>({});
 
   const loadRecipes = async () => {
     setLoading(true);
@@ -936,7 +941,12 @@ export function RecipesManagement() {
                           <>
                             <TableRow
                               key={recipe.id}
-                              className="cursor-pointer hover:bg-gray-50"
+                              className={`cursor-pointer hover:bg-gray-50 ${
+                                recipe.item_id && recipe.name && recipe.item?.name && 
+                                recipe.name.toLowerCase() !== recipe.item.name.toLowerCase() 
+                                  ? "bg-orange-50 hover:bg-orange-100" 
+                                  : ""
+                              }`}
                               onClick={() => toggleRecipeExpand(recipe.id)}
                             >
                               <TableCell>
@@ -951,32 +961,67 @@ export function RecipesManagement() {
                               </TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 {linkingItem?.recipeId === recipe.id ? (
-                                  <Select
-                                    value={linkingItem.itemId?.toString() || "__none__"}
-                                    onValueChange={(value) => {
-                                      const itemId = value === "__none__" ? null : parseInt(value);
-                                      handleLinkRecipeToItem(recipe.id, itemId);
-                                    }}
+                                  <Popover 
+                                    open={itemSearchOpen[recipe.id] || false}
                                     onOpenChange={(open) => {
-                                      if (open) {
-                                        setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
-                                      } else if (!open && linkingItem?.recipeId === recipe.id) {
+                                      setItemSearchOpen(prev => ({ ...prev, [recipe.id]: open }));
+                                      if (!open && linkingItem?.recipeId === recipe.id) {
                                         setLinkingItem(null);
                                       }
                                     }}
                                   >
-                                    <SelectTrigger className="w-full max-w-xs">
-                                      <SelectValue placeholder="Виберіть страву" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">Не підв'язано</SelectItem>
-                                      {items.map((item) => (
-                                        <SelectItem key={item.id} value={item.id.toString()}>
-                                          {item.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        className="w-full max-w-xs justify-between"
+                                      >
+                                        {linkingItem.itemId
+                                          ? items.find(item => item.id === linkingItem.itemId)?.name || "Виберіть страву"
+                                          : "Виберіть страву"}
+                                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[400px] p-0">
+                                      <Command>
+                                        <CommandInput placeholder="Пошук страви..." />
+                                        <CommandEmpty>Страву не знайдено</CommandEmpty>
+                                        <CommandGroup className="max-h-64 overflow-auto">
+                                          <CommandItem
+                                            value="__none__"
+                                            onSelect={() => {
+                                              handleLinkRecipeToItem(recipe.id, null);
+                                              setItemSearchOpen(prev => ({ ...prev, [recipe.id]: false }));
+                                            }}
+                                          >
+                                            <Check
+                                              className={`mr-2 h-4 w-4 ${
+                                                linkingItem.itemId === null ? "opacity-100" : "opacity-0"
+                                              }`}
+                                            />
+                                            Не підв'язано
+                                          </CommandItem>
+                                          {items.map((item) => (
+                                            <CommandItem
+                                              key={item.id}
+                                              value={item.name}
+                                              onSelect={() => {
+                                                handleLinkRecipeToItem(recipe.id, item.id);
+                                                setItemSearchOpen(prev => ({ ...prev, [recipe.id]: false }));
+                                              }}
+                                            >
+                                              <Check
+                                                className={`mr-2 h-4 w-4 ${
+                                                  linkingItem.itemId === item.id ? "opacity-100" : "opacity-0"
+                                                }`}
+                                              />
+                                              {item.name}
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
                                 ) : (
                                   <div className="flex items-center gap-2">
                                     {recipe.item ? (
@@ -1060,32 +1105,67 @@ export function RecipesManagement() {
                                       <div className="mt-3 flex items-center gap-3">
                                         <span className="text-xs text-gray-500">Підв'язана страва:</span>
                                         {linkingItem?.recipeId === recipe.id ? (
-                                          <Select
-                                            value={linkingItem.itemId?.toString() || "__none__"}
-                                            onValueChange={(value) => {
-                                              const itemId = value === "__none__" ? null : parseInt(value);
-                                              handleLinkRecipeToItem(recipe.id, itemId);
-                                            }}
+                                          <Popover 
+                                            open={itemSearchOpen[recipe.id] || false}
                                             onOpenChange={(open) => {
-                                              if (open) {
-                                                setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
-                                              } else if (!open && linkingItem?.recipeId === recipe.id) {
+                                              setItemSearchOpen(prev => ({ ...prev, [recipe.id]: open }));
+                                              if (!open && linkingItem?.recipeId === recipe.id) {
                                                 setLinkingItem(null);
                                               }
                                             }}
                                           >
-                                            <SelectTrigger className="w-full max-w-xs h-8 text-xs">
-                                              <SelectValue placeholder="Виберіть страву" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="__none__">Не підв'язано</SelectItem>
-                                              {items.map((item) => (
-                                                <SelectItem key={item.id} value={item.id.toString()}>
-                                                  {item.name}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
+                                            <PopoverTrigger asChild>
+                                              <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full max-w-xs h-8 text-xs justify-between"
+                                              >
+                                                {linkingItem.itemId
+                                                  ? items.find(item => item.id === linkingItem.itemId)?.name || "Виберіть страву"
+                                                  : "Виберіть страву"}
+                                                <Search className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                              </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[400px] p-0">
+                                              <Command>
+                                                <CommandInput placeholder="Пошук страви..." />
+                                                <CommandEmpty>Страву не знайдено</CommandEmpty>
+                                                <CommandGroup className="max-h-64 overflow-auto">
+                                                  <CommandItem
+                                                    value="__none__"
+                                                    onSelect={() => {
+                                                      handleLinkRecipeToItem(recipe.id, null);
+                                                      setItemSearchOpen(prev => ({ ...prev, [recipe.id]: false }));
+                                                    }}
+                                                  >
+                                                    <Check
+                                                      className={`mr-2 h-4 w-4 ${
+                                                        linkingItem.itemId === null ? "opacity-100" : "opacity-0"
+                                                      }`}
+                                                    />
+                                                    Не підв'язано
+                                                  </CommandItem>
+                                                  {items.map((item) => (
+                                                    <CommandItem
+                                                      key={item.id}
+                                                      value={item.name}
+                                                      onSelect={() => {
+                                                        handleLinkRecipeToItem(recipe.id, item.id);
+                                                        setItemSearchOpen(prev => ({ ...prev, [recipe.id]: false }));
+                                                      }}
+                                                    >
+                                                      <Check
+                                                        className={`mr-2 h-4 w-4 ${
+                                                          linkingItem.itemId === item.id ? "opacity-100" : "opacity-0"
+                                                        }`}
+                                                      />
+                                                      {item.name}
+                                                    </CommandItem>
+                                                  ))}
+                                                </CommandGroup>
+                                              </Command>
+                                            </PopoverContent>
+                                          </Popover>
                                         ) : (
                                           <div className="flex items-center gap-2">
                                             {recipe.item ? (

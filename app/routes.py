@@ -1712,7 +1712,7 @@ def get_recipe(
 @router.post("/recipes/auto-link", response_model=schema.RecipeAutoLinkResult)
 def auto_link_recipes_to_items_endpoint(
     recipe_type: Optional[str] = None,
-    threshold: float = 0.86,
+    threshold: float = 0.80,
     update_item_weight: bool = True,
     force_relink: bool = False,
     create_missing_items: bool = False,
