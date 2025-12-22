@@ -1124,7 +1124,7 @@ export function RecipesManagement() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setRecipeToDelete(recipe);
@@ -1258,18 +1258,33 @@ export function RecipesManagement() {
                                         )}
                                       </div>
                                     </div>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="gap-2"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openEdit(recipe);
-                                      }}
-                                    >
-                                      <Pencil className="w-4 h-4" />
-                                      Редагувати
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEdit(recipe);
+                                        }}
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                        Редагувати
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRecipeToDelete(recipe);
+                                          setIsDeleteDialogOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        Видалити
+                                      </Button>
+                                    </div>
                                   </div>
                                   {recipe.recipe_type === "box" ? (
                                     <div className="space-y-3">
@@ -1555,18 +1570,33 @@ export function RecipesManagement() {
                             </div>
                           </div>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(recipe);
-                          }}
-                        >
-                          <Pencil className="w-4 h-4" />
-                          <span className="hidden sm:inline">Редагувати</span>
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(recipe);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            <span className="hidden sm:inline">Редагувати</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRecipeToDelete(recipe);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="hidden sm:inline">Видалити</span>
+                          </Button>
+                        </div>
                       </div>
                       {expandedRecipes.has(recipe.id) && (
                         <div className="border-t pt-3 mt-3">

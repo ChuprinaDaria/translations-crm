@@ -80,7 +80,6 @@ def delete_item(db: Session, item_id: int):
         return None
 
     # Перед видаленням item, встановлюємо item_id = None для всіх Recipe, які посилаються на цей item
-    from app import models
     db.query(models.Recipe).filter(models.Recipe.item_id == item_id).update({"item_id": None})
     
     # KPItem має nullable item_id, тому там не потрібно нічого робити
