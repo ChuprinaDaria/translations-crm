@@ -123,15 +123,35 @@ export function ProcurementExcel() {
 
     setExporting(true);
     try {
-      const blob = await purchaseApi.exportPurchase({
+      // Використовуємо новий endpoint для генерації Excel закупки з КП
+      const blob = await purchaseApi.generateProcurement({
         kp_ids: selectedIds,
-        format: "excel",
       });
 
+      // Отримуємо назву файлу з заголовка Content-Disposition або використовуємо дефолтну
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "purchase.xlsx";
+      
+      // Формуємо назву файлу на основі дат вибраних КП
+      const selectedKps = kps.filter(kp => selectedIds.includes(kp.id));
+      const dates = selectedKps
+        .map(kp => kp.event_date ? new Date(kp.event_date) : null)
+        .filter(Boolean) as Date[];
+      
+      let filename = "Закупка";
+      if (dates.length > 0) {
+        const uniqueDates = [...new Set(dates.map(d => d.toISOString().split('T')[0]))];
+        if (uniqueDates.length === 1) {
+          const dateStr = uniqueDates[0].split('-').reverse().join('-');
+          filename = `Закупка_${dateStr}`;
+        } else {
+          filename = `Закупка_${dates.length}_КП`;
+        }
+      }
+      filename += ".xlsx";
+      
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

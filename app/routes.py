@@ -30,6 +30,7 @@ import loyalty_service
 from purchase_service import generate_purchase_excel
 from service_excel_service import generate_service_excel
 from recipe_service import import_calculations_file, get_all_recipes, calculate_purchase_from_kps
+from procurement_excel_service import generate_procurement_excel
 
 
 router = APIRouter()
@@ -1516,6 +1517,50 @@ def export_service_excel(
     safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
     if not safe_filename or safe_filename == '.xlsx':
         safe_filename = 'service.xlsx'
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={'Content-Disposition': f'attachment; filename=\"{safe_filename}\"'},
+    )
+
+
+@router.post("/procurement/generate")
+def generate_procurement(
+    request: schema.ProcurementGenerateRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """
+    Генерує Excel-файл закупки на основі вибраних КП.
+    
+    Формат файлу відповідає закупка.ods з трьома типами аркушів:
+    1. "список продуктов" - зведений список продуктів з категоріями
+    2. "Меню {Назва КП}" - меню для кухарів БЕЗ ЦІН
+    3. "техкарта {Назва КП}" - техкарти страв з інгредієнтами
+    """
+    if not request.kp_ids:
+        raise HTTPException(status_code=400, detail="Список KP ID порожній")
+
+    try:
+        excel_bytes, filename = generate_procurement_excel(db, request.kp_ids)
+        
+        # Використовуємо надану назву файлу або стандартну
+        if request.filename:
+            safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', request.filename)
+            if not safe_filename.endswith('.xlsx'):
+                safe_filename += '.xlsx'
+        else:
+            safe_filename = re.sub(r'[^A-Za-z0-9_.-]+', '_', filename)
+            if not safe_filename or safe_filename == '.xlsx':
+                safe_filename = 'procurement.xlsx'
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"[PROCUREMENT GENERATE ERROR] {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Помилка генерації Excel закупки: {str(e)}")
 
     return Response(
         content=excel_bytes,

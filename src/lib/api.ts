@@ -781,6 +781,11 @@ export interface PurchaseExportRequest {
   format?: "excel" | "pdf";
 }
 
+export interface ProcurementGenerateRequest {
+  kp_ids: number[];
+  filename?: string;
+}
+
 export interface KPCreate {
   title: string;
   people_count: number;
@@ -922,6 +927,35 @@ export const purchaseApi = {
     }
 
     const response = await fetch(`${API_BASE_URL}/purchase/export`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: response.statusText };
+      }
+      throw new ApiError(response.status, response.statusText, errorData);
+    }
+
+    return response.blob();
+  },
+
+  async generateProcurement(data: ProcurementGenerateRequest): Promise<Blob> {
+    const token = tokenManager.getToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/procurement/generate`, {
       method: "POST",
       headers,
       body: JSON.stringify(data),

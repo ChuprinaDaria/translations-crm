@@ -830,6 +830,17 @@ class ServiceExportRequest(BaseModel):
     format: Literal["excel", "pdf"] = "excel"
 
 
+class ProcurementGenerateRequest(BaseModel):
+    """
+    Запит на генерацію Excel-файлу закупки з КП.
+    
+    kp_ids - список ID вибраних КП
+    filename - опціональна назва файлу
+    """
+    kp_ids: List[int]
+    filename: Optional[str] = None
+
+
 # ============ Техкарти (Рецепти) ============
 
 class RecipeIngredientBase(BaseModel):
