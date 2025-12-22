@@ -952,9 +952,9 @@ export function RecipesManagement() {
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 {linkingItem?.recipeId === recipe.id ? (
                                   <Select
-                                    value={linkingItem.itemId?.toString() || ""}
+                                    value={linkingItem.itemId?.toString() || "__none__"}
                                     onValueChange={(value) => {
-                                      const itemId = value === "" ? null : parseInt(value);
+                                      const itemId = value === "__none__" ? null : parseInt(value);
                                       handleLinkRecipeToItem(recipe.id, itemId);
                                     }}
                                     onOpenChange={(open) => {
@@ -969,7 +969,7 @@ export function RecipesManagement() {
                                       <SelectValue placeholder="Виберіть страву" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="">Не підв'язано</SelectItem>
+                                      <SelectItem value="__none__">Не підв'язано</SelectItem>
                                       {items.map((item) => (
                                         <SelectItem key={item.id} value={item.id.toString()}>
                                           {item.name}
@@ -1061,9 +1061,9 @@ export function RecipesManagement() {
                                         <span className="text-xs text-gray-500">Підв'язана страва:</span>
                                         {linkingItem?.recipeId === recipe.id ? (
                                           <Select
-                                            value={linkingItem.itemId?.toString() || ""}
+                                            value={linkingItem.itemId?.toString() || "__none__"}
                                             onValueChange={(value) => {
-                                              const itemId = value === "" ? null : parseInt(value);
+                                              const itemId = value === "__none__" ? null : parseInt(value);
                                               handleLinkRecipeToItem(recipe.id, itemId);
                                             }}
                                             onOpenChange={(open) => {
@@ -1078,7 +1078,7 @@ export function RecipesManagement() {
                                               <SelectValue placeholder="Виберіть страву" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                              <SelectItem value="">Не підв'язано</SelectItem>
+                                              <SelectItem value="__none__">Не підв'язано</SelectItem>
                                               {items.map((item) => (
                                                 <SelectItem key={item.id} value={item.id.toString()}>
                                                   {item.name}
@@ -1356,9 +1356,9 @@ export function RecipesManagement() {
                               <div className="mt-1">
                                 {linkingItem?.recipeId === recipe.id ? (
                                   <Select
-                                    value={linkingItem.itemId?.toString() || ""}
+                                    value={linkingItem.itemId?.toString() || "__none__"}
                                     onValueChange={(value) => {
-                                      const itemId = value === "" ? null : parseInt(value);
+                                      const itemId = value === "__none__" ? null : parseInt(value);
                                       handleLinkRecipeToItem(recipe.id, itemId);
                                     }}
                                     onOpenChange={(open) => {
@@ -1373,7 +1373,7 @@ export function RecipesManagement() {
                                       <SelectValue placeholder="Виберіть страву" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="">Не підв'язано</SelectItem>
+                                      <SelectItem value="__none__">Не підв'язано</SelectItem>
                                       {items.map((item) => (
                                         <SelectItem key={item.id} value={item.id.toString()}>
                                           {item.name}
