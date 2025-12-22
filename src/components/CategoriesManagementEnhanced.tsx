@@ -8,6 +8,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
+import { Checkbox } from "./ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -42,12 +43,18 @@ export function CategoriesManagementEnhanced() {
   const [isEditSubcategoryModalOpen, setIsEditSubcategoryModalOpen] = useState(false);
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
   const [isDeleteSubcategoryDialogOpen, setIsDeleteSubcategoryDialogOpen] = useState(false);
+  const [isBulkDeleteCategoriesDialogOpen, setIsBulkDeleteCategoriesDialogOpen] = useState(false);
+  const [isBulkDeleteSubcategoriesDialogOpen, setIsBulkDeleteSubcategoriesDialogOpen] = useState(false);
   
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [subcategoryToDelete, setSubcategoryToDelete] = useState<Subcategory | null>(null);
   const [selectedCategoryForSubcategory, setSelectedCategoryForSubcategory] = useState<Category | null>(null);
+  
+  // Bulk selection
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
+  const [selectedSubcategoryIds, setSelectedSubcategoryIds] = useState<Set<number>>(new Set());
   
   // Form data
   const [categoryName, setCategoryName] = useState("");
@@ -160,10 +167,18 @@ export function CategoriesManagementEnhanced() {
 
     try {
       setActionLoading(true);
-      // Note: API doesn't have delete endpoint, so we show a message
-      toast.info("API не підтримує видалення категорій");
+      // Перевіряємо, чи є підкатегорії в цій категорії
+      const categorySubcategories = subcategories.filter(sc => sc.category_id === categoryToDelete.id);
+      if (categorySubcategories.length > 0) {
+        toast.error(`Неможливо видалити категорію, яка має ${categorySubcategories.length} підкатегорій`);
+        return;
+      }
+      
+      await categoriesApi.deleteCategory(categoryToDelete.id);
+      toast.success("Категорію видалено");
       setIsDeleteCategoryDialogOpen(false);
       setCategoryToDelete(null);
+      loadData();
     } catch (error: any) {
       toast.error(error?.data?.detail || "Помилка видалення категорії");
       console.error("Error deleting category:", error);
@@ -243,10 +258,18 @@ export function CategoriesManagementEnhanced() {
 
     try {
       setActionLoading(true);
-      // Note: API doesn't have delete endpoint, so we show a message
-      toast.info("API не підтримує видалення підкатегорій");
+      // Перевіряємо, чи є товари в цій підкатегорії
+      const subcategoryItems = items.filter(item => item.subcategory_id === subcategoryToDelete.id);
+      if (subcategoryItems.length > 0) {
+        toast.error(`Неможливо видалити підкатегорію, яка має ${subcategoryItems.length} товарів`);
+        return;
+      }
+      
+      await subcategoriesApi.deleteSubcategory(subcategoryToDelete.id);
+      toast.success("Підкатегорію видалено");
       setIsDeleteSubcategoryDialogOpen(false);
       setSubcategoryToDelete(null);
+      loadData();
     } catch (error: any) {
       toast.error(error?.data?.detail || "Помилка видалення підкатегорії");
       console.error("Error deleting subcategory:", error);
@@ -353,6 +376,28 @@ export function CategoriesManagementEnhanced() {
       {/* Categories list */}
       {!loading && categories.length > 0 && (
         <div className="space-y-4">
+          {/* Bulk actions for categories */}
+          {selectedCategoryIds.size > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">
+                    Вибрано категорій: {selectedCategoryIds.size}
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setIsBulkDeleteCategoriesDialogOpen(true)}
+                    disabled={actionLoading}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Видалити вибрані
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
           {categories.map(category => {
             const categorySubcategories = subcategories.filter(
               sub => sub.category_id === category.id
@@ -367,6 +412,10 @@ export function CategoriesManagementEnhanced() {
                   {/* Category header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={selectedCategoryIds.has(category.id)}
+                        onCheckedChange={() => toggleCategorySelection(category.id)}
+                      />
                       <div className="p-2 bg-blue-100 rounded-lg">
                         <FolderOpen className="h-5 w-5 text-blue-600" />
                       </div>
@@ -399,6 +448,28 @@ export function CategoriesManagementEnhanced() {
                   {/* Subcategories */}
                   {categorySubcategories.length > 0 && (
                     <div className="space-y-2 ml-12 mb-4">
+                      {/* Bulk actions for subcategories in this category */}
+                      {Array.from(selectedSubcategoryIds).some(id => 
+                        categorySubcategories.some(sc => sc.id === id)
+                      ) && (
+                        <div className="flex items-center justify-between p-2 bg-yellow-50 rounded mb-2">
+                          <span className="text-xs text-gray-600">
+                            Вибрано підкатегорій: {
+                              categorySubcategories.filter(sc => selectedSubcategoryIds.has(sc.id)).length
+                            }
+                          </span>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setIsBulkDeleteSubcategoriesDialogOpen(true)}
+                            disabled={actionLoading}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Видалити
+                          </Button>
+                        </div>
+                      )}
+                      
                       {categorySubcategories.map(subcategory => {
                         const subcategoryItemsCount = items.filter(
                           item => item.subcategory_id === subcategory.id
@@ -410,6 +481,10 @@ export function CategoriesManagementEnhanced() {
                             className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                           >
                             <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={selectedSubcategoryIds.has(subcategory.id)}
+                                onCheckedChange={() => toggleSubcategorySelection(subcategory.id)}
+                              />
                               <Tag className="h-4 w-4 text-gray-400" />
                               <span className="font-medium">{subcategory.name}</span>
                               <Badge variant="outline">
@@ -718,6 +793,66 @@ export function CategoriesManagementEnhanced() {
             <AlertDialogCancel onClick={() => setSubcategoryToDelete(null)}>Скасувати</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteSubcategory}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Видалення...
+                </>
+              ) : (
+                'Видалити'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Categories Confirmation */}
+      <AlertDialog open={isBulkDeleteCategoriesDialogOpen} onOpenChange={setIsBulkDeleteCategoriesDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Видалити категорії?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ви впевнені, що хочете видалити {selectedCategoryIds.size} категорій? 
+              Цю дію неможливо скасувати.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsBulkDeleteCategoriesDialogOpen(false)}>Скасувати</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDeleteCategories}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Видалення...
+                </>
+              ) : (
+                'Видалити'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Subcategories Confirmation */}
+      <AlertDialog open={isBulkDeleteSubcategoriesDialogOpen} onOpenChange={setIsBulkDeleteSubcategoriesDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Видалити підкатегорії?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ви впевнені, що хочете видалити {selectedSubcategoryIds.size} підкатегорій? 
+              Цю дію неможливо скасувати.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsBulkDeleteSubcategoriesDialogOpen(false)}>Скасувати</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDeleteSubcategories}
               className="bg-red-600 hover:bg-red-700"
               disabled={actionLoading}
             >

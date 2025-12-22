@@ -676,6 +676,13 @@ export const categoriesApi = {
       method: 'DELETE',
     });
   },
+
+  async bulkDeleteCategories(categoryIds: number[]): Promise<{ status: string; deleted_count: number }> {
+    return apiFetch<{ status: string; deleted_count: number }>('/categories/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids: categoryIds }),
+    });
+  },
 };
 
 // Subcategories API
@@ -695,6 +702,13 @@ export const subcategoriesApi = {
   async deleteSubcategory(subcategoryId: number): Promise<{ status: string }> {
     return apiFetch<{ status: string }>(`/subcategories/${subcategoryId}`, {
       method: 'DELETE',
+    });
+  },
+
+  async bulkDeleteSubcategories(subcategoryIds: number[]): Promise<{ status: string; deleted_count: number }> {
+    return apiFetch<{ status: string; deleted_count: number }>('/subcategories/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids: subcategoryIds }),
     });
   },
 };

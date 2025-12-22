@@ -30,6 +30,10 @@ class Subcategory(SubcategoryBase):
     class Config:
         from_attributes = True
 
+class BulkDeleteRequest(BaseModel):
+    """Схема для bulk delete операцій."""
+    ids: List[int]
+
 # Item schemas
 class ItemBase(BaseModel):
     name: str
@@ -44,6 +48,9 @@ class ItemBase(BaseModel):
     @classmethod
     def convert_weight_to_str(cls, v):
         if v is None:
+            return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
             return None
         return str(v)
 
@@ -65,6 +72,9 @@ class ItemUpdate(BaseModel):
     def convert_weight_to_str(cls, v):
         if v is None:
             return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
+            return None
         return str(v)
 
 class Item(ItemBase):
@@ -77,6 +87,9 @@ class Item(ItemBase):
     @classmethod
     def convert_weight_to_str(cls, v):
         if v is None:
+            return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
             return None
         return str(v)
     
@@ -246,6 +259,9 @@ class KPItem(BaseModel):
     @classmethod
     def convert_weight_to_str(cls, v):
         if v is None:
+            return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
             return None
         return str(v)
 
@@ -923,12 +939,24 @@ class RecipeCreate(RecipeBase):
     components: List[RecipeComponentCreate] = []     # Для боксів
 
 
+class RecipeItemInfo(BaseModel):
+    """Інформація про підв'язану страву."""
+    id: int
+    name: str
+    weight: Optional[str] = None
+    unit: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class Recipe(RecipeBase):
     id: int
     ingredients: List[RecipeIngredient] = []
     components: List[RecipeComponent] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    item: Optional[RecipeItemInfo] = None  # Підв'язана страва
 
     class Config:
         from_attributes = True

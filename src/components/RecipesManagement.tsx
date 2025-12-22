@@ -11,6 +11,7 @@ import {
 } from "./ui/table";
 import { Input } from "./ui/input";
 import { InfoTooltip } from "./InfoTooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { toast } from "sonner";
 import {
   Upload,
@@ -22,7 +23,7 @@ import {
   Trash2,
   Link2,
 } from "lucide-react";
-import { tokenManager, API_BASE_URL } from "../lib/api";
+import { tokenManager, API_BASE_URL, itemsApi, type Item } from "../lib/api";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { Textarea } from "./ui/textarea";
 
 type RecipeType = "catering" | "box";
@@ -74,6 +85,13 @@ interface Recipe {
   weight_per_portion: number | null;
   notes?: string | null;
   recipe_type: "catering" | "box";
+  item_id?: number | null;
+  item?: {
+    id: number;
+    name: string;
+    weight?: string | null;
+    unit?: string | null;
+  } | null;
   ingredients: RecipeIngredient[];
   components: RecipeComponent[];
 }
@@ -120,6 +138,9 @@ export function RecipesManagement() {
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<EditableRecipe | null>(null);
   const [linking, setLinking] = useState(false);
+  const [showLinkWarning, setShowLinkWarning] = useState(false);
+  const [items, setItems] = useState<Item[]>([]);
+  const [linkingItem, setLinkingItem] = useState<{ recipeId: number; itemId: number | null } | null>(null);
 
   const loadRecipes = async () => {
     setLoading(true);
@@ -179,9 +200,49 @@ export function RecipesManagement() {
     }
   };
 
+  const loadItems = async () => {
+    try {
+      const data = await itemsApi.getItems(0, 1000);
+      setItems(data);
+    } catch (e) {
+      console.error(e);
+      toast.error("Помилка завантаження страв");
+    }
+  };
+
+  const handleLinkRecipeToItem = async (recipeId: number, itemId: number | null) => {
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}/link-item`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ item_id: itemId }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Не вдалося підв'язати техкарту до страви");
+      }
+
+      const updatedRecipe = await response.json();
+      
+      // Оновлюємо техкарту в списку
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updatedRecipe : r));
+      
+      toast.success(itemId ? "Техкарту підв'язано до страви" : "Техкарту відв'язано від страви");
+      setLinkingItem(null);
+    } catch (e: any) {
+      toast.error(e.message || "Помилка підв'язування");
+    }
+  };
+
   useEffect(() => {
     loadRecipes();
     loadFiles();
+    loadItems();
   }, [activeType]);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -280,12 +341,12 @@ export function RecipesManagement() {
     }
   };
 
-  const handleAutoLink = async () => {
+  const handleAutoLink = async (updateWeight: boolean = true) => {
     setLinking(true);
     try {
       const token = tokenManager.getToken();
       const response = await fetch(
-        `${API_BASE_URL}/recipes/auto-link?recipe_type=${activeType}&create_missing_items=true&update_item_weight=true`,
+        `${API_BASE_URL}/recipes/auto-link?recipe_type=${activeType}&create_missing_items=true&update_item_weight=${updateWeight}`,
         {
           method: "POST",
           headers: {
@@ -330,6 +391,19 @@ export function RecipesManagement() {
     } finally {
       setLinking(false);
     }
+  };
+
+  const handleAutoLinkWithChanges = () => {
+    setShowLinkWarning(true);
+  };
+
+  const confirmAutoLinkWithChanges = () => {
+    setShowLinkWarning(false);
+    handleAutoLink(true);
+  };
+
+  const handleAutoLinkWithoutChanges = () => {
+    handleAutoLink(false);
   };
 
   const toggleRecipeExpand = (recipeId: number) => {
@@ -787,14 +861,29 @@ export function RecipesManagement() {
             />
             <Button
               variant="outline"
-              className="flex items-center gap-2 w-full sm:w-auto"
-              onClick={handleAutoLink}
+              className="flex items-center gap-2 w-full sm:w-auto bg-red-50 hover:bg-red-100 border-red-300 text-red-700"
+              onClick={handleAutoLinkWithChanges}
               disabled={linking}
-              title="Автоматично зв'язати техкарти зі стравами за назвами"
+              title="Зв'язати техкарти зі стравами з переносом ваги (може змінити дані страви)"
             >
               <Link2 className="w-4 h-4" />
-              <span className="hidden sm:inline">{linking ? "Зв'язування..." : "Зв'язати зі стравами"}</span>
+              <span className="hidden sm:inline">
+                {linking ? "Зв'язування..." : "Зв'язати (з переносом ваги)"}
+              </span>
               <span className="sm:hidden">{linking ? "Зв'язування..." : "Зв'язати"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex items-center gap-2 w-full sm:w-auto bg-green-50 hover:bg-green-100 border-green-300 text-green-700"
+              onClick={handleAutoLinkWithoutChanges}
+              disabled={linking}
+              title="Зв'язати техкарти зі стравами по назві для розрахунку (без змін даних страви)"
+            >
+              <Link2 className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {linking ? "Зв'язування..." : "Зв'язати без змін (для розрахунку)"}
+              </span>
+              <span className="sm:hidden">{linking ? "Зв'язування..." : "Без змін"}</span>
             </Button>
             <Button
               variant="outline"
@@ -835,6 +924,7 @@ export function RecipesManagement() {
                         <TableRow>
                           <TableHead className="w-10"></TableHead>
                           <TableHead>Назва страви</TableHead>
+                          <TableHead>Підв'язана страва</TableHead>
                           <TableHead>Вихід готової, г</TableHead>
                           <TableHead>Вага інгредієнтів, г</TableHead>
                           <TableHead>Інгредієнтів</TableHead>
@@ -858,6 +948,75 @@ export function RecipesManagement() {
                               </TableCell>
                               <TableCell className="font-medium">
                                 {recipe.name}
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                {linkingItem?.recipeId === recipe.id ? (
+                                  <Select
+                                    value={linkingItem.itemId?.toString() || ""}
+                                    onValueChange={(value) => {
+                                      const itemId = value === "" ? null : parseInt(value);
+                                      handleLinkRecipeToItem(recipe.id, itemId);
+                                    }}
+                                    onOpenChange={(open) => {
+                                      if (open) {
+                                        setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                      } else if (!open && linkingItem?.recipeId === recipe.id) {
+                                        setLinkingItem(null);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full max-w-xs">
+                                      <SelectValue placeholder="Виберіть страву" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="">Не підв'язано</SelectItem>
+                                      {items.map((item) => (
+                                        <SelectItem key={item.id} value={item.id.toString()}>
+                                          {item.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    {recipe.item ? (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-700">{recipe.item.name}</span>
+                                        {recipe.item.weight && (
+                                          <span className="text-xs text-gray-500">
+                                            ({recipe.item.weight} {recipe.item.unit || "г"})
+                                          </span>
+                                        )}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                          }}
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-400">Не підв'язано</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLinkingItem({ recipeId: recipe.id, itemId: null });
+                                          }}
+                                        >
+                                          <Link2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>
                                 {recipe.weight_per_portion ? `${recipe.weight_per_portion} г` : "—"}
@@ -885,7 +1044,7 @@ export function RecipesManagement() {
                             </TableRow>
                           {expandedRecipes.has(recipe.id) && (
                             <TableRow>
-                              <TableCell colSpan={6} className="bg-gray-50 p-4">
+                              <TableCell colSpan={7} className="bg-gray-50 p-4">
                                 <div className="text-sm">
                                   <div className="flex items-center justify-between mb-2">
                                     <div>
@@ -896,6 +1055,76 @@ export function RecipesManagement() {
                                         )}
                                         {calculateIngredientsWeight(recipe) > 0 && (
                                           <span>Вага інгредієнтів (сирі): {Math.round(calculateIngredientsWeight(recipe))} г</span>
+                                        )}
+                                      </div>
+                                      <div className="mt-3 flex items-center gap-3">
+                                        <span className="text-xs text-gray-500">Підв'язана страва:</span>
+                                        {linkingItem?.recipeId === recipe.id ? (
+                                          <Select
+                                            value={linkingItem.itemId?.toString() || ""}
+                                            onValueChange={(value) => {
+                                              const itemId = value === "" ? null : parseInt(value);
+                                              handleLinkRecipeToItem(recipe.id, itemId);
+                                            }}
+                                            onOpenChange={(open) => {
+                                              if (open) {
+                                                setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                              } else if (!open && linkingItem?.recipeId === recipe.id) {
+                                                setLinkingItem(null);
+                                              }
+                                            }}
+                                          >
+                                            <SelectTrigger className="w-full max-w-xs h-8 text-xs">
+                                              <SelectValue placeholder="Виберіть страву" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="">Не підв'язано</SelectItem>
+                                              {items.map((item) => (
+                                                <SelectItem key={item.id} value={item.id.toString()}>
+                                                  {item.name}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            {recipe.item ? (
+                                              <>
+                                                <span className="text-xs font-medium text-gray-700">{recipe.item.name}</span>
+                                                {recipe.item.weight && (
+                                                  <span className="text-xs text-gray-500">
+                                                    ({recipe.item.weight} {recipe.item.unit || "г"})
+                                                  </span>
+                                                )}
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-6 px-2 text-xs"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                                  }}
+                                                >
+                                                  <Pencil className="w-3 h-3" />
+                                                </Button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span className="text-xs text-gray-400">Не підв'язано</span>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-6 px-2 text-xs"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setLinkingItem({ recipeId: recipe.id, itemId: null });
+                                                  }}
+                                                >
+                                                  <Link2 className="w-3 h-3" />
+                                                </Button>
+                                              </>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
                                     </div>
@@ -1121,6 +1350,78 @@ export function RecipesManagement() {
                               <span className="ml-2 text-gray-900">
                                 {countIngredients(recipe)}
                               </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-500">Підв'язана страва:</span>
+                              <div className="mt-1">
+                                {linkingItem?.recipeId === recipe.id ? (
+                                  <Select
+                                    value={linkingItem.itemId?.toString() || ""}
+                                    onValueChange={(value) => {
+                                      const itemId = value === "" ? null : parseInt(value);
+                                      handleLinkRecipeToItem(recipe.id, itemId);
+                                    }}
+                                    onOpenChange={(open) => {
+                                      if (open) {
+                                        setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                      } else if (!open && linkingItem?.recipeId === recipe.id) {
+                                        setLinkingItem(null);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full h-8 text-xs">
+                                      <SelectValue placeholder="Виберіть страву" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="">Не підв'язано</SelectItem>
+                                      {items.map((item) => (
+                                        <SelectItem key={item.id} value={item.id.toString()}>
+                                          {item.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    {recipe.item ? (
+                                      <>
+                                        <span className="text-sm text-gray-700">{recipe.item.name}</span>
+                                        {recipe.item.weight && (
+                                          <span className="text-xs text-gray-500">
+                                            ({recipe.item.weight} {recipe.item.unit || "г"})
+                                          </span>
+                                        )}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLinkingItem({ recipeId: recipe.id, itemId: recipe.item_id || null });
+                                          }}
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="text-sm text-gray-400">Не підв'язано</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLinkingItem({ recipeId: recipe.id, itemId: null });
+                                          }}
+                                        >
+                                          <Link2 className="w-3 h-3" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1654,6 +1955,37 @@ export function RecipesManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Warning Dialog for linking with changes */}
+      <AlertDialog open={showLinkWarning} onOpenChange={setShowLinkWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">⚠️ Увага!</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ви збираєтеся зв'язати техкарти зі стравами з переносом ваги та інших даних.
+              <br /><br />
+              <strong>Це може змінити дані страв:</strong>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Вага страви може бути оновлена з техкарти</li>
+                <li>Інші дані можуть бути змінені</li>
+              </ul>
+              <br />
+              Якщо ви хочете лише зв'язати для розрахунку без змін даних, використайте кнопку 
+              <strong className="text-green-600"> "Зв'язати без змін"</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Скасувати</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmAutoLinkWithChanges}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={linking}
+            >
+              Продовжити зв'язування
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

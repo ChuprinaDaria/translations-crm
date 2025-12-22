@@ -1130,7 +1130,8 @@ def get_all_recipes(
     """
     query = db.query(models.Recipe).options(
         joinedload(models.Recipe.ingredients),
-        joinedload(models.Recipe.components).joinedload(models.RecipeComponent.ingredients)
+        joinedload(models.Recipe.components).joinedload(models.RecipeComponent.ingredients),
+        joinedload(models.Recipe.item)
     )
     
     if recipe_type:

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, Fil
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import Optional, Any, List
 import logging
@@ -541,13 +541,18 @@ async def create_item(
         # Якщо передано photo_url, використовуємо його
         final_photo_url = photo_url
     
+    # Нормалізуємо порожні рядки до None
+    weight_normalized = weight if weight and weight.strip() else None
+    unit_normalized = unit if unit and unit.strip() else None
+    description_normalized = description if description and description.strip() else None
+    
     # Створюємо об'єкт ItemCreate
     item_data = schema.ItemCreate(
         name=name,
-        description=description,
+        description=description_normalized,
         price=price,
-        weight=weight,
-        unit=unit,
+        weight=weight_normalized,
+        unit=unit_normalized,
         subcategory_id=subcategory_id,
         active=active,
         photo_url=final_photo_url
@@ -600,14 +605,19 @@ async def update_item(
         # Якщо не передано ні photo, ні photo_url, залишаємо поточне значення
         final_photo_url = current_item.photo_url
     
+    # Нормалізуємо порожні рядки до None
+    weight_normalized = weight if weight and weight.strip() else None
+    unit_normalized = unit if unit and unit.strip() else None
+    description_normalized = description if description and description.strip() else None
+    
     # Створюємо об'єкт ItemUpdate
     # name обов'язкове поле, тому якщо воно None або порожнє, не передаємо його в оновлення
     # (exclude_none=True в crud.update_item виключить None значення)
     item_data_dict = {
-        'description': description,
+        'description': description_normalized,
         'price': price,
-        'weight': weight,
-        'unit': unit,
+        'weight': weight_normalized,
+        'unit': unit_normalized,
         'subcategory_id': subcategory_id,
         'active': active,
         'photo_url': final_photo_url
@@ -1816,6 +1826,43 @@ def update_recipe_endpoint(
     return updated
 
 
+@router.patch("/recipes/{recipe_id}/link-item")
+def link_recipe_to_item(
+    recipe_id: int,
+    item_id: Optional[int] = Body(None),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """Підв'язати техкарту до страви (або відв'язати, якщо item_id=None)."""
+    recipe = db.query(models.Recipe).filter(models.Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Техкарта не знайдена")
+    
+    if item_id is not None:
+        # Перевіряємо, чи існує страва
+        item = db.query(models.Item).filter(models.Item.id == item_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Страва не знайдена")
+        recipe.item_id = item_id
+    else:
+        # Відв'язуємо
+        recipe.item_id = None
+    
+    db.commit()
+    db.refresh(recipe)
+    
+    # Завантажуємо item для відповіді
+    if recipe.item_id:
+        recipe = (
+            db.query(models.Recipe)
+            .options(joinedload(models.Recipe.item))
+            .filter(models.Recipe.id == recipe_id)
+            .first()
+        )
+    
+    return recipe
+
+
 @router.delete("/recipes/{recipe_id}")
 def delete_recipe_endpoint(
     recipe_id: int,
@@ -2400,6 +2447,41 @@ def get_subcategories(category_id: int = None, db: Session = Depends(get_db), us
 @router.post("/subcategories", response_model=schema.Subcategory)
 def create_subcategory(subcategory: schema.SubcategoryCreate, db: Session = Depends(get_db), user = Depends(get_current_user)):
     return crud.create_subcategory(db, subcategory.name, subcategory.category_id)
+
+@router.delete("/subcategories/{subcategory_id}")
+def delete_subcategory(subcategory_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    deleted = crud.delete_subcategory(db, subcategory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Subcategory not found")
+    return {"status": "success"}
+
+@router.post("/categories/bulk-delete")
+def bulk_delete_categories(
+    request: schema.BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Видаляє кілька категорій одразу."""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="Список ID порожній")
+    deleted = crud.delete_categories(db, request.ids)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Категорії не знайдено")
+    return {"status": "success", "deleted_count": len(request.ids)}
+
+@router.post("/subcategories/bulk-delete")
+def bulk_delete_subcategories(
+    request: schema.BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    """Видаляє кілька підкатегорій одразу."""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="Список ID порожній")
+    deleted = crud.delete_subcategories(db, request.ids)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Підкатегорії не знайдено")
+    return {"status": "success", "deleted_count": len(request.ids)}
 
 
 ############################################################

@@ -121,8 +121,35 @@ def get_subcategories(db: Session, category_id: int = None):
         query = query.filter(models.Subcategory.category_id == category_id)
     return query.all()
 
-def delete_subcategory(db: Session, subcategory_id: int = None):
-    ...
+def delete_subcategory(db: Session, subcategory_id: int):
+    subcategory = db.query(models.Subcategory).filter(models.Subcategory.id == subcategory_id).first()
+    if not subcategory:
+        return False
+    db.delete(subcategory)
+    db.commit()
+    return True
+
+
+def delete_categories(db: Session, category_ids: list[int]):
+    """Видаляє кілька категорій одразу."""
+    categories = db.query(models.Category).filter(models.Category.id.in_(category_ids)).all()
+    if not categories:
+        return False
+    for category in categories:
+        db.delete(category)
+    db.commit()
+    return True
+
+
+def delete_subcategories(db: Session, subcategory_ids: list[int]):
+    """Видаляє кілька підкатегорій одразу."""
+    subcategories = db.query(models.Subcategory).filter(models.Subcategory.id.in_(subcategory_ids)).all()
+    if not subcategories:
+        return False
+    for subcategory in subcategories:
+        db.delete(subcategory)
+    db.commit()
+    return True
 
 
 # KP CRUD
