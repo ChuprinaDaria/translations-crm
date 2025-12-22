@@ -146,6 +146,8 @@ export function RecipesManagement() {
   const [items, setItems] = useState<Item[]>([]);
   const [linkingItem, setLinkingItem] = useState<{ recipeId: number; itemId: number | null } | null>(null);
   const [itemSearchOpen, setItemSearchOpen] = useState<{ [recipeId: number]: boolean }>({});
+  const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const loadRecipes = async () => {
     setLoading(true);
@@ -241,6 +243,33 @@ export function RecipesManagement() {
       setLinkingItem(null);
     } catch (e: any) {
       toast.error(e.message || "Помилка підв'язування");
+    }
+  };
+
+  const handleDeleteRecipe = async () => {
+    if (!recipeToDelete) return;
+
+    try {
+      const token = tokenManager.getToken();
+      const response = await fetch(`${API_BASE_URL}/recipes/${recipeToDelete.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || "Не вдалося видалити техкарту");
+      }
+
+      // Видаляємо техкарту зі списку
+      setRecipes(prev => prev.filter(r => r.id !== recipeToDelete.id));
+      toast.success("Техкарту видалено");
+      setIsDeleteDialogOpen(false);
+      setRecipeToDelete(null);
+    } catch (e: any) {
+      toast.error(e.message || "Помилка видалення техкарти");
     }
   };
 
@@ -662,6 +691,12 @@ export function RecipesManagement() {
   };
 
   const filteredRecipes = recipes.filter((recipe) => {
+    // Фільтруємо по типу техкарти (catering або box)
+    if (recipe.recipe_type !== activeType) {
+      return false;
+    }
+    
+    // Фільтруємо по пошуку
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -1073,18 +1108,33 @@ export function RecipesManagement() {
                               </TableCell>
                               <TableCell>{countIngredients(recipe)}</TableCell>
                               <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="gap-2"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEdit(recipe);
-                                  }}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                  Редагувати
-                                </Button>
+                                <div className="flex items-center gap-2 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEdit(recipe);
+                                    }}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                    Редагувати
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRecipeToDelete(recipe);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Видалити
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           {expandedRecipes.has(recipe.id) && (
@@ -2062,6 +2112,30 @@ export function RecipesManagement() {
               disabled={linking}
             >
               Продовжити зв'язування
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Recipe Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Видалити техкарту?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ви впевнені, що хочете видалити техкарту "{recipeToDelete?.name}"? 
+              Цю дію неможливо скасувати.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRecipeToDelete(null)}>
+              Скасувати
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteRecipe}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Видалити
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -32,6 +32,7 @@ import { Label } from "./ui/label";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { CategoriesManagementEnhanced } from "./CategoriesManagementEnhanced";
 import {
   Dialog,
   DialogContent,
@@ -983,137 +984,7 @@ export function MenuManagement() {
 
         {/* TAB 2: CATEGORIES */}
         <TabsContent value="categories" className="space-y-6">
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsCreateCategoryModalOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Додати категорію
-            </Button>
-          </div>
-
-          {/* Categories List */}
-          {loading ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Loader2 className="h-12 w-12 text-[#FF5A00] animate-spin mx-auto mb-4" />
-                <p className="text-gray-500">Завантаження...</p>
-              </CardContent>
-            </Card>
-          ) : categories.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <FolderOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Немає категорій
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  Створіть першу категорію для страв
-                </p>
-                <Button
-                  onClick={() => setIsCreateCategoryModalOpen(true)}
-                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Створити категорію
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {categories.map(category => {
-                const categorySubcategories = subcategories.filter(
-                  sub => sub.category_id === category.id
-                );
-                const categoryItemsCount = items.filter(
-                  item => item.subcategory?.category_id === category.id
-                ).length;
-                
-                return (
-                  <Card key={category.id}>
-                    <CardContent className="p-6">
-                      {/* Category Header */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <FolderOpen className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg text-gray-900">{category.name}</h3>
-                            <p className="text-sm text-gray-500">
-                              {categorySubcategories.length} підкатегорій • {categoryItemsCount} страв
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setCategoryToDelete(category);
-                            setIsDeleteCategoryDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                      
-                      {/* Subcategories */}
-                      {categorySubcategories.length > 0 && (
-                        <div className="space-y-2 ml-12 mb-4">
-                          {categorySubcategories.map(subcategory => {
-                            const subcategoryItemsCount = items.filter(
-                              item => item.subcategory_id === subcategory.id
-                            ).length;
-                            
-                            return (
-                              <div
-                                key={subcategory.id}
-                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Tag className="h-4 w-4 text-gray-400" />
-                                  <span>{subcategory.name}</span>
-                                  <Badge variant="outline">
-                                    {subcategoryItemsCount} страв
-                                  </Badge>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setSubcategoryToDelete(subcategory);
-                                    setIsDeleteSubcategoryDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      
-                      {/* Add Subcategory Button */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedCategoryForSubcategory(category.id);
-                          setSubcategoryFormData({ name: "", category_id: category.id });
-                          setIsCreateSubcategoryModalOpen(true);
-                        }}
-                        className="ml-12"
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Додати підкатегорію
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          <CategoriesManagementEnhanced />
         </TabsContent>
 
         {/* TAB 3: MENUS – конструктор меню */}
