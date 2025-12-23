@@ -2,6 +2,7 @@
 
 import smtplib
 import socket
+import re
 import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -129,13 +130,28 @@ def send_kp_email(
         
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
+        
+        # Спробуємо резолвити DNS, якщо це не IP адреса
+        smtp_host = host
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+$', host):
+            try:
+                # Спробуємо резолвити DNS
+                ip_address = socket.gethostbyname(host)
+                print(f"Resolved {host} to {ip_address}")
+                smtp_host = ip_address
+            except socket.gaierror as dns_error:
+                print(f"DNS resolution failed for {host}: {dns_error}")
+                print(f"  Trying direct connection with hostname...")
+                smtp_host = host
+        
         # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
         try:
             if port == 465:
-                print(f"Using SSL connection (port 465)...")
-                server = smtplib.SMTP_SSL(host, port, timeout=30)
+                print(f"Using SSL connection (port 465) to {smtp_host}...")
+                server = smtplib.SMTP_SSL(smtp_host, port, timeout=30)
             else:
-                server = smtplib.SMTP(host, port, timeout=30)
+                print(f"Using STARTTLS connection (port {port}) to {smtp_host}...")
+                server = smtplib.SMTP(smtp_host, port, timeout=30)
                 print(f"Starting TLS...")
                 server.starttls()
             print(f"Logging in as {user}...")
@@ -149,9 +165,11 @@ def send_kp_email(
         except (OSError, socket.gaierror) as conn_error:
             # Якщо не вдалося підключитися через DNS, спробуємо використати IP
             error_msg = f"Connection error: {conn_error}"
-            print(f"Error connecting to {host}:{port}: {error_msg}")
+            print(f"Error connecting to {smtp_host}:{port}: {error_msg}")
             print(f"  This might be a DNS resolution issue. If you know the IP address, try using it instead.")
-            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, перевірте налаштування мережі.")
+            if host == "serwer2555348.home.pl":
+                print(f"  For serwer2555348.home.pl, try using IP: 46.242.246.132")
+            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, спробуйте використати IP адресу (46.242.246.132) замість доменного імені.")
     except Exception as e:
         error_msg = f"Unexpected error: {e}"
         print(f"Error sending email: {error_msg}")
@@ -222,13 +240,28 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
+        
+        # Спробуємо резолвити DNS, якщо це не IP адреса
+        smtp_host = host
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+$', host):
+            try:
+                # Спробуємо резолвити DNS
+                ip_address = socket.gethostbyname(host)
+                print(f"Resolved {host} to {ip_address}")
+                smtp_host = ip_address
+            except socket.gaierror as dns_error:
+                print(f"DNS resolution failed for {host}: {dns_error}")
+                print(f"  Trying direct connection with hostname...")
+                smtp_host = host
+        
         # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
         try:
             if port == 465:
-                print(f"Using SSL connection (port 465)...")
-                server = smtplib.SMTP_SSL(host, port, timeout=30)
+                print(f"Using SSL connection (port 465) to {smtp_host}...")
+                server = smtplib.SMTP_SSL(smtp_host, port, timeout=30)
             else:
-                server = smtplib.SMTP(host, port, timeout=30)
+                print(f"Using STARTTLS connection (port {port}) to {smtp_host}...")
+                server = smtplib.SMTP(smtp_host, port, timeout=30)
                 print(f"Starting TLS...")
                 server.starttls()
             print(f"Logging in as {user}...")
@@ -242,9 +275,11 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         except (OSError, socket.gaierror) as conn_error:
             # Якщо не вдалося підключитися через DNS, спробуємо використати IP
             error_msg = f"Connection error: {conn_error}"
-            print(f"Error connecting to {host}:{port}: {error_msg}")
+            print(f"Error connecting to {smtp_host}:{port}: {error_msg}")
             print(f"  This might be a DNS resolution issue. If you know the IP address, try using it instead.")
-            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, перевірте налаштування мережі.")
+            if host == "serwer2555348.home.pl":
+                print(f"  For serwer2555348.home.pl, try using IP: 46.242.246.132")
+            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, спробуйте використати IP адресу (46.242.246.132) замість доменного імені.")
     except Exception as e:
         error_msg = f"Unexpected error: {e}"
         print(f"Error sending password reset email: {error_msg}")

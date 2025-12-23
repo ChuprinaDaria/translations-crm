@@ -767,7 +767,36 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
                 pass  # Обробимо нижче
             continue
 
-        item_weight = (item.weight or 0) * kp_item.quantity
+        # Парсимо вагу з урахуванням одиниці виміру
+        item_weight_raw = 0.0
+        if item.weight:
+            try:
+                # Парсимо вагу (може бути рядок "45" або "150/75")
+                if isinstance(item.weight, str):
+                    if '/' in item.weight:
+                        item_weight_raw = float(item.weight.split('/')[0])
+                    else:
+                        item_weight_raw = float(item.weight)
+                else:
+                    item_weight_raw = float(item.weight)
+            except (ValueError, TypeError):
+                item_weight_raw = 0.0
+        
+        # Конвертуємо вагу в кг для total_weight (якщо одиниця г, ділимо на 1000)
+        unit_lower = (item.unit or 'кг').lower()
+        if unit_lower == 'г':
+            item_weight_kg = item_weight_raw / 1000.0
+        elif unit_lower in ['л', 'мл']:
+            # Для рідини приблизно 1л = 1кг
+            if unit_lower == 'л':
+                item_weight_kg = item_weight_raw
+            else:
+                item_weight_kg = item_weight_raw / 1000.0
+        else:
+            # Для кг та інших одиниць залишаємо як є
+            item_weight_kg = item_weight_raw
+        
+        item_weight = item_weight_kg * kp_item.quantity
         total_weight += item_weight
 
         # Готуємо дані для фото та категорій
@@ -787,6 +816,16 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             """Форматує число без зайвих нулів після коми"""
             if num is None:
                 return "-"
+            # Якщо це рядок, спробуємо парсити
+            if isinstance(num, str):
+                try:
+                    # Парсимо вагу (може бути формат "150/75" або просто число)
+                    if '/' in num:
+                        num = float(num.split('/')[0])
+                    else:
+                        num = float(num)
+                except (ValueError, TypeError):
+                    return str(num)
             if isinstance(num, (int, float)):
                 # Якщо число ціле, показуємо без коми
                 if num == int(num):
@@ -796,7 +835,19 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
                 return formatted.rstrip('0').rstrip('.')
             return str(num)
         
-        weight_str = f"{format_number_local(item.weight)} {item.unit or 'кг'}" if item.weight else "-"
+        # Парсимо вагу для форматування
+        weight_value = item.weight
+        if isinstance(weight_value, str):
+            # Якщо вага в рядку, парсимо (може бути "150/75" або "0.150")
+            try:
+                if '/' in weight_value:
+                    weight_value = float(weight_value.split('/')[0])
+                else:
+                    weight_value = float(weight_value)
+            except (ValueError, TypeError):
+                weight_value = item.weight
+        
+        weight_str = f"{format_number_local(weight_value)} {item.unit or 'кг'}" if weight_value else "-"
         price_str = f"{format_number_local(item.price)} грн" if item.price else "-"
         total_str = f"{format_number_local((item.price or 0) * kp_item.quantity)} грн"
         
@@ -834,8 +885,11 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'description': item.description,
             'unit': item.unit,
             # Вага однієї одиниці страви
-            'weight': weight_str,          # форматований текст, напр. "0.50 кг"
-            'weight_raw': item.weight or 0,  # числове значення ваги 1 одиниці (float, кг)
+            'weight': weight_str,          # форматований текст, напр. "45 г" або "0.50 кг"
+            # weight_raw - вага в кг для шаблону (шаблон множить на 1000 для конвертації в грами)
+            # Якщо одиниця г, то weight_raw = weight_value / 1000 (щоб при множенні на 1000 отримати правильне значення)
+            # Якщо одиниця кг, то weight_raw = weight_value (залишаємо як є)
+            'weight_raw': (item_weight_raw / 1000.0) if unit_lower == 'г' else item_weight_raw,  # числове значення ваги 1 одиниці (float, кг) для шаблону
             'total_weight': item_weight,
             # Об'єм для розрахунку мл на особу
             'volume': item.volume,

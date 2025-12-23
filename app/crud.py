@@ -171,12 +171,40 @@ def delete_kp(db: Session, kp_id: int):
 
 
 def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = None):
+    import crud_user
 
     price_per_person = kp_in.price_per_person
     print(f"Price per person: {price_per_person}")
     
     if not price_per_person and kp_in.people_count and kp_in.people_count > 0:
         price_per_person = kp_in.total_price / kp_in.people_count
+
+    # Отримуємо дані менеджера (координатора) з залогіненого користувача
+    coordinator_name = None
+    coordinator_phone = None
+    if created_by_id:
+        user = crud_user.get_user_by_id(db, created_by_id)
+        if user:
+            # Формуємо ім'я з first_name та last_name
+            name_parts = []
+            if user.first_name:
+                name_parts.append(user.first_name)
+            if user.last_name:
+                name_parts.append(user.last_name)
+            if name_parts:
+                coordinator_name = " ".join(name_parts)
+            else:
+                # Якщо немає first_name/last_name, використовуємо email
+                coordinator_name = user.email or None
+            # Телефон менеджера (поки що немає поля phone в User, тому залишаємо None)
+            # coordinator_phone = getattr(user, "phone", None)  # Поки що не використовуємо
+            coordinator_phone = None
+    
+    # Якщо дані менеджера не знайдені, використовуємо дані з kp_in (fallback)
+    if not coordinator_name:
+        coordinator_name = kp_in.coordinator_name
+    if not coordinator_phone:
+        coordinator_phone = kp_in.coordinator_phone
 
     kp = models.KP(
         title=kp_in.title,
@@ -192,8 +220,8 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         event_date=kp_in.event_date,
         event_location=kp_in.event_location,
         event_time=kp_in.event_time,
-        coordinator_name=kp_in.coordinator_name,
-        coordinator_phone=kp_in.coordinator_phone,
+        coordinator_name=coordinator_name,
+        coordinator_phone=coordinator_phone,
         client_email=kp_in.client_email,
         client_phone=kp_in.client_phone,
         # Фінансові дані
@@ -396,8 +424,12 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
     kp.event_date = kp_in.event_date
     kp.event_location = kp_in.event_location
     kp.event_time = kp_in.event_time
-    kp.coordinator_name = kp_in.coordinator_name
-    kp.coordinator_phone = kp_in.coordinator_phone
+    # Оновлюємо coordinator_name та coordinator_phone тільки якщо вони передані явно
+    # Інакше залишаємо поточні значення (які були встановлені при створенні з даних менеджера)
+    if kp_in.coordinator_name is not None:
+        kp.coordinator_name = kp_in.coordinator_name
+    if kp_in.coordinator_phone is not None:
+        kp.coordinator_phone = kp_in.coordinator_phone
     kp.client_email = kp_in.client_email
     kp.client_phone = kp_in.client_phone
     
