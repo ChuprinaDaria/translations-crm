@@ -37,8 +37,55 @@ import {
   type Benefit,
   type ClientQuestionnaire,
   type Checklist,
+  type KP,
 } from "../lib/api";
 import { InfoTooltip } from "./InfoTooltip";
+import { Info } from "lucide-react";
+
+// Функція для форматування телефону під час вводу (+380 93 423 32 29)
+const formatPhoneInput = (value: string): string => {
+  // Видаляємо все крім цифр
+  const digits = value.replace(/\D/g, '');
+  
+  // Якщо починається не з 380, додаємо +380
+  let phone = digits;
+  if (digits.length > 0 && !digits.startsWith('380')) {
+    phone = '380' + digits.slice(0, 9);
+  }
+  
+  // Форматуємо +380 XX XXX XX XX
+  if (phone.startsWith('380') && phone.length > 3) {
+    const rest = phone.slice(3);
+    if (rest.length <= 2) {
+      return `+380 ${rest}`;
+    } else if (rest.length <= 5) {
+      return `+380 ${rest.slice(0, 2)} ${rest.slice(2)}`;
+    } else if (rest.length <= 7) {
+      return `+380 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`;
+    } else {
+      return `+380 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5, 7)} ${rest.slice(7, 9)}`;
+    }
+  }
+  
+  return value;
+};
+
+// Функції для швидких дій з датою
+const getTodayDate = (): string => {
+  return new Date().toISOString().split('T')[0];
+};
+
+const getTomorrowDate = (): string => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().split('T')[0];
+};
+
+const getDatePlus7Days = (): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + 7);
+  return date.toISOString().split('T')[0];
+};
 
 interface Dish {
   id: number;
@@ -295,6 +342,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [checklistAutofill, setChecklistAutofill] = useState<
     Record<string, { checklistId: number; checklistDate?: string }>
   >({});
+  // Стан для відстеження автозаповнення з клієнта
+  const [clientAutofillSource, setClientAutofillSource] = useState<{ type: 'client' | 'checklist'; date?: string } | null>(null);
+  
+  // Стани для копіювання з існуючого КП
+  const [allKPs, setAllKPs] = useState<KP[]>([]);
+  const [selectedKPToCopy, setSelectedKPToCopy] = useState<number | null>(null);
+  const [loadingKPs, setLoadingKPs] = useState(false);
+  const [copySuccessMessage, setCopySuccessMessage] = useState<string | null>(null);
 
   // Функція для валідації кроку 1 (без показу помилок)
   const isStep1Valid = (): boolean => {
@@ -552,6 +607,12 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
     setSelectedChecklistId(checklist.id);
     setChecklistAutofill(autofill);
+    
+    // Встановлюємо джерело автозаповнення
+    setClientAutofillSource({ 
+      type: 'checklist', 
+      date: sourceDate 
+    });
     
     // Очищаємо дані з анкети якщо обрали чекліст
     setSelectedQuestionnaireId(null);
@@ -982,6 +1043,125 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     loadTemplatesAndMenus();
   }, []);
 
+  // Load KPs for copying when step 2 is shown
+  useEffect(() => {
+    if (step === 2) {
+      const loadKPs = async () => {
+        setLoadingKPs(true);
+        try {
+          const kpsData = await kpApi.getKPs();
+          setAllKPs(kpsData);
+        } catch (error: any) {
+          console.error("Помилка завантаження КП:", error);
+          toast.error("Не вдалося завантажити список КП");
+        } finally {
+          setLoadingKPs(false);
+        }
+      };
+      
+      loadKPs();
+    }
+  }, [step]);
+
+  // Function to copy formats and dishes from selected KP
+  const handleCopyFromKP = async () => {
+    if (!selectedKPToCopy) {
+      toast.error("Оберіть КП для копіювання");
+      return;
+    }
+
+    try {
+      const sourceKP = await kpApi.getKP(selectedKPToCopy);
+      
+      if (!sourceKP) {
+        toast.error("КП не знайдено");
+        return;
+      }
+
+      let formatsCount = 0;
+      let dishesCount = 0;
+
+      // Collect all unique dish IDs and quantities
+      const allDishIds = new Set<number>();
+      const quantitiesToAdd: Record<number, number> = {};
+
+      // Copy event formats
+      if (sourceKP.event_formats && sourceKP.event_formats.length > 0) {
+        const newFormats: UIEventFormat[] = sourceKP.event_formats.map((format, index) => {
+          // Get dishes for this format
+          const formatItems = sourceKP.items.filter(item => item.event_format_id === format.id);
+          const dishIds = formatItems.map(item => item.item_id);
+          
+          // Add dishes to the set and collect quantities
+          formatItems.forEach(item => {
+            if (dishes.find(d => d.id === item.item_id)) {
+              allDishIds.add(item.item_id);
+              quantitiesToAdd[item.item_id] = (quantitiesToAdd[item.item_id] || 0) + item.quantity;
+            }
+          });
+          
+          return {
+            id: eventFormats.length > 0 
+              ? (Math.max(...eventFormats.map(f => f.id), 0) + index + 1) 
+              : index,
+            name: format.name || "",
+            eventTime: format.event_time || "",
+            peopleCount: format.people_count?.toString() || guestCount || "",
+            group: sourceKP.event_group as "" | "delivery-boxes" | "catering" | "other" || eventGroup || "",
+            selectedDishes: dishIds,
+          };
+        });
+        
+        setEventFormats(prev => [...prev, ...newFormats]);
+        formatsCount = newFormats.length;
+      }
+
+      // Copy dishes without format (general dishes)
+      sourceKP.items.forEach(item => {
+        if (!item.event_format_id && dishes.find(d => d.id === item.item_id)) {
+          allDishIds.add(item.item_id);
+          quantitiesToAdd[item.item_id] = (quantitiesToAdd[item.item_id] || 0) + item.quantity;
+        }
+      });
+
+      // Add all quantities
+      if (Object.keys(quantitiesToAdd).length > 0) {
+        setDishQuantities(prev => {
+          const updated = { ...prev };
+          Object.entries(quantitiesToAdd).forEach(([dishId, quantity]) => {
+            updated[parseInt(dishId, 10)] = (updated[parseInt(dishId, 10)] || 0) + quantity;
+          });
+          return updated;
+        });
+      }
+
+      // Add all dishes to selected dishes
+      if (allDishIds.size > 0) {
+        setSelectedDishes(prev => {
+          const newSet = new Set(prev);
+          allDishIds.forEach(id => newSet.add(id));
+          return Array.from(newSet);
+        });
+        dishesCount = allDishIds.size;
+      }
+
+      // Show success message
+      const message = `✓ Скопійовано ${formatsCount} форматів та ${dishesCount} страв`;
+      setCopySuccessMessage(message);
+      toast.success(message);
+      
+      // Clear message after 5 seconds
+      setTimeout(() => {
+        setCopySuccessMessage(null);
+      }, 5000);
+      
+      // Reset selection
+      setSelectedKPToCopy(null);
+    } catch (error: any) {
+      console.error("Помилка копіювання з КП:", error);
+      toast.error("Не вдалося скопіювати дані з КП");
+    }
+  };
 
   const allTags: string[] = Array.from(
     new Set<string>(dishes.map((dish) => dish.category))
@@ -1034,9 +1214,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       const matchesSearch =
         dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         dish.description.toLowerCase().includes(searchQuery.toLowerCase());
+      // Якщо вибрана категорія, показуємо тільки страви цієї категорії (точна відповідність)
       const matchesTags =
         selectedTags.length === 0 ||
-        selectedTags.some((tag) => dish.category.includes(tag));
+        selectedTags.some((tag) => dish.category === tag);
       return matchesSearch && matchesTags;
     })
     .sort((a, b) => {
@@ -1117,9 +1298,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   };
 
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
+    setSelectedTags((prev) => {
+      // Якщо натиснули на вже вибрану категорію - знімаємо її
+      if (prev.includes(tag)) {
+        return [];
+      }
+      // Якщо натиснули на іншу категорію - переключаємось на неї (тільки одна категорія вибрана)
+      return [tag];
+    });
   };
 
   const getSelectedDishesData = () => {
@@ -1951,535 +2137,748 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
       {/* Step 1: Client Data */}
       {step === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Крок 1: Дані клієнта та заходу</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4 md:space-y-6">
-              {/* Вибір типу: Бокс або Кейтеринг */}
-              <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <Label className="text-base font-semibold">
-                  Тип послуги <span className="text-red-500">*</span>
-                </Label>
-                <div className="flex gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="type-boxes"
-                      checked={eventGroup === "delivery-boxes"}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setEventGroup("delivery-boxes");
-                          setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
-                          // Очищаємо формати, якщо вони не відповідають новому типу
-                          setEventFormats((prev) => 
-                            prev.filter(f => f.group === "delivery-boxes" || !f.group).map((f, idx) => ({
-                              ...f,
-                              id: idx,
-                              group: f.group || "delivery-boxes",
-                            }))
-                          );
-                        } else if (eventGroup === "delivery-boxes") {
-                          // Якщо знімаємо вибір, очищаємо eventGroup
-                          setEventGroup("");
-                        }
-                      }}
-                    />
-                    <Label htmlFor="type-boxes" className="cursor-pointer font-medium">
-                      Доставка боксів
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="type-catering"
-                      checked={eventGroup === "catering"}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setEventGroup("catering");
-                          setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
-                          // Очищаємо формати, якщо вони не відповідають новому типу
-                          setEventFormats((prev) => 
-                            prev.filter(f => f.group === "catering" || !f.group).map((f, idx) => ({
-                              ...f,
-                              id: idx,
-                              group: f.group || "catering",
-                            }))
-                          );
-                        } else if (eventGroup === "catering") {
-                          // Якщо знімаємо вибір, очищаємо eventGroup
-                          setEventGroup("");
-                        }
-                      }}
-                    />
-                    <Label htmlFor="type-catering" className="cursor-pointer font-medium">
-                      Кейтерінг
-                    </Label>
-                  </div>
+        <div className="space-y-6">
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Крок 1 з 4</span>
+              <span className="text-gray-600">Дані клієнта та заходу</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-[#FF5A00] h-2 rounded-full" style={{ width: '25%' }}></div>
+            </div>
+          </div>
+
+          {/* Header with Client Name and KP Number */}
+          <div className="space-y-1">
+            <h2 className="text-3xl font-bold text-gray-900">
+              {clientName || "Новий клієнт"}
+              {createdKPId && (
+                <span className="text-xl font-normal text-gray-500 ml-3">
+                  #{createdKPId}
+                </span>
+              )}
+            </h2>
+            {clientAutofillSource && (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-sm px-3 py-1 flex items-center gap-2 w-fit">
+                <Check className="w-4 h-4" />
+                Дані завантажено з {clientAutofillSource.type === 'client' ? 'клієнта' : 'чекліста'}
+                {clientAutofillSource.date && (
+                  <span className="text-xs">
+                    від {new Date(clientAutofillSource.date).toLocaleDateString("uk-UA")}
+                  </span>
+                )}
+              </Badge>
+            )}
+          </div>
+
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
+            <div className="space-y-6">
+              {/* Секція: Тип послуги */}
+              <div className="space-y-4">
+                <div className="border-b border-gray-200 pb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Тип послуги</h3>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant={eventGroup === "delivery-boxes" ? "default" : "outline"}
+                    onClick={() => {
+                      setEventGroup("delivery-boxes");
+                      setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
+                      setEventFormats((prev) => 
+                        prev.filter(f => f.group === "delivery-boxes" || !f.group).map((f, idx) => ({
+                          ...f,
+                          id: idx,
+                          group: f.group || "delivery-boxes",
+                        }))
+                      );
+                    }}
+                    className={`h-12 px-6 text-base ${
+                      eventGroup === "delivery-boxes"
+                        ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                        : "bg-white hover:bg-gray-50 border-2"
+                    }`}
+                  >
+                    Доставка боксів
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={eventGroup === "catering" ? "default" : "outline"}
+                    onClick={() => {
+                      setEventGroup("catering");
+                      setStep1Errors((prev) => ({ ...prev, eventGroup: undefined }));
+                      setEventFormats((prev) => 
+                        prev.filter(f => f.group === "catering" || !f.group).map((f, idx) => ({
+                          ...f,
+                          id: idx,
+                          group: f.group || "catering",
+                        }))
+                      );
+                    }}
+                    className={`h-12 px-6 text-base ${
+                      eventGroup === "catering"
+                        ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                        : "bg-white hover:bg-gray-50 border-2"
+                    }`}
+                  >
+                    Кейтерінг
+                  </Button>
                 </div>
                 {step1Errors.eventGroup && (
-                  <p className="text-xs text-red-600">{step1Errors.eventGroup}</p>
+                  <p className="text-sm text-red-600">{step1Errors.eventGroup}</p>
                 )}
               </div>
 
-              {/* Вибір між новим та існуючим клієнтом */}
-              <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                <Label>Оберіть клієнта</Label>
-                <div className="flex gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="new-client"
-                      checked={clientSelectionMode === "new"}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setClientSelectionMode("new");
-                          setSelectedClientId(null);
-                          // Очищаємо поля при переключенні на новий клієнт
-                          setClientName("");
-                          setClientEmail("");
-                          setClientPhone("");
-                        }
-                      }}
-                    />
-                    <Label htmlFor="new-client" className="cursor-pointer">
-                      Новий клієнт
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="existing-client"
-                      checked={clientSelectionMode === "existing"}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setClientSelectionMode("existing");
-                        }
-                      }}
-                    />
-                    <Label htmlFor="existing-client" className="cursor-pointer">
-                      Обрати існуючого клієнта
-                    </Label>
-                  </div>
+              {/* Секція: Оберіть клієнта */}
+              <div className="space-y-4">
+                <div className="border-b border-gray-200 pb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Оберіть клієнта</h3>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant={clientSelectionMode === "new" ? "default" : "outline"}
+                    onClick={() => {
+                      setClientSelectionMode("new");
+                      setSelectedClientId(null);
+                      setClientName("");
+                      setClientEmail("");
+                      setClientPhone("");
+                      setClientAutofillSource(null);
+                    }}
+                    className={`h-12 px-6 text-base ${
+                      clientSelectionMode === "new"
+                        ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                        : "bg-white hover:bg-gray-50 border-2"
+                    }`}
+                  >
+                    Новий клієнт
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={clientSelectionMode === "existing" ? "default" : "outline"}
+                    onClick={() => {
+                      setClientSelectionMode("existing");
+                    }}
+                    className={`h-12 px-6 text-base ${
+                      clientSelectionMode === "existing"
+                        ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+                        : "bg-white hover:bg-gray-50 border-2"
+                    }`}
+                  >
+                    Обрати існуючого клієнта
+                  </Button>
                 </div>
               </div>
 
               {/* Вибір існуючого клієнта */}
               {clientSelectionMode === "existing" && (
-                <div className="space-y-2">
-                  <Label htmlFor="select-client">
-                    Оберіть клієнта <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={selectedClientId?.toString() || ""}
-                    onValueChange={(value) => {
-                      const clientId = parseInt(value);
-                      setSelectedClientId(clientId);
-                      setStep1Errors((prev) => ({ ...prev, selectedClient: undefined }));
+                <div className="space-y-4">
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="select-client" className="text-sm font-semibold">
+                          Оберіть клієнта <span className="text-[#FF5A00]">*</span>
+                        </Label>
+                        <Select
+                          value={selectedClientId?.toString() || ""}
+                          onValueChange={(value) => {
+                            const clientId = parseInt(value);
+                            setSelectedClientId(clientId);
+                            setStep1Errors((prev) => ({ ...prev, selectedClient: undefined }));
 
-                      const client = clients.find((c) => c.id === clientId);
-                      if (client) {
-                        setClientName(client.name || "");
-                        setClientEmail(client.email || "");
-                        setClientPhone(client.phone || "");
-                        // Заповнюємо дані заходу, якщо вони є
-                        if (client.event_date) {
-                          const date = new Date(client.event_date);
-                          setEventDate(date.toISOString().split("T")[0]);
-                        }
-                        if (client.event_format) {
-                          setEventFormat(client.event_format);
-                        }
-                        if (client.event_location) {
-                          setEventLocation(client.event_location);
-                        }
+                            const client = clients.find((c) => c.id === clientId);
+                            if (client) {
+                              setClientName(client.name || "");
+                              setClientEmail(client.email || "");
+                              setClientPhone(client.phone || "");
+                              // Заповнюємо дані заходу, якщо вони є
+                              if (client.event_date) {
+                                const date = new Date(client.event_date);
+                                setEventDate(date.toISOString().split("T")[0]);
+                              }
+                              if (client.event_format) {
+                                setEventFormat(client.event_format);
+                              }
+                              if (client.event_location) {
+                                setEventLocation(client.event_location);
+                              }
 
-                        // Завантажуємо всі чеклісти та анкети клієнта
-                        loadClientChecklists(clientId);
-                        loadClientQuestionnaires(clientId);
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      id="select-client"
-                      className={`h-10 ${
-                        step1Errors.selectedClient
-                          ? "border-red-500 focus-visible:ring-red-500"
-                          : ""
-                      }`}
-                    >
-                      <SelectValue placeholder="Оберіть клієнта зі списку" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
-                          {client.name} {client.phone ? `(${client.phone})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {step1Errors.selectedClient && (
-                    <p className="text-xs text-red-600">{step1Errors.selectedClient}</p>
-                  )}
+                              // Встановлюємо джерело автозаповнення
+                              setClientAutofillSource({ type: 'client' });
+
+                              // Завантажуємо всі чеклісти та анкети клієнта
+                              loadClientChecklists(clientId);
+                              loadClientQuestionnaires(clientId);
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            id="select-client"
+                            className={`h-12 ${
+                              step1Errors.selectedClient
+                                ? "border-red-500 focus-visible:ring-red-500"
+                                : ""
+                            }`}
+                          >
+                            <SelectValue placeholder="Оберіть клієнта зі списку" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.map((client) => (
+                              <SelectItem key={client.id} value={client.id.toString()}>
+                                {client.name} {client.phone ? `(${client.phone})` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {step1Errors.selectedClient && (
+                          <p className="text-sm text-red-600">{step1Errors.selectedClient}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
 
               {/* Вибір чекліста клієнта для автозаповнення КП */}
               {clientSelectionMode === "existing" && selectedClientId && (
-                <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm font-semibold flex items-center gap-2">
-                      <Clipboard className="w-4 h-4 text-blue-600" />
-                      Оберіть чекліст клієнта
-                    </Label>
-                    {Object.keys(checklistAutofill).length > 0 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => {
-                          clearChecklistData();
-                        }}
-                      >
-                        Очистити дані
-                      </Button>
-                    )}
-                  </div>
+                <Card className="shadow-sm bg-white">
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-semibold flex items-center gap-2">
+                          <Clipboard className="w-4 h-4 text-blue-600" />
+                          Оберіть чекліст клієнта
+                        </Label>
+                        {Object.keys(checklistAutofill).length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              clearChecklistData();
+                              setClientAutofillSource(null);
+                            }}
+                          >
+                            Очистити дані
+                          </Button>
+                        )}
+                      </div>
 
-                  {clientChecklists.length === 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-600">
-                        У цього клієнта ще немає чеклістів. Спочатку створіть чекліст у розділі "Чеклісти".
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <Select
-                        value={selectedChecklistId?.toString() || ""}
-                        onValueChange={(value) => {
-                          const clId = parseInt(value, 10);
-                          const cl = clientChecklists.find((c) => c.id === clId) || null;
-                          applyChecklistToKP(cl);
-                        }}
-                      >
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Оберіть чекліст клієнта" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clientChecklists.map((cl) => {
-                            const dateLabel = cl.event_date || cl.created_at || "";
-                            const formattedDate = dateLabel
-                              ? new Date(dateLabel).toLocaleDateString("uk-UA", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric"
-                                })
-                              : "";
-                            const typeLabel = cl.checklist_type === "box" ? "🎁 Бокси" : "🍽️ Кейтеринг";
-                            const eventFormat = cl.event_format || "";
-                            const guestCount = cl.guest_count ? `${cl.guest_count} гостей` : "";
-                            return (
-                              <SelectItem key={cl.id} value={cl.id.toString()}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">
-                                    {typeLabel} {formattedDate ? `від ${formattedDate}` : `#${cl.id}`}
-                                  </span>
-                                  {(eventFormat || guestCount) && (
-                                    <span className="text-xs text-gray-500">
-                                      {eventFormat && guestCount ? `${eventFormat}, ${guestCount}` : eventFormat || guestCount}
-                                    </span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      
-                      {selectedChecklistId && (
-                        <p className="text-xs text-emerald-700 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          Дані з чекліста будуть автоматично заповнені у відповідних полях
-                        </p>
+                      {clientChecklists.length === 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-sm text-gray-600">
+                            У цього клієнта ще немає чеклістів. Спочатку створіть чекліст у розділі "Чеклісти".
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Select
+                            value={selectedChecklistId?.toString() || ""}
+                            onValueChange={(value) => {
+                              const clId = parseInt(value, 10);
+                              const cl = clientChecklists.find((c) => c.id === clId) || null;
+                              applyChecklistToKP(cl);
+                            }}
+                          >
+                            <SelectTrigger className="h-12">
+                              <SelectValue placeholder="Оберіть чекліст клієнта" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clientChecklists.map((cl) => {
+                                const dateLabel = cl.event_date || cl.created_at || "";
+                                const formattedDate = dateLabel
+                                  ? new Date(dateLabel).toLocaleDateString("uk-UA", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "numeric"
+                                    })
+                                  : "";
+                                const typeLabel = cl.checklist_type === "box" ? "🎁 Бокси" : "🍽️ Кейтеринг";
+                                const eventFormat = cl.event_format || "";
+                                const guestCount = cl.guest_count ? `${cl.guest_count} гостей` : "";
+                                return (
+                                  <SelectItem key={cl.id} value={cl.id.toString()}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {typeLabel} {formattedDate ? `від ${formattedDate}` : `#${cl.id}`}
+                                      </span>
+                                      {(eventFormat || guestCount) && (
+                                        <span className="text-xs text-gray-500">
+                                          {eventFormat && guestCount ? `${eventFormat}, ${guestCount}` : eventFormat || guestCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                          
+                          {selectedChecklistId && (
+                            <p className="text-sm text-emerald-700 flex items-center gap-2">
+                              <Info className="w-4 h-4" />
+                              Дані з чекліста будуть автоматично заповнені у відповідних полях
+                            </p>
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="client-name">
-                    Ім'я клієнта <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="client-name"
-                    placeholder="ТОВ 'Компанія' або Іван Петренко"
-                    value={clientName}
-                    onChange={(e) => {
-                      setClientName(e.target.value);
-                      if (step1Errors.clientName) {
-                        setStep1Errors((prev) => ({ ...prev, clientName: undefined }));
-                      }
-                    }}
-                    aria-invalid={!!step1Errors.clientName}
-                    disabled={clientSelectionMode === "existing" && !selectedClientId}
-                  />
-                  {step1Errors.clientName && (
-                    <p className="text-xs text-red-600">{step1Errors.clientName}</p>
-                  )}
+              {/* Секція: Інформація про клієнта */}
+              <div className="space-y-4">
+                <div className="border-b border-gray-200 pb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Інформація про клієнта</h3>
                 </div>
-                <div className="space-y-2">
-                  {/* Старий блок з групою/форматом прибрано, залишаємо лише багатоформатний редактор нижче */}
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="event-date">
-                      Дата події <span className="text-red-500">*</span>
-                    </Label>
-                    {questionnaireAutofill.eventDate && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
-                        <Clipboard className="w-3 h-3" />
-                        З анкети
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="event-date"
-                      type="date"
-                      value={eventDate}
-                      onChange={(e) => {
-                        setEventDate(e.target.value);
-                        if (step1Errors.eventDate) {
-                          setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
-                        }
-                        // Видаляємо індикатор якщо користувач змінює значення
-                        if (questionnaireAutofill.eventDate) {
-                          const newAutofill = { ...questionnaireAutofill };
-                          delete newAutofill.eventDate;
-                          setQuestionnaireAutofill(newAutofill);
-                        }
-                      }}
-                      aria-invalid={!!step1Errors.eventDate}
-                      className={`${
-                        questionnaireAutofill.eventDate
-                          ? "!border-emerald-400 !bg-emerald-50"
-                          : ""
-                      }`}
-                    />
-                    {questionnaireAutofill.eventDate && (
-                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                    )}
-                  </div>
-                  {step1Errors.eventDate && (
-                    <p className="text-xs text-red-600">{step1Errors.eventDate}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="event-time">Час події</Label>
-                    {questionnaireAutofill.eventTime && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
-                        <Clipboard className="w-3 h-3" />
-                        З анкети
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="event-time"
-                      placeholder="17:00–19:00"
-                      value={eventTime}
-                      onChange={(e) => {
-                        setEventTime(e.target.value);
-                        // Видаляємо індикатор якщо користувач змінює значення
-                        if (questionnaireAutofill.eventTime) {
-                          const newAutofill = { ...questionnaireAutofill };
-                          delete newAutofill.eventTime;
-                          setQuestionnaireAutofill(newAutofill);
-                        }
-                      }}
-                      className={`${
-                        questionnaireAutofill.eventTime
-                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
-                          : ""
-                      }`}
-                    />
-                    {questionnaireAutofill.eventTime && (
-                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                    )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="client-name" className="text-sm font-semibold">
+                          Ім'я клієнта <span className="text-[#FF5A00]">*</span>
+                        </Label>
+                        <Input
+                          id="client-name"
+                          placeholder="ТОВ 'Компанія' або Іван Петренко"
+                          value={clientName}
+                          onChange={(e) => {
+                            setClientName(e.target.value);
+                            if (step1Errors.clientName) {
+                              setStep1Errors((prev) => ({ ...prev, clientName: undefined }));
+                            }
+                            setClientAutofillSource(null);
+                          }}
+                          aria-invalid={!!step1Errors.clientName}
+                          disabled={clientSelectionMode === "existing" && !selectedClientId}
+                          className="h-12"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const nextInput = e.currentTarget.form?.querySelector('#client-email') as HTMLInputElement;
+                              nextInput?.focus();
+                            }
+                          }}
+                        />
+                        {step1Errors.clientName && (
+                          <p className="text-sm text-red-600">{step1Errors.clientName}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-1">
+                    <Card className="shadow-sm bg-white">
+                      <CardContent className="p-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="client-email" className="text-sm font-semibold">
+                            Email клієнта
+                          </Label>
+                          <Input
+                            id="client-email"
+                            type="email"
+                            placeholder="info@company.com"
+                            value={clientEmail}
+                            onChange={(e) => {
+                              setClientEmail(e.target.value);
+                              setClientAutofillSource(null);
+                            }}
+                            className="h-12"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#client-phone') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="shadow-sm bg-white">
+                      <CardContent className="p-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="client-phone" className="text-sm font-semibold">
+                            Телефон клієнта (Telegram)
+                          </Label>
+                          <Input
+                            id="client-phone"
+                            type="tel"
+                            placeholder="+380 XX XXX XX XX"
+                            value={clientPhone}
+                            onChange={(e) => {
+                              const formatted = formatPhoneInput(e.target.value);
+                              setClientPhone(formatted);
+                              setClientAutofillSource(null);
+                            }}
+                            className="h-12"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#event-date') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Поле "Кількість гостей" під форматами прибрали — кількість рахуємо з сумарних гостей у форматах */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="event-location">Місце проведення</Label>
-                    {questionnaireAutofill.eventLocation && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
-                        <Clipboard className="w-3 h-3" />
-                        З анкети
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="event-location"
-                      placeholder="м. Київ, вул. Короленківська 4"
-                      value={eventLocation}
-                      onChange={(e) => {
-                        setEventLocation(e.target.value);
-                        // Видаляємо індикатор якщо користувач змінює значення
-                        if (questionnaireAutofill.eventLocation) {
-                          const newAutofill = { ...questionnaireAutofill };
-                          delete newAutofill.eventLocation;
-                          setQuestionnaireAutofill(newAutofill);
-                        }
-                      }}
-                      className={`${
-                        questionnaireAutofill.eventLocation
-                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
-                          : ""
-                      }`}
-                    />
-                    {questionnaireAutofill.eventLocation && (
-                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                    )}
-                  </div>
-                  {questionnaireAutofill.eventLocation && (
-                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
-                      Дані з анкети{" "}
-                      {questionnaireAutofill.eventLocation.questionnaireDate && (
-                        <>
-                          від{" "}
-                          {new Date(
-                            questionnaireAutofill.eventLocation.questionnaireDate
-                          ).toLocaleDateString("uk-UA")}
-                        </>
-                      )}
-                    </p>
-                  )}
+
+              {/* Секція: Деталі заходу */}
+              <div className="space-y-4">
+                <div className="border-b border-gray-200 pb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Деталі заходу</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="event-date" className="text-sm font-semibold">
+                            Дата події <span className="text-[#FF5A00]">*</span>
+                          </Label>
+                          {questionnaireAutofill.eventDate && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                              <Clipboard className="w-3 h-3" />
+                              З анкети
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEventDate(getTodayDate());
+                              if (step1Errors.eventDate) {
+                                setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
+                              }
+                            }}
+                            className="h-9 text-sm"
+                          >
+                            Сьогодні
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEventDate(getTomorrowDate());
+                              if (step1Errors.eventDate) {
+                                setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
+                              }
+                            }}
+                            className="h-9 text-sm"
+                          >
+                            Завтра
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEventDate(getDatePlus7Days());
+                              if (step1Errors.eventDate) {
+                                setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
+                              }
+                            }}
+                            className="h-9 text-sm"
+                          >
+                            +7 днів
+                          </Button>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="event-date"
+                            type="date"
+                            value={eventDate}
+                            onChange={(e) => {
+                              setEventDate(e.target.value);
+                              if (step1Errors.eventDate) {
+                                setStep1Errors((prev) => ({ ...prev, eventDate: undefined }));
+                              }
+                              if (questionnaireAutofill.eventDate) {
+                                const newAutofill = { ...questionnaireAutofill };
+                                delete newAutofill.eventDate;
+                                setQuestionnaireAutofill(newAutofill);
+                              }
+                            }}
+                            aria-invalid={!!step1Errors.eventDate}
+                            className={`h-12 ${
+                              questionnaireAutofill.eventDate
+                                ? "!border-emerald-400 !bg-emerald-50"
+                                : ""
+                            }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#event-time') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                          {questionnaireAutofill.eventDate && (
+                            <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                          )}
+                        </div>
+                        {step1Errors.eventDate && (
+                          <p className="text-sm text-red-600">{step1Errors.eventDate}</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="event-time" className="text-sm font-semibold">Час події</Label>
+                          {questionnaireAutofill.eventTime && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                              <Clipboard className="w-3 h-3" />
+                              З анкети
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {['10:00', '12:00', '14:00', '18:00', '20:00'].map((time) => (
+                            <Button
+                              key={time}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEventTime(time);
+                                if (questionnaireAutofill.eventTime) {
+                                  const newAutofill = { ...questionnaireAutofill };
+                                  delete newAutofill.eventTime;
+                                  setQuestionnaireAutofill(newAutofill);
+                                }
+                              }}
+                              className="h-9 text-sm"
+                            >
+                              {time}
+                            </Button>
+                          ))}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="event-time"
+                            placeholder="17:00–19:00"
+                            value={eventTime}
+                            onChange={(e) => {
+                              setEventTime(e.target.value);
+                              if (questionnaireAutofill.eventTime) {
+                                const newAutofill = { ...questionnaireAutofill };
+                                delete newAutofill.eventTime;
+                                setQuestionnaireAutofill(newAutofill);
+                              }
+                            }}
+                            className={`h-12 ${
+                              questionnaireAutofill.eventTime
+                                ? "!border-emerald-400 !bg-emerald-50 pr-8"
+                                : ""
+                            }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#event-location') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                          {questionnaireAutofill.eventTime && (
+                            <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="shadow-sm bg-white md:col-span-2">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="event-location" className="text-sm font-semibold">Місце проведення</Label>
+                          {questionnaireAutofill.eventLocation && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                              <Clipboard className="w-3 h-3" />
+                              З анкети
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="event-location"
+                            placeholder="м. Київ, вул. Короленківська 4"
+                            value={eventLocation}
+                            onChange={(e) => {
+                              setEventLocation(e.target.value);
+                              if (questionnaireAutofill.eventLocation) {
+                                const newAutofill = { ...questionnaireAutofill };
+                                delete newAutofill.eventLocation;
+                                setQuestionnaireAutofill(newAutofill);
+                              }
+                            }}
+                            className={`h-12 ${
+                              questionnaireAutofill.eventLocation
+                                ? "!border-emerald-400 !bg-emerald-50 pr-8"
+                                : ""
+                            }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#coordinator-name') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                          {questionnaireAutofill.eventLocation && (
+                            <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                          )}
+                        </div>
+                        {questionnaireAutofill.eventLocation && (
+                          <p className="text-sm text-emerald-700 flex items-center gap-1">
+                            Дані з анкети{" "}
+                            {questionnaireAutofill.eventLocation.questionnaireDate && (
+                              <>
+                                від{" "}
+                                {new Date(
+                                  questionnaireAutofill.eventLocation.questionnaireDate
+                                ).toLocaleDateString("uk-UA")}
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="client-email">Email клієнта</Label>
-                  <Input
-                    id="client-email"
-                    type="email"
-                    placeholder="client@example.com"
-                    value={clientEmail}
-                    onChange={(e) => setClientEmail(e.target.value)}
-                  />
+              {/* Секція: Координатор */}
+              <div className="space-y-4">
+                <div className="border-b border-gray-200 pb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Координатор</h3>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="client-phone">Телефон клієнта (Telegram)</Label>
-                  <Input
-                    id="client-phone"
-                    type="tel"
-                    placeholder="+380..."
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="coordinator-name">Координатор</Label>
-                    {questionnaireAutofill.coordinatorName && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
-                        <Clipboard className="w-3 h-3" />
-                        З анкети
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="coordinator-name"
-                      placeholder="Ім'я координатора"
-                      value={coordinatorName}
-                      onChange={(e) => {
-                        setCoordinatorName(e.target.value);
-                        // Видаляємо індикатор якщо користувач змінює значення
-                        if (questionnaireAutofill.coordinatorName) {
-                          const newAutofill = { ...questionnaireAutofill };
-                          delete newAutofill.coordinatorName;
-                          setQuestionnaireAutofill(newAutofill);
-                        }
-                      }}
-                      className={`${
-                        questionnaireAutofill.coordinatorName
-                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
-                          : ""
-                      }`}
-                    />
-                    {questionnaireAutofill.coordinatorName && (
-                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                    )}
-                  </div>
-                  {questionnaireAutofill.coordinatorName && (
-                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
-                      Дані з анкети{" "}
-                      {questionnaireAutofill.coordinatorName.questionnaireDate && (
-                        <>
-                          від{" "}
-                          {new Date(
-                            questionnaireAutofill.coordinatorName.questionnaireDate
-                          ).toLocaleDateString("uk-UA")}
-                        </>
-                      )}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="coordinator-phone">Телефон координатора</Label>
-                    {questionnaireAutofill.coordinatorPhone && (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
-                        <Clipboard className="w-3 h-3" />
-                        З анкети
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      id="coordinator-phone"
-                      type="tel"
-                      placeholder="+380..."
-                      value={coordinatorPhone}
-                      onChange={(e) => {
-                        setCoordinatorPhone(e.target.value);
-                        // Видаляємо індикатор якщо користувач змінює значення
-                        if (questionnaireAutofill.coordinatorPhone) {
-                          const newAutofill = { ...questionnaireAutofill };
-                          delete newAutofill.coordinatorPhone;
-                          setQuestionnaireAutofill(newAutofill);
-                        }
-                      }}
-                      className={`${
-                        questionnaireAutofill.coordinatorPhone
-                          ? "!border-emerald-400 !bg-emerald-50 pr-8"
-                          : ""
-                      }`}
-                    />
-                    {questionnaireAutofill.coordinatorPhone && (
-                      <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                    )}
-                  </div>
-                  {questionnaireAutofill.coordinatorPhone && (
-                    <p className="text-[11px] text-emerald-700 flex items-center gap-1">
-                      Дані з анкети{" "}
-                      {questionnaireAutofill.coordinatorPhone.questionnaireDate && (
-                        <>
-                          від{" "}
-                          {new Date(
-                            questionnaireAutofill.coordinatorPhone.questionnaireDate
-                          ).toLocaleDateString("uk-UA")}
-                        </>
-                      )}
-                    </p>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="coordinator-name" className="text-sm font-semibold">Координатор</Label>
+                          {questionnaireAutofill.coordinatorName && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                              <Clipboard className="w-3 h-3" />
+                              З анкети
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="coordinator-name"
+                            placeholder="Ім'я координатора"
+                            value={coordinatorName}
+                            onChange={(e) => {
+                              setCoordinatorName(e.target.value);
+                              if (questionnaireAutofill.coordinatorName) {
+                                const newAutofill = { ...questionnaireAutofill };
+                                delete newAutofill.coordinatorName;
+                                setQuestionnaireAutofill(newAutofill);
+                              }
+                            }}
+                            className={`h-12 ${
+                              questionnaireAutofill.coordinatorName
+                                ? "!border-emerald-400 !bg-emerald-50 pr-8"
+                                : ""
+                            }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextInput = e.currentTarget.form?.querySelector('#coordinator-phone') as HTMLInputElement;
+                                nextInput?.focus();
+                              }
+                            }}
+                          />
+                          {questionnaireAutofill.coordinatorName && (
+                            <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                          )}
+                        </div>
+                        {questionnaireAutofill.coordinatorName && (
+                          <p className="text-sm text-emerald-700 flex items-center gap-1">
+                            Дані з анкети{" "}
+                            {questionnaireAutofill.coordinatorName.questionnaireDate && (
+                              <>
+                                від{" "}
+                                {new Date(
+                                  questionnaireAutofill.coordinatorName.questionnaireDate
+                                ).toLocaleDateString("uk-UA")}
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="shadow-sm bg-white">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="coordinator-phone" className="text-sm font-semibold">Телефон координатора</Label>
+                          {questionnaireAutofill.coordinatorPhone && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-xs px-2 py-0 flex items-center gap-1">
+                              <Clipboard className="w-3 h-3" />
+                              З анкети
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="coordinator-phone"
+                            type="tel"
+                            placeholder="+380 XX XXX XX XX"
+                            value={coordinatorPhone}
+                            onChange={(e) => {
+                              const formatted = formatPhoneInput(e.target.value);
+                              setCoordinatorPhone(formatted);
+                              if (questionnaireAutofill.coordinatorPhone) {
+                                const newAutofill = { ...questionnaireAutofill };
+                                delete newAutofill.coordinatorPhone;
+                                setQuestionnaireAutofill(newAutofill);
+                              }
+                            }}
+                            className={`h-12 ${
+                              questionnaireAutofill.coordinatorPhone
+                                ? "!border-emerald-400 !bg-emerald-50 pr-8"
+                                : ""
+                            }`}
+                          />
+                          {questionnaireAutofill.coordinatorPhone && (
+                            <Clipboard className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                          )}
+                        </div>
+                        {questionnaireAutofill.coordinatorPhone && (
+                          <p className="text-sm text-emerald-700 flex items-center gap-1">
+                            Дані з анкети{" "}
+                            {questionnaireAutofill.coordinatorPhone.questionnaireDate && (
+                              <>
+                                від{" "}
+                                {new Date(
+                                  questionnaireAutofill.coordinatorPhone.questionnaireDate
+                                ).toLocaleDateString("uk-UA")}
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
 
@@ -2548,19 +2947,21 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   )}
                 </div>
               </div>
-              <div className="flex justify-end">
+              {/* Кнопка Далі */}
+              <div className="flex justify-end pt-4 border-t border-gray-200">
                 <Button
                   onClick={() => goToStep(2)}
-                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full md:w-auto"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full md:w-auto h-14 text-base md:text-lg px-8 font-semibold"
                   disabled={!isStep1Valid()}
                 >
                   Далі: Вибір страв
-                  <ChevronRight className="w-4 h-4 ml-2" />
+                  <ChevronRight className="w-5 h-5 ml-2" />
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* Step 2: Select Dishes, Equipment, Service */}
@@ -2571,6 +2972,58 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               <CardTitle>Крок 2: Виберіть страви, обладнання та обслуговування</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Швидке заповнення з існуючого КП */}
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">💡</span>
+                  <Label className="text-sm font-semibold">Швидке заповнення</Label>
+                </div>
+                <div className="flex flex-col md:flex-row gap-3 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="copy-kp-select" className="text-xs text-gray-600">
+                      Оберіть КП для копіювання
+                    </Label>
+                    <Select
+                      value={selectedKPToCopy?.toString() || ""}
+                      onValueChange={(value) => setSelectedKPToCopy(value ? parseInt(value, 10) : null)}
+                      disabled={loadingKPs}
+                    >
+                      <SelectTrigger id="copy-kp-select" className="w-full">
+                        <SelectValue placeholder={loadingKPs ? "Завантаження..." : "Оберіть КП"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allKPs.map((kp) => {
+                          const eventDateStr = kp.event_date 
+                            ? new Date(kp.event_date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                            : '';
+                          const guestCountStr = kp.people_count ? `${kp.people_count} гостей` : '';
+                          const displayText = `${kp.client_name || kp.title || 'КП'} - ${kp.event_format || 'Кейтерінг'} ${eventDateStr}${guestCountStr ? ` (${guestCountStr})` : ''}`;
+                          
+                          return (
+                            <SelectItem key={kp.id} value={kp.id.toString()}>
+                              {displayText}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleCopyFromKP}
+                    disabled={!selectedKPToCopy || loadingKPs}
+                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 w-full md:w-auto"
+                  >
+                    Скопіювати формати та страви
+                  </Button>
+                </div>
+                {copySuccessMessage && (
+                  <div className="mt-3 p-2 bg-green-100 border border-green-300 rounded text-sm text-green-700">
+                    {copySuccessMessage}
+                  </div>
+                )}
+              </div>
+
               {/* Швидкий вибір форматів заходу */}
               {eventGroup && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
@@ -2816,42 +3269,50 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </div>
                     )}
                   </div>
-                  {/* Ready menus selector */}
+                  {/* Меню - швидкий вибір страв */}
                   {menus.length > 0 && (
-                    <div className="flex flex-col md:flex-row gap-3 md:items-end">
-                      <div className="flex-1 space-y-1">
-                        <Label htmlFor="ready-menu">Додати готове меню</Label>
-                        <select
-                          id="ready-menu"
-                          className="w-full border rounded-md px-3 py-2 text-sm"
-                          value={selectedMenuId}
-                          onChange={(e) => setSelectedMenuId(e.target.value)}
-                        >
-                          <option value="">Оберіть меню</option>
-                          {menus.map((menu) => (
-                            <option key={menu.id} value={menu.id}>
-                              {menu.name}
-                              {menu.people_count
-                                ? ` • ${menu.people_count} гостей`
-                                : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-gray-500">
-                          Після вибору меню всі його страви з кількостями будуть додані до списку нижче. 
-                          Ви зможете додатково змінити порції на наступному кроці «Конструктор».
-                        </p>
+                    <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-lg">📋</span>
+                        <Label className="text-sm font-semibold">Меню</Label>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full md:w-auto"
-                        disabled={!selectedMenuId}
-                        onClick={handleApplyMenu}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Додати меню
-                      </Button>
+                      <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                        <div className="flex-1 space-y-1">
+                          <Label htmlFor="ready-menu" className="text-xs text-gray-600">
+                            Оберіть готове меню для швидкого заповнення
+                          </Label>
+                          <select
+                            id="ready-menu"
+                            className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                            value={selectedMenuId}
+                            onChange={(e) => setSelectedMenuId(e.target.value)}
+                          >
+                            <option value="">Оберіть меню</option>
+                            {menus.map((menu) => (
+                              <option key={menu.id} value={menu.id}>
+                                {menu.name}
+                                {menu.event_format ? ` • ${menu.event_format}` : ""}
+                                {menu.people_count
+                                  ? ` • ${menu.people_count} гостей`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Після вибору меню всі його страви з кількостями будуть додані до обраних. 
+                            Ви зможете додатково змінити порції на наступному кроці «Конструктор».
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          className="w-full md:w-auto bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                          disabled={!selectedMenuId}
+                          onClick={handleApplyMenu}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Додати меню
+                        </Button>
+                      </div>
                     </div>
                   )}
 
@@ -3783,94 +4244,113 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             }
                             
                             return (
-                              <tr key={dish.id} className={`border-b last:border-0 hover:bg-gray-50 ${isCustom ? 'bg-yellow-50' : ''}`}>
-                                <td className="py-3 px-4 text-left">
-                                  {isCustom ? (
+                              <tr key={dish.id} className={`border-b last:border-0 hover:bg-gray-50 h-16 ${isCustom ? 'bg-yellow-50' : ''}`}>
+                                <td className="px-4 align-middle">
+                                  <div className="flex items-center h-full">
+                                    {isCustom ? (
+                                      <Input
+                                        type="text"
+                                        className="w-full h-9"
+                                        placeholder="Назва страви"
+                                        value={dish.name}
+                                        onChange={(e) => {
+                                          setCustomDishes((prev) =>
+                                            prev.map((d) => (d.id === dish.id ? { ...d, name: e.target.value } : d))
+                                          );
+                                        }}
+                                      />
+                                    ) : (
+                                      <span className="text-left">{dish.name}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 text-right align-middle">
+                                  <div className="flex items-center justify-end gap-1 h-full">
                                     <Input
                                       type="text"
-                                      className="w-full"
-                                      placeholder="Назва страви"
-                                      value={dish.name}
+                                      className="w-24 h-9 text-right"
+                                      placeholder="150 або 150/75"
+                                      value={typeof displayValue === 'string' ? displayValue : String(displayValue)}
                                       onChange={(e) => {
-                                        setCustomDishes((prev) =>
-                                          prev.map((d) => (d.id === dish.id ? { ...d, name: e.target.value } : d))
-                                        );
+                                        const value = e.target.value;
+                                        setDishOverrides((prev) => ({
+                                          ...prev,
+                                          [dish.id]: { ...prev[dish.id], weight: value },
+                                        }));
                                       }}
                                     />
-                                  ) : (
-                                    dish.name
-                                  )}
+                                    <span className="text-xs text-gray-500 whitespace-nowrap">{displayUnit}</span>
+                                  </div>
                                 </td>
-                                <td className="py-3 px-4 text-right">
-                                  <Input
-                                    type="text"
-                                    className="w-24 ml-auto text-right"
-                                    placeholder="150 або 150/75"
-                                    value={typeof displayValue === 'string' ? displayValue : String(displayValue)}
-                                    onChange={(e) => {
-                                      const value = e.target.value;
-                                      setDishOverrides((prev) => ({
-                                        ...prev,
-                                        [dish.id]: { ...prev[dish.id], weight: value },
-                                      }));
-                                    }}
-                                  />
-                                  <span className="text-xs text-gray-500 ml-1">{displayUnit}</span>
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <Input
-                                    type="number"
-                                    className="w-20 ml-auto text-right"
-                                    min="0"
-                                    value={qty}
-                                    onChange={(e) => {
-                                      const value = parseInt(e.target.value, 10) || 0;
-                                      setDishQuantities((prev) => ({
-                                        ...prev,
-                                        [dish.id]: value,
-                                      }));
-                                    }}
-                                  />
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <Input
-                                    type="number"
-                                    className="w-24 ml-auto text-right"
-                                    min="0"
-                                    step="0.01"
-                                    value={price.toFixed(2)}
-                                    onChange={(e) => {
-                                      const value = parseFloat(e.target.value) || 0;
-                                      setDishOverrides((prev) => ({
-                                        ...prev,
-                                        [dish.id]: { ...prev[dish.id], price: value },
-                                      }));
-                                    }}
-                                  />
-                                </td>
-                                <td className="py-3 px-4 text-right font-medium">{total.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-right">{outputPerPerson}</td>
-                                <td className="py-3 px-4 text-center">
-                                  {isCustom && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setCustomDishes((prev) => prev.filter((d) => d.id !== dish.id));
-                                        setDishQuantities((prev) => {
-                                          const { [dish.id]: _, ...rest } = prev;
-                                          return rest;
-                                        });
-                                        setDishOverrides((prev) => {
-                                          const { [dish.id]: _, ...rest } = prev;
-                                          return rest;
-                                        });
+                                <td className="px-4 text-right align-middle">
+                                  <div className="flex items-center justify-end h-full">
+                                    <Input
+                                      type="number"
+                                      className="w-20 h-9 text-right"
+                                      min="0"
+                                      value={qty}
+                                      onChange={(e) => {
+                                        const value = parseInt(e.target.value, 10) || 0;
+                                        setDishQuantities((prev) => ({
+                                          ...prev,
+                                          [dish.id]: value,
+                                        }));
                                       }}
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </Button>
-                                  )}
+                                    />
+                                  </div>
+                                </td>
+                                <td className="px-4 text-right align-middle">
+                                  <div className="flex items-center justify-end h-full">
+                                    <Input
+                                      type="number"
+                                      className="w-24 h-9 text-right"
+                                      min="0"
+                                      step="0.01"
+                                      value={price.toFixed(2)}
+                                      onChange={(e) => {
+                                        const value = parseFloat(e.target.value) || 0;
+                                        setDishOverrides((prev) => ({
+                                          ...prev,
+                                          [dish.id]: { ...prev[dish.id], price: value },
+                                        }));
+                                      }}
+                                    />
+                                  </div>
+                                </td>
+                                <td className="px-4 text-right font-medium align-middle">
+                                  <div className="flex items-center justify-end h-full">
+                                    {total.toFixed(2)}
+                                  </div>
+                                </td>
+                                <td className="px-4 text-right align-middle">
+                                  <div className="flex items-center justify-end h-full">
+                                    {outputPerPerson}
+                                  </div>
+                                </td>
+                                <td className="px-4 text-center align-middle">
+                                  <div className="flex items-center justify-center h-full">
+                                    {isCustom && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-9"
+                                        onClick={() => {
+                                          setCustomDishes((prev) => prev.filter((d) => d.id !== dish.id));
+                                          setDishQuantities((prev) => {
+                                            const { [dish.id]: _, ...rest } = prev;
+                                            return rest;
+                                          });
+                                          setDishOverrides((prev) => {
+                                            const { [dish.id]: _, ...rest } = prev;
+                                            return rest;
+                                          });
+                                        }}
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -4443,33 +4923,119 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   />
                 </div>
 
-                <div className="border-t pt-4 space-y-4">
+                <div className="border-t pt-4 space-y-6">
                   <h4 className="text-gray-900 font-medium">Обрані страви</h4>
                   {getSelectedDishesData().length === 0 ? (
                     <p className="text-gray-500 text-sm">
                       Страви не обрано.
                     </p>
                   ) : (
-                    <div className="space-y-2 text-sm">
-                      {getSelectedDishesData().map((dish) => {
-                        const qty = dishQuantities[dish.id] ?? 1;
-                        return (
-                          <div
-                            key={dish.id}
-                            className="flex items-center justify-between"
-                          >
-                            <span className="text-gray-900">
-                              {dish.name}{" "}
-                              <span className="text-gray-500">
-                                × {qty} порцій
-                              </span>
-                            </span>
-                            <span className="text-gray-600">
-                              {dish.price * qty} грн
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <div className="space-y-6">
+                      {(() => {
+                        // Групуємо страви за форматами та категоріями
+                        const allDishes = getSelectedDishesData();
+                        
+                        // Створюємо структуру: формат -> категорія -> страви
+                        const groupedByFormat: Record<string | number, Record<string, typeof allDishes>> = {};
+                        
+                        // Спочатку додаємо страви з форматів
+                        eventFormats.forEach((format) => {
+                          if (!groupedByFormat[format.id]) {
+                            groupedByFormat[format.id] = {};
+                          }
+                          
+                          format.selectedDishes.forEach((dishId) => {
+                            const dish = allDishes.find((d) => d.id === dishId);
+                            if (dish) {
+                              const category = dish.category || "Інше";
+                              if (!groupedByFormat[format.id][category]) {
+                                groupedByFormat[format.id][category] = [];
+                              }
+                              if (!groupedByFormat[format.id][category].find((d) => d.id === dish.id)) {
+                                groupedByFormat[format.id][category].push(dish);
+                              }
+                            }
+                          });
+                        });
+                        
+                        // Додаємо страви без формату (загальний вибір)
+                        const dishesWithoutFormat = allDishes.filter((dish) => {
+                          return !eventFormats.some((format) => format.selectedDishes.includes(dish.id));
+                        });
+                        
+                        if (dishesWithoutFormat.length > 0) {
+                          if (!groupedByFormat['general']) {
+                            groupedByFormat['general'] = {};
+                          }
+                          
+                          dishesWithoutFormat.forEach((dish) => {
+                            const category = dish.category || "Інше";
+                            if (!groupedByFormat['general'][category]) {
+                              groupedByFormat['general'][category] = [];
+                            }
+                            groupedByFormat['general'][category].push(dish);
+                          });
+                        }
+                        
+                        return Object.entries(groupedByFormat).map(([formatKey, categories]) => {
+                          const format = typeof formatKey === 'string' && formatKey === 'general' 
+                            ? null 
+                            : eventFormats.find((f) => f.id === parseInt(formatKey, 10));
+                          
+                          return (
+                            <div key={formatKey} className="space-y-4">
+                              {/* Заголовок формату */}
+                              {format ? (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                  <div className="font-semibold text-blue-900">
+                                    {format.name}
+                                    {format.eventTime && ` (${format.eventTime})`}
+                                    {format.peopleCount && ` • ${format.peopleCount} гостей`}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                  <div className="font-semibold text-gray-900">Загальний вибір</div>
+                                </div>
+                              )}
+                              
+                              {/* Категорії в форматі */}
+                              {Object.entries(categories).map(([category, categoryDishes]) => (
+                                <div key={category} className="ml-4 space-y-2">
+                                  {/* Заголовок категорії */}
+                                  <div className="border-l-4 border-[#FF5A00] pl-3">
+                                    <h5 className="font-semibold text-gray-800">{category}</h5>
+                                  </div>
+                                  
+                                  {/* Страви в категорії */}
+                                  <div className="ml-4 space-y-1 text-sm">
+                                    {categoryDishes.map((dish) => {
+                                      const qty = dishQuantities[dish.id] ?? 1;
+                                      const price = getDishPrice(dish);
+                                      return (
+                                        <div
+                                          key={dish.id}
+                                          className="flex items-center justify-between py-1"
+                                        >
+                                          <span className="text-gray-900">
+                                            {dish.name}{" "}
+                                            <span className="text-gray-500">
+                                              × {qty} порцій
+                                            </span>
+                                          </span>
+                                          <span className="text-gray-600">
+                                            {(price * qty).toFixed(2)} грн
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </div>
