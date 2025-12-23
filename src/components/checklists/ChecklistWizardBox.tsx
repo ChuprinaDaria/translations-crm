@@ -174,7 +174,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-amber-500 to-amber-600 px-4 md:px-8 py-3 md:py-4 lg:py-6 flex-shrink-0 shadow-lg">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-[#FF5A00] to-orange-500 px-4 md:px-8 py-3 md:py-4 lg:py-6 flex-shrink-0 shadow-lg">
         <div className="flex items-start sm:items-center justify-between text-white mb-3 md:mb-4 gap-3">
           <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
             <div className="w-10 h-10 md:w-14 md:h-14 bg-white/20 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
@@ -184,7 +184,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
               <h2 className="text-lg md:text-xl lg:text-2xl font-bold truncate">
                 {checklist ? "Редагування чекліста" : "Новий чекліст на доставку боксів"}
               </h2>
-              <p className="text-amber-100 text-xs md:text-sm">
+              <p className="text-orange-100 text-xs md:text-sm">
                 Крок {currentStep + 1} з {STEPS.length}
                 {lastAutoSaveTime && (
                   <span className="hidden md:inline ml-3 text-xs">
@@ -227,7 +227,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
                 onClick={() => handleTabClick(step.id)}
                 className={`flex items-center gap-1.5 md:gap-2.5 px-2 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl transition-all font-medium text-sm md:text-base ${
                   isActive
-                    ? "bg-amber-500 text-white shadow-lg scale-105"
+                    ? "bg-[#FF5A00] text-white shadow-lg scale-105"
                     : isCompleted
                     ? "bg-green-100 text-green-700 hover:bg-green-200"
                     : "bg-white text-gray-500 hover:bg-gray-100 border border-gray-200"
@@ -285,7 +285,7 @@ export function ChecklistWizardBox({ checklist, onSave, onCancel }: ChecklistWiz
             <Button
               size="lg"
               onClick={handleNext}
-              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-4 md:px-8 shadow-lg min-h-[44px] text-sm md:text-base"
+              className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white px-4 md:px-8 shadow-lg min-h-[44px] text-sm md:text-base"
             >
               Далі
               <ChevronRight className="w-4 h-4 md:w-5 md:h-5 ml-2" />
@@ -329,8 +329,8 @@ function StepContact({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <User className="w-5 h-5 text-amber-600" />
+        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+          <User className="w-5 h-5 text-orange-600" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Контактна інформація</h3>
@@ -394,8 +394,8 @@ function StepEvent({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <Calendar className="w-5 h-5 text-amber-600" />
+        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+          <Calendar className="w-5 h-5 text-orange-600" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Інформація про подію</h3>
@@ -491,8 +491,8 @@ function StepLocation({ formData, updateField, errors }: StepProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-          <MapPin className="w-5 h-5 text-amber-600" />
+        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+          <MapPin className="w-5 h-5 text-orange-600" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Локація доставки</h3>
@@ -536,10 +536,10 @@ function StepLocation({ formData, updateField, errors }: StepProps) {
           </div>
         </div>
         
-        <Card className="border-amber-200 bg-amber-50">
+      <Card className="border-orange-200 bg-orange-50">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <Truck className="w-5 h-5 text-amber-600 mt-0.5" />
+            <Truck className="w-5 h-5 text-orange-600 mt-0.5" />
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <Label className="text-base font-medium">Потрібен кур'єр / персонал?</Label>
@@ -582,8 +582,8 @@ function StepDetails({ formData, updateField, errors }: StepProps) {
       {/* Деталі замовлення */}
       <div>
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-            <FileText className="w-5 h-5 text-amber-600" />
+          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+            <FileText className="w-5 h-5 text-orange-600" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Деталі замовлення</h3>
@@ -592,10 +592,10 @@ function StepDetails({ formData, updateField, errors }: StepProps) {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <Card className="border-2 border-amber-200">
+          <Card className="border-2 border-orange-200">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <User className="w-5 h-5 text-amber-600" />
+                <User className="w-5 h-5 text-orange-600" />
                 Кількість гостей
               </CardTitle>
             </CardHeader>
@@ -652,8 +652,8 @@ function StepDetails({ formData, updateField, errors }: StepProps) {
               key={option.key}
               className={`flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
                 formData[option.key as keyof ChecklistCreate]
-                  ? "border-amber-500 bg-amber-50"
-                  : "border-gray-200 hover:border-amber-300"
+                  ? "border-orange-500 bg-orange-50"
+                  : "border-gray-200 hover:border-orange-300"
               }`}
             >
               <span className="text-3xl mb-2">{option.emoji}</span>
@@ -763,7 +763,7 @@ function StepDetails({ formData, updateField, errors }: StepProps) {
       </div>
 
       {/* Підсумок */}
-      <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+      <Card className="bg-gradient-to-br from-orange-50 to-red-50 border-orange-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Check className="w-5 h-5 text-green-600" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
+import React, { useMemo, useState, useEffect, ChangeEvent } from "react";
 import {
   itemsApi,
   categoriesApi,
@@ -60,6 +60,7 @@ export function MenuManagement() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [loading, setLoading] = useState(false);
+  const itemsById = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
 
   // Menus
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -150,10 +151,19 @@ export function MenuManagement() {
         menusApi.getMenus(),
       ]);
       
+      const itemsMap = new Map(itemsData.map((it) => [it.id, it] as const));
+      const menusWithItems = menusData.map((menu) => ({
+        ...menu,
+        items: (menu.items || []).map((mi) => ({
+          ...mi,
+          item: mi.item ?? itemsMap.get(mi.item_id),
+        })),
+      }));
+
       setItems(itemsData);
       setCategories(categoriesData);
       setSubcategories(subcategoriesData);
-      setMenus(menusData);
+      setMenus(menusWithItems);
       
       if (showToast) {
         toast.success("Дані завантажено");
@@ -1053,7 +1063,8 @@ export function MenuManagement() {
               {menus.map((menu) => {
                 const totalPositions = menu.items.length;
                 const totalPrice = menu.items.reduce((sum, mi) => {
-                  const price = mi.item?.price || 0;
+                  const item = mi.item ?? itemsById.get(mi.item_id);
+                  const price = item?.price || 0;
                   return sum + price * mi.quantity;
                 }, 0);
                 const peopleCount = menu.people_count && menu.people_count > 0 ? menu.people_count : undefined;
@@ -1150,11 +1161,12 @@ export function MenuManagement() {
                           {/* Mobile list (collapsed/expanded) */}
                           <ul className="sm:hidden space-y-2">
                             {mobileItems.map((mi) => {
-                              const linePrice = (mi.item?.price || 0) * mi.quantity;
+                              const item = mi.item ?? itemsById.get(mi.item_id);
+                              const linePrice = (item?.price || 0) * mi.quantity;
                               return (
                                 <li key={mi.id} className="flex justify-between items-center py-2">
                                   <span className="text-sm text-gray-700 flex-1 min-w-0">
-                                    • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                    • {item?.name || `Страва #${mi.item_id}`}{" "}
                                     <span className="text-gray-500">× {mi.quantity}</span>
                                   </span>
                                   <span className="text-sm font-medium text-gray-900 ml-4 shrink-0">
@@ -1187,11 +1199,12 @@ export function MenuManagement() {
                           {/* Desktop list */}
                           <ul className="hidden sm:block space-y-2">
                             {menu.items.map((mi) => {
-                              const linePrice = (mi.item?.price || 0) * mi.quantity;
+                              const item = mi.item ?? itemsById.get(mi.item_id);
+                              const linePrice = (item?.price || 0) * mi.quantity;
                               return (
                                 <li key={mi.id} className="flex justify-between items-center py-2">
                                   <span className="text-sm text-gray-700 flex-1 min-w-0">
-                                    • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                    • {item?.name || `Страва #${mi.item_id}`}{" "}
                                     <span className="text-gray-500">× {mi.quantity}</span>
                                   </span>
                                   <span className="text-sm font-medium text-gray-900 ml-4 shrink-0">
@@ -1486,7 +1499,7 @@ export function MenuManagement() {
                           Загальна вартість:{" "}
                           <span className="font-medium text-gray-900">
                             {menuForm.items.reduce((sum, mi) => {
-                              const item = items.find((it) => it.id === mi.item_id);
+                              const item = itemsById.get(mi.item_id);
                               return sum + (item?.price || 0) * mi.quantity;
                             }, 0).toFixed(2)} грн
                           </span>

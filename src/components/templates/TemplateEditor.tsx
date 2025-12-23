@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { X, Save, Palette, FileText, Settings, Image, Upload, Trash2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
