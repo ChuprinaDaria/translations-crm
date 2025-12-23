@@ -1035,9 +1035,10 @@ export function MenuManagement() {
 
           {/* Список меню */}
           {menus.length === 0 ? (
-            <Card>
-              <CardContent className="p-10 text-center text-sm text-gray-500 space-y-3">
-                <p>Ще немає жодного меню.</p>
+            <Card className="border border-gray-200 bg-white rounded-xl shadow-sm">
+              <CardContent className="p-10 text-center space-y-4">
+                <span className="text-6xl block mb-2">📝</span>
+                <p className="text-sm text-gray-500">Ще немає жодного меню.</p>
                 <Button
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
                   onClick={openCreateMenu}
@@ -1063,124 +1064,145 @@ export function MenuManagement() {
                 const mobileItems = isExpanded ? menu.items : menu.items.slice(0, mobilePreviewCount);
 
                 return (
-                  <Card key={menu.id} className="flex flex-col border-gray-200 bg-white shadow-sm">
-                    <CardContent className="p-5 flex-1 flex flex-col">
-                      {/* Title row */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg leading-none">🍽️</span>
-                            <h3 className="text-[20px] font-semibold text-[#1a1a1a] truncate">
+                  <Card key={menu.id} className="flex flex-col border border-gray-200 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-6 flex-1 flex flex-col">
+                      {/* Шапка картки */}
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+                            <span className="text-lg">🍽️</span>
+                            <span className="truncate">
                               Меню: {menu.name?.trim() ? menu.name : "Без назви"}
-                            </h3>
-                          </div>
-                          <p className="text-sm font-normal text-[#6b7280] mt-1">
+                            </span>
+                          </h3>
+                          <p className="text-sm text-gray-500 leading-relaxed">
                             {menu.description?.trim()
                               ? menu.description
                               : `Формат: ${menu.event_format || "—"} • Гостей: ${menu.people_count ?? "—"}`}
                           </p>
                         </div>
-
-                        <div className="flex gap-2 shrink-0">
-                          <Button variant="outline" size="icon" onClick={() => openEditMenu(menu)}>
+                        <div className="flex gap-2 shrink-0 ml-4">
+                          <Button 
+                            variant="outline" 
+                            size="icon"
+                            className="w-9 h-9 hover:bg-gray-100 rounded-lg transition-colors"
+                            onClick={() => openEditMenu(menu)}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteMenu(menu)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="w-9 h-9 hover:bg-red-50 rounded-lg transition-colors text-red-500 hover:text-red-600"
+                            onClick={() => handleDeleteMenu(menu)}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
 
-                      <div className="mt-4 border-t border-[#e5e7eb]" />
+                      {/* Розділювач */}
+                      <div className="border-t border-gray-200 my-4" />
 
-                      {/* Stats */}
-                      <div className="mt-4 rounded-lg bg-[#f9fafb] p-3 text-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
+                      {/* Статистика */}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 p-3 bg-gray-50 rounded-lg mb-4">
                         <div className="flex items-center gap-2">
-                          <span>💰</span>
-                          <span className="text-[#059669] font-semibold">
+                          <span className="text-lg">💰</span>
+                          <span className="text-sm font-medium text-gray-700">
                             ~{formatUAH(totalPrice)} грн
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-[#374151]">
-                          <span>📦</span>
-                          <span>{totalPositions} страв</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">📦</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            {totalPositions} страв
+                          </span>
                         </div>
                         {perGuest !== undefined && (
-                          <div className="flex items-center gap-2 text-[#374151]">
-                            <span>👤</span>
-                            <span>{formatUAH(perGuest)} грн/гість</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">👤</span>
+                            <span className="text-sm font-medium text-gray-700">
+                              {formatUAH(perGuest)} грн/гість
+                            </span>
                           </div>
                         )}
                       </div>
 
-                      {/* Items */}
-                      <div className="mt-4 pt-4 border-t border-[#e5e7eb]">
-                        {menu.items.length === 0 ? (
-                          <div className="space-y-3">
-                            <div className="text-sm text-[#6b7280] flex items-center gap-2">
-                              <span>⚠️</span>
-                              <span>Додайте страви до меню</span>
+                      {/* Розділювач */}
+                      <div className="border-t border-gray-200 my-4" />
+
+                      {/* Список страв або empty state */}
+                      {menu.items.length === 0 ? (
+                        <div className="text-center py-8 px-4">
+                          <span className="text-5xl block mb-3">⚠️</span>
+                          <p className="text-sm text-gray-500 mb-4">Додайте страви до меню</p>
+                          <Button 
+                            variant="outline"
+                            className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white border-[#FF5A00]"
+                            onClick={() => openEditMenu(menu)}
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Додати страви
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Mobile list (collapsed/expanded) */}
+                          <ul className="sm:hidden space-y-2">
+                            {mobileItems.map((mi) => {
+                              const linePrice = (mi.item?.price || 0) * mi.quantity;
+                              return (
+                                <li key={mi.id} className="flex justify-between items-center py-2">
+                                  <span className="text-sm text-gray-700 flex-1 min-w-0">
+                                    • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                    <span className="text-gray-500">× {mi.quantity}</span>
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-900 ml-4 shrink-0">
+                                    {formatUAH(linePrice)} грн
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+
+                          {hasMoreMobile && (
+                            <div className="sm:hidden mt-3">
+                              <Button
+                                variant="ghost"
+                                className="px-0 text-[#FF5A00] hover:text-[#FF5A00]/90"
+                                onClick={() =>
+                                  setExpandedMenuIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(menu.id)) next.delete(menu.id);
+                                    else next.add(menu.id);
+                                    return next;
+                                  })
+                                }
+                              >
+                                {isExpanded ? `Приховати` : `Показати всі ${menu.items.length} ↓`}
+                              </Button>
                             </div>
-                            <Button variant="outline" className="w-fit" onClick={() => openEditMenu(menu)}>
-                              <Plus className="mr-2 h-4 w-4" />
-                              Додати страви
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            {/* Mobile list (collapsed/expanded) */}
-                            <ul className="sm:hidden space-y-2">
-                              {mobileItems.map((mi) => {
-                                const linePrice = (mi.item?.price || 0) * mi.quantity;
-                                return (
-                                  <li key={mi.id} className="text-sm text-[#374151] flex items-start justify-between gap-3">
-                                    <span className="min-w-0">
-                                      • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
-                                      <span className="text-[#6b7280]">× {mi.quantity}</span>
-                                    </span>
-                                    <span className="shrink-0 text-[#374151]">({formatUAH(linePrice)} грн)</span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
+                          )}
 
-                            {hasMoreMobile && (
-                              <div className="sm:hidden mt-3">
-                                <Button
-                                  variant="ghost"
-                                  className="px-0 text-[#FF5A00] hover:text-[#FF5A00]/90"
-                                  onClick={() =>
-                                    setExpandedMenuIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(menu.id)) next.delete(menu.id);
-                                      else next.add(menu.id);
-                                      return next;
-                                    })
-                                  }
-                                >
-                                  {isExpanded ? `Приховати` : `Показати всі ${menu.items.length} ↓`}
-                                </Button>
-                              </div>
-                            )}
-
-                            {/* Desktop list */}
-                            <ul className="hidden sm:block space-y-2">
-                              {menu.items.map((mi) => {
-                                const linePrice = (mi.item?.price || 0) * mi.quantity;
-                                return (
-                                  <li key={mi.id} className="text-sm text-[#374151] flex items-start justify-between gap-4">
-                                    <span className="min-w-0">
-                                      • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
-                                      <span className="text-[#6b7280]">× {mi.quantity}</span>
-                                    </span>
-                                    <span className="shrink-0 text-[#374151]">({formatUAH(linePrice)} грн)</span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </>
-                        )}
-                      </div>
+                          {/* Desktop list */}
+                          <ul className="hidden sm:block space-y-2">
+                            {menu.items.map((mi) => {
+                              const linePrice = (mi.item?.price || 0) * mi.quantity;
+                              return (
+                                <li key={mi.id} className="flex justify-between items-center py-2">
+                                  <span className="text-sm text-gray-700 flex-1 min-w-0">
+                                    • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                    <span className="text-gray-500">× {mi.quantity}</span>
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-900 ml-4 shrink-0">
+                                    {formatUAH(linePrice)} грн
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
