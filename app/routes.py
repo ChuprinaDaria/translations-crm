@@ -1649,7 +1649,11 @@ def update_kp(
     user = Depends(get_current_user)
 ):
     """Оновити існуючий КП"""
-    kp = crud.update_kp(db, kp_id, kp_in)
+    try:
+        kp = crud.update_kp(db, kp_id, kp_in)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
     if not kp:
         raise HTTPException(status_code=404, detail="KP not found")
     
@@ -2447,13 +2451,13 @@ def update_smtp_settings(
     Оновлює SMTP налаштування, які використовуються при відправці КП.
     """
     try:
-        # Нормалізуємо значення (замінюємо None на порожній рядок)
-        host = host if host is not None else ""
-        port = port if port is not None else ""
-        user = user if user is not None else ""
-        password = password if password is not None else ""
-        from_email = from_email if from_email is not None else ""
-        from_name = from_name if from_name is not None else ""
+        # Нормалізуємо значення (замінюємо None на порожній рядок та прибираємо зайві пробіли)
+        host = (host if host is not None else "").strip()
+        port = (port if port is not None else "").strip()
+        user = (user if user is not None else "").strip()
+        password = (password if password is not None else "").strip()
+        from_email = (from_email if from_email is not None else "").strip()
+        from_name = (from_name if from_name is not None else "").strip()
         
         crud.set_setting(db, "smtp_host", host)
         crud.set_setting(db, "smtp_port", port)

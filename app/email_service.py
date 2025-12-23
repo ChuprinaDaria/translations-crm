@@ -1,6 +1,7 @@
 # Email service для відправки КП
 
 import smtplib
+import socket
 import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -23,12 +24,12 @@ def _load_smtp_config() -> dict:
   finally:
       db.close()
 
-  host = settings.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
-  port_str = settings.get("smtp_port") or os.getenv("SMTP_PORT", "587")
-  user = settings.get("smtp_user") or os.getenv("SMTP_USER", "")
-  password = settings.get("smtp_password") or os.getenv("SMTP_PASSWORD", "")
-  from_email = settings.get("smtp_from_email") or os.getenv("SMTP_FROM_EMAIL", user)
-  from_name = settings.get("smtp_from_name") or os.getenv("SMTP_FROM_NAME", "BOX Catering")
+  host = (settings.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com")).strip()
+  port_str = (settings.get("smtp_port") or os.getenv("SMTP_PORT", "587")).strip()
+  user = (settings.get("smtp_user") or os.getenv("SMTP_USER", "")).strip()
+  password = (settings.get("smtp_password") or os.getenv("SMTP_PASSWORD", "")).strip()
+  from_email = (settings.get("smtp_from_email") or os.getenv("SMTP_FROM_EMAIL", user) or user).strip()
+  from_name = (settings.get("smtp_from_name") or os.getenv("SMTP_FROM_NAME", "BOX Catering")).strip()
 
   try:
       port = int(port_str)
@@ -75,11 +76,14 @@ def send_kp_email(
     if not user or not password:
         raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
     
+    if not host:
+        raise ValueError("SMTP host is empty. Please configure SMTP settings.")
+    
     # Діагностика: виводимо налаштування (без пароля)
     print(f"Attempting to send KP email via SMTP:")
-    print(f"  Host: {host}")
+    print(f"  Host: '{host}' (length: {len(host)})")
     print(f"  Port: {port}")
-    print(f"  User: {user}")
+    print(f"  User: '{user}'")
     print(f"  From: {from_email} ({from_name})")
     print(f"  To: {to_email}")
     print(f"  Subject: Комерційна пропозиція: {kp_title}")
@@ -126,31 +130,28 @@ def send_kp_email(
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
         # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
-        if port == 465:
-            print(f"Using SSL connection (port 465)...")
-            server = smtplib.SMTP_SSL(host, port, timeout=10)
-        else:
-            server = smtplib.SMTP(host, port, timeout=10)
-            print(f"Starting TLS...")
-            server.starttls()
-        print(f"Logging in as {user}...")
-        server.login(user, password)
-        print(f"Sending message...")
-        server.send_message(msg)
-        server.quit()
-        print(f"Email sent successfully!")
-        
-        return True
-    except smtplib.SMTPException as e:
-        error_msg = f"SMTP error: {e}"
-        print(f"Error sending email: {error_msg}")
-        raise Exception(f"Помилка SMTP: {e}")
-    except OSError as e:
-        error_msg = f"Connection error: {e}"
-        print(f"Error sending email: {error_msg}")
-        print(f"  Host: {host}, Port: {port}")
-        print(f"  This usually means the hostname cannot be resolved or the server is unreachable.")
-        raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі.")
+        try:
+            if port == 465:
+                print(f"Using SSL connection (port 465)...")
+                server = smtplib.SMTP_SSL(host, port, timeout=30)
+            else:
+                server = smtplib.SMTP(host, port, timeout=30)
+                print(f"Starting TLS...")
+                server.starttls()
+            print(f"Logging in as {user}...")
+            server.login(user, password)
+            print(f"Sending message...")
+            server.send_message(msg)
+            server.quit()
+            print(f"Email sent successfully!")
+            
+            return True
+        except (OSError, socket.gaierror) as conn_error:
+            # Якщо не вдалося підключитися через DNS, спробуємо використати IP
+            error_msg = f"Connection error: {conn_error}"
+            print(f"Error connecting to {host}:{port}: {error_msg}")
+            print(f"  This might be a DNS resolution issue. If you know the IP address, try using it instead.")
+            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, перевірте налаштування мережі.")
     except Exception as e:
         error_msg = f"Unexpected error: {e}"
         print(f"Error sending email: {error_msg}")
@@ -182,11 +183,15 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
     try:
         # Діагностика: виводимо налаштування (без пароля)
         print(f"Attempting to send email via SMTP:")
-        print(f"  Host: {host}")
+        print(f"  Host: '{host}' (length: {len(host)})")
         print(f"  Port: {port}")
-        print(f"  User: {user}")
+        print(f"  User: '{user}'")
         print(f"  From: {from_email} ({from_name})")
         print(f"  To: {to_email}")
+        
+        # Перевірка на порожній host
+        if not host:
+            raise ValueError("SMTP host is empty. Please configure SMTP settings.")
         
         # Створюємо повідомлення
         msg = MIMEMultipart()
@@ -218,31 +223,28 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
         # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
-        if port == 465:
-            print(f"Using SSL connection (port 465)...")
-            server = smtplib.SMTP_SSL(host, port, timeout=10)
-        else:
-            server = smtplib.SMTP(host, port, timeout=10)
-            print(f"Starting TLS...")
-            server.starttls()
-        print(f"Logging in as {user}...")
-        server.login(user, password)
-        print(f"Sending message...")
-        server.send_message(msg)
-        server.quit()
-        print(f"Email sent successfully!")
-        
-        return True
-    except smtplib.SMTPException as e:
-        error_msg = f"SMTP error: {e}"
-        print(f"Error sending password reset email: {error_msg}")
-        raise Exception(f"Помилка SMTP: {e}")
-    except OSError as e:
-        error_msg = f"Connection error: {e}"
-        print(f"Error sending password reset email: {error_msg}")
-        print(f"  Host: {host}, Port: {port}")
-        print(f"  This usually means the hostname cannot be resolved or the server is unreachable.")
-        raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі.")
+        try:
+            if port == 465:
+                print(f"Using SSL connection (port 465)...")
+                server = smtplib.SMTP_SSL(host, port, timeout=30)
+            else:
+                server = smtplib.SMTP(host, port, timeout=30)
+                print(f"Starting TLS...")
+                server.starttls()
+            print(f"Logging in as {user}...")
+            server.login(user, password)
+            print(f"Sending message...")
+            server.send_message(msg)
+            server.quit()
+            print(f"Email sent successfully!")
+            
+            return True
+        except (OSError, socket.gaierror) as conn_error:
+            # Якщо не вдалося підключитися через DNS, спробуємо використати IP
+            error_msg = f"Connection error: {conn_error}"
+            print(f"Error connecting to {host}:{port}: {error_msg}")
+            print(f"  This might be a DNS resolution issue. If you know the IP address, try using it instead.")
+            raise Exception(f"Помилка підключення до SMTP сервера {host}:{port}. Перевірте правильність адреси сервера та доступність мережі. Якщо використовуєте Docker, перевірте налаштування мережі.")
     except Exception as e:
         error_msg = f"Unexpected error: {e}"
         print(f"Error sending password reset email: {error_msg}")

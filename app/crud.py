@@ -572,18 +572,35 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
         kp.weight_per_person = kp_in.weight_per_person
     
     db.commit()
-    db.refresh(kp)
     
     # Автоматично оновлюємо клієнта з даними про знижки та кешбек
+    # ВАЖЛИВО: upsert_client_from_kp викликає db.commit(), тому потрібно перезавантажити KP
     upsert_client_from_kp(db, kp)
     
-    # eager load items+item for immediate use
-    return (
+    # Перезавантажуємо KP з усіма необхідними зв'язками після commit в upsert_client_from_kp
+    updated_kp = (
         db.query(models.KP)
-        .options(selectinload(models.KP.items).selectinload(models.KPItem.item))
-        .filter(models.KP.id == kp.id)
+        .options(
+            selectinload(models.KP.items)
+                .selectinload(models.KPItem.item)
+                .selectinload(models.Item.subcategory)
+                .selectinload(models.Subcategory.category),
+            selectinload(models.KP.items).selectinload(models.KPItem.event_format),
+            selectinload(models.KP.event_formats),
+            selectinload(models.KP.created_by),
+            selectinload(models.KP.client),
+        )
+        .filter(models.KP.id == kp_id)
         .first()
     )
+    
+    if not updated_kp:
+        # Якщо не знайдено, спробуємо знайти без eager loading
+        updated_kp = db.query(models.KP).filter(models.KP.id == kp_id).first()
+        if not updated_kp:
+            raise ValueError(f"KP {kp_id} not found after update")
+    
+    return updated_kp
 
 
 def get_all_kps(db: Session):
