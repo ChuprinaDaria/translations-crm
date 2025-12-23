@@ -660,7 +660,11 @@ export const itemsApi = {
     }
     if (data.active !== undefined) formData.append('active', data.active.toString());
     if (data.photo) formData.append('photo', data.photo);
-    if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
+    // Передаємо photo_url тільки якщо він явно вказаний (не undefined)
+    // Якщо photo_url === undefined, не передаємо його взагалі, щоб залишити старе фото без змін
+    if (data.photo_url !== undefined) {
+      formData.append('photo_url', data.photo_url || '');
+    }
     
     console.log(`[API] PUT /items/${itemId}`, {
       name: data.name,

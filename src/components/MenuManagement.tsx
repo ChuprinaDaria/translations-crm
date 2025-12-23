@@ -283,9 +283,15 @@ export function MenuManagement() {
     
     setLoading(true);
     try {
+      // Якщо фото не змінюється (немає нового файлу і photo_url не змінився), не передаємо photo_url
+      const originalPhotoUrl = editingItem.photo_url || "";
+      const photoUrlChanged = itemFormData.photo_url !== originalPhotoUrl;
+      
       const payload: ItemCreate = {
         ...itemFormData,
         photo: itemPhotoFile || undefined,
+        // Передаємо photo_url тільки якщо він змінився або є новий файл
+        photo_url: (itemPhotoFile || photoUrlChanged) ? itemFormData.photo_url : undefined,
       };
       
       console.log("Оновлення страви:", editingItem.id, payload);
@@ -1557,8 +1563,8 @@ export function MenuManagement() {
                   <div className="flex-1 space-y-2">
                     <Input
                       id="photo_url"
-                      type="url"
-                      placeholder="https://example.com/photo.jpg"
+                      type="text"
+                      placeholder="URL фото або шлях (наприклад: uploads/photos/photo.jpg)"
                       value={itemFormData.photo_url}
                       onChange={(e) =>
                         setItemFormData({
