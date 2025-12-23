@@ -157,7 +157,7 @@ function App() {
       ],
       "menu-dishes": [
         { label: "КП", href: "#" },
-        { label: "Меню / Страви" },
+        { label: "Меню та страви" },
       ],
       "kp-templates": [
         { label: "КП", href: "#" },

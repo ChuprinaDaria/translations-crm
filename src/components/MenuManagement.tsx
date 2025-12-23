@@ -65,6 +65,7 @@ export function MenuManagement() {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null);
   const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
+  const [expandedMenuIds, setExpandedMenuIds] = useState<Set<number>>(new Set());
   const [menuForm, setMenuForm] = useState<{
     name: string;
     description: string;
@@ -619,6 +620,12 @@ export function MenuManagement() {
     try {
       await menusApi.deleteMenu(menu.id);
       setMenus((prev) => prev.filter((m) => m.id !== menu.id));
+      setExpandedMenuIds((prev) => {
+        if (!prev.has(menu.id)) return prev;
+        const next = new Set(prev);
+        next.delete(menu.id);
+        return next;
+      });
       if (selectedMenu?.id === menu.id) {
         resetMenuForm();
         setIsMenuFormOpen(false);
@@ -631,12 +638,18 @@ export function MenuManagement() {
     }
   };
 
+  const formatUAH = (value: number) =>
+    new Intl.NumberFormat("uk-UA", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number.isFinite(value) ? value : 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl text-gray-900">Меню / Страви</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Меню та страви</h1>
           <p className="text-gray-500">Управління стравами та їх категоріями</p>
         </div>
         <Button
@@ -650,18 +663,27 @@ export function MenuManagement() {
 
       {/* Tabs */}
       <Tabs defaultValue="items" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="items">
+        <TabsList className="w-full justify-start bg-transparent border-b border-gray-200 rounded-none p-0 h-auto">
+          <TabsTrigger
+            value="items"
+            className="rounded-none bg-transparent border-b-[3px] border-transparent data-[state=active]:border-[#FF5A00] data-[state=active]:text-[#FF5A00] data-[state=active]:bg-transparent px-4 py-3 font-semibold"
+          >
             <ChefHat className="mr-2 h-4 w-4" />
             Страви
           </TabsTrigger>
-          <TabsTrigger value="categories">
+          <TabsTrigger
+            value="categories"
+            className="rounded-none bg-transparent border-b-[3px] border-transparent data-[state=active]:border-[#FF5A00] data-[state=active]:text-[#FF5A00] data-[state=active]:bg-transparent px-4 py-3 font-semibold"
+          >
             <FolderOpen className="mr-2 h-4 w-4" />
             Категорії
           </TabsTrigger>
-          <TabsTrigger value="menus">
+          <TabsTrigger
+            value="menus"
+            className="rounded-none bg-transparent border-b-[3px] border-transparent data-[state=active]:border-[#FF5A00] data-[state=active]:text-[#FF5A00] data-[state=active]:bg-transparent px-4 py-3 font-semibold"
+          >
             <ListChecks className="mr-2 h-4 w-4" />
-            Формувати меню
+            Готові меню
           </TabsTrigger>
         </TabsList>
 
@@ -995,19 +1017,19 @@ export function MenuManagement() {
 
         {/* TAB 3: MENUS – конструктор меню */}
         <TabsContent value="menus" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl text-gray-900">Готові меню</h2>
-              <p className="text-gray-500 text-sm">
-                Створюйте типові набори страв (наприклад, «Фуршет 55 осіб»), щоб швидше формувати КП.
+          <div className="rounded-xl border border-gray-200 bg-white p-5 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl leading-none">💡</span>
+                <h2 className="text-xl font-semibold text-gray-900">Готові меню</h2>
+              </div>
+              <p className="text-gray-500 text-sm mt-1">
+                Збережіть часто використовувані набори страв, щоб швидше формувати КП.
               </p>
             </div>
-            <Button
-              className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-              onClick={openCreateMenu}
-            >
+            <Button className="bg-[#FF5A00] hover:bg-[#FF5A00]/90 shrink-0" onClick={openCreateMenu}>
               <Plus className="mr-2 h-4 w-4" />
-              Додати меню
+              Створити готове меню
             </Button>
           </div>
 
@@ -1033,68 +1055,132 @@ export function MenuManagement() {
                   const price = mi.item?.price || 0;
                   return sum + price * mi.quantity;
                 }, 0);
+                const peopleCount = menu.people_count && menu.people_count > 0 ? menu.people_count : undefined;
+                const perGuest = peopleCount ? totalPrice / peopleCount : undefined;
+                const isExpanded = expandedMenuIds.has(menu.id);
+                const mobilePreviewCount = 3;
+                const hasMoreMobile = menu.items.length > mobilePreviewCount;
+                const mobileItems = isExpanded ? menu.items : menu.items.slice(0, mobilePreviewCount);
 
                 return (
-                  <Card key={menu.id} className="flex flex-col">
-                    <CardContent className="p-5 flex-1 flex flex-col space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {menu.name}
-                          </h3>
-                          <p className="text-xs text-gray-500">
-                            Формат: {menu.event_format || "—"} • Гостей:{" "}
-                            {menu.people_count ?? "—"}
+                  <Card key={menu.id} className="flex flex-col border-gray-200 bg-white shadow-sm">
+                    <CardContent className="p-5 flex-1 flex flex-col">
+                      {/* Title row */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg leading-none">🍽️</span>
+                            <h3 className="text-[20px] font-semibold text-[#1a1a1a] truncate">
+                              Меню: {menu.name?.trim() ? menu.name : "Без назви"}
+                            </h3>
+                          </div>
+                          <p className="text-sm font-normal text-[#6b7280] mt-1">
+                            {menu.description?.trim()
+                              ? menu.description
+                              : `Формат: ${menu.event_format || "—"} • Гостей: ${menu.people_count ?? "—"}`}
                           </p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => openEditMenu(menu)}
-                          >
+
+                        <div className="flex gap-2 shrink-0">
+                          <Button variant="outline" size="icon" onClick={() => openEditMenu(menu)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteMenu(menu)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteMenu(menu)}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </div>
                       </div>
 
-                      {menu.description && (
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {menu.description}
-                        </p>
-                      )}
+                      <div className="mt-4 border-t border-[#e5e7eb]" />
 
-                      <div className="text-xs text-gray-500">
-                        Позицій: {totalPositions} • Орієнтовна сума:{" "}
-                        <span className="font-medium text-gray-900">
-                          {totalPrice} грн
-                        </span>
+                      {/* Stats */}
+                      <div className="mt-4 rounded-lg bg-[#f9fafb] p-3 text-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
+                        <div className="flex items-center gap-2">
+                          <span>💰</span>
+                          <span className="text-[#059669] font-semibold">
+                            ~{formatUAH(totalPrice)} грн
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[#374151]">
+                          <span>📦</span>
+                          <span>{totalPositions} страв</span>
+                        </div>
+                        {perGuest !== undefined && (
+                          <div className="flex items-center gap-2 text-[#374151]">
+                            <span>👤</span>
+                            <span>{formatUAH(perGuest)} грн/гість</span>
+                          </div>
+                        )}
                       </div>
 
-                      {menu.items.length > 0 && (
-                        <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-3 max-h-40 overflow-y-auto">
-                          <ul className="text-xs space-y-1">
-                            {menu.items.map((mi) => (
-                              <li key={mi.id} className="flex justify-between">
-                                <span className="truncate max-w-[60%]">
-                                  {mi.item?.name || `Страва #${mi.item_id}`}
-                                </span>
-                                <span className="text-gray-600">
-                                  × {mi.quantity} •{" "}
-                                  {(mi.item?.price || 0) * mi.quantity} грн
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      {/* Items */}
+                      <div className="mt-4 pt-4 border-t border-[#e5e7eb]">
+                        {menu.items.length === 0 ? (
+                          <div className="space-y-3">
+                            <div className="text-sm text-[#6b7280] flex items-center gap-2">
+                              <span>⚠️</span>
+                              <span>Додайте страви до меню</span>
+                            </div>
+                            <Button variant="outline" className="w-fit" onClick={() => openEditMenu(menu)}>
+                              <Plus className="mr-2 h-4 w-4" />
+                              Додати страви
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Mobile list (collapsed/expanded) */}
+                            <ul className="sm:hidden space-y-2">
+                              {mobileItems.map((mi) => {
+                                const linePrice = (mi.item?.price || 0) * mi.quantity;
+                                return (
+                                  <li key={mi.id} className="text-sm text-[#374151] flex items-start justify-between gap-3">
+                                    <span className="min-w-0">
+                                      • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                      <span className="text-[#6b7280]">× {mi.quantity}</span>
+                                    </span>
+                                    <span className="shrink-0 text-[#374151]">({formatUAH(linePrice)} грн)</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+
+                            {hasMoreMobile && (
+                              <div className="sm:hidden mt-3">
+                                <Button
+                                  variant="ghost"
+                                  className="px-0 text-[#FF5A00] hover:text-[#FF5A00]/90"
+                                  onClick={() =>
+                                    setExpandedMenuIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(menu.id)) next.delete(menu.id);
+                                      else next.add(menu.id);
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  {isExpanded ? `Приховати` : `Показати всі ${menu.items.length} ↓`}
+                                </Button>
+                              </div>
+                            )}
+
+                            {/* Desktop list */}
+                            <ul className="hidden sm:block space-y-2">
+                              {menu.items.map((mi) => {
+                                const linePrice = (mi.item?.price || 0) * mi.quantity;
+                                return (
+                                  <li key={mi.id} className="text-sm text-[#374151] flex items-start justify-between gap-4">
+                                    <span className="min-w-0">
+                                      • {mi.item?.name || `Страва #${mi.item_id}`}{" "}
+                                      <span className="text-[#6b7280]">× {mi.quantity}</span>
+                                    </span>
+                                    <span className="shrink-0 text-[#374151]">({formatUAH(linePrice)} грн)</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 );

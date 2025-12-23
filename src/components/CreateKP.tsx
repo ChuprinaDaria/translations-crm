@@ -256,6 +256,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
+  const [isApplyingMenu, setIsApplyingMenu] = useState(false);
   const [clientName, setClientName] = useState("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -1543,44 +1544,81 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       : 0;
   const totalPrice = foodTotalPrice + equipmentTotal + serviceTotal;
 
-  const handleApplyMenu = () => {
-    if (!selectedMenuId) return;
-    const menuIdNum = parseInt(selectedMenuId, 10);
-    const menu = menus.find((m) => m.id === menuIdNum);
-    if (!menu) {
-      toast.error("Меню не знайдено");
-      return;
+  const handleApplyMenu = async (menuIdOverride?: string) => {
+    const menuIdRaw = menuIdOverride ?? selectedMenuId;
+    if (!menuIdRaw) return;
+
+    const menuIdNum = parseInt(menuIdRaw, 10);
+    if (!Number.isFinite(menuIdNum)) return;
+
+    // Захист від випадкової втрати вже обраних страв
+    const hasAnySelected =
+      selectedDishes.length > 0 ||
+      Object.keys(dishQuantities).length > 0 ||
+      eventFormats.some((f) => f.selectedDishes.length > 0);
+    if (hasAnySelected) {
+      const ok = window.confirm(
+        "Застосування готового меню замінить поточний список страв та їх кількості. Продовжити?"
+      );
+      if (!ok) return;
     }
 
-    if (!menu.items || menu.items.length === 0) {
-      toast.error("У цьому меню немає страв");
-      return;
-    }
+    try {
+      setIsApplyingMenu(true);
+      const menu = await menusApi.getMenu(menuIdNum);
 
-    // Додаємо/оновлюємо кількість порцій за меню
-    setDishQuantities((prev) => {
-      const updated = { ...prev };
+      if (!menu) {
+        toast.error("Меню не знайдено");
+        return;
+      }
+      if (!menu.items || menu.items.length === 0) {
+        toast.error("У цьому меню немає страв");
+        return;
+      }
+
+      // 1) Формат + гості
+      setEventFormat(menu.event_format || "");
+      setGuestCount(menu.people_count?.toString() || "");
+
+      // 2) Страви + кількості (ПЕРЕЗАПИСУЄМО, не додаємо)
+      const nextDishQuantities: Record<number, number> = {};
+      const nextSelectedDishIds: number[] = [];
+
       menu.items.forEach((mi) => {
-        // Переконуємось, що ця страва доступна серед активних страв
         const exists = dishes.some((d) => d.id === mi.item_id);
         if (!exists) return;
-        updated[mi.item_id] = (updated[mi.item_id] ?? 0) + mi.quantity;
+        nextDishQuantities[mi.item_id] = (nextDishQuantities[mi.item_id] || 0) + (mi.quantity || 0);
       });
-      return updated;
-    });
 
-    // Додаємо страви з меню до обраних
-    setSelectedDishes((prev) => {
-      const ids = new Set(prev);
-      menu.items.forEach((mi) => {
-        if (dishes.some((d) => d.id === mi.item_id)) {
-          ids.add(mi.item_id);
-        }
+      Object.keys(nextDishQuantities).forEach((dishId) => {
+        const idNum = parseInt(dishId, 10);
+        if (Number.isFinite(idNum)) nextSelectedDishIds.push(idNum);
       });
-      return Array.from(ids);
-    });
 
-    toast.success(`Меню "${menu.name}" додано до списку страв`);
+      setDishQuantities(nextDishQuantities);
+      setSelectedDishes(nextSelectedDishIds);
+
+      // 3) Категорії (фільтр) — підсвічуємо тільки категорії, які є в меню
+      const menuCategories = Array.from(
+        new Set(
+          nextSelectedDishIds
+            .map((id) => dishes.find((d) => d.id === id)?.category)
+            .filter(Boolean) as string[]
+        )
+      );
+      setSelectedTags(menuCategories);
+
+      // 4) Скидаємо прив'язки до форматів, щоб меню гарантовано попало в payload (як загальний вибір)
+      setActiveFormatId(null);
+      setEventFormats((prev) => prev.map((f) => ({ ...f, selectedDishes: [] })));
+
+      toast.success("Готове меню застосовано до КП");
+    } catch (error: any) {
+      console.error("Error applying menu:", error);
+      toast.error(error?.data?.detail || "Не вдалося застосувати меню");
+    } finally {
+      setIsApplyingMenu(false);
+    }
   };
 
   const handleAdditionalItemChange = (
@@ -3285,7 +3323,13 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             id="ready-menu"
                             className="w-full border rounded-md px-3 py-2 text-sm bg-white"
                             value={selectedMenuId}
-                            onChange={(e) => setSelectedMenuId(e.target.value)}
+                            onChange={async (e) => {
+                              const nextId = e.target.value;
+                              setSelectedMenuId(nextId);
+                              if (nextId) {
+                                await handleApplyMenu(nextId);
+                              }
+                            }}
                           >
                             <option value="">Оберіть меню</option>
                             {menus.map((menu) => (
@@ -3306,11 +3350,11 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         <Button
                           type="button"
                           className="w-full md:w-auto bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                          disabled={!selectedMenuId}
-                          onClick={handleApplyMenu}
+                          disabled={!selectedMenuId || isApplyingMenu}
+                          onClick={() => handleApplyMenu()}
                         >
                           <Plus className="w-4 h-4 mr-2" />
-                          Додати меню
+                          {isApplyingMenu ? "Застосовую..." : "Застосувати меню"}
                         </Button>
                       </div>
                     </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu } from "lucide-react";
+import { Home, Menu } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -37,20 +37,22 @@ export function Header({
           )}
           
           <Breadcrumb className="hidden sm:block">
-            <BreadcrumbList>
+            <BreadcrumbList className="gap-2">
               {breadcrumbs.map((crumb, index) => (
                 <div key={index} className="flex items-center">
-                  {index > 0 && <BreadcrumbSeparator />}
+                  {index > 0 && <BreadcrumbSeparator className="text-gray-300" />}
                   <BreadcrumbItem>
                     {index === breadcrumbs.length - 1 ? (
-                      <BreadcrumbPage className="font-semibold text-gray-900 truncate max-w-[150px] md:max-w-none">
+                      <BreadcrumbPage className="font-semibold text-gray-900 truncate max-w-[180px] md:max-w-none flex items-center gap-2">
+                        {index === 0 && <Home className="w-4 h-4 text-gray-500" />}
                         {crumb.label}
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink
                         href={crumb.href || "#"}
-                        className="text-gray-500 hover:text-gray-700 truncate max-w-[100px]"
+                        className="text-gray-500 hover:text-gray-700 truncate max-w-[140px] px-2 py-1 rounded-md hover:bg-gray-100 flex items-center gap-2"
                       >
+                        {index === 0 && <Home className="w-4 h-4 text-gray-400" />}
                         {crumb.label}
                       </BreadcrumbLink>
                     )}
