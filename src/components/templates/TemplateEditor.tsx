@@ -7,7 +7,6 @@ import { Textarea } from "../ui/textarea";
 import { ColorPicker } from "./ColorPicker";
 import { ImageUploader } from "./ImageUploader";
 import { TemplatePreview } from "./TemplatePreview";
-import { DraggableSectionList } from "./DraggableSectionList";
 import { toast } from "sonner";
 import { templatesApi, getImageUrl, tokenManager, type Template as ApiTemplate } from "../../lib/api";
 
@@ -527,16 +526,6 @@ function ContentTab({
         <h3 className="text-sm font-semibold mb-3">Заголовки</h3>
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium block mb-1">Заголовок секції меню</label>
-            <Input
-              type="text"
-              value={design.menu_title}
-              onChange={(e) => setDesign({ ...design, menu_title: e.target.value })}
-              placeholder="Меню"
-            />
-          </div>
-
-          <div>
             <label className="text-xs font-medium block mb-1">Заголовок підсумку</label>
             <Input
               type="text"
@@ -546,19 +535,11 @@ function ContentTab({
             />
           </div>
         </div>
-      </div>
-
-      {/* Секції меню */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">Секції меню</h3>
-        <p className="text-xs text-gray-500 mb-3">
-          Страви будуть згруповані за цими категоріями в PDF
+        <p className="text-xs text-gray-500 mt-3">
+          <strong>Примітка:</strong> Заголовки секцій меню та категорії страв автоматично формуються з даних КП:
+          <br />• Заголовки секцій = назви форматів заходу (Фуршет, Кава-пауза тощо)
+          <br />• Категорії страв = категорії зі страв, доданих до КП
         </p>
-
-        <DraggableSectionList
-          sections={design.menu_sections}
-          onChange={(newSections) => setDesign({ ...design, menu_sections: newSections })}
-        />
       </div>
 
       {/* Умови бронювання */}
@@ -742,8 +723,8 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     show_item_price: template?.show_item_price ?? true,
     show_item_total: template?.show_item_total ?? true,
     show_item_description: template?.show_item_description ?? false,
-    // Секції меню (зберігаємо порядок)
-    menu_sections: Array.isArray(template?.menu_sections) ? template.menu_sections : (template?.menu_sections ? [template.menu_sections] : ["Холодні закуски", "Салати", "Гарячі страви", "Гарнір", "Десерти", "Напої"]),
+    // Секції меню - тепер динамічно формуються з даних КП, не зберігаємо в шаблоні
+    menu_sections: [], // Не використовується - секції меню формуються динамічно з категорій страв КП
     // Підсумки
     show_weight_summary: template?.show_weight_summary ?? true,
     show_weight_per_person: template?.show_weight_per_person ?? true,
@@ -752,7 +733,7 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
     show_transport_block: template?.show_transport_block ?? true,
     show_discount_block: template?.show_discount_block ?? false,
     // Тексти
-    menu_title: template?.menu_title ?? "Меню",
+    menu_title: "", // Не використовується - заголовки секцій формуються динамічно з назв форматів заходу
     summary_title: template?.summary_title ?? "Підсумок",
     footer_text: template?.footer_text ?? "",
     // Layout

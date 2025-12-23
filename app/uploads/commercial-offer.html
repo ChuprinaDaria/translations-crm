@@ -457,9 +457,9 @@
             <h1>{{ title_text or 'КОМЕРЦІЙНА ПРОПОЗИЦІЯ' }} {{ template_company_name or company_name or 'ДЗИҐА КЕЙТЕРІНҐ' }}</h1>
             <div class="manager-info">
                 <div class="manager-info-row">
-                    <span class="manager-info-cell">Менеджер: {{ kp.coordinator_name or '—' }}</span>
-                    <span class="manager-info-cell">Номер: {{ kp.coordinator_phone or '—' }}</span>
-                    <span class="manager-info-cell">Пошта: {{ kp.client_email or '—' }}</span>
+                    <span class="manager-info-cell">Координатор: {{ manager_name or kp.coordinator_name or '—' }}</span>
+                    <span class="manager-info-cell">Тел. координатора: {{ manager_phone or kp.coordinator_phone or '—' }}</span>
+                    <span class="manager-info-cell">Пошта: {{ manager_email or kp.client_email or '—' }}</span>
                 </div>
             </div>
         </div>
@@ -531,7 +531,7 @@
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">
                     {% endif %}
                 </div>
-                <div class="item-cell value-col">{% if item.weight_raw %}{{ "%.0f"|format(item.weight_raw * 1000) }}{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.weight_raw %}{{ "%.2f"|format(item.weight_raw * 1000) }}{% else %}—{% endif %}</div>
                 <div class="item-cell value-col">{{ item.quantity }}</div>
                 <div class="item-cell value-col">{{ "%.2f"|format(item.price_raw) if item.price_raw else '—' }} ₴</div>
                 <div class="item-cell value-col">{{ "%.2f"|format(item.total_raw) if item.total_raw else '—' }} ₴</div>
@@ -556,7 +556,7 @@
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">
                     {% endif %}
                 </div>
-                <div class="item-cell value-col">{% if item.weight_raw %}{{ "%.0f"|format(item.weight_raw * 1000) }}{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.weight_raw %}{{ "%.2f"|format(item.weight_raw * 1000) }}{% else %}—{% endif %}</div>
                 <div class="item-cell value-col">{{ item.quantity }}</div>
                 <div class="item-cell value-col">{{ "%.2f"|format(item.price_raw) if item.price_raw else '—' }} ₴</div>
                 <div class="item-cell value-col">{{ "%.2f"|format(item.total_raw) if item.total_raw else '—' }} ₴</div>
@@ -646,11 +646,68 @@
         </div>
         {% endif %}
         
+        <!-- ДЕТАЛЬНИЙ ПІДСУМОК -->
+        {% if template_config and template_config.summary_lines %}
+        <!-- Використовуємо налаштування summary з шаблону -->
+        <div class="summary-gray" style="margin-top: 3mm;">
+            {% for line in template_config.summary_lines %}
+            {% if line.show %}
+            {% set field_value = None %}
+            {% if line.field == "food_total" %}
+                {% set field_value = items_total_formatted %}
+            {% elif line.field == "total_weight" %}
+                {% set field_value = total_weight %}
+            {% elif line.field == "weight_per_person" %}
+                {% set field_value = weight_per_person %}
+            {% elif line.field == "total_items" %}
+                {% set field_value = total_items %}
+            {% elif line.field == "equipment_service_total" %}
+                {% set field_value = equipment_service_total_formatted %}
+            {% elif line.field == "discount" %}
+                {% set field_value = total_discount_amount_formatted %}
+            {% elif line.field == "grand_total" %}
+                {% set field_value = grand_total_formatted %}
+            {% elif line.field == "fop_extra" %}
+                {% set field_value = fop_extra_formatted %}
+            {% elif line.field == "grand_total_with_fop" %}
+                {% set field_value = grand_total_with_fop_formatted %}
+            {% endif %}
+            {% if field_value %}
+            <div class="summary-gray-line{% if line.bold %} summary-gray-bold{% endif %}">
+                {{ line.label }}: {{ field_value }}
+            </div>
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Дефолтний summary (якщо немає налаштувань) -->
+        <div class="summary-gray" style="margin-top: 3mm;">
+            <div class="summary-gray-line">Страви: {{ food_total }}</div>
+            {% if total_weight %}
+            <div class="summary-gray-line">Загальна вага: {{ total_weight }}</div>
+            {% endif %}
+            {% if weight_per_person %}
+            <div class="summary-gray-line">Вага на людину: {{ weight_per_person }}</div>
+            {% endif %}
+            {% if total_items %}
+            <div class="summary-gray-line">Всього позицій: {{ total_items }}</div>
+            {% endif %}
+            {% if equipment_service_total_formatted %}
+            <div class="summary-gray-line">Сервіс/обладнання: {{ equipment_service_total_formatted }}</div>
+            {% endif %}
+            {% if discount_percent and total_discount_amount_formatted %}
+            <div class="summary-gray-line">Знижка: -{{ total_discount_amount_formatted }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
         <!-- ФІНАЛЬНИЙ ПІДСУМОК -->
         <div class="final-summary">
             <div class="final-summary-main">ВСЬОГО ДО СПЛАТИ: {{ grand_total_formatted }}</div>
             {% if fop_percent and fop_extra_formatted %}
-            <div class="final-summary-fop">оплата на ФОП +{{ fop_percent|round(0)|int }}% {{ grand_total_with_fop_formatted }}</div>
+            <div class="final-summary-fop">ФОП 3-ї категорії (+{{ fop_percent|round(0)|int }}%): {{ fop_extra_formatted }}</div>
+            <div class="final-summary-fop" style="font-weight: bold; margin-top: 2mm;">Разом до оплати: {{ grand_total_with_fop_formatted }}</div>
             {% endif %}
         </div>
         

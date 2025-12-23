@@ -38,8 +38,11 @@ class BulkDeleteRequest(BaseModel):
 class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
-    price: Optional[float] = None
+    price: Optional[float] = None  # Ціна прокату за шт/грн
+    stock_quantity: Optional[int] = None  # Кількість на складі
+    loss_price: Optional[float] = None  # Ціна втрати шт/грн
     weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
+    volume: Optional[Union[str, float, int]] = None  # Об'єм (необов'язкове поле)
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = True
@@ -61,8 +64,11 @@ class ItemUpdate(BaseModel):
     name: Optional[str] = None
     subcategory_id: Optional[int] = None
     description: Optional[str] = None
-    price: Optional[float] = None
+    price: Optional[float] = None  # Ціна прокату за шт/грн
+    stock_quantity: Optional[int] = None  # Кількість на складі
+    loss_price: Optional[float] = None  # Ціна втрати шт/грн
     weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
+    volume: Optional[Union[str, float, int]] = None  # Об'єм (необов'язкове поле)
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     active: Optional[bool] = None
@@ -70,6 +76,16 @@ class ItemUpdate(BaseModel):
     @field_validator('weight', mode='before')
     @classmethod
     def convert_weight_to_str(cls, v):
+        if v is None:
+            return None
+        # Якщо порожній рядок, повертаємо None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return str(v)
+    
+    @field_validator('volume', mode='before')
+    @classmethod
+    def convert_volume_to_str(cls, v):
         if v is None:
             return None
         # Якщо порожній рядок, повертаємо None
@@ -384,6 +400,10 @@ class TemplateBase(BaseModel):
     summary_title: Optional[str] = "Підсумок"
     footer_text: Optional[str] = None
     
+    # Налаштування summary (JSON масив рядків для відображення в підсумку)
+    # Формат: [{"label": "Страви", "field": "food_total", "show": true}, ...]
+    summary_lines: Optional[List[dict]] = None
+    
     # Layout налаштування
     page_orientation: Optional[str] = "portrait"  # portrait або landscape
     items_per_page: Optional[int] = 20
@@ -471,6 +491,7 @@ class TemplateUpdate(BaseModel):
     menu_title: Optional[str] = None
     summary_title: Optional[str] = None
     footer_text: Optional[str] = None
+    summary_lines: Optional[List[dict]] = None
     
     # Layout
     page_orientation: Optional[str] = None

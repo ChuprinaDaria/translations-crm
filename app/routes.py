@@ -518,7 +518,10 @@ async def create_item(
     name: str = Form(...),
     description: str = Form(None),
     price: float = Form(None),
+    stock_quantity: int = Form(None),
+    loss_price: float = Form(None),
     weight: str = Form(None),
+    volume: str = Form(None),
     unit: str = Form(None),
     subcategory_id: int = Form(None),
     active: bool = Form(True),
@@ -543,6 +546,7 @@ async def create_item(
     
     # Нормалізуємо порожні рядки до None
     weight_normalized = weight if weight and weight.strip() else None
+    volume_normalized = volume if volume and volume.strip() else None
     unit_normalized = unit if unit and unit.strip() else None
     description_normalized = description if description and description.strip() else None
     
@@ -551,7 +555,10 @@ async def create_item(
         name=name,
         description=description_normalized,
         price=price,
+        stock_quantity=stock_quantity,
+        loss_price=loss_price,
         weight=weight_normalized,
+        volume=volume_normalized,
         unit=unit_normalized,
         subcategory_id=subcategory_id,
         active=active,
@@ -567,7 +574,10 @@ async def update_item(
     name: str = Form(None),
     description: str = Form(None),
     price: float = Form(None),
+    stock_quantity: int = Form(None),
+    loss_price: float = Form(None),
     weight: str = Form(None),
+    volume: str = Form(None),
     unit: str = Form(None),
     subcategory_id: int = Form(None),
     active: bool = Form(None),
@@ -607,6 +617,7 @@ async def update_item(
     
     # Нормалізуємо порожні рядки до None
     weight_normalized = weight if weight and weight.strip() else None
+    volume_normalized = volume if volume and volume.strip() else None
     unit_normalized = unit if unit and unit.strip() else None
     description_normalized = description if description and description.strip() else None
     
@@ -616,7 +627,10 @@ async def update_item(
     item_data_dict = {
         'description': description_normalized,
         'price': price,
+        'stock_quantity': stock_quantity,
+        'loss_price': loss_price,
         'weight': weight_normalized,
+        'volume': volume_normalized,
         'unit': unit_normalized,
         'subcategory_id': subcategory_id,
         'active': active,
@@ -738,8 +752,18 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     for kp_item in kp.items:
         # kp_item.item вже завантажений через selectinload в get_kp_items
         item = kp_item.item
+        
+        # Обробляємо custom items (equipment/service без item_id)
         if not item:
-            # Якщо страву видалили з меню після створення КП — просто пропускаємо її
+            # Custom item - може бути обладнанням або сервісом
+            # Перевіряємо чи це обладнання чи сервіс через назву або інші поля
+            # Поки що додаємо до відповідних списків на основі того, чи є price та loss_price
+            if kp_item.name:
+                # Якщо є loss_price в KPItem - це обладнання, інакше сервіс
+                # Але в KPItem немає loss_price, тому використаємо інший підхід
+                # Перевіряємо чи це обладнання через перевірку в equipment_total
+                # Поки що додаємо всі custom items до обох списків, а потім відфільтруємо
+                pass  # Обробимо нижче
             continue
 
         item_weight = (item.weight or 0) * kp_item.quantity
@@ -989,6 +1013,13 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         else:
             total_menu_after_discount += fmt["food_total"]
 
+    # Розраховуємо загальну знижку (якщо є)
+    total_discount_amount = 0.0
+    if discount_percent:
+        # Сума знижки = різниця між сумою меню до та після знижки
+        total_menu_before_discount = sum(fmt["food_total"] for fmt in formats)
+        total_discount_amount = total_menu_before_discount - total_menu_after_discount
+    
     # Загальна сума до оплати (меню + обладнання + сервіс + доставка)
     grand_total = total_menu_after_discount + equipment_total + service_total + transport_total
     fop_percent = 7.0  # Комісія ФОП 3-ї категорії
@@ -999,6 +1030,11 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     grand_total_formatted = f"{grand_total:.2f} грн"
     fop_extra_formatted = f"{fop_extra:.2f} грн" if fop_extra else None
     grand_total_with_fop_formatted = f"{grand_total_with_fop:.2f} грн"
+    total_discount_amount_formatted = f"{total_discount_amount:.2f} грн" if total_discount_amount > 0 else None
+    
+    # Сума сервісу та обладнання разом
+    equipment_service_total = equipment_total + service_total
+    equipment_service_total_formatted = f"{equipment_service_total:.2f} грн" if equipment_service_total > 0 else None
     
     # Налаштування теми шаблону (з дефолтами)
     primary_color = "#FF5A00"
@@ -1139,6 +1175,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'summary_title': getattr(selected_template, 'summary_title', None) or "Підсумок",
             'footer_text': getattr(selected_template, 'footer_text', None),
             'page_orientation': getattr(selected_template, 'page_orientation', None) or 'portrait',
+            'summary_lines': getattr(selected_template, 'summary_lines', None),
         })
 
     # Конвертуємо dict в простий об'єкт для доступу через крапку в Jinja2
@@ -1149,8 +1186,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     
     template_config_obj = TemplateConfig(template_config)
 
-    # Форматуємо вагу на людину
-    formatted_weight_per_person = f"{calculated_weight_per_person:.0f} г" if calculated_weight_per_person else None
+    # Форматуємо вагу на людину (округлюємо до 2 знаків)
+    formatted_weight_per_person = f"{round(calculated_weight_per_person, 2):.2f} г" if calculated_weight_per_person else None
     
     # Обробляємо фото галереї (конвертуємо в file:// URLs для WeasyPrint)
     # Беремо фото з шаблону (а не з КП)
@@ -1196,6 +1233,99 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
                 event_format_display = kp.event_format
         except (json.JSONDecodeError, TypeError):
             event_format_display = kp.event_format
+    
+    # Отримуємо дані менеджера (координатора) з created_by
+    manager_name = None
+    manager_phone = None
+    manager_email = None
+    if kp.created_by:
+        # Формуємо ім'я з first_name та last_name
+        name_parts = []
+        if getattr(kp.created_by, "first_name", None):
+            name_parts.append(kp.created_by.first_name)
+        if getattr(kp.created_by, "last_name", None):
+            name_parts.append(kp.created_by.last_name)
+        if name_parts:
+            manager_name = " ".join(name_parts)
+        else:
+            # Якщо немає first_name/last_name, використовуємо email
+            manager_name = getattr(kp.created_by, "email", None) or "—"
+        manager_email = getattr(kp.created_by, "email", None)
+        # Телефон менеджера (якщо є поле phone в User)
+        manager_phone = getattr(kp.created_by, "phone", None)
+    
+    # Фільтруємо обладнання та сервіс з kp.items
+    equipment_items = []
+    service_items = []
+    
+    # Знаходимо категорії "Обладнання" та "Обслуговування"
+    equipment_category_name = "Обладнання"
+    service_category_name = "Обслуговування"
+    
+    # Розділяємо суми обладнання та сервісу для розподілу custom items
+    equipment_total_from_items = 0.0
+    service_total_from_items = 0.0
+    
+    # Спочатку обробляємо items з категоріями
+    for kp_item in kp.items:
+        item = kp_item.item
+        if not item:
+            continue  # Custom items обробимо окремо
+        
+        # Перевіряємо категорію через subcategory
+        category_name = None
+        if item.subcategory and item.subcategory.category:
+            category_name = item.subcategory.category.name
+        
+        # Формуємо дані для обладнання
+        if category_name == equipment_category_name:
+            item_total = (item.price or 0) * kp_item.quantity
+            equipment_item = {
+                "name": item.name,
+                "rental_price": item.price or 0,  # Ціна прокату
+                "loss_price": item.loss_price or 0,  # Ціна втрати
+                "quantity": kp_item.quantity,
+                "total": item_total,
+            }
+            equipment_items.append(equipment_item)
+            equipment_total_from_items += item_total
+        
+        # Формуємо дані для сервісу
+        elif category_name == service_category_name:
+            item_total = (item.price or 0) * kp_item.quantity
+            service_item = {
+                "name": item.name,
+                "total": item_total,
+            }
+            service_items.append(service_item)
+            service_total_from_items += item_total
+    
+    # Тепер обробляємо custom items (без item_id) - це обладнання або сервіс
+    for kp_item in kp.items:
+        item = kp_item.item
+        if not item and kp_item.name:
+            # Custom item - визначаємо тип на основі того, чи сума відповідає equipment_total чи service_total
+            item_total = (kp_item.price or 0) * kp_item.quantity
+            
+            # Якщо ще не досягли equipment_total, то це обладнання
+            if equipment_total_from_items + item_total <= equipment_total + 0.01:  # Допуск на округлення
+                equipment_item = {
+                    "name": kp_item.name,
+                    "rental_price": kp_item.price or 0,
+                    "loss_price": 0,  # Для custom items loss_price не зберігається
+                    "quantity": kp_item.quantity,
+                    "total": item_total,
+                }
+                equipment_items.append(equipment_item)
+                equipment_total_from_items += item_total
+            else:
+                # Інакше це сервіс
+                service_item = {
+                    "name": kp_item.name,
+                    "total": item_total,
+                }
+                service_items.append(service_item)
+                service_total_from_items += item_total
     
     html_content = template.render(
         kp=kp,
@@ -1259,6 +1389,25 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         booking_terms=booking_terms,
         # Форматований формат заходу (якщо був JSON)
         event_format_display=event_format_display,
+        # Дані менеджера (координатора)
+        manager_name=manager_name,
+        manager_phone=manager_phone,
+        manager_email=manager_email,
+        # Обладнання та сервіс
+        equipment_items=equipment_items,
+        service_items=service_items,
+        # Детальний підсумок
+        total_discount_amount=total_discount_amount,
+        total_discount_amount_formatted=total_discount_amount_formatted,
+        discount_percent=discount_percent,
+        equipment_service_total_formatted=equipment_service_total_formatted,
+        # Дані для summary (використовуються в шаблоні)
+        items_total=food_total_raw,
+        items_total_formatted=formatted_food_total,
+        services_total=service_total,
+        services_total_formatted=f"{service_total:.2f} грн" if service_total else None,
+        equipment_total_value=equipment_total,
+        equipment_total_formatted=f"{equipment_total:.2f} грн" if equipment_total else None,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
@@ -2773,6 +2922,7 @@ async def create_template(
     menu_title: str = Form("Меню"),
     summary_title: str = Form("Підсумок"),
     footer_text: str = Form(None),
+    summary_lines: str = Form(None),  # JSON-рядок масиву налаштувань summary
     # Layout
     page_orientation: str = Form("portrait"),
     items_per_page: int = Form(20),
@@ -2944,6 +3094,16 @@ async def create_template(
         except Exception:
             menu_sections_list = None
 
+    # Якщо summary_lines передані як JSON‑рядок – конвертуємо в список
+    summary_lines_list = None
+    if summary_lines:
+        try:
+            parsed = json.loads(summary_lines)
+            if isinstance(parsed, list):
+                summary_lines_list = parsed
+        except Exception:
+            summary_lines_list = None
+
     template_data = schema.TemplateCreate(
         name=name,
         filename=temp_filename,  # Тимчасовий filename, буде оновлено після створення
@@ -2989,6 +3149,7 @@ async def create_template(
         menu_title=menu_title,
         summary_title=summary_title,
         footer_text=footer_text,
+        summary_lines=summary_lines_list,
         page_orientation=page_orientation,
         items_per_page=items_per_page,
         booking_terms=booking_terms,
@@ -3079,6 +3240,7 @@ async def update_template(
     menu_title: str = Form(None),
     summary_title: str = Form(None),
     footer_text: str = Form(None),
+    summary_lines: str = Form(None),  # JSON-рядок масиву налаштувань summary
     # Layout
     page_orientation: str = Form(None),
     items_per_page: int = Form(None),
@@ -3303,6 +3465,19 @@ async def update_template(
         except Exception:
             gallery_photos_list = None
 
+    # Якщо summary_lines передані як JSON‑рядок – конвертуємо в список
+    summary_lines_list = None
+    if summary_lines is not None:
+        try:
+            parsed = json.loads(summary_lines)
+            # Переконуємося, що це список
+            if isinstance(parsed, list):
+                summary_lines_list = parsed
+            else:
+                summary_lines_list = None
+        except Exception:
+            summary_lines_list = None
+
     template_data = schema.TemplateUpdate(
         name=name,
         filename=final_filename if (filename or filename_was_generated) else None,
@@ -3348,6 +3523,7 @@ async def update_template(
         menu_title=menu_title,
         summary_title=summary_title,
         footer_text=footer_text,
+        summary_lines=summary_lines_list,
         page_orientation=page_orientation,
         items_per_page=items_per_page,
         booking_terms=booking_terms,

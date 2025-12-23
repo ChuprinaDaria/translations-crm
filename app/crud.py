@@ -256,9 +256,13 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
     item_ids = [it.item_id for it in kp_in.items]
     total_weight_grams = 0.0
     
+    # Обробляємо items з item_id (страви з меню)
+    item_ids = [it.item_id for it in kp_in.items if it.item_id is not None]
     if item_ids:
         existing_items = {i.id: i for i in db.query(models.Item).filter(models.Item.id.in_(item_ids)).all()}
         for it in kp_in.items:
+            if it.item_id is None:
+                continue  # Custom items обробимо окремо
             if it.item_id not in existing_items:
                 raise ValueError(f"Item id {it.item_id} not found")
             
@@ -299,6 +303,37 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
                 event_format_id=db_event_format_id,
             )
             db.add(kp_item)
+    
+    # Обробляємо custom items (equipment/service без item_id)
+    # Розподіляємо їх між equipment та service на основі equipment_total та service_total
+    custom_items = [it for it in kp_in.items if it.item_id is None and it.name]
+    equipment_total_expected = float(getattr(kp_in, "equipment_total", None) or 0)
+    service_total_expected = float(getattr(kp_in, "service_total", None) or 0)
+    
+    # Розраховуємо суми custom items
+    custom_items_total = sum((it.price or 0) * it.quantity for it in custom_items)
+    
+    # Розподіляємо custom items між equipment та service
+    # Якщо equipment_total > 0, то перші custom items - це equipment
+    equipment_items_added = 0.0
+    for it in custom_items:
+        item_total = (it.price or 0) * it.quantity
+        # Якщо ще не досягли equipment_total, то це equipment
+        if equipment_items_added + item_total <= equipment_total_expected + 0.01:  # Допуск на округлення
+            equipment_items_added += item_total
+        # Інакше це service (або якщо equipment_total = 0)
+        
+        kp_item = models.KPItem(
+            kp_id=kp.id,
+            item_id=None,  # Custom item
+            quantity=it.quantity,
+            name=it.name,
+            price=it.price,
+            weight=it.weight,
+            unit=it.unit,
+            event_format_id=None,  # Custom items не прив'язані до форматів
+        )
+        db.add(kp_item)
     
     # Розраховуємо вагу на 1 гостя
     weight_per_person = None
@@ -442,12 +477,15 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
             event_format_id_map[idx] = db_event_format.id
     
     # Додаємо нові позиції
-    item_ids = [it.item_id for it in kp_in.items]
+    # Обробляємо items з item_id (страви з меню)
+    item_ids = [it.item_id for it in kp_in.items if it.item_id is not None]
     total_weight_grams = 0.0
     
     if item_ids:
         existing_items = {i.id: i for i in db.query(models.Item).filter(models.Item.id.in_(item_ids)).all()}
         for it in kp_in.items:
+            if it.item_id is None:
+                continue  # Custom items обробимо окремо
             if it.item_id not in existing_items:
                 raise ValueError(f"Item id {it.item_id} not found")
             
@@ -487,6 +525,35 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
                 event_format_id=db_event_format_id,
             )
             db.add(kp_item)
+    
+    # Обробляємо custom items (equipment/service без item_id)
+    custom_items = [it for it in kp_in.items if it.item_id is None and it.name]
+    equipment_total_expected = float(getattr(kp_in, "equipment_total", None) or 0)
+    service_total_expected = float(getattr(kp_in, "service_total", None) or 0)
+    
+    # Розраховуємо суми custom items
+    custom_items_total = sum((it.price or 0) * it.quantity for it in custom_items)
+    
+    # Розподіляємо custom items між equipment та service
+    equipment_items_added = 0.0
+    for it in custom_items:
+        item_total = (it.price or 0) * it.quantity
+        # Якщо ще не досягли equipment_total, то це equipment
+        if equipment_items_added + item_total <= equipment_total_expected + 0.01:  # Допуск на округлення
+            equipment_items_added += item_total
+        # Інакше це service (або якщо equipment_total = 0)
+        
+        kp_item = models.KPItem(
+            kp_id=kp.id,
+            item_id=None,  # Custom item
+            quantity=it.quantity,
+            name=it.name,
+            price=it.price,
+            weight=it.weight,
+            unit=it.unit,
+            event_format_id=None,  # Custom items не прив'язані до форматів
+        )
+        db.add(kp_item)
     
     # Розраховуємо вагу на 1 гостя
     weight_per_person = None
@@ -560,7 +627,9 @@ def get_kp_items(db: Session, kp_id: int):
             selectinload(models.KP.items)           # load KPItem rows
             .selectinload(models.KPItem.item)       # then load Item on each KPItem
             .selectinload(models.Item.subcategory)  # then load Subcategory on each Item
-            .selectinload(models.Subcategory.category)  # then load Category on each Subcategory
+            .selectinload(models.Subcategory.category),  # then load Category on each Subcategory
+            selectinload(models.KP.event_formats),  # load event formats
+            selectinload(models.KP.created_by),  # load manager (created_by)
         )
         .filter(models.KP.id == kp_id)
         .first()

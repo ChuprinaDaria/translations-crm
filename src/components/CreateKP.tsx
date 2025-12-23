@@ -1698,6 +1698,32 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         });
       }
     });
+    
+    // Додаємо обладнання як custom items (без item_id)
+    equipmentItems.forEach((eqItem) => {
+      if (eqItem.name && eqItem.quantity > 0) {
+        itemsPayload.push({
+          item_id: null, // Custom item
+          quantity: eqItem.quantity,
+          name: eqItem.name,
+          price: eqItem.unitPrice || 0,
+          // Позначаємо як обладнання через спеціальний префікс в назві або окреме поле
+          // Використаємо категорію через перевірку в PDF генерації
+        });
+      }
+    });
+    
+    // Додаємо сервіс як custom items (без item_id)
+    serviceItems.forEach((srvItem) => {
+      if (srvItem.name && srvItem.quantity > 0) {
+        itemsPayload.push({
+          item_id: null, // Custom item
+          quantity: srvItem.quantity,
+          name: srvItem.name,
+          price: srvItem.unitPrice || 0,
+        });
+      }
+    });
 
     setCreatingKP(true);
     try {

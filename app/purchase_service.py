@@ -81,7 +81,10 @@ def _load_kps_with_items(db: Session, kp_ids: List[int]) -> List[models.KP]:
     return (
         db.query(models.KP)
         .options(
-            joinedload(models.KP.items).joinedload(models.KPItem.item),
+            joinedload(models.KP.items).joinedload(models.KPItem.item)
+                .joinedload(models.Item.subcategory).joinedload(models.Subcategory.category),
+            joinedload(models.KP.items).joinedload(models.KPItem.event_format),
+            joinedload(models.KP.event_formats),
             joinedload(models.KP.client),
         )
         .filter(models.KP.id.in_(kp_ids))
@@ -293,16 +296,177 @@ def generate_purchase_excel(
         ws_menu["A6"] = "Тип:"
         ws_menu["B6"] = kp.event_group or ""
 
-        # Заголовок таблиці
+        # Порожній рядок
         ws_menu.append([])
-        headers = ["№ п/п", "Назва страви", "Кількість", "Одиниця", "Вага, г", "Ціна, грн", "Сума, грн"]
-        ws_menu.append(headers)
-        _style_header_row(ws_menu, 8, header_fill, 7)
+        current_row = 8
 
-        for index, name, qty, unit, weight, price, total in _iter_kp_items(kp):
-            ws_menu.append([
-                index, name, qty, unit or "", weight or "", price or "", total
-            ])
+        # Формати заходу
+        event_formats = sorted(kp.event_formats, key=lambda x: x.order_index or 0) if kp.event_formats else []
+        has_formats = len(event_formats) > 0
+
+        if not has_formats:
+            # Якщо немає форматів, показуємо всі страви в одному форматі
+            format_name = kp.event_format or 'Загальне меню'
+            format_time = kp.event_time or ""
+            people_count = kp.people_count or 0
+            
+            # Заголовок формату
+            format_text = format_name
+            if format_time:
+                format_text += f"({format_time})"
+            if people_count:
+                format_text += f"\nМеню із розрахунку на {people_count} осіб"
+            
+            headers = ["№ п/п", "Назва страви", "Кількість", "Одиниця", "Вага, г", "Ціна, грн", "Сума, грн"]
+            ws_menu.append(["№ п/п", format_text, "Кількість", "Одиниця", "Вага, г", "Ціна, грн", "Сума, грн"])
+            _style_header_row(ws_menu, current_row, header_fill, 7)
+            current_row += 1
+            
+            # Групуємо всі страви по категоріях
+            items_by_category: Dict[str, List[models.KPItem]] = defaultdict(list)
+            for kp_item in kp.items:
+                category = "Інше"
+                if kp_item.item and kp_item.item.subcategory and kp_item.item.subcategory.category:
+                    category = kp_item.item.subcategory.category.name or "Інше"
+                elif kp_item.item and kp_item.item.subcategory:
+                    category = kp_item.item.subcategory.name or "Інше"
+                items_by_category[category].append(kp_item)
+            
+            # Сортуємо категорії
+            sorted_categories = sorted(items_by_category.keys())
+            
+            item_num = 1
+            for category in sorted_categories:
+                # Заголовок категорії
+                ws_menu.append([category, "", "", "", "", "", ""])
+                _style_header_row(ws_menu, current_row, header_fill, 7)
+                current_row += 1
+                
+                # Страви
+                for kp_item in items_by_category[category]:
+                    name = ""
+                    if kp_item.item and kp_item.item.name:
+                        name = kp_item.item.name
+                    elif kp_item.name:
+                        name = kp_item.name
+                    else:
+                        name = "Без назви"
+                    
+                    qty = kp_item.quantity or 0
+                    unit = None
+                    if kp_item.item and kp_item.item.unit:
+                        unit = kp_item.item.unit
+                    elif kp_item.unit:
+                        unit = kp_item.unit
+                    
+                    weight = None
+                    if kp_item.item and kp_item.item.weight is not None:
+                        weight = float(kp_item.item.weight)
+                    elif kp_item.weight is not None:
+                        weight = float(kp_item.weight)
+                    
+                    price = None
+                    if kp_item.item and kp_item.item.price is not None:
+                        price = float(kp_item.item.price)
+                    elif kp_item.price is not None:
+                        price = float(kp_item.price)
+                    
+                    total = (price or 0.0) * qty
+                    
+                    ws_menu.append([
+                        item_num, name, qty, unit or "", weight or "", price or "", total
+                    ])
+                    item_num += 1
+                    current_row += 1
+                
+                # Порожній рядок після категорії
+                ws_menu.append([])
+                current_row += 1
+        
+        else:
+            # Є формати заходу
+            for event_format in event_formats:
+                format_name = event_format.name or ""
+                format_time = event_format.event_time or ""
+                people_count = event_format.people_count or kp.people_count or 0
+                
+                # Заголовок формату
+                format_text = format_name
+                if format_time:
+                    format_text += f"({format_time})"
+                if people_count:
+                    format_text += f"\nМеню із розрахунку на {people_count} осіб"
+                
+                headers = ["№ п/п", "Назва страви", "Кількість", "Одиниця", "Вага, г", "Ціна, грн", "Сума, грн"]
+                ws_menu.append(["№ п/п", format_text, "Кількість", "Одиниця", "Вага, г", "Ціна, грн", "Сума, грн"])
+                _style_header_row(ws_menu, current_row, header_fill, 7)
+                current_row += 1
+                
+                # Групуємо страви по категоріях
+                items_by_category: Dict[str, List[models.KPItem]] = defaultdict(list)
+                for kp_item in kp.items:
+                    if kp_item.event_format_id == event_format.id:
+                        category = "Інше"
+                        if kp_item.item and kp_item.item.subcategory and kp_item.item.subcategory.category:
+                            category = kp_item.item.subcategory.category.name or "Інше"
+                        elif kp_item.item and kp_item.item.subcategory:
+                            category = kp_item.item.subcategory.name or "Інше"
+                        items_by_category[category].append(kp_item)
+                
+                # Сортуємо категорії
+                sorted_categories = sorted(items_by_category.keys())
+                
+                item_num = 1
+                for category in sorted_categories:
+                    # Заголовок категорії
+                    ws_menu.append([category, "", "", "", "", "", ""])
+                    _style_header_row(ws_menu, current_row, header_fill, 7)
+                    current_row += 1
+                    
+                    # Страви
+                    for kp_item in items_by_category[category]:
+                        name = ""
+                        if kp_item.item and kp_item.item.name:
+                            name = kp_item.item.name
+                        elif kp_item.name:
+                            name = kp_item.name
+                        else:
+                            name = "Без назви"
+                        
+                        qty = kp_item.quantity or 0
+                        unit = None
+                        if kp_item.item and kp_item.item.unit:
+                            unit = kp_item.item.unit
+                        elif kp_item.unit:
+                            unit = kp_item.unit
+                        
+                        weight = None
+                        if kp_item.item and kp_item.item.weight is not None:
+                            weight = float(kp_item.item.weight)
+                        elif kp_item.weight is not None:
+                            weight = float(kp_item.weight)
+                        
+                        price = None
+                        if kp_item.item and kp_item.item.price is not None:
+                            price = float(kp_item.item.price)
+                        elif kp_item.price is not None:
+                            price = float(kp_item.price)
+                        
+                        total = (price or 0.0) * qty
+                        
+                        ws_menu.append([
+                            item_num, name, qty, unit or "", weight or "", price or "", total
+                        ])
+                        item_num += 1
+                        current_row += 1
+                    
+                    # Порожній рядок після категорії
+                    ws_menu.append([])
+                    current_row += 1
+                
+                # Порожній рядок після формату
+                ws_menu.append([])
+                current_row += 1
 
         _auto_column_width(ws_menu)
 

@@ -83,7 +83,10 @@ export function EquipmentManagement() {
     name: "",
     description: "",
     price: 0,
+    stock_quantity: 0,
+    loss_price: 0,
     weight: 0,
+    volume: "",
     unit: "",
     photo_url: "",
     active: true,
@@ -182,7 +185,10 @@ export function EquipmentManagement() {
       name: "",
       description: "",
       price: 0,
+      stock_quantity: 0,
+      loss_price: 0,
       weight: 0,
+      volume: "",
       unit: "",
       photo_url: "",
       active: true,
@@ -233,7 +239,10 @@ export function EquipmentManagement() {
       name: item.name,
       description: item.description || "",
       price: item.price,
+      stock_quantity: item.stock_quantity || 0,
+      loss_price: item.loss_price || 0,
       weight: item.weight || 0,
+      volume: item.volume || "",
       unit: item.unit || "",
       photo_url: item.photo_url || "",
       active: item.active,
@@ -517,20 +526,33 @@ export function EquipmentManagement() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mb-3 text-sm">
-                      <div>
-                        <div className="text-lg font-semibold text-gray-900">
-                          {item.price} грн
+                    <div className="space-y-2 mb-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {item.price} грн
+                          </div>
+                          <div className="text-xs text-gray-500">Прокат</div>
                         </div>
+                        <Badge
+                          variant={item.active ? "default" : "secondary"}
+                          className={
+                            item.active ? "bg-green-100 text-green-800" : ""
+                          }
+                        >
+                          {item.active ? "Активне" : "Неактивне"}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={item.active ? "default" : "secondary"}
-                        className={
-                          item.active ? "bg-green-100 text-green-800" : ""
-                        }
-                      >
-                        {item.active ? "Активне" : "Неактивне"}
-                      </Badge>
+                      {item.stock_quantity !== undefined && item.stock_quantity !== null && (
+                        <div className="text-xs text-gray-600">
+                          На складі: <span className="font-medium">{item.stock_quantity} шт</span>
+                        </div>
+                      )}
+                      {item.loss_price !== undefined && item.loss_price !== null && (
+                        <div className="text-xs text-gray-600">
+                          Ціна втрати: <span className="font-medium">{item.loss_price} грн</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-auto flex gap-2">
@@ -757,7 +779,7 @@ export function EquipmentManagement() {
               </div>
               
               <div>
-                <Label htmlFor="price">Ціна (₴) *</Label>
+                <Label htmlFor="price">Ціна прокату за шт/грн *</Label>
                 <Input
                   id="price"
                   type="number"
@@ -765,7 +787,50 @@ export function EquipmentManagement() {
                   min="0"
                   value={itemFormData.price}
                   onChange={(e) => setItemFormData({...itemFormData, price: parseFloat(e.target.value) || 0})}
+                  onFocus={(e) => e.target.select()}
                   required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="stock_quantity">Кількість на складі</Label>
+                <Input
+                  id="stock_quantity"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={itemFormData.stock_quantity || ""}
+                  onChange={(e) => setItemFormData({...itemFormData, stock_quantity: e.target.value ? parseInt(e.target.value) : 0})}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="Необов'язково"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="loss_price">Ціна втрати шт/грн</Label>
+                <Input
+                  id="loss_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={itemFormData.loss_price || ""}
+                  onChange={(e) => setItemFormData({...itemFormData, loss_price: e.target.value ? parseFloat(e.target.value) : 0})}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="Необов'язково"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="volume">Об'єм</Label>
+                <Input
+                  id="volume"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={itemFormData.volume || ""}
+                  onChange={(e) => setItemFormData({...itemFormData, volume: e.target.value ? parseFloat(e.target.value) : ""})}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="Необов'язково"
                 />
               </div>
               

@@ -41,8 +41,11 @@ class Item(Base):
     subcategory_id = Column(Integer, ForeignKey("subcategories.id"), nullable=True)
     subcategory = relationship("Subcategory", back_populates="items")
     
-    price = Column(Float, index=True)
+    price = Column(Float, index=True)  # Ціна прокату за шт/грн
+    stock_quantity = Column(Integer, nullable=True, default=0)  # Кількість на складі
+    loss_price = Column(Float, nullable=True)  # Ціна втрати шт/грн
     weight = Column(String, index=True)  # Може бути число або рядок типу "150/75"
+    volume = Column(String, index=True, nullable=True)  # Об'єм (необов'язкове поле)
     unit = Column(String, index=True)
     description = Column(String, index=True)
 
@@ -151,6 +154,12 @@ class Template(Base):
     menu_title = Column(String, default="Меню")
     summary_title = Column(String, default="Підсумок")
     footer_text = Column(Text, nullable=True)
+    
+    # Налаштування summary (JSON масив рядків для відображення в підсумку)
+    # Формат: [{"label": "Страви", "field": "food_total", "show": true}, ...]
+    # Підтримувані поля: food_total, total_weight, weight_per_person, total_items, 
+    # equipment_service_total, discount, grand_total, fop_extra, grand_total_with_fop
+    summary_lines = Column(JSON, nullable=True)  # Налаштування рядків summary
     
     # Layout налаштування
     page_orientation = Column(String, default="portrait")  # portrait або landscape

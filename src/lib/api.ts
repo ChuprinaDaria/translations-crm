@@ -75,8 +75,11 @@ export interface Item {
   id: number;
   name: string;
   description?: string;
-  price: number;
+  price: number; // Ціна прокату за шт/грн
+  stock_quantity?: number; // Кількість на складі
+  loss_price?: number; // Ціна втрати шт/грн
   weight?: string | number; // Може бути число або рядок типу "150/75"
+  volume?: string | number; // Об'єм (необов'язкове поле)
   unit?: string;
   photo_url?: string;
   active: boolean;
@@ -88,8 +91,11 @@ export interface Item {
 export interface ItemCreate {
   name: string;
   description?: string;
-  price?: number;
+  price?: number; // Ціна прокату за шт/грн
+  stock_quantity?: number; // Кількість на складі
+  loss_price?: number; // Ціна втрати шт/грн
   weight?: string | number; // Може бути число або рядок типу "150/75"
+  volume?: string | number; // Об'єм (необов'язкове поле)
   unit?: string;
   photo_url?: string;
   active?: boolean;
@@ -597,8 +603,17 @@ export const itemsApi = {
     if (data.price !== undefined && data.price !== null) {
       formData.append('price', data.price.toString());
     }
+    if (data.stock_quantity !== undefined && data.stock_quantity !== null) {
+      formData.append('stock_quantity', data.stock_quantity.toString());
+    }
+    if (data.loss_price !== undefined && data.loss_price !== null) {
+      formData.append('loss_price', data.loss_price.toString());
+    }
     if (data.weight !== undefined && data.weight !== null) {
       formData.append('weight', String(data.weight));
+    }
+    if (data.volume !== undefined && data.volume !== null) {
+      formData.append('volume', String(data.volume));
     }
     if (data.unit !== undefined) formData.append('unit', data.unit || '');
     if (data.subcategory_id !== undefined && data.subcategory_id !== null) {
@@ -623,9 +638,19 @@ export const itemsApi = {
     if (data.price !== undefined && data.price !== null) {
       formData.append('price', data.price.toString());
     }
+    if (data.stock_quantity !== undefined && data.stock_quantity !== null) {
+      formData.append('stock_quantity', data.stock_quantity.toString());
+    }
+    if (data.loss_price !== undefined && data.loss_price !== null) {
+      formData.append('loss_price', data.loss_price.toString());
+    }
     if (data.weight !== undefined && data.weight !== null) {
       // weight може бути числом або рядком, завжди перетворюємо на рядок
       formData.append('weight', String(data.weight));
+    }
+    if (data.volume !== undefined && data.volume !== null) {
+      // volume може бути числом або рядком, завжди перетворюємо на рядок
+      formData.append('volume', String(data.volume));
     }
     if (data.unit !== undefined) formData.append('unit', data.unit || '');
     if (data.subcategory_id !== undefined && data.subcategory_id !== null && data.subcategory_id !== 0) {
