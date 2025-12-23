@@ -714,6 +714,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     items_data: list[dict] = []
     total_quantity = 0
     total_weight = 0.0
+    total_volume_ml = 0.0  # Загальний об'єм в мл
 
     # Підготовка структур для форматів меню (Welcome drink, Фуршет, тощо)
     formats_map: dict[Any, dict] = {}
@@ -781,10 +782,49 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             except Exception:
                 photo_src = None
 
-        # Форматуємо дані для відображення в шаблоні
-        weight_str = f"{item.weight:.2f} {item.unit or 'кг'}" if item.weight else "-"
-        price_str = f"{item.price:.2f} грн" if item.price else "-"
-        total_str = f"{(item.price or 0) * kp_item.quantity:.2f} грн"
+        # Допоміжна функція для форматування чисел без нулів
+        def format_number_local(num, decimals=2):
+            """Форматує число без зайвих нулів після коми"""
+            if num is None:
+                return "-"
+            if isinstance(num, (int, float)):
+                # Якщо число ціле, показуємо без коми
+                if num == int(num):
+                    return str(int(num))
+                # Інакше показуємо з комою, але без зайвих нулів
+                formatted = f"{num:.{decimals}f}"
+                return formatted.rstrip('0').rstrip('.')
+            return str(num)
+        
+        weight_str = f"{format_number_local(item.weight)} {item.unit or 'кг'}" if item.weight else "-"
+        price_str = f"{format_number_local(item.price)} грн" if item.price else "-"
+        total_str = f"{format_number_local((item.price or 0) * kp_item.quantity)} грн"
+        
+        # Розраховуємо об'єм для мл на особу (якщо є volume)
+        volume_raw = None
+        total_volume = 0.0
+        if item.volume:
+            try:
+                # Парсимо об'єм (може бути рядок або число)
+                if isinstance(item.volume, str):
+                    # Можливо формат "150/75" або просто "150"
+                    volume_parts = item.volume.split('/')
+                    volume_raw = float(volume_parts[0]) if volume_parts else 0
+                else:
+                    volume_raw = float(item.volume)
+                # Об'єм в мл (якщо одиниця л, множимо на 1000)
+                unit_lower = (item.unit or '').lower()
+                if unit_lower in ['л', 'l']:
+                    volume_ml = volume_raw * 1000
+                elif unit_lower in ['мл', 'ml']:
+                    volume_ml = volume_raw
+                else:
+                    volume_ml = 0
+                total_volume = volume_ml * kp_item.quantity
+                total_volume_ml += total_volume  # Додаємо до загального об'єму
+            except (ValueError, TypeError):
+                volume_raw = None
+                total_volume = 0.0
         
         item_dict = {
             'name': item.name,
@@ -797,6 +837,10 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'weight': weight_str,          # форматований текст, напр. "0.50 кг"
             'weight_raw': item.weight or 0,  # числове значення ваги 1 одиниці (float, кг)
             'total_weight': item_weight,
+            # Об'єм для розрахунку мл на особу
+            'volume': item.volume,
+            'volume_raw': volume_raw,
+            'total_volume': total_volume,  # Загальний об'єм в мл
             'photo_url': photo_url,  # Відносний шлях (наприклад, uploads/photos/...)
             'photo_src': photo_src,  # Повний file:// шлях для використання в <img src="...">
             'category_name': item.subcategory.category.name if getattr(item, "subcategory", None) and getattr(item.subcategory, "category", None) else None,
@@ -919,9 +963,24 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         max_from_formats = max((fmt.get("people_count") or 0) for fmt in formats_map.values())
         effective_people_count = max_from_formats or 0
 
+    # Допоміжна функція для форматування чисел без нулів
+    def format_number(num, decimals=2):
+        """Форматує число без зайвих нулів після коми"""
+        if num is None:
+            return "0"
+        if isinstance(num, (int, float)):
+            # Якщо число ціле, показуємо без коми
+            if num == int(num):
+                return str(int(num))
+            # Інакше показуємо з комою, але без зайвих нулів
+            formatted = f"{num:.{decimals}f}"
+            # Прибираємо зайві нулі в кінці
+            return formatted.rstrip('0').rstrip('.')
+        return str(num)
+    
     # Форматуємо ціни та вагу (загальні по КП)
     food_total_raw = sum(item["total_raw"] for item in items_data)
-    formatted_food_total = f"{food_total_raw:.2f} грн"
+    formatted_food_total = f"{format_number(food_total_raw)} грн"
     
     # Використовуємо вагу з бази даних, якщо вона є, інакше розраховуємо
     kp_total_weight = getattr(kp, "total_weight", None)
@@ -933,7 +992,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     if kp_total_weight is not None:
         # Вага зберігається в грамах
         total_weight_grams_value = kp_total_weight
-        formatted_total_weight = f"{kp_total_weight:.0f} г"
+        formatted_total_weight = f"{format_number(kp_total_weight, 0)} г"
         calculated_weight_per_person = (
             kp_weight_per_person
             if kp_weight_per_person is not None
@@ -942,12 +1001,15 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     else:
         # Якщо ваги немає в БД, використовуємо розраховану (в кг, конвертуємо в г)
         total_weight_grams_value = calculated_total_weight_grams
-        formatted_total_weight = f"{calculated_total_weight_grams:.0f} г"
+        formatted_total_weight = f"{format_number(calculated_total_weight_grams, 0)} г"
         calculated_weight_per_person = (
             calculated_total_weight_grams / effective_people_count
             if effective_people_count
             else 0
         )
+    
+    # Форматуємо вагу на особу
+    formatted_weight_per_person = f"{format_number(calculated_weight_per_person, 0)} г" if calculated_weight_per_person else None
     
     # Конвертуємо Decimal з БД в float для уникнення помилок типів
     equipment_total = float(getattr(kp, "equipment_total", None) or 0)
@@ -966,12 +1028,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         people = fmt["people_count"] if fmt["people_count"] and fmt["people_count"] > 0 else effective_people_count
         food_total_fmt = fmt["food_total_raw"]
         fmt["food_total"] = food_total_fmt
-        fmt["food_total_formatted"] = f"{food_total_fmt:.2f} грн"
+        fmt["food_total_formatted"] = f"{format_number(food_total_fmt)} грн"
         fmt["price_per_person"] = (
             (food_total_fmt / people) if people and people > 0 else None
         )
         fmt["price_per_person_formatted"] = (
-            f"{fmt['price_per_person']:.2f} грн/люд" if fmt["price_per_person"] is not None else None
+            f"{format_number(fmt['price_per_person'])} грн/люд" if fmt["price_per_person"] is not None else None
         )
         
         # Знижка по формату, якщо увімкнено блок знижки
@@ -980,14 +1042,14 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             total_after_discount = food_total_fmt - discount_amount
             fmt["discount_percent"] = discount_percent
             fmt["discount_amount"] = discount_amount
-            fmt["discount_amount_formatted"] = f"{discount_amount:.2f} грн"
+            fmt["discount_amount_formatted"] = f"{format_number(discount_amount)} грн"
             fmt["total_after_discount"] = total_after_discount
-            fmt["total_after_discount_formatted"] = f"{total_after_discount:.2f} грн"
+            fmt["total_after_discount_formatted"] = f"{format_number(total_after_discount)} грн"
             fmt["price_per_person_after_discount"] = (
                 (total_after_discount / people) if people and people > 0 else None
             )
             fmt["price_per_person_after_discount_formatted"] = (
-                f"{fmt['price_per_person_after_discount']:.2f} грн/люд"
+                f"{format_number(fmt['price_per_person_after_discount'])} грн/люд"
                 if fmt["price_per_person_after_discount"] is not None
                 else None
             )
@@ -1026,15 +1088,34 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
     fop_extra = grand_total * fop_percent / 100.0
     grand_total_with_fop = grand_total + fop_extra
 
-    # Форматовані рядки для шаблону
-    grand_total_formatted = f"{grand_total:.2f} грн"
-    fop_extra_formatted = f"{fop_extra:.2f} грн" if fop_extra else None
-    grand_total_with_fop_formatted = f"{grand_total_with_fop:.2f} грн"
-    total_discount_amount_formatted = f"{total_discount_amount:.2f} грн" if total_discount_amount > 0 else None
+    # Розраховуємо ціну на особу, вагу на особу, мл на особу
+    price_per_person_total = grand_total / effective_people_count if effective_people_count and grand_total > 0 else None
+    formatted_price_per_person_total = f"{format_number(price_per_person_total)} грн" if price_per_person_total else None
+    
+    # Вага на особу (вже розрахована вище)
+    formatted_weight_per_person = f"{format_number(calculated_weight_per_person, 0)} г" if calculated_weight_per_person else None
+    
+    # Мл на особу
+    ml_per_person = total_volume_ml / effective_people_count if effective_people_count and total_volume_ml > 0 else None
+    formatted_ml_per_person = f"{format_number(ml_per_person, 0)} мл" if ml_per_person else None
+    
+    # Форматовані рядки для шаблону (без нулів після коми)
+    grand_total_formatted = f"{format_number(grand_total)} грн"
+    fop_extra_formatted = f"{format_number(fop_extra)} грн" if fop_extra else None
+    grand_total_with_fop_formatted = f"{format_number(grand_total_with_fop)} грн"
+    total_discount_amount_formatted = f"{format_number(total_discount_amount)} грн" if total_discount_amount > 0 else None
     
     # Сума сервісу та обладнання разом
     equipment_service_total = equipment_total + service_total
-    equipment_service_total_formatted = f"{equipment_service_total:.2f} грн" if equipment_service_total > 0 else None
+    equipment_service_total_formatted = f"{format_number(equipment_service_total)} грн" if equipment_service_total > 0 else None
+    
+    # Розраховуємо ціну на особу (загальна сума / кількість людей)
+    price_per_person_total = grand_total / effective_people_count if effective_people_count and grand_total > 0 else None
+    formatted_price_per_person_total = f"{format_number(price_per_person_total)} грн" if price_per_person_total else None
+    
+    # Розраховуємо мл на особу
+    ml_per_person = total_volume_ml / effective_people_count if effective_people_count and total_volume_ml > 0 else None
+    formatted_ml_per_person = f"{format_number(ml_per_person, 0)} мл" if ml_per_person else None
     
     # Налаштування теми шаблону (з дефолтами)
     primary_color = "#FF5A00"
@@ -1334,9 +1415,9 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         formats=formats,
         # Підсумки по кухні та додаткових блоках
         food_total=formatted_food_total,
-        equipment_total=f"{equipment_total:.2f} грн" if equipment_total else None,
-        service_total=f"{service_total:.2f} грн" if service_total else None,
-        transport_total=f"{transport_total:.2f} грн" if transport_total else None,
+        equipment_total=f"{format_number(equipment_total)} грн" if equipment_total else None,
+        service_total=f"{format_number(service_total)} грн" if service_total else None,
+        transport_total=f"{format_number(transport_total)} грн" if transport_total else None,
         total_weight=formatted_total_weight,
         total_weight_grams=total_weight_grams_value,
         weight_per_person=formatted_weight_per_person,
@@ -1407,7 +1488,12 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
         services_total=service_total,
         services_total_formatted=f"{service_total:.2f} грн" if service_total else None,
         equipment_total_value=equipment_total,
-        equipment_total_formatted=f"{equipment_total:.2f} грн" if equipment_total else None,
+        equipment_total_formatted=f"{format_number(equipment_total)} грн" if equipment_total else None,
+        # Підсумок на особу
+        price_per_person_total=price_per_person_total,
+        price_per_person_total_formatted=formatted_price_per_person_total,
+        ml_per_person=ml_per_person,
+        ml_per_person_formatted=formatted_ml_per_person,
     )
     
     # base_url потрібен, щоб WeasyPrint коректно розумів відносні шляхи
