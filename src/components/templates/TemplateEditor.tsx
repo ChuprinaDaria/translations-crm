@@ -825,8 +825,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       };
 
       // Шапка: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      // Якщо formData.header_image === null, значить користувач видалив зображення - передаємо порожній рядок
       if (uploadedImages.header) {
         templateData.header_image_url = uploadedImages.header;
+      } else if (formData.header_image === null) {
+        // Користувач видалив зображення - очищаємо URL
+        templateData.header_image_url = "";
       } else if (typeof formData.header_image === "string" && formData.header_image) {
         templateData.header_image_url = formData.header_image;
       } else if (template?.header_image_url) {
@@ -843,8 +847,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       }
 
       // Роздільовач: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      // Якщо formData.category_separator_image === null, значить користувач видалив зображення
       if (uploadedImages.separator) {
         templateData.category_separator_image_url = uploadedImages.separator;
+      } else if (formData.category_separator_image === null) {
+        // Користувач видалив зображення - очищаємо URL
+        templateData.category_separator_image_url = "";
       } else if (typeof formData.category_separator_image === "string" && formData.category_separator_image) {
         templateData.category_separator_image_url = formData.category_separator_image;
       } else if (template?.category_separator_image_url) {
@@ -852,8 +860,12 @@ export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProp
       }
 
       // Прев'ю: якщо є новий завантажений файл - передаємо URL, інакше зберігаємо існуючий URL
+      // Якщо formData.logo_image === null, значить користувач видалив зображення
       if (uploadedImages.logo) {
         templateData.preview_image_url = uploadedImages.logo;
+      } else if (formData.logo_image === null) {
+        // Користувач видалив зображення - очищаємо URL
+        templateData.preview_image_url = "";
       } else if (typeof formData.logo_image === "string" && formData.logo_image) {
         templateData.preview_image_url = formData.logo_image;
       } else if (template?.preview_image_url) {

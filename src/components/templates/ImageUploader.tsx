@@ -126,6 +126,10 @@ export function ImageUploader({
                   type="button"
                   onClick={() => {
                     setPreview(null);
+                    // Очищаємо input для можливості повторного вибору того ж файлу
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
                     onRemove();
                   }}
                   className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"

@@ -169,8 +169,8 @@ class ResetPasswordRequest(BaseModel):
 class KPBase(BaseModel):
     title: str
     people_count: int
-    # Статус КП (за замовчуванням "sent")
-    status: Optional[str] = "sent"
+    # Статус КП (за замовчуванням "in_progress" - В роботі)
+    status: Optional[str] = "in_progress"
     # Загальні дані про клієнта та захід
     client_name: Optional[str] = None
     event_format: Optional[str] = None

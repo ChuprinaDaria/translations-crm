@@ -234,7 +234,7 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
         total_amount=getattr(kp_in, "total_amount", None),
         final_amount=getattr(kp_in, "final_amount", None),
         created_by_id=created_by_id,
-        status=kp_in.status or "sent",
+        status=kp_in.status or "in_progress",
         # Знижки (стара система - deprecated)
         discount_id=getattr(kp_in, "discount_id", None),
         cashback_id=getattr(kp_in, "cashback_id", None),
