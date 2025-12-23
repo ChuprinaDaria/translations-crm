@@ -3064,9 +3064,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
               {/* Швидкий вибір форматів заходу */}
               {eventGroup && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+                <div className="mb-6 p-3 md:p-4 bg-gray-50 rounded-lg border">
                   <Label className="text-sm font-semibold mb-3 block">Формат заходу</Label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {(eventGroup === "delivery-boxes" ? BOX_FORMAT_OPTIONS : CATERING_FORMAT_OPTIONS).map((formatValue) => {
                       const format = { label: formatValue, value: formatValue };
                     const isSelected = eventFormats.some((f) => f.name === format.value);
@@ -3076,7 +3076,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         type="button"
                         variant={isSelected ? "default" : "outline"}
                         size="sm"
-                        className={`h-9 text-sm ${
+                        className={`h-auto min-h-[36px] py-2 px-3 text-sm whitespace-normal text-left justify-start ${
                           isSelected
                             ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
                             : "bg-white hover:bg-gray-50"
@@ -3103,8 +3103,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           }
                         }}
                       >
-                        {formatValue}
-                        {isSelected && <X className="w-3 h-3 ml-1" />}
+                        <span className="flex-1">{formatValue}</span>
+                        {isSelected && <X className="w-3 h-3 ml-2 flex-shrink-0" />}
                       </Button>
                     );
                     })}
@@ -3118,10 +3118,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               )}
 
               <Tabs defaultValue="dishes" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="dishes">Страви</TabsTrigger>
-                  <TabsTrigger value="equipment">Обладнання</TabsTrigger>
-                  <TabsTrigger value="service">Обслуговування</TabsTrigger>
+                <TabsList className="w-full flex flex-wrap h-auto p-1 gap-1">
+                  <TabsTrigger value="dishes" className="flex-1 min-w-[80px] text-xs sm:text-sm py-2">Страви</TabsTrigger>
+                  <TabsTrigger value="equipment" className="flex-1 min-w-[80px] text-xs sm:text-sm py-2">Обладнання</TabsTrigger>
+                  <TabsTrigger value="service" className="flex-1 min-w-[80px] text-xs sm:text-sm py-2">Обслуговування</TabsTrigger>
                 </TabsList>
                 
                 {/* Tab: Страви */}
@@ -3144,13 +3144,13 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
               ) : (
                 <div className="space-y-4">
                   {/* Формати заходу з таймінгами */}
-                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
+                  <div className="space-y-3 p-3 md:p-4 bg-gray-50 rounded-lg border">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900">
                           Формати заходу та таймінг
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 mt-1">
                           Додайте формати заходу (наприклад, Welcome drink, Фуршет) з таймінгами та оберіть страви для кожного формату.
                         </p>
                       </div>
@@ -3158,6 +3158,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="w-full sm:w-auto whitespace-nowrap"
                         onClick={() => {
                           setEventFormats((prev) => [
                             ...prev,
@@ -3183,10 +3184,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         {eventFormats.map((format) => (
                           <div
                             key={format.id}
-                            className="p-4 bg-white rounded-lg border border-gray-200"
+                            className="p-3 md:p-4 bg-white rounded-lg border border-gray-200"
                           >
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-3">
-                              <div className="space-y-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 md:gap-3 items-end mb-3">
+                              <div className="space-y-1 col-span-2 sm:col-span-1">
                                 <Label className="text-xs text-gray-600">Назва формату</Label>
                                 <Input
                                   value={format.name}
@@ -3199,7 +3200,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                     )
                                   }
                                   placeholder="Welcome drink / Фуршет"
-                                  className="h-9"
+                                  className="h-9 text-sm"
                                 />
                               </div>
                               <div className="space-y-1">
@@ -3363,35 +3364,32 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   {/* Активний формат для вибору страв */}
                   {eventFormats.length > 0 && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Label className="text-sm font-medium text-gray-900 mb-1 block">
-                            Оберіть формат для вибору страв:
-                          </Label>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              variant={activeFormatId === null ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => setActiveFormatId(null)}
-                              className={activeFormatId === null ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
-                            >
-                              Загальний вибір
-                            </Button>
-                            {eventFormats.map((format) => (
-                              <Button
-                                key={format.id}
-                                type="button"
-                                variant={activeFormatId === format.id ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setActiveFormatId(format.id)}
-                                className={activeFormatId === format.id ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
-                              >
-                                {format.name} {format.eventTime && `(${format.eventTime})`}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
+                      <Label className="text-sm font-medium text-gray-900 mb-2 block">
+                        Оберіть формат для вибору страв:
+                      </Label>
+                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant={activeFormatId === null ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setActiveFormatId(null)}
+                          className={`text-xs sm:text-sm ${activeFormatId === null ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}`}
+                        >
+                          Загальний вибір
+                        </Button>
+                        {eventFormats.map((format) => (
+                          <Button
+                            key={format.id}
+                            type="button"
+                            variant={activeFormatId === format.id ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setActiveFormatId(format.id)}
+                            className={`text-xs sm:text-sm whitespace-normal h-auto py-1.5 ${activeFormatId === format.id ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}`}
+                          >
+                            <span className="line-clamp-1">{format.name}</span>
+                            {format.eventTime && <span className="ml-1 opacity-75">({format.eventTime})</span>}
+                          </Button>
+                        ))}
                       </div>
                       {activeFormatId !== null && (
                         <p className="text-xs text-gray-600 mt-2">
@@ -3442,17 +3440,17 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-6 max-h-[500px] overflow-y-auto p-1">
+                    <div className="space-y-6 max-h-[500px] overflow-y-auto overflow-x-hidden px-1">
                       {sortedCategories.map((category) => {
                         const categoryDishes = dishesByCategory[category];
                         if (!categoryDishes || categoryDishes.length === 0) return null;
                         
                         return (
                           <div key={category} className="space-y-3">
-                            <h3 className="text-lg font-semibold text-gray-900 border-b-2 border-[#FF5A00] pb-2">
+                            <h3 className="text-base md:text-lg font-semibold text-gray-900 border-b-2 border-[#FF5A00] pb-2">
                               {category}
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                               {categoryDishes.map((dish) => {
                                 const isSelected = selectedDishes.includes(dish.id);
                                 const isSelectedForFormat = activeFormatId !== null 
@@ -3462,7 +3460,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                   <div
                                     key={dish.id}
                                     onClick={() => toggleDish(dish.id)}
-                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                    className={`p-3 md:p-4 border-2 rounded-lg cursor-pointer transition-all ${
                                       isSelectedForFormat
                                         ? "border-blue-500 bg-blue-50"
                                         : isSelected
@@ -3470,8 +3468,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                         : "border-gray-200 hover:border-gray-300"
                                     }`}
                                   >
-                                    <div className="flex gap-4">
-                                      <div className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
+                                    <div className="flex gap-3">
+                                      <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-50 flex items-center justify-center">
                                         {dish.photo_url ? (
                                           <img
                                             src={getImageUrl(dish.photo_url) || ""}
@@ -3487,27 +3485,27 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                           </span>
                                         )}
                                       </div>
-                                      <div className="flex-1 min-w-0">
+                                      <div className="flex-1 min-w-0 overflow-hidden">
                                         <div className="flex items-start justify-between gap-2 mb-1">
-                                          <h4 className="text-gray-900 truncate">{dish.name}</h4>
-                                          <Checkbox checked={isSelectedForFormat || isSelected} />
+                                          <h4 className="text-sm md:text-base text-gray-900 line-clamp-2 break-words">{dish.name}</h4>
+                                          <Checkbox checked={isSelectedForFormat || isSelected} className="flex-shrink-0" />
                                         </div>
                                         {isSelectedForFormat && activeFormatId !== null && (
                                           <Badge variant="outline" className="text-xs mb-1 bg-blue-100 border-blue-300 text-blue-700">
                                             {eventFormats.find((f) => f.id === activeFormatId)?.name}
                                           </Badge>
                                         )}
-                                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                        <p className="text-xs md:text-sm text-gray-600 line-clamp-2 mb-2 break-words">
                                           {dish.description}
                                         </p>
-                                        <div className="flex items-center justify-between">
-                                          <div className="text-sm text-gray-600">
+                                        <div className="flex items-center justify-between text-xs md:text-sm">
+                                          <div className="text-gray-600">
                                             {dish.weight ? `${dish.weight}${dish.unit}` : '-'}
                                           </div>
-                                          <div className="text-gray-900">{dish.price} грн</div>
+                                          <div className="text-gray-900 font-medium">{dish.price} грн</div>
                                         </div>
                                         {dish.subcategory && (
-                                          <Badge variant="outline" className="mt-2 text-xs">
+                                          <Badge variant="outline" className="mt-2 text-xs truncate max-w-full">
                                             {dish.subcategory}
                                           </Badge>
                                         )}
@@ -4174,7 +4172,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         Додати позицію вручну
                       </Button>
                     </div>
-                    <div className="overflow-x-auto">
+                    {/* Desktop table - hidden on mobile */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="min-w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b bg-[#FF5A00] text-white">
@@ -4420,6 +4419,189 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                         })()}
                         </tbody>
                       </table>
+                    </div>
+
+                    {/* Mobile cards - shown only on mobile */}
+                    <div className="md:hidden space-y-3">
+                      {(() => {
+                        const allDishes = getSelectedDishesData();
+                        const regularDishes = allDishes.filter(d => !isDrink(d));
+                        const drinks = allDishes.filter(d => isDrink(d));
+                        
+                        let peopleCountNum = 0;
+                        if (eventFormats.length > 0) {
+                          peopleCountNum = eventFormats.reduce((sum, format) => {
+                            const formatPeopleCount = parseInt(format.peopleCount, 10) || 0;
+                            return sum + formatPeopleCount;
+                          }, 0);
+                        }
+                        if (peopleCountNum === 0) {
+                          peopleCountNum = parseInt(guestCount, 10) || 0;
+                        }
+                        
+                        const renderMobileCard = (dish: Dish, isDrinkItem: boolean) => {
+                          const qty = dishQuantities[dish.id] ?? 1;
+                          const price = getDishPrice(dish);
+                          const weight = getDishWeight(dish);
+                          const total = qty * price;
+                          const isCustom = isCustomDish(dish.id);
+                          
+                          const parsedWeight = parseWeightValue(weight);
+                          let displayValue: number | string = weight || 0;
+                          let displayUnit = dish.unit || (isDrinkItem ? 'мл' : 'г');
+                          let outputPerPerson = "0.00";
+                          
+                          if (isDrinkItem) {
+                            const unit = (dish.unit || 'мл').toLowerCase();
+                            let volumeInMl = parsedWeight.first;
+                            if (unit === 'л') volumeInMl = volumeInMl * 1000;
+                            displayValue = volumeInMl;
+                            displayUnit = 'мл';
+                            const totalVolumeMl = volumeInMl * qty;
+                            outputPerPerson = totalVolumeMl > 0 && peopleCountNum > 0 
+                              ? (totalVolumeMl / peopleCountNum).toFixed(2) : "0.00";
+                          } else {
+                            if (parsedWeight.isRange) {
+                              displayValue = weight;
+                              displayUnit = dish.unit || 'г';
+                              const unit = (dish.unit || 'г').toLowerCase();
+                              let weightInGrams = parsedWeight.first;
+                              if (unit === 'кг') weightInGrams = weightInGrams * 1000;
+                              const totalWeightGrams = weightInGrams * qty;
+                              outputPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
+                                ? (totalWeightGrams / peopleCountNum).toFixed(2) : "0.00";
+                            } else {
+                              const unit = (dish.unit || 'г').toLowerCase();
+                              let weightInGrams = parsedWeight.first;
+                              if (unit === 'кг') weightInGrams = weightInGrams * 1000;
+                              displayValue = weightInGrams;
+                              displayUnit = 'г';
+                              const totalWeightGrams = weightInGrams * qty;
+                              outputPerPerson = totalWeightGrams > 0 && peopleCountNum > 0 
+                                ? (totalWeightGrams / peopleCountNum).toFixed(2) : "0.00";
+                            }
+                          }
+                          
+                          return (
+                            <div key={dish.id} className={`border rounded-lg p-3 ${isCustom ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200'}`}>
+                              {/* Dish name */}
+                              <div className="flex items-center justify-between mb-3">
+                                {isCustom ? (
+                                  <Input
+                                    type="text"
+                                    className="flex-1 h-9 text-sm font-medium"
+                                    placeholder="Назва страви"
+                                    value={dish.name}
+                                    onChange={(e) => {
+                                      setCustomDishes((prev) =>
+                                        prev.map((d) => (d.id === dish.id ? { ...d, name: e.target.value } : d))
+                                      );
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="font-medium text-sm flex-1">{dish.name}</span>
+                                )}
+                                {isCustom && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 ml-2"
+                                    onClick={() => {
+                                      setCustomDishes((prev) => prev.filter((d) => d.id !== dish.id));
+                                      setDishQuantities((prev) => {
+                                        const { [dish.id]: _, ...rest } = prev;
+                                        return rest;
+                                      });
+                                      setDishOverrides((prev) => {
+                                        const { [dish.id]: _, ...rest } = prev;
+                                        return rest;
+                                      });
+                                    }}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              
+                              {/* Grid with inputs */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Вага ({displayUnit})</label>
+                                  <Input
+                                    type="text"
+                                    className="h-9 text-sm"
+                                    placeholder="150"
+                                    value={typeof displayValue === 'string' ? displayValue : String(displayValue)}
+                                    onChange={(e) => {
+                                      setDishOverrides((prev) => ({
+                                        ...prev,
+                                        [dish.id]: { ...prev[dish.id], weight: e.target.value },
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Порцій</label>
+                                  <Input
+                                    type="number"
+                                    className="h-9 text-sm"
+                                    min="0"
+                                    value={qty}
+                                    onChange={(e) => {
+                                      const value = parseInt(e.target.value, 10) || 0;
+                                      setDishQuantities((prev) => ({ ...prev, [dish.id]: value }));
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Ціна (грн)</label>
+                                  <Input
+                                    type="number"
+                                    className="h-9 text-sm"
+                                    min="0"
+                                    step="0.01"
+                                    value={price.toFixed(2)}
+                                    onChange={(e) => {
+                                      const value = parseFloat(e.target.value) || 0;
+                                      setDishOverrides((prev) => ({
+                                        ...prev,
+                                        [dish.id]: { ...prev[dish.id], price: value },
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">На особу</label>
+                                  <div className="h-9 flex items-center text-sm text-gray-600">
+                                    {outputPerPerson} {displayUnit}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Total */}
+                              <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Сума:</span>
+                                <span className="font-semibold text-[#FF5A00]">{total.toFixed(2)} грн</span>
+                              </div>
+                            </div>
+                          );
+                        };
+                        
+                        return (
+                          <>
+                            {regularDishes.map(dish => renderMobileCard(dish, false))}
+                            {drinks.length > 0 && (
+                              <>
+                                <div className="py-2 px-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <div className="font-semibold text-blue-900 text-sm">Напої</div>
+                                </div>
+                                {drinks.map(dish => renderMobileCard(dish, true))}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
@@ -5396,13 +5578,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
                 {/* PDF Preview Actions */}
                 <div className="border-t pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Попередній перегляд PDF</h3>
-                    <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-gray-900 font-medium">Попередній перегляд PDF</h3>
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <Button
                         onClick={handleGeneratePDFPreview}
                         variant="outline"
                         disabled={!selectedTemplateId || isGeneratingPreview}
+                        className="w-full sm:w-auto text-sm"
                       >
                         {isGeneratingPreview ? (
                           <>
@@ -5425,7 +5608,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             link.click();
                           }}
                           variant="outline"
-                          className="bg-[#FF5A00] text-white hover:bg-[#FF5A00]/90"
+                          className="w-full sm:w-auto bg-[#FF5A00] text-white hover:bg-[#FF5A00]/90 text-sm"
                         >
                           Скачати PDF
                         </Button>
@@ -5438,7 +5621,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                       <iframe
                         src={pdfPreviewUrl}
                         className="w-full"
-                        style={{ height: '600px' }}
+                        style={{ height: 'min(600px, 70vh)' }}
                         title="PDF Preview"
                       />
                     </div>
@@ -5447,41 +5630,41 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
                 {/* Text Preview */}
                 <div className="border-t pt-6">
-                  <h3 className="text-gray-900 mb-4">Деталі КП</h3>
-                  <div className="bg-gray-50 rounded-lg p-6 border border-gray-200 space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
+                  <h3 className="text-gray-900 mb-4 font-medium">Деталі КП</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
+                      <div className="flex justify-between sm:block">
                         <span className="text-gray-600">Клієнт:</span>
-                        <span className="text-gray-900 ml-2">{clientName}</span>
+                        <span className="text-gray-900 sm:ml-2">{clientName}</span>
                       </div>
-                      <div>
+                      <div className="flex justify-between sm:block">
                         <span className="text-gray-600">Дата події:</span>
-                        <span className="text-gray-900 ml-2">{eventDate}</span>
+                        <span className="text-gray-900 sm:ml-2">{eventDate}</span>
                       </div>
-                      <div>
+                      <div className="flex justify-between sm:block">
                         <span className="text-gray-600">Гостей:</span>
-                        <span className="text-gray-900 ml-2">
+                        <span className="text-gray-900 sm:ml-2">
                           {guestCount || (eventFormats.length > 0 
                             ? Math.max(...eventFormats.map(f => parseInt(f.peopleCount, 10) || 0), 0) 
                             : "Не вказано")}
                         </span>
                       </div>
-                      <div>
+                      <div className="flex justify-between sm:block">
                         <span className="text-gray-600">Страв:</span>
-                        <span className="text-gray-900 ml-2">{selectedDishes.length}</span>
+                        <span className="text-gray-900 sm:ml-2">{selectedDishes.length}</span>
                       </div>
                     </div>
 
                     <div className="border-t pt-4">
-                      <h4 className="text-gray-900 mb-3">Обрані страви:</h4>
+                      <h4 className="text-gray-900 mb-3 font-medium">Обрані страви:</h4>
                       <div className="space-y-2">
                         {getSelectedDishesData().map((dish) => (
                           <div
                             key={dish.id}
-                            className="flex items-center justify-between text-sm"
+                            className="flex items-center justify-between text-sm gap-2"
                           >
-                            <span className="text-gray-900">{dish.name}</span>
-                            <span className="text-gray-600">{dish.price} грн</span>
+                            <span className="text-gray-900 truncate flex-1 min-w-0">{dish.name}</span>
+                            <span className="text-gray-600 whitespace-nowrap">{dish.price} грн</span>
                           </div>
                         ))}
                       </div>
