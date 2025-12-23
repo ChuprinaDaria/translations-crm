@@ -109,6 +109,7 @@ export interface User {
   email: string;
   first_name?: string;
   last_name?: string;
+  phone?: string;
   role: string;
   department?: string | null;
   is_active: boolean;
@@ -119,6 +120,7 @@ export interface User {
 export interface UserUpdate {
   first_name?: string;
   last_name?: string;
+  phone?: string;
   role?: string;
   department?: string | null;
   is_active?: boolean;

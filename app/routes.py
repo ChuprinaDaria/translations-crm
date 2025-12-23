@@ -885,11 +885,16 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             'description': item.description,
             'unit': item.unit,
             # Вага однієї одиниці страви
-            'weight': weight_str,          # форматований текст, напр. "45 г" або "0.50 кг"
+            'weight': weight_str,          # форматований текст, напр. "45 г" або "1000 мл"
             # weight_raw - вага в кг для шаблону (шаблон множить на 1000 для конвертації в грами)
             # Якщо одиниця г, то weight_raw = weight_value / 1000 (щоб при множенні на 1000 отримати правильне значення)
+            # Якщо одиниця мл, то weight_raw = weight_value / 1000 (щоб при множенні на 1000 отримати правильне значення в мл)
+            # Якщо одиниця л, то weight_raw = weight_value * 1000 / 1000 = weight_value (1л = 1000мл, тому множимо на 1000, а потім ділимо на 1000 для шаблону)
             # Якщо одиниця кг, то weight_raw = weight_value (залишаємо як є)
-            'weight_raw': (item_weight_raw / 1000.0) if unit_lower == 'г' else item_weight_raw,  # числове значення ваги 1 одиниці (float, кг) для шаблону
+            'weight_raw': (
+                (item_weight_raw / 1000.0) if unit_lower in ['г', 'мл'] 
+                else item_weight_raw
+            ),  # числове значення ваги 1 одиниці (float, кг) для шаблону
             'total_weight': item_weight,
             # Об'єм для розрахунку мл на особу
             'volume': item.volume,

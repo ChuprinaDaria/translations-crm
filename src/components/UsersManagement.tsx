@@ -22,7 +22,7 @@ export function UsersManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [editingNames, setEditingNames] = useState<Record<number, { first_name: string; last_name: string }>>({});
+  const [editingNames, setEditingNames] = useState<Record<number, { first_name: string; last_name: string; phone: string }>>({});
 
   useEffect(() => {
     loadUsers();
@@ -144,11 +144,11 @@ export function UsersManagement() {
     { value: "service-lead", label: "Керівник сервісу" },
   ];
 
-  const handleNameChange = async (user: User, field: "first_name" | "last_name", value: string) => {
-    // Перевірка: тільки адміністратори можуть змінювати імена
+  const handleNameChange = async (user: User, field: "first_name" | "last_name" | "phone", value: string) => {
+    // Перевірка: тільки адміністратори можуть змінювати дані користувачів
     const currentUser = users.find(u => u.email === currentUserEmail);
     if (!currentUser?.is_admin) {
-      toast.error("Тільки адміністратори можуть змінювати імена користувачів");
+      toast.error("Тільки адміністратори можуть змінювати дані користувачів");
       return;
     }
 
@@ -173,7 +173,12 @@ export function UsersManagement() {
         delete newState[user.id];
         return newState;
       });
-      toast.success(`${field === "first_name" ? "Ім'я" : "Прізвище"} оновлено`);
+      const fieldNames: Record<string, string> = {
+        first_name: "Ім'я",
+        last_name: "Прізвище",
+        phone: "Телефон",
+      };
+      toast.success(`${fieldNames[field]} оновлено`);
     } catch (error: any) {
       toast.error("Помилка оновлення даних користувача");
       console.error(error);
@@ -246,6 +251,7 @@ export function UsersManagement() {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Ім'я</TableHead>
+                    <TableHead>Телефон</TableHead>
                     <TableHead>Роль</TableHead>
                     <TableHead>Відділ</TableHead>
                     <TableHead>Статус</TableHead>
@@ -344,6 +350,42 @@ export function UsersManagement() {
                                 }}
                                 className="w-24 text-sm h-8"
                               />
+                              <Input
+                                type="tel"
+                                placeholder="Телефон"
+                                value={editingNames[user.id]?.phone !== undefined 
+                                  ? editingNames[user.id].phone 
+                                  : (user.phone || "")}
+                                onChange={(e) => {
+                                  setEditingNames((prev) => ({
+                                    ...prev,
+                                    [user.id]: {
+                                      ...prev[user.id],
+                                      phone: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                onBlur={(e) => {
+                                  const newValue = e.target.value.trim();
+                                  const oldValue = user.phone || "";
+                                  if (newValue !== oldValue) {
+                                    handleNameChange(user, "phone", newValue);
+                                  } else {
+                                    // Очищаємо локальний стан, якщо значення не змінилося
+                                    setEditingNames((prev) => {
+                                      const newState = { ...prev };
+                                      if (newState[user.id]) {
+                                        delete newState[user.id].phone;
+                                        if (Object.keys(newState[user.id]).length === 0) {
+                                          delete newState[user.id];
+                                        }
+                                      }
+                                      return newState;
+                                    });
+                                  }
+                                }}
+                                className="w-32 text-sm h-8"
+                              />
                             </div>
                           ) : (
                             <span>
@@ -352,6 +394,9 @@ export function UsersManagement() {
                                 : "-"}
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          {user.phone || "-"}
                         </TableCell>
                         <TableCell>
                           {isCurrentUserAdmin ? (

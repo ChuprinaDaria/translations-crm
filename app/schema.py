@@ -127,6 +127,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
     role: Optional[str] = None
     department: Optional[str] = None
     is_active: Optional[bool] = None
@@ -135,6 +136,7 @@ class UserUpdate(BaseModel):
 
 class UserOut(UserBase):
     id: int
+    phone: Optional[str] = None
     is_active: bool
     is_admin: bool
     role: str

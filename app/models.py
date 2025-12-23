@@ -64,6 +64,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)  # Телефон менеджера для відображення в КП
     role = Column(String, default='user')
     department = Column(String, nullable=True)  # Напр.: "КП", "Продажі"
 

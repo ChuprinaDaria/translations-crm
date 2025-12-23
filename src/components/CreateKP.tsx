@@ -1525,23 +1525,47 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         const totalPrice = totalBeforeCashback - (useCashback ? cashbackAmount : 0);
         const title = clientName || `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
 
-        // Формуємо payload для страв
+        // Формуємо payload для страв з прив'язкою до форматів
         const itemsPayload: Array<{ item_id: number; quantity: number; event_format_id?: number }> = [];
-        const allSelectedDishIds = new Set<number>();
-        eventFormats.forEach((format) => {
-          format.selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
-        });
-        selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
         
-        allSelectedDishIds.forEach((dishId) => {
-          const dish = dishes.find((d) => d.id === dishId);
-          if (dish && !isCustomDish(dish.id)) {
-            itemsPayload.push({
-              item_id: dish.id,
-              quantity: dishQuantities[dish.id] || 1,
-            });
+        // Додаємо страви з кожного формату окремо
+        eventFormats.forEach((format, formatIndex) => {
+          format.selectedDishes.forEach((dishId) => {
+            const dish = dishes.find((d) => d.id === dishId);
+            if (dish && !isCustomDish(dish.id)) {
+              itemsPayload.push({
+                item_id: dish.id,
+                quantity: dishQuantities[dishId] || 1,
+                // Встановлюємо індекс формату (backend мапить його на ID)
+                event_format_id: formatIndex,
+              });
+            }
+          });
+        });
+        
+        // Додаємо страви з загального вибору (якщо вони не в форматі, event_format_id буде undefined)
+        selectedDishes.forEach((dishId) => {
+          // Перевіряємо, чи страва вже не додана через формати
+          const alreadyInFormat = eventFormats.some((format) => format.selectedDishes.includes(dishId));
+          if (!alreadyInFormat) {
+            const dish = dishes.find((d) => d.id === dishId);
+            if (dish && !isCustomDish(dish.id)) {
+              itemsPayload.push({
+                item_id: dish.id,
+                quantity: dishQuantities[dishId] || 1,
+                // event_format_id залишається undefined для страв без формату
+              });
+            }
           }
         });
+
+        // Формуємо формати заходів для КП
+        const eventFormatsPayload = eventFormats.map((format, index) => ({
+          name: format.name || `Формат ${index + 1}`,
+          event_time: format.eventTime || undefined,
+          people_count: parseInt(format.peopleCount, 10) || undefined,
+          order_index: index,
+        }));
 
         const kpData = {
           title,
@@ -1565,6 +1589,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
           total_price: totalPrice,
           template_id: selectedTemplateId,
           items: itemsPayload,
+          event_formats: eventFormatsPayload.length > 0 ? eventFormatsPayload : undefined,
           event_date: eventDate || undefined,
           event_format: eventFormat || undefined,
           event_group: eventGroup || undefined,
