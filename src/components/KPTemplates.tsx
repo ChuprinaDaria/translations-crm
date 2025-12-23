@@ -977,6 +977,7 @@ export function KPTemplates() {
       {/* Візуальний редактор шаблонів */}
       {isEditorOpen && (
         <TemplateEditor
+          key={editingTemplate?.id ?? "new"}
           template={editingTemplate}
           onSave={handleSaveTemplate}
           onClose={() => {

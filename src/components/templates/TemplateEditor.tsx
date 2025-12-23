@@ -684,66 +684,75 @@ function StructureTab({
 export function TemplateEditor({ template, onSave, onClose }: TemplateEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"design" | "content" | "structure">("design");
-  const [formData, setFormData] = useState<TemplateDesign>({
-    name: template?.name || "",
-    description: template?.description || "",
-    is_default: template?.is_default || false,
+  const buildInitialFormData = (tpl: TemplateEditorProps["template"]): TemplateDesign => ({
+    name: tpl?.name || "",
+    description: tpl?.description || "",
+    is_default: tpl?.is_default || false,
     // Основні кольори
-    primary_color: template?.primary_color ?? "#FF5A00",
-    secondary_color: template?.secondary_color ?? "#FFFFFF",
-    text_color: template?.text_color ?? "#1A1A1A",
-    font_family: template?.font_family ?? "Inter, sans-serif",
+    primary_color: tpl?.primary_color ?? "#FF5A00",
+    secondary_color: tpl?.secondary_color ?? "#FFFFFF",
+    text_color: tpl?.text_color ?? "#1A1A1A",
+    font_family: tpl?.font_family ?? "Inter, sans-serif",
     // Заголовок КП
-    title_text: template?.title_text ?? "КОМЕРЦІЙНА ПРОПОЗИЦІЯ",
-    company_name: template?.company_name ?? "ДЗИҐА КЕЙТЕРІНҐ",
+    title_text: tpl?.title_text ?? "КОМЕРЦІЙНА ПРОПОЗИЦІЯ",
+    company_name: tpl?.company_name ?? "ДЗИҐА КЕЙТЕРІНҐ",
     // Шрифти для різних елементів
-    title_font: template?.title_font ?? "Montserrat, Arial, sans-serif",
-    header_font: template?.header_font ?? "Montserrat, Arial, sans-serif",
-    body_font: template?.body_font ?? "Inter, Arial, sans-serif",
-    table_font: template?.table_font ?? "Inter, Arial, sans-serif",
+    title_font: tpl?.title_font ?? "Montserrat, Arial, sans-serif",
+    header_font: tpl?.header_font ?? "Montserrat, Arial, sans-serif",
+    body_font: tpl?.body_font ?? "Inter, Arial, sans-serif",
+    table_font: tpl?.table_font ?? "Inter, Arial, sans-serif",
     // Зображення (зберігаємо URL якщо вже завантажено, інакше null для нового файлу)
-    logo_image: (template?.preview_image_url ? template.preview_image_url : null) as File | string | null,
-    header_image: (template?.header_image_url ? template.header_image_url : null) as File | string | null,
-    category_separator_image: (template?.category_separator_image_url ? template.category_separator_image_url : null) as File | string | null,
+    logo_image: (tpl?.preview_image_url ? tpl.preview_image_url : null) as File | string | null,
+    header_image: (tpl?.header_image_url ? tpl.header_image_url : null) as File | string | null,
+    category_separator_image: (tpl?.category_separator_image_url ? tpl.category_separator_image_url : null) as File | string | null,
     // Кольори елементів PDF
-    format_bg_color: template?.format_bg_color ?? "#FF8C00",
-    table_header_bg_color: template?.table_header_bg_color ?? "#FFA500",
-    category_bg_color: template?.category_bg_color ?? "#FFB84D",
-    summary_bg_color: template?.summary_bg_color ?? "#F3F4F6",
-    total_bg_color: template?.total_bg_color ?? "#FF8C00",
+    format_bg_color: tpl?.format_bg_color ?? "#FF8C00",
+    table_header_bg_color: tpl?.table_header_bg_color ?? "#FFA500",
+    category_bg_color: tpl?.category_bg_color ?? "#FFB84D",
+    summary_bg_color: tpl?.summary_bg_color ?? "#F3F4F6",
+    total_bg_color: tpl?.total_bg_color ?? "#FF8C00",
     // Налаштування тексту категорій та страв
-    category_text_align: template?.category_text_align ?? "center",
-    category_text_color: template?.category_text_color !== undefined && template?.category_text_color !== null ? template.category_text_color : "#FFFFFF",
-    dish_text_align: template?.dish_text_align ?? "left",
-    dish_text_color: template?.dish_text_color !== undefined && template?.dish_text_color !== null ? template.dish_text_color : "#333333",
+    category_text_align: tpl?.category_text_align ?? "center",
+    category_text_color: tpl?.category_text_color !== undefined && tpl?.category_text_color !== null ? tpl.category_text_color : "#FFFFFF",
+    dish_text_align: tpl?.dish_text_align ?? "left",
+    dish_text_color: tpl?.dish_text_color !== undefined && tpl?.dish_text_color !== null ? tpl.dish_text_color : "#333333",
     // Структура таблиці
-    show_item_photo: template?.show_item_photo ?? true,
-    show_item_weight: template?.show_item_weight ?? true,
-    show_item_quantity: template?.show_item_quantity ?? true,
-    show_item_price: template?.show_item_price ?? true,
-    show_item_total: template?.show_item_total ?? true,
-    show_item_description: template?.show_item_description ?? false,
+    show_item_photo: tpl?.show_item_photo ?? true,
+    show_item_weight: tpl?.show_item_weight ?? true,
+    show_item_quantity: tpl?.show_item_quantity ?? true,
+    show_item_price: tpl?.show_item_price ?? true,
+    show_item_total: tpl?.show_item_total ?? true,
+    show_item_description: tpl?.show_item_description ?? false,
     // Секції меню - тепер динамічно формуються з даних КП, не зберігаємо в шаблоні
     menu_sections: [], // Не використовується - секції меню формуються динамічно з категорій страв КП
     // Підсумки
-    show_weight_summary: template?.show_weight_summary ?? true,
-    show_weight_per_person: template?.show_weight_per_person ?? true,
-    show_equipment_block: template?.show_equipment_block ?? true,
-    show_service_block: template?.show_service_block ?? true,
-    show_transport_block: template?.show_transport_block ?? true,
-    show_discount_block: template?.show_discount_block ?? false,
+    show_weight_summary: tpl?.show_weight_summary ?? true,
+    show_weight_per_person: tpl?.show_weight_per_person ?? true,
+    show_equipment_block: tpl?.show_equipment_block ?? true,
+    show_service_block: tpl?.show_service_block ?? true,
+    show_transport_block: tpl?.show_transport_block ?? true,
+    show_discount_block: tpl?.show_discount_block ?? false,
     // Тексти
     menu_title: "", // Не використовується - заголовки секцій формуються динамічно з назв форматів заходу
-    summary_title: template?.summary_title ?? "Підсумок",
-    footer_text: template?.footer_text ?? "",
+    summary_title: tpl?.summary_title ?? "Підсумок",
+    footer_text: tpl?.footer_text ?? "",
     // Layout
-    page_orientation: template?.page_orientation ?? "portrait",
-    items_per_page: template?.items_per_page ?? 20,
+    page_orientation: tpl?.page_orientation ?? "portrait",
+    items_per_page: tpl?.items_per_page ?? 20,
     // Галерея фото
-    gallery_photos: template?.gallery_photos || [],
+    gallery_photos: Array.isArray(tpl?.gallery_photos) ? [...tpl.gallery_photos] : [],
     // Умови бронювання
-    booking_terms: template?.booking_terms || "",
+    booking_terms: tpl?.booking_terms || "",
   });
+
+  const [formData, setFormData] = useState<TemplateDesign>(() => buildInitialFormData(template));
+
+  // Важливо: при переключенні між шаблонами треба скидати state редактора,
+  // інакше gallery_photos та інші поля "переїжджають" між шаблонами.
+  useEffect(() => {
+    setFormData(buildInitialFormData(template));
+    setActiveTab("design");
+  }, [template?.id]);
 
   const uploadImages = async () => {
     const uploads: Record<string, string> = {};
