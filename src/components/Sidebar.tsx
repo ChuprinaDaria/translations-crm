@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { InfoTooltip } from "./InfoTooltip";
 import { cn } from "./ui/utils";
-import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
 
 interface SidebarProps {
@@ -305,7 +304,7 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
   return (
     <div
       className={cn(
-        "bg-[#F7F7F7] border-r border-gray-200 flex flex-col overflow-hidden",
+        "bg-[#F7F7F7] border-r border-gray-200 flex flex-col",
         !isMobile && "h-screen fixed left-0 top-0",
         isMobile && "h-full w-full max-h-screen",
         !isMobile && (isCollapsed ? "w-20" : "w-[260px]")
@@ -327,15 +326,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
         )}
       </div>
 
-      {isMobile ? (
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-          {menuContent}
-        </div>
-      ) : (
-        <ScrollArea className="flex-1 min-h-0">
-          {menuContent}
-        </ScrollArea>
-      )}
+      {/* Область меню зі скролом - працює і на мобільних, і на десктопі */}
+      <div 
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain sidebar-scroll" 
+        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+      >
+        {menuContent}
+      </div>
 
       <div className="border-t border-gray-200 p-3 flex-shrink-0">
         <Button

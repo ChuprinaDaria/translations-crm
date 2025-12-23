@@ -348,6 +348,36 @@ export class ApiError extends Error {
   }
 }
 
+// JWT helpers (frontend only)
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const binary = atob(padded);
+    // payload is almost always ASCII JSON; handle UTF-8 just in case
+    try {
+      return JSON.parse(binary);
+    } catch {
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      const text = new TextDecoder().decode(bytes);
+      return JSON.parse(text);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(token: string, leewaySeconds = 30): boolean {
+  const payload = decodeJwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== "number") return false; // якщо exp нема — не блокуємо
+  const now = Math.floor(Date.now() / 1000);
+  return exp <= now + leewaySeconds;
+}
+
 // Token management
 export const tokenManager = {
   getToken(): string | null {
@@ -357,17 +387,31 @@ export const tokenManager = {
   setToken(token: string): void {
     console.log('Saving token to localStorage:', token?.substring(0, 20) + '...');
     localStorage.setItem('auth_token', token);
+    window.dispatchEvent(new CustomEvent("auth:token-changed", { detail: { action: "set" } }));
   },
 
   removeToken(): void {
     console.log('Removing token from localStorage');
     localStorage.removeItem('auth_token');
+    window.dispatchEvent(new CustomEvent("auth:token-changed", { detail: { action: "remove" } }));
+    window.dispatchEvent(new CustomEvent("auth:logout"));
   },
 
   isAuthenticated(): boolean {
-    const hasToken = !!this.getToken();
-    console.log('Is authenticated:', hasToken);
-    return hasToken;
+    const token = this.getToken();
+    const hasToken = !!token;
+    if (!hasToken) {
+      console.log('Is authenticated:', false);
+      return false;
+    }
+    if (token && isJwtExpired(token)) {
+      console.log("[Auth] Token expired - logging out");
+      this.removeToken();
+      console.log('Is authenticated:', false);
+      return false;
+    }
+    console.log('Is authenticated:', true);
+    return true;
   }
 };
 
@@ -416,10 +460,6 @@ async function apiFetch<T>(
     if (response.status === 401) {
       console.log('[API] Unauthorized - redirecting to login');
       tokenManager.removeToken();
-      // Перенаправляємо на сторінку логіну, якщо ми не на ній
-      if (!window.location.pathname.includes('/auth')) {
-        window.location.href = '/auth';
-      }
     }
     
     throw new ApiError(response.status, response.statusText, errorData);
@@ -485,10 +525,6 @@ async function apiFetchMultipart<T>(
     if (response.status === 401) {
       console.log('[API] Unauthorized - redirecting to login');
       tokenManager.removeToken();
-      // Перенаправляємо на сторінку логіну, якщо ми не на ній
-      if (!window.location.pathname.includes('/auth')) {
-        window.location.href = '/auth';
-      }
     }
     
     throw new ApiError(response.status, response.statusText, errorData);
