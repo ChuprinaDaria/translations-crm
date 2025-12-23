@@ -125,9 +125,14 @@ def send_kp_email(
         
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
-        server = smtplib.SMTP(host, port, timeout=10)
-        print(f"Starting TLS...")
-        server.starttls()
+        # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
+        if port == 465:
+            print(f"Using SSL connection (port 465)...")
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+            print(f"Starting TLS...")
+            server.starttls()
         print(f"Logging in as {user}...")
         server.login(user, password)
         print(f"Sending message...")
@@ -212,9 +217,14 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         
         # Відправляємо email
         print(f"Connecting to SMTP server {host}:{port}...")
-        server = smtplib.SMTP(host, port, timeout=10)
-        print(f"Starting TLS...")
-        server.starttls()
+        # Порт 465 використовує SSL з самого початку, інші порти використовують STARTTLS
+        if port == 465:
+            print(f"Using SSL connection (port 465)...")
+            server = smtplib.SMTP_SSL(host, port, timeout=10)
+        else:
+            server = smtplib.SMTP(host, port, timeout=10)
+            print(f"Starting TLS...")
+            server.starttls()
         print(f"Logging in as {user}...")
         server.login(user, password)
         print(f"Sending message...")

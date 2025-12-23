@@ -1676,26 +1676,38 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       `КП від ${new Date(eventDate || Date.now()).toLocaleDateString("uk-UA")}`;
 
     // Формуємо payload для страв
-    // Примітка: event_format_id буде встановлено після створення КП та форматів на бекенді
+    // Важливо: event_format_id вказує на індекс формату в масиві event_formats
     const itemsPayload: Array<{ item_id: number; quantity: number; event_format_id?: number }> = [];
     
-    // Збираємо всі унікальні страви з форматів та загального вибору
-    const allSelectedDishIds = new Set<number>();
-    eventFormats.forEach((format) => {
-      format.selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
+    // Додаємо страви з кожного формату окремо
+    eventFormats.forEach((format, formatIndex) => {
+      format.selectedDishes.forEach((dishId) => {
+        const dish = dishes.find((d) => d.id === dishId);
+        if (dish && !isCustomDish(dish.id)) {
+          itemsPayload.push({
+            item_id: dish.id,
+            quantity: dishQuantities[dishId] || 1,
+            // Встановлюємо індекс формату
+            event_format_id: formatIndex,
+          });
+        }
+      });
     });
-    // Додаємо страви з загального вибору
-    selectedDishes.forEach((dishId) => allSelectedDishIds.add(dishId));
     
-    // Формуємо payload для всіх обраних страв
-    allSelectedDishIds.forEach((dishId) => {
-      const dish = dishes.find((d) => d.id === dishId);
-      if (dish && !isCustomDish(dish.id)) {
-        itemsPayload.push({
-          item_id: dish.id,
-          quantity: dishQuantities[dish.id] || 1,
-          // event_format_id буде встановлено після створення форматів на бекенді
-        });
+    // Додаємо страви з загального вибору (якщо вони не в форматі, event_format_id буде undefined)
+    selectedDishes.forEach((dishId) => {
+      // Перевіряємо, чи страва вже не додана через формати
+      const alreadyInFormat = eventFormats.some((format) => format.selectedDishes.includes(dishId));
+      if (!alreadyInFormat) {
+        const dish = dishes.find((d) => d.id === dishId);
+        if (dish && !isCustomDish(dish.id)) {
+          itemsPayload.push({
+            item_id: dish.id,
+            quantity: dishQuantities[dishId] || 1,
+            // Страви без формату не мають event_format_id
+            event_format_id: undefined,
+          });
+        }
       }
     });
     
