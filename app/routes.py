@@ -15,6 +15,22 @@ from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
 import crud, schema, crud_user, models
+
+
+def jinja2_format_number(value, decimals=2):
+    """Кастомний Jinja2 фільтр для форматування чисел без зайвих нулів."""
+    if value is None:
+        return ''
+    try:
+        num = float(value)
+        # Якщо число ціле, показуємо без десяткових
+        if num == int(num):
+            return str(int(num))
+        # Інакше форматуємо з вказаною кількістю десяткових і прибираємо зайві нулі
+        formatted = f"{num:.{decimals}f}"
+        return formatted.rstrip('0').rstrip('.')
+    except (ValueError, TypeError):
+        return str(value)
 import jwt, os, re, json
 import shutil
 import uuid
@@ -961,6 +977,7 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
 
     # Render template with data
     env = Environment(loader=FileSystemLoader(str(UPLOADS_DIR)))
+    env.filters['format_number'] = jinja2_format_number
     try:
         template = env.get_template(template_filename)
     except Exception as e:
@@ -3147,6 +3164,7 @@ async def create_template(
     # ВАЛІДАЦІЯ: перевіряємо, що шаблон можна завантажити через Jinja2
     try:
         env = Environment(loader=FileSystemLoader(str(UPLOADS_DIR)))
+        env.filters['format_number'] = jinja2_format_number
         test_template = env.get_template(temp_filename)
         print(f"✓ Template validation passed: {temp_filename}")
     except Exception as e:
@@ -3830,6 +3848,7 @@ def generate_template_preview(
             # Використовуємо файл з UPLOADS_DIR
             template_dir = UPLOADS_DIR
             env = Environment(loader=FileSystemLoader(str(template_dir)))
+            env.filters['format_number'] = jinja2_format_number
             template_filename = design.get("filename", "commercial-offer.html")
             try:
                 template = env.get_template(template_filename)

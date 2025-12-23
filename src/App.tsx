@@ -38,6 +38,9 @@ type UserRole =
   | "sales-lead"
   | "service-lead";
 
+// Константа для таймауту неактивності (30 хвилин в мілісекундах)
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -77,6 +80,77 @@ function App() {
     
     checkAuth();
   }, []);
+
+  // Sync auth state when token changes (401, logout in another place, etc.)
+  useEffect(() => {
+    const syncAuth = () => {
+      const isAuth = tokenManager.isAuthenticated();
+      setIsAuthenticated(isAuth);
+      if (!isAuth) {
+        setActiveItem("dashboard");
+        setEditingKPId(null);
+      }
+    };
+    window.addEventListener("auth:token-changed", syncAuth as EventListener);
+    window.addEventListener("auth:logout", syncAuth as EventListener);
+    return () => {
+      window.removeEventListener("auth:token-changed", syncAuth as EventListener);
+      window.removeEventListener("auth:logout", syncAuth as EventListener);
+    };
+  }, []);
+
+  // Автоматичний логаут після 30 хвилин неактивності
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      // Оновлюємо час останньої активності
+      localStorage.setItem('lastActivity', Date.now().toString());
+      
+      inactivityTimer = setTimeout(() => {
+        console.log('[Auth] Автоматичний логаут через 30 хвилин неактивності');
+        authApi.logout();
+        setIsAuthenticated(false);
+        setActiveItem("dashboard");
+        setEditingKPId(null);
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Перевіряємо час останньої активності при завантаженні
+    const lastActivity = localStorage.getItem('lastActivity');
+    if (lastActivity) {
+      const timeSinceLastActivity = Date.now() - parseInt(lastActivity, 10);
+      if (timeSinceLastActivity >= INACTIVITY_TIMEOUT) {
+        console.log('[Auth] Сесія закінчилась через неактивність');
+        authApi.logout();
+        setIsAuthenticated(false);
+        setActiveItem("dashboard");
+        setEditingKPId(null);
+        return;
+      }
+    }
+
+    // Події активності користувача
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    // Встановлюємо початковий таймер
+    resetTimer();
+
+    // Додаємо слухачі подій
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetTimer, { passive: true });
+    });
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const checkMobile = () => {

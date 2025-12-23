@@ -534,10 +534,10 @@
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">
                     {% endif %}
                 </div>
-                <div class="item-cell value-col">{% if item.weight_raw %}{% set weight_grams = item.weight_raw * 1000 %}{% if weight_grams == weight_grams|int %}{{ weight_grams|int }}{% else %}{{ "%.2f"|format(weight_grams).rstrip('0').rstrip('.') }}{% endif %}{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.weight_raw %}{% set weight_grams = item.weight_raw * 1000 %}{{ weight_grams|format_number }}{% else %}—{% endif %}</div>
                 <div class="item-cell value-col">{{ item.quantity }}</div>
-                <div class="item-cell value-col">{% if item.price_raw %}{% if item.price_raw == item.price_raw|int %}{{ item.price_raw|int }}{% else %}{{ "%.2f"|format(item.price_raw).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
-                <div class="item-cell value-col">{% if item.total_raw %}{% if item.total_raw == item.total_raw|int %}{{ item.total_raw|int }}{% else %}{{ "%.2f"|format(item.total_raw).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.price_raw %}{{ item.price_raw|format_number }} ₴{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.total_raw %}{{ item.total_raw|format_number }} ₴{% else %}—{% endif %}</div>
             </div>
         </div>
         {% endfor %}
@@ -559,10 +559,10 @@
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">
                     {% endif %}
                 </div>
-                <div class="item-cell value-col">{% if item.weight_raw %}{% set weight_grams = item.weight_raw * 1000 %}{% if weight_grams == weight_grams|int %}{{ weight_grams|int }}{% else %}{{ "%.2f"|format(weight_grams).rstrip('0').rstrip('.') }}{% endif %}{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.weight_raw %}{% set weight_grams = item.weight_raw * 1000 %}{{ weight_grams|format_number }}{% else %}—{% endif %}</div>
                 <div class="item-cell value-col">{{ item.quantity }}</div>
-                <div class="item-cell value-col">{% if item.price_raw %}{% if item.price_raw == item.price_raw|int %}{{ item.price_raw|int }}{% else %}{{ "%.2f"|format(item.price_raw).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
-                <div class="item-cell value-col">{% if item.total_raw %}{% if item.total_raw == item.total_raw|int %}{{ item.total_raw|int }}{% else %}{{ "%.2f"|format(item.total_raw).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.price_raw %}{{ item.price_raw|format_number }} ₴{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if item.total_raw %}{{ item.total_raw|format_number }} ₴{% else %}—{% endif %}</div>
             </div>
         </div>
         {% endfor %}
@@ -605,7 +605,7 @@
                 <div class="item-cell value-col">{{ "%.2f"|format(eq_item.rental_price) if eq_item.rental_price else '—' }} ₴</div>
                 <div class="item-cell value-col">{{ "%.2f"|format(eq_item.loss_price) if eq_item.loss_price else '—' }} ₴</div>
                 <div class="item-cell value-col">{{ eq_item.quantity }}</div>
-                <div class="item-cell value-col">{% if eq_item.total %}{% if eq_item.total == eq_item.total|int %}{{ eq_item.total|int }}{% else %}{{ "%.2f"|format(eq_item.total).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
+                <div class="item-cell value-col">{% if eq_item.total %}{{ eq_item.total|format_number }} ₴{% else %}—{% endif %}</div>
             </div>
         </div>
         {% endfor %}
@@ -632,7 +632,7 @@
         {% for srv_item in service_items %}
         <div class="service-row">
             <div class="service-cell name-col">{{ srv_item.name }}</div>
-            <div class="service-cell value-col">{% if srv_item.total %}{% if srv_item.total == srv_item.total|int %}{{ srv_item.total|int }}{% else %}{{ "%.2f"|format(srv_item.total).rstrip('0').rstrip('.') }}{% endif %} ₴{% else %}—{% endif %}</div>
+            <div class="service-cell value-col">{% if srv_item.total %}{{ srv_item.total|format_number }} ₴{% else %}—{% endif %}</div>
         </div>
         {% endfor %}
         {% endif %}
