@@ -131,6 +131,7 @@ jobs:
           ENVFILE
           
           echo "🐳 Rebuilding backend..."
+          export DOCKER_BUILDKIT=1
           docker-compose build backend
           
           echo "▶️ Restarting services..."
