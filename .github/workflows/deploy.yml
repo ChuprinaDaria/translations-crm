@@ -131,8 +131,23 @@ jobs:
           ENVFILE
           
           echo "🐳 Rebuilding backend..."
-          export DOCKER_BUILDKIT=1
-          docker-compose build backend
+          # Перевіряємо чи встановлений buildx, якщо ні - встановлюємо або використовуємо fallback
+          if ! docker buildx version > /dev/null 2>&1; then
+            echo "⚠️ Buildx not found, attempting to install..."
+            if command -v apt-get > /dev/null 2>&1; then
+              sudo apt-get update -qq && sudo apt-get install -y docker-buildx-plugin || echo "⚠️ Could not install buildx, using legacy builder"
+            fi
+          fi
+          
+          # Спробуємо використати BuildKit якщо доступний
+          if docker buildx version > /dev/null 2>&1; then
+            echo "✅ Using BuildKit with buildx"
+            export DOCKER_BUILDKIT=1
+            COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build backend
+          else
+            echo "ℹ️ Using legacy Docker builder"
+            docker-compose build backend
+          fi
           
           echo "▶️ Restarting services..."
           docker-compose up -d
@@ -151,13 +166,35 @@ jobs:
           
           echo "🔨 Building frontend..."
           rm -rf build/
-          NODE_OPTIONS=--max_old_space_size=1536 npm run build
+          # Збільшуємо heap size для важких React/Vite проектів
+          NODE_OPTIONS=--max_old_space_size=4096 npm run build
           
           echo "✅ Checking build..."
-          if grep -r "MenuManagement" build/assets/ > /dev/null; then
-            echo "✅ Frontend build complete!"
+          # Перевіряємо що build директорія існує і не порожня
+          if [ ! -d "build" ] || [ -z "$(ls -A build 2>/dev/null)" ]; then
+            echo "❌ Error: Build directory is empty or missing!"
+            exit 1
+          fi
+          
+          # Перевіряємо наявність ключових файлів
+          if [ ! -f "build/index.html" ]; then
+            echo "❌ Error: index.html not found in build!"
+            exit 1
+          fi
+          
+          # Перевіряємо наявність assets
+          if [ ! -d "build/assets" ] || [ -z "$(ls -A build/assets 2>/dev/null)" ]; then
+            echo "❌ Error: No assets found in build!"
+            exit 1
+          fi
+          
+          # Перевіряємо наявність MenuManagement (базова перевірка)
+          if grep -r "MenuManagement" build/assets/ > /dev/null 2>&1; then
+            echo "✅ Frontend build complete and verified!"
           else
-            echo "⚠️ Frontend build might be incomplete"
+            echo "⚠️ Warning: MenuManagement not found in build (might be minified)"
+            echo "ℹ️ Build directory structure:"
+            ls -la build/ || true
           fi
           
           echo "🔄 Restarting nginx..."
