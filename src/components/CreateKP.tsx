@@ -272,6 +272,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [isApplyingMenu, setIsApplyingMenu] = useState(false);
   const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState<string>("");
+  const [selectedSubcategoryToAdd, setSelectedSubcategoryToAdd] = useState<string>("");
+  const [wizardStep, setWizardStep] = useState<"category" | "subcategory">("category");
   const [clientName, setClientName] = useState("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -1244,9 +1246,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
 
   const filteredDishes = dishes
     .filter((dish) => {
-      const matchesSearch =
-        dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        dish.description.toLowerCase().includes(searchQuery.toLowerCase());
+      // Пошук тільки по назві страви
+      const matchesSearch = dish.name.toLowerCase().includes(searchQuery.toLowerCase());
       // Фільтр за випадаючим списком категорії/підкатегорії
       const matchesCategoryFilter = selectedCategoryFilter === "__all__" || 
         dish.category === selectedCategoryFilter || 
@@ -3460,145 +3461,305 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     </div>
                   )}
 
-                  {/* Додавання категорії страв */}
+                  {/* Додавання категорії страв - Візард */}
                   <div className="p-3 md:p-4 bg-purple-50 rounded-lg border border-purple-200">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-lg">📁</span>
-                      <Label className="text-sm font-semibold">Додати категорію страв</Label>
-                    </div>
-                    <div className="flex flex-col md:flex-row gap-3 md:items-end">
-                      <div className="flex-1 space-y-1">
-                        <Label htmlFor="category-select" className="text-xs text-gray-600">
-                          Оберіть категорію для додавання всіх страв
-                        </Label>
-                        <Select
-                          value={selectedCategoryToAdd}
-                          onValueChange={(value) => {
-                            setSelectedCategoryToAdd(value);
-                            if (value) {
-                              // Знаходимо всі страви з цієї категорії
-                              const categoryDishes = dishes.filter((dish) => {
-                                const dishCategory = dish.category || "Інше";
-                                return dishCategory === value;
-                              });
-                              
-                              if (categoryDishes.length === 0) {
-                                toast.info(`У категорії "${value}" немає страв`);
-                                setSelectedCategoryToAdd("");
-                                return;
-                              }
-                              
-                              // Додаємо страви до обраних або до активного формату
-                              if (activeFormatId !== null) {
-                                // Додаємо до активного формату
-                                const format = eventFormats.find((f) => f.id === activeFormatId);
-                                if (format) {
-                                  const newDishIds = categoryDishes.map((d) => d.id);
-                                  const existingDishIds = format.selectedDishes || [];
-                                  const uniqueNewDishIds = newDishIds.filter((id) => !existingDishIds.includes(id));
-                                  
-                                  setEventFormats((prev) =>
-                                    prev.map((f) =>
-                                      f.id === activeFormatId
-                                        ? { ...f, selectedDishes: [...existingDishIds, ...uniqueNewDishIds] }
-                                        : f
-                                    )
-                                  );
-                                  
-                                  // Також додаємо до загального списку обраних страв
-                                  setSelectedDishes((prev) => {
-                                    const newIds = uniqueNewDishIds.filter((id) => !prev.includes(id));
-                                    return [...prev, ...newIds];
-                                  });
-                                  
-                                  toast.success(`Додано ${uniqueNewDishIds.length} страв з категорії "${value}" до формату "${format.name}"`);
-                                }
-                              } else {
-                                // Додаємо до загального списку обраних страв
-                                const newDishIds = categoryDishes.map((d) => d.id);
-                                const existingDishIds = selectedDishes;
-                                const uniqueNewDishIds = newDishIds.filter((id) => !existingDishIds.includes(id));
-                                
-                                setSelectedDishes((prev) => [...prev, ...uniqueNewDishIds]);
-                                toast.success(`Додано ${uniqueNewDishIds.length} страв з категорії "${value}"`);
-                              }
-                              
-                              // Скидаємо вибір після додавання
-                              setSelectedCategoryToAdd("");
-                            }
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">📁</span>
+                        <Label className="text-sm font-semibold">Додати категорію страв</Label>
+                      </div>
+                      {wizardStep === "subcategory" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setWizardStep("category");
+                            setSelectedCategoryToAdd("");
+                            setSelectedSubcategoryToAdd("");
                           }}
                         >
-                          <SelectTrigger id="category-select" className="w-full">
-                            <SelectValue placeholder="Оберіть категорію" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from(new Set(dishes.map((d) => d.category || "Інше")))
-                              .sort()
-                              .map((categoryName) => {
-                                const categoryDishCount = dishes.filter(
-                                  (d) => (d.category || "Інше") === categoryName
-                                ).length;
-                                return (
-                                  <SelectItem key={categoryName} value={categoryName}>
-                                    {categoryName} ({categoryDishCount} страв)
-                                  </SelectItem>
-                                );
-                              })}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Всі страви з обраної категорії будуть додані {activeFormatId !== null ? `до формату "${eventFormats.find((f) => f.id === activeFormatId)?.name}"` : "до обраних страв"}.
-                        </p>
-                      </div>
+                          <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
+                          Назад
+                        </Button>
+                      )}
                     </div>
+
+                    {/* Крок 1: Вибір категорії */}
+                    {wizardStep === "category" && (
+                      <div className="space-y-3">
+                        <Label className="text-xs text-gray-600">
+                          Крок 1: Оберіть категорію
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(new Set(dishes.map((d) => d.category || "Інше")))
+                            .sort()
+                            .map((categoryName) => {
+                              const categoryDishCount = dishes.filter(
+                                (d) => (d.category || "Інше") === categoryName
+                              ).length;
+                              const isSelected = selectedCategoryToAdd === categoryName;
+                              return (
+                                <Button
+                                  key={categoryName}
+                                  variant={isSelected ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedCategoryToAdd(categoryName);
+                                    setWizardStep("subcategory");
+                                    setSelectedSubcategoryToAdd("");
+                                  }}
+                                  className={isSelected ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
+                                >
+                                  {categoryName} ({categoryDishCount})
+                                </Button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Крок 2: Вибір підкатегорії */}
+                    {wizardStep === "subcategory" && selectedCategoryToAdd && (() => {
+                      const subcategories = Array.from(
+                        new Set(
+                          dishes
+                            .filter((d) => (d.category || "Інше") === selectedCategoryToAdd)
+                            .map((d) => d.subcategory)
+                            .filter(Boolean)
+                        )
+                      ).sort();
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-[#FF5A00] text-white flex items-center justify-center text-xs font-semibold">
+                              1
+                            </div>
+                            <span className="text-sm text-gray-600">{selectedCategoryToAdd}</span>
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                            <div className="w-6 h-6 rounded-full bg-[#FF5A00] text-white flex items-center justify-center text-xs font-semibold">
+                              2
+                            </div>
+                            <Label className="text-xs text-gray-600">
+                              Оберіть підкатегорію
+                            </Label>
+                          </div>
+                          {subcategories.length === 0 ? (
+                            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <p className="text-sm text-yellow-800">
+                                У категорії "{selectedCategoryToAdd}" немає підкатегорій. Всі страви з цієї категорії будуть додані.
+                              </p>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="mt-2 bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                                onClick={() => {
+                                  // Знаходимо всі страви з цієї категорії
+                                  const categoryDishes = dishes.filter((dish) => {
+                                    const dishCategory = dish.category || "Інше";
+                                    return dishCategory === selectedCategoryToAdd;
+                                  });
+
+                                  if (categoryDishes.length === 0) {
+                                    toast.info(`У категорії "${selectedCategoryToAdd}" немає страв`);
+                                    return;
+                                  }
+
+                                  // Додаємо страви до обраних або до активного формату
+                                  if (activeFormatId !== null) {
+                                    const format = eventFormats.find((f) => f.id === activeFormatId);
+                                    if (format) {
+                                      const newDishIds = categoryDishes.map((d) => d.id);
+                                      const existingDishIds = format.selectedDishes || [];
+                                      const uniqueNewDishIds = newDishIds.filter(
+                                        (id) => !existingDishIds.includes(id)
+                                      );
+
+                                      setEventFormats((prev) =>
+                                        prev.map((f) =>
+                                          f.id === activeFormatId
+                                            ? {
+                                                ...f,
+                                                selectedDishes: [
+                                                  ...existingDishIds,
+                                                  ...uniqueNewDishIds,
+                                                ],
+                                              }
+                                            : f
+                                        )
+                                      );
+
+                                      setSelectedDishes((prev) => {
+                                        const newIds = uniqueNewDishIds.filter(
+                                          (id) => !prev.includes(id)
+                                        );
+                                        return [...prev, ...newIds];
+                                      });
+
+                                      toast.success(
+                                        `Додано ${uniqueNewDishIds.length} страв з категорії "${selectedCategoryToAdd}" до формату "${format.name}"`
+                                      );
+                                    }
+                                  } else {
+                                    const newDishIds = categoryDishes.map((d) => d.id);
+                                    const existingDishIds = selectedDishes;
+                                    const uniqueNewDishIds = newDishIds.filter(
+                                      (id) => !existingDishIds.includes(id)
+                                    );
+
+                                    setSelectedDishes((prev) => [...prev, ...uniqueNewDishIds]);
+                                    toast.success(
+                                      `Додано ${uniqueNewDishIds.length} страв з категорії "${selectedCategoryToAdd}"`
+                                    );
+                                  }
+
+                                  // Скидаємо вибір
+                                  setWizardStep("category");
+                                  setSelectedCategoryToAdd("");
+                                  setSelectedSubcategoryToAdd("");
+                                }}
+                              >
+                                Додати всі страви з категорії
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {subcategories.map((subcategoryName) => {
+                              const subcategoryDishCount = dishes.filter(
+                                (d) =>
+                                  (d.category || "Інше") === selectedCategoryToAdd &&
+                                  d.subcategory === subcategoryName
+                              ).length;
+                              return (
+                                <Button
+                                  key={subcategoryName}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Знаходимо всі страви з цієї підкатегорії
+                                    const subcategoryDishes = dishes.filter((dish) => {
+                                      const dishCategory = dish.category || "Інше";
+                                      return (
+                                        dishCategory === selectedCategoryToAdd &&
+                                        dish.subcategory === subcategoryName
+                                      );
+                                    });
+
+                                    if (subcategoryDishes.length === 0) {
+                                      toast.info(`У підкатегорії "${subcategoryName}" немає страв`);
+                                      return;
+                                    }
+
+                                    // Додаємо страви до обраних або до активного формату
+                                    if (activeFormatId !== null) {
+                                      // Додаємо до активного формату
+                                      const format = eventFormats.find((f) => f.id === activeFormatId);
+                                      if (format) {
+                                        const newDishIds = subcategoryDishes.map((d) => d.id);
+                                        const existingDishIds = format.selectedDishes || [];
+                                        const uniqueNewDishIds = newDishIds.filter(
+                                          (id) => !existingDishIds.includes(id)
+                                        );
+
+                                        setEventFormats((prev) =>
+                                          prev.map((f) =>
+                                            f.id === activeFormatId
+                                              ? {
+                                                  ...f,
+                                                  selectedDishes: [
+                                                    ...existingDishIds,
+                                                    ...uniqueNewDishIds,
+                                                  ],
+                                                }
+                                              : f
+                                          )
+                                        );
+
+                                        // Також додаємо до загального списку обраних страв
+                                        setSelectedDishes((prev) => {
+                                          const newIds = uniqueNewDishIds.filter(
+                                            (id) => !prev.includes(id)
+                                          );
+                                          return [...prev, ...newIds];
+                                        });
+
+                                        toast.success(
+                                          `Додано ${uniqueNewDishIds.length} страв з підкатегорії "${subcategoryName}" до формату "${format.name}"`
+                                        );
+                                      }
+                                    } else {
+                                      // Додаємо до загального списку обраних страв
+                                      const newDishIds = subcategoryDishes.map((d) => d.id);
+                                      const existingDishIds = selectedDishes;
+                                      const uniqueNewDishIds = newDishIds.filter(
+                                        (id) => !existingDishIds.includes(id)
+                                      );
+
+                                      setSelectedDishes((prev) => [...prev, ...uniqueNewDishIds]);
+                                      toast.success(
+                                        `Додано ${uniqueNewDishIds.length} страв з підкатегорії "${subcategoryName}"`
+                                      );
+                                    }
+
+                                    // Скидаємо вибір після додавання та повертаємося до кроку 1
+                                    setWizardStep("category");
+                                    setSelectedCategoryToAdd("");
+                                    setSelectedSubcategoryToAdd("");
+                                  }}
+                                >
+                                  {subcategoryName} ({subcategoryDishCount})
+                                </Button>
+                              );
+                            })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Search and Filter */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        placeholder="Пошук страв..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                    <div className="w-full sm:w-[240px]">
-                      <Select
-                        value={selectedCategoryFilter}
-                        onValueChange={(value) => {
-                          setSelectedCategoryFilter(value);
-                          // Очищаємо старий фільтр через бейджі
-                          setSelectedTags([]);
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Всі категорії" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__all__">Всі категорії</SelectItem>
-                          {/* Категорії */}
-                          {Array.from(new Set(dishes.map((d) => d.category).filter(Boolean))).sort().map((category) => {
-                            const count = dishes.filter((d) => d.category === category).length;
-                            return (
-                              <SelectItem key={`cat-${category}`} value={category}>
-                                📁 {category} ({count})
-                              </SelectItem>
-                            );
-                          })}
-                          {/* Підкатегорії */}
-                          {Array.from(new Set(dishes.map((d) => d.subcategory).filter(Boolean))).sort().map((subcategory) => {
-                            const count = dishes.filter((d) => d.subcategory === subcategory).length;
-                            return (
-                              <SelectItem key={`subcat-${subcategory}`} value={subcategory}>
-                                📂 {subcategory} ({count})
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Пошук по назві страви..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+
+                  {/* Category Tabs */}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={selectedCategoryFilter === "__all__" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCategoryFilter("__all__");
+                        setSelectedTags([]);
+                      }}
+                      className={selectedCategoryFilter === "__all__" ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
+                    >
+                      Всі категорії
+                    </Button>
+                    {Array.from(new Set(dishes.map((d) => d.category).filter(Boolean))).sort().map((category) => {
+                      const count = dishes.filter((d) => d.category === category).length;
+                      const isSelected = selectedCategoryFilter === category;
+                      return (
+                        <Button
+                          key={`cat-${category}`}
+                          variant={isSelected ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setSelectedCategoryFilter(category);
+                            setSelectedTags([]);
+                          }}
+                          className={isSelected ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90" : ""}
+                        >
+                          {category} ({count})
+                        </Button>
+                      );
+                    })}
                   </div>
 
                   {/* Tag filters (для сумісності) */}

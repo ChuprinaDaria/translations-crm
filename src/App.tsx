@@ -62,11 +62,22 @@ function App() {
     const fontLink = document.createElement("link");
     fontLink.href = "https://fonts.cdnfonts.com/css/gilroy";
     fontLink.rel = "stylesheet";
+    fontLink.onerror = () => {
+      console.warn("Failed to load Gilroy font from CDN");
+    };
     document.head.appendChild(fontLink);
     
     return () => {
-      document.head.removeChild(link);
-      document.head.removeChild(fontLink);
+      try {
+        if (document.head.contains(link)) {
+          document.head.removeChild(link);
+        }
+        if (document.head.contains(fontLink)) {
+          document.head.removeChild(fontLink);
+        }
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
     };
   }, []);
 

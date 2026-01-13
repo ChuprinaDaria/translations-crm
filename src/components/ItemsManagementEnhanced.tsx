@@ -2,7 +2,8 @@ import { Checkbox } from "./ui/checkbox";
 import { Switch } from "./ui/switch";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { toast } from "sonner";
-import { itemsApi, categoriesApi, subcategoriesApi, type Item, type Category, type Subcategory, type ItemCreate } from "../lib/api";
+import { itemsApi, categoriesApi, subcategoriesApi, getImageUrl, type Item, type Category, type Subcategory, type ItemCreate } from "../lib/api";
+import { AllergenIconPicker, getAllergenIcon, getAllergenName } from "./AllergenIconPicker";
 
 type SortBy = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "date-asc" | "date-desc";
 
@@ -49,6 +50,7 @@ export function ItemsManagementEnhanced() {
     weight: "",
     unit: "",
     photo_url: "",
+    icon_name: "",
     active: true,
     subcategory_id: 0,
   });
@@ -189,6 +191,7 @@ export function ItemsManagementEnhanced() {
       weight: "",
       unit: "",
       photo_url: "",
+      icon_name: "",
       active: true,
       subcategory_id: 0,
     });
@@ -212,6 +215,7 @@ export function ItemsManagementEnhanced() {
       weight: item.weight ? String(item.weight) : "",
       unit: item.unit || "",
       photo_url: item.photo_url || "",
+      icon_name: item.icon_name || "",
       active: item.active,
       subcategory_id: item.subcategory_id,
     });
@@ -655,12 +659,21 @@ export function ItemsManagementEnhanced() {
                         </TableCell>
                         <TableCell>
                           <ImageWithFallback
-                            src={item.photo_url || ''}
+                            src={getImageUrl(item.photo_url) || ''}
                             alt={item.name}
                             className="w-12 h-12 object-cover rounded"
                           />
                         </TableCell>
-                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{item.name}</span>
+                            {item.icon_name && (
+                              <span className="text-lg" title={getAllergenName(item.icon_name)}>
+                                {getAllergenIcon(item.icon_name)}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div className="text-sm">
                             <div className="text-gray-900">
@@ -727,13 +740,20 @@ export function ItemsManagementEnhanced() {
                     />
                     
                     <ImageWithFallback
-                      src={item.photo_url || ''}
+                      src={getImageUrl(item.photo_url) || ''}
                       alt={item.name}
                       className="w-20 h-20 object-cover rounded"
                     />
                     
                     <div className="flex-1">
-                      <h3 className="font-semibold mb-1">{item.name}</h3>
+                      <h3 className="font-semibold mb-1 flex items-center gap-2">
+                        <span>{item.name}</span>
+                        {item.icon_name && (
+                          <span className="text-lg" title={getAllergenName(item.icon_name)}>
+                            {getAllergenIcon(item.icon_name)}
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-sm text-gray-500 mb-1">
                         {item.subcategory?.category?.name} → {item.subcategory?.name}
                       </p>
@@ -827,7 +847,7 @@ export function ItemsManagementEnhanced() {
           <div className="space-y-6">
             {/* Photo */}
             <ImageWithFallback
-              src={viewItem?.photo_url || ''}
+              src={getImageUrl(viewItem?.photo_url) || ''}
               alt={viewItem?.name || ''}
               className="w-full h-64 object-cover rounded-lg"
             />
@@ -838,6 +858,17 @@ export function ItemsManagementEnhanced() {
                 {viewItem?.active ? 'Активний' : 'Неактивний'}
               </Badge>
             </div>
+            
+            {/* Allergen Icon */}
+            {viewItem?.icon_name && (
+              <div>
+                <Label className="text-gray-500">Іконка алергену</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-2xl">{getAllergenIcon(viewItem.icon_name)}</span>
+                  <span className="text-sm text-gray-700">{getAllergenName(viewItem.icon_name)}</span>
+                </div>
+              </div>
+            )}
             
             {/* Information */}
             <div className="grid grid-cols-2 gap-4">
@@ -1062,12 +1093,21 @@ export function ItemsManagementEnhanced() {
                 {formData.photo_url && (
                   <div className="mt-2">
                     <ImageWithFallback
-                      src={formData.photo_url}
+                      src={getImageUrl(formData.photo_url)}
                       alt="Preview"
                       className="w-32 h-32 object-cover rounded"
                     />
                   </div>
                 )}
+              </div>
+              
+              {/* Allergen Icon */}
+              <div className="col-span-2">
+                <AllergenIconPicker
+                  value={formData.icon_name || ""}
+                  onChange={(icon) => setFormData({...formData, icon_name: icon})}
+                  label="Іконка алергену"
+                />
               </div>
               
               {/* Active */}
