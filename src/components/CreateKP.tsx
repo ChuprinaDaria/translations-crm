@@ -146,6 +146,17 @@ const EVENT_FORMAT_OPTIONS: string[] = [
   ...CATERING_FORMAT_OPTIONS,
 ];
 
+// Категорії для вибору в конструкторі КП (крок 6)
+const KP_CATEGORIES: string[] = [
+  "Холодні закуски",
+  "Салати",
+  "Гарячі страви",
+  "Гарнір",
+  "Соус",
+  "Десерти",
+  "Напоі",
+];
+
 // Компонент для редагування полів у прев'ю
 interface EditableFieldProps {
   label: string;
@@ -256,6 +267,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("");
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [isApplyingMenu, setIsApplyingMenu] = useState(false);
@@ -1235,11 +1247,15 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
       const matchesSearch =
         dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         dish.description.toLowerCase().includes(searchQuery.toLowerCase());
-      // Якщо вибрана категорія, показуємо тільки страви цієї категорії (точна відповідність)
+      // Фільтр за випадаючим списком категорії/підкатегорії
+      const matchesCategoryFilter = !selectedCategoryFilter || 
+        dish.category === selectedCategoryFilter || 
+        dish.subcategory === selectedCategoryFilter;
+      // Якщо вибрана категорія через бейджі (для сумісності), показуємо тільки страви цієї категорії (точна відповідність)
       const matchesTags =
         selectedTags.length === 0 ||
         selectedTags.some((tag) => dish.category === tag);
-      return matchesSearch && matchesTags;
+      return matchesSearch && matchesCategoryFilter && matchesTags;
     })
     .sort((a, b) => {
       // Спочатку сортуємо за категорією
@@ -3537,19 +3553,56 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     </div>
                   </div>
 
-                  {/* Search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      placeholder="Пошук страв..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
+                  {/* Search and Filter */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Пошук страв..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="w-full sm:w-[240px]">
+                      <Select
+                        value={selectedCategoryFilter}
+                        onValueChange={(value) => {
+                          setSelectedCategoryFilter(value);
+                          // Очищаємо старий фільтр через бейджі
+                          setSelectedTags([]);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Всі категорії" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Всі категорії</SelectItem>
+                          {/* Категорії */}
+                          {Array.from(new Set(dishes.map((d) => d.category).filter(Boolean))).sort().map((category) => {
+                            const count = dishes.filter((d) => d.category === category).length;
+                            return (
+                              <SelectItem key={`cat-${category}`} value={category}>
+                                📁 {category} ({count})
+                              </SelectItem>
+                            );
+                          })}
+                          {/* Підкатегорії */}
+                          {Array.from(new Set(dishes.map((d) => d.subcategory).filter(Boolean))).sort().map((subcategory) => {
+                            const count = dishes.filter((d) => d.subcategory === subcategory).length;
+                            return (
+                              <SelectItem key={`subcat-${subcategory}`} value={subcategory}>
+                                📂 {subcategory} ({count})
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
-                  {/* Tag filters */}
-                  {allTags.length > 0 && (
+                  {/* Tag filters (для сумісності) */}
+                  {allTags.length > 0 && selectedTags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       <span className="text-sm text-gray-600 py-1">Категорії:</span>
                       {allTags.map((tag) => (
@@ -5406,42 +5459,63 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                             setIsEditing(false);
                           };
                           
+                          const handleCategorySelect = (selectedCategory: string) => {
+                            setEditValue(selectedCategory);
+                          };
+
                           if (isEditing) {
                             return (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="text"
-                                  value={editValue}
-                                  onChange={(e) => setEditValue(e.target.value)}
-                                  className="h-8 text-sm font-semibold"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      handleSave();
-                                    } else if (e.key === "Escape") {
-                                      handleCancel();
-                                    }
-                                  }}
-                                  onBlur={handleSave}
-                                />
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={handleSave}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Check className="w-4 h-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={handleCancel}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <X className="w-4 h-4 text-red-600" />
-                                </Button>
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={KP_CATEGORIES.includes(editValue) ? editValue : ""}
+                                    onValueChange={handleCategorySelect}
+                                  >
+                                    <SelectTrigger className="h-8 text-sm font-semibold w-[200px]">
+                                      <SelectValue placeholder="Оберіть категорію" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {KP_CATEGORIES.map((cat) => (
+                                        <SelectItem key={cat} value={cat}>
+                                          {cat}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Input
+                                    type="text"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    className="h-8 text-sm font-semibold flex-1"
+                                    placeholder="Або введіть вручну"
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleSave();
+                                      } else if (e.key === "Escape") {
+                                        handleCancel();
+                                      }
+                                    }}
+                                    onBlur={handleSave}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={handleSave}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Check className="w-4 h-4 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={handleCancel}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <X className="w-4 h-4 text-red-600" />
+                                  </Button>
+                                </div>
                               </div>
                             );
                           }
