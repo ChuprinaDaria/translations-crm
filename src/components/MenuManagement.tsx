@@ -53,6 +53,7 @@ import {
 } from "./ui/alert-dialog";
 import { Textarea } from "./ui/textarea";
 import { Switch } from "./ui/switch";
+import { AllergenIconPicker, getAllergenIcon, getAllergenName } from "./AllergenIconPicker";
 
 export function MenuManagement() {
   // States
@@ -211,6 +212,7 @@ export function MenuManagement() {
       weight: '',
       unit: "",
       photo_url: "",
+      icon_name: "",
       active: true,
       subcategory_id: 0,
     });
@@ -279,6 +281,7 @@ export function MenuManagement() {
       weight: item.weight ? String(item.weight) : '',
       unit: item.unit || "",
       photo_url: item.photo_url || "",
+      icon_name: item.icon_name || "",
       active: item.active,
       subcategory_id: item.subcategory_id,
     });
@@ -940,7 +943,7 @@ export function MenuManagement() {
                 >
                   <CardContent className="p-4 flex flex-col h-full">
                     <div className="flex gap-3 mb-3">
-                      <div className="w-20 h-20 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden border bg-gray-50 flex-shrink-0 relative">
                         {item.photo_url ? (
                           <img
                             src={getImageUrl(item.photo_url) || ""}
@@ -957,8 +960,13 @@ export function MenuManagement() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 truncate mb-1">
-                          {item.name}
+                        <h3 className="font-medium text-gray-900 truncate mb-1 flex items-center gap-2">
+                          <span>{item.name}</span>
+                          {item.icon_name && (
+                            <span className="text-lg" title={getAllergenName(item.icon_name)}>
+                              {getAllergenIcon(item.icon_name)}
+                            </span>
+                          )}
                         </h3>
                         {item.description && (
                           <p className="text-sm text-gray-500 line-clamp-2">
@@ -1388,8 +1396,13 @@ export function MenuManagement() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start justify-between gap-2 mb-1">
-                                    <h5 className="text-sm font-medium text-gray-900 truncate">
-                                      {item.name}
+                                    <h5 className="text-sm font-medium text-gray-900 truncate flex items-center gap-1">
+                                      <span>{item.name}</span>
+                                      {item.icon_name && (
+                                        <span className="text-base" title={getAllergenName(item.icon_name)}>
+                                          {getAllergenIcon(item.icon_name)}
+                                        </span>
+                                      )}
                                     </h5>
                                     <div className="flex items-center gap-2">
                                       {isSelected && (
@@ -1461,8 +1474,13 @@ export function MenuManagement() {
                                     />
                                   )}
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-gray-900 truncate">
-                                      {item.name}
+                                    <div className="text-sm font-medium text-gray-900 truncate flex items-center gap-1">
+                                      <span>{item.name}</span>
+                                      {item.icon_name && (
+                                        <span className="text-base" title={getAllergenName(item.icon_name)}>
+                                          {getAllergenIcon(item.icon_name)}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-xs text-gray-500">
                                       {item.price} грн × {mi.quantity} = {(item.price * mi.quantity).toFixed(2)} грн
@@ -1676,6 +1694,14 @@ export function MenuManagement() {
                     className="w-20"
                   />
                 </div>
+              </div>
+              
+              <div className="col-span-2">
+                <AllergenIconPicker
+                  value={itemFormData.icon_name || ""}
+                  onChange={(icon) => setItemFormData({...itemFormData, icon_name: icon})}
+                  label="Іконка алергену"
+                />
               </div>
               
               <div className="col-span-2 space-y-2">

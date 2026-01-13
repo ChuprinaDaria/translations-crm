@@ -82,6 +82,7 @@ export interface Item {
   volume?: string | number; // Об'єм (необов'язкове поле)
   unit?: string;
   photo_url?: string;
+  icon_name?: string; // Назва іконки (emoji або назва іконки)
   active: boolean;
   subcategory_id: number;
   subcategory?: Subcategory;
@@ -98,6 +99,7 @@ export interface ItemCreate {
   volume?: string | number; // Об'єм (необов'язкове поле)
   unit?: string;
   photo_url?: string;
+  icon_name?: string; // Назва іконки (emoji або назва іконки)
   active?: boolean;
   subcategory_id?: number;
   photo?: File; // Для завантаження файлу

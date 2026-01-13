@@ -41,6 +41,7 @@ import {
 } from "../lib/api";
 import { InfoTooltip } from "./InfoTooltip";
 import { Info } from "lucide-react";
+import { getAllergenIcon, getAllergenName } from "./AllergenIconPicker";
 
 // Функція для форматування телефону під час вводу (+380 93 423 32 29)
 const formatPhoneInput = (value: string): string => {
@@ -95,6 +96,7 @@ interface Dish {
   unit: string;
   price: number;
   photo_url: string;
+  icon_name?: string;
   category: string;
   subcategory: string;
 }
@@ -257,6 +259,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [isApplyingMenu, setIsApplyingMenu] = useState(false);
+  const [selectedCategoryToAdd, setSelectedCategoryToAdd] = useState<string>("");
   const [clientName, setClientName] = useState("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -296,6 +299,16 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [customDishIdCounter, setCustomDishIdCounter] = useState(-1);
   // Активний формат заходу для вибору страв (null = загальний вибір)
   const [activeFormatId, setActiveFormatId] = useState<number | null>(null);
+  
+  // Стан для перейменованих категорій на кроці 6 (ключ - оригінальна назва категорії, значення - нова назва)
+  const [renamedCategories, setRenamedCategories] = useState<Record<string, string>>({});
+  // Стан для призначень страв до категорій (ключ - dish.id, значення - назва категорії)
+  // Якщо страва не має запису тут, використовується оригінальна категорія з dish.category
+  const [dishCategoryAssignments, setDishCategoryAssignments] = useState<Record<number, string>>({});
+  // Стан для відстеження перетягування (dragged dish ID)
+  const [draggedDishId, setDraggedDishId] = useState<number | null>(null);
+  // Стан для відстеження категорії, над якою перетягується страва
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -765,6 +778,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         dishOverrides,
         customDishIdCounter,
         activeFormatId,
+        renamedCategories,
+        dishCategoryAssignments,
       };
       localStorage.setItem('kp_form_data', JSON.stringify(formData));
     };
@@ -812,6 +827,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setDishOverrides(formData.dishOverrides || {});
         setCustomDishIdCounter(formData.customDishIdCounter || -1);
         setActiveFormatId(formData.activeFormatId || null);
+        setRenamedCategories(formData.renamedCategories || {});
+        setDishCategoryAssignments(formData.dishCategoryAssignments || {});
       } catch (error) {
         console.error("Помилка завантаження даних з localStorage:", error);
       }
@@ -872,6 +889,8 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
     dishOverrides,
     customDishIdCounter,
     activeFormatId,
+    renamedCategories,
+    dishCategoryAssignments,
   ]);
 
   // Load dishes from API
@@ -896,6 +915,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             unit: item.unit || "",
             price: item.price,
             photo_url: item.photo_url || "",
+            icon_name: item.icon_name,
             category: item.subcategory?.category?.name || "Інше",
             subcategory: item.subcategory?.name || "",
           }));
@@ -1350,6 +1370,31 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   // Перевірити чи страва кастомна (додана вручну)
   const isCustomDish = (dishId: number): boolean => {
     return dishId < 0;
+  };
+
+  // Отримати ефективну категорію страви (з урахуванням призначень та перейменувань)
+  const getEffectiveCategory = (dish: Dish): string => {
+    // Спочатку перевіряємо чи є призначення категорії для цієї страви
+    const assignedCategory = dishCategoryAssignments[dish.id];
+    if (assignedCategory) {
+      // Якщо категорія була перейменована, повертаємо перейменовану версію
+      return renamedCategories[assignedCategory] || assignedCategory;
+    }
+    // Якщо немає призначення, використовуємо оригінальну категорію
+    const originalCategory = dish.category || "Інше";
+    // Перевіряємо чи вона була перейменована
+    return renamedCategories[originalCategory] || originalCategory;
+  };
+
+  // Отримати оригінальну назву категорії (без перейменувань)
+  const getOriginalCategoryName = (displayCategory: string): string => {
+    // Знаходимо оригінальну назву категорії (якщо вона була перейменована)
+    for (const [original, renamed] of Object.entries(renamedCategories)) {
+      if (renamed === displayCategory) {
+        return original;
+      }
+    }
+    return displayCategory;
   };
 
   const getTotalPrice = () => {
@@ -3399,6 +3444,99 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                     </div>
                   )}
 
+                  {/* Додавання категорії страв */}
+                  <div className="p-3 md:p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg">📁</span>
+                      <Label className="text-sm font-semibold">Додати категорію страв</Label>
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                      <div className="flex-1 space-y-1">
+                        <Label htmlFor="category-select" className="text-xs text-gray-600">
+                          Оберіть категорію для додавання всіх страв
+                        </Label>
+                        <Select
+                          value={selectedCategoryToAdd}
+                          onValueChange={(value) => {
+                            setSelectedCategoryToAdd(value);
+                            if (value) {
+                              // Знаходимо всі страви з цієї категорії
+                              const categoryDishes = dishes.filter((dish) => {
+                                const dishCategory = dish.category || "Інше";
+                                return dishCategory === value;
+                              });
+                              
+                              if (categoryDishes.length === 0) {
+                                toast.info(`У категорії "${value}" немає страв`);
+                                setSelectedCategoryToAdd("");
+                                return;
+                              }
+                              
+                              // Додаємо страви до обраних або до активного формату
+                              if (activeFormatId !== null) {
+                                // Додаємо до активного формату
+                                const format = eventFormats.find((f) => f.id === activeFormatId);
+                                if (format) {
+                                  const newDishIds = categoryDishes.map((d) => d.id);
+                                  const existingDishIds = format.selectedDishes || [];
+                                  const uniqueNewDishIds = newDishIds.filter((id) => !existingDishIds.includes(id));
+                                  
+                                  setEventFormats((prev) =>
+                                    prev.map((f) =>
+                                      f.id === activeFormatId
+                                        ? { ...f, selectedDishes: [...existingDishIds, ...uniqueNewDishIds] }
+                                        : f
+                                    )
+                                  );
+                                  
+                                  // Також додаємо до загального списку обраних страв
+                                  setSelectedDishes((prev) => {
+                                    const newIds = uniqueNewDishIds.filter((id) => !prev.includes(id));
+                                    return [...prev, ...newIds];
+                                  });
+                                  
+                                  toast.success(`Додано ${uniqueNewDishIds.length} страв з категорії "${value}" до формату "${format.name}"`);
+                                }
+                              } else {
+                                // Додаємо до загального списку обраних страв
+                                const newDishIds = categoryDishes.map((d) => d.id);
+                                const existingDishIds = selectedDishes;
+                                const uniqueNewDishIds = newDishIds.filter((id) => !existingDishIds.includes(id));
+                                
+                                setSelectedDishes((prev) => [...prev, ...uniqueNewDishIds]);
+                                toast.success(`Додано ${uniqueNewDishIds.length} страв з категорії "${value}"`);
+                              }
+                              
+                              // Скидаємо вибір після додавання
+                              setSelectedCategoryToAdd("");
+                            }
+                          }}
+                        >
+                          <SelectTrigger id="category-select" className="w-full">
+                            <SelectValue placeholder="Оберіть категорію" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(new Set(dishes.map((d) => d.category || "Інше")))
+                              .sort()
+                              .map((categoryName) => {
+                                const categoryDishCount = dishes.filter(
+                                  (d) => (d.category || "Інше") === categoryName
+                                ).length;
+                                return (
+                                  <SelectItem key={categoryName} value={categoryName}>
+                                    {categoryName} ({categoryDishCount} страв)
+                                  </SelectItem>
+                                );
+                              })}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Всі страви з обраної категорії будуть додані {activeFormatId !== null ? `до формату "${eventFormats.find((f) => f.id === activeFormatId)?.name}"` : "до обраних страв"}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -3487,7 +3625,14 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                       </div>
                                       <div className="flex-1 min-w-0 overflow-hidden">
                                         <div className="flex items-start justify-between gap-2 mb-1">
-                                          <h4 className="text-sm md:text-base text-gray-900 line-clamp-2 break-words">{dish.name}</h4>
+                                          <h4 className="text-sm md:text-base text-gray-900 line-clamp-2 break-words flex items-center gap-1">
+                                            <span>{dish.name}</span>
+                                            {dish.icon_name && (
+                                              <span className="text-lg" title={getAllergenName(dish.icon_name)}>
+                                                {getAllergenIcon(dish.icon_name)}
+                                              </span>
+                                            )}
+                                          </h4>
                                           <Checkbox checked={isSelectedForFormat || isSelected} className="flex-shrink-0" />
                                         </div>
                                         {isSelectedForFormat && activeFormatId !== null && (
@@ -5150,7 +5295,34 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                 </div>
 
                 <div className="border-t pt-4 space-y-6">
-                  <h4 className="text-gray-900 font-medium">Обрані страви</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-gray-900 font-medium">Обрані страви</h4>
+                    {/* Список доступних категорій для автоматичного вибору */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Доступні категорії:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(new Set([
+                          ...categories.map(c => c.name),
+                          ...getSelectedDishesData().map(d => d.category || "Інше")
+                        ])).slice(0, 5).map((catName) => (
+                          <Badge key={catName} variant="outline" className="text-xs">
+                            {renamedCategories[catName] || catName}
+                          </Badge>
+                        ))}
+                        {Array.from(new Set([
+                          ...categories.map(c => c.name),
+                          ...getSelectedDishesData().map(d => d.category || "Інше")
+                        ])).length > 5 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{Array.from(new Set([
+                              ...categories.map(c => c.name),
+                              ...getSelectedDishesData().map(d => d.category || "Інше")
+                            ])).length - 5}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                   {getSelectedDishesData().length === 0 ? (
                     <p className="text-gray-500 text-sm">
                       Страви не обрано.
@@ -5173,7 +5345,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           format.selectedDishes.forEach((dishId) => {
                             const dish = allDishes.find((d) => d.id === dishId);
                             if (dish) {
-                              const category = dish.category || "Інше";
+                              const category = getEffectiveCategory(dish);
                               if (!groupedByFormat[format.id][category]) {
                                 groupedByFormat[format.id][category] = [];
                               }
@@ -5195,13 +5367,129 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           }
                           
                           dishesWithoutFormat.forEach((dish) => {
-                            const category = dish.category || "Інше";
+                            const category = getEffectiveCategory(dish);
                             if (!groupedByFormat['general'][category]) {
                               groupedByFormat['general'][category] = [];
                             }
                             groupedByFormat['general'][category].push(dish);
                           });
                         }
+                        
+                        // Компонент для редагування назви категорії
+                        const EditableCategoryName = ({ categoryName, formatKey }: { categoryName: string; formatKey: string | number }) => {
+                          const [isEditing, setIsEditing] = useState(false);
+                          const [editValue, setEditValue] = useState(categoryName);
+                          const originalCategory = getOriginalCategoryName(categoryName);
+                          
+                          useEffect(() => {
+                            setEditValue(categoryName);
+                          }, [categoryName]);
+                          
+                          const handleSave = () => {
+                            if (editValue.trim() && editValue.trim() !== originalCategory) {
+                              setRenamedCategories((prev) => ({
+                                ...prev,
+                                [originalCategory]: editValue.trim(),
+                              }));
+                            } else if (editValue.trim() === originalCategory) {
+                              // Якщо повернули до оригіналу, видаляємо перейменування
+                              setRenamedCategories((prev) => {
+                                const { [originalCategory]: _, ...rest } = prev;
+                                return rest;
+                              });
+                            }
+                            setIsEditing(false);
+                          };
+                          
+                          const handleCancel = () => {
+                            setEditValue(categoryName);
+                            setIsEditing(false);
+                          };
+                          
+                          if (isEditing) {
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  className="h-8 text-sm font-semibold"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleSave();
+                                    } else if (e.key === "Escape") {
+                                      handleCancel();
+                                    }
+                                  }}
+                                  onBlur={handleSave}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={handleSave}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Check className="w-4 h-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={handleCancel}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <X className="w-4 h-4 text-red-600" />
+                                </Button>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div className="group flex items-center gap-2">
+                              <h5 className="font-semibold text-gray-800">{categoryName}</h5>
+                              <button
+                                type="button"
+                                onClick={() => setIsEditing(true)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded"
+                                title="Перейменувати категорію"
+                              >
+                                <Pencil className="w-3 h-3 text-gray-400" />
+                              </button>
+                            </div>
+                          );
+                        };
+                        
+                        // Обробники drag and drop
+                        const handleDragStart = (e: React.DragEvent, dishId: number) => {
+                          setDraggedDishId(dishId);
+                          e.dataTransfer.effectAllowed = "move";
+                        };
+                        
+                        const handleDragOver = (e: React.DragEvent, category: string) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setDragOverCategory(category);
+                        };
+                        
+                        const handleDragLeave = () => {
+                          setDragOverCategory(null);
+                        };
+                        
+                        const handleDrop = (e: React.DragEvent, targetCategory: string) => {
+                          e.preventDefault();
+                          setDragOverCategory(null);
+                          if (draggedDishId !== null) {
+                            // Використовуємо оригінальну назву категорії (не перейменовану)
+                            const originalCategory = getOriginalCategoryName(targetCategory);
+                            setDishCategoryAssignments((prev) => ({
+                              ...prev,
+                              [draggedDishId]: originalCategory,
+                            }));
+                            setDraggedDishId(null);
+                          }
+                        };
                         
                         return Object.entries(groupedByFormat).map(([formatKey, categories]) => {
                           const format = typeof formatKey === 'string' && formatKey === 'general' 
@@ -5227,10 +5515,18 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                               
                               {/* Категорії в форматі */}
                               {Object.entries(categories).map(([category, categoryDishes]) => (
-                                <div key={category} className="ml-4 space-y-2">
-                                  {/* Заголовок категорії */}
-                                  <div className="border-l-4 border-[#FF5A00] pl-3">
-                                    <h5 className="font-semibold text-gray-800">{category}</h5>
+                                <div 
+                                  key={category} 
+                                  className={`ml-4 space-y-2 transition-all ${
+                                    dragOverCategory === category ? 'bg-blue-50 border-2 border-blue-300 rounded-lg p-2' : ''
+                                  }`}
+                                  onDragOver={(e) => handleDragOver(e, category)}
+                                  onDragLeave={handleDragLeave}
+                                  onDrop={(e) => handleDrop(e, category)}
+                                >
+                                  {/* Заголовок категорії з можливістю редагування */}
+                                  <div className="border-l-4 border-[#FF5A00] pl-3 py-1 bg-gray-50 rounded-r">
+                                    <EditableCategoryName categoryName={category} formatKey={formatKey} />
                                   </div>
                                   
                                   {/* Страви в категорії */}
@@ -5241,10 +5537,20 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                       return (
                                         <div
                                           key={dish.id}
-                                          className="flex items-center justify-between py-1"
+                                          draggable
+                                          onDragStart={(e) => handleDragStart(e, dish.id)}
+                                          className={`flex items-center justify-between py-1 px-2 rounded cursor-move hover:bg-gray-50 transition-colors ${
+                                            draggedDishId === dish.id ? 'opacity-50' : ''
+                                          }`}
                                         >
-                                          <span className="text-gray-900">
-                                            {dish.name}{" "}
+                                          <span className="text-gray-900 flex items-center gap-2">
+                                            <span className="text-gray-400">⋮⋮</span>
+                                            <span>{dish.name}</span>
+                                            {dish.icon_name && (
+                                              <span className="text-lg" title={getAllergenName(dish.icon_name)}>
+                                                {getAllergenIcon(dish.icon_name)}
+                                              </span>
+                                            )}
                                             <span className="text-gray-500">
                                               × {qty} порцій
                                             </span>

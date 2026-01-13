@@ -1,0 +1,156 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Перевірка коду та linting
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: |
+          if [ -f "tsconfig.json" ]; then
+            npx tsc --noEmit
+          else
+            echo "⚠️ No tsconfig.json found, skipping TypeScript check"
+          fi
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Check build artifacts
+        run: |
+          if [ ! -d "build" ]; then
+            echo "❌ Error: Build directory not found!"
+            exit 1
+          fi
+          echo "✅ Build successful!"
+
+  # Деплой на сервер
+  deploy:
+    name: Deploy to Server
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy application
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+            set -e
+            cd \${DEPLOY_PATH}
+            
+            echo "📥 Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/main
+            
+            echo "🛑 Stopping containers..."
+            docker-compose down || docker compose down || true
+            
+            echo "🏗️ Building containers..."
+            docker-compose build --no-cache backend || docker compose build --no-cache backend
+            
+            echo "🚀 Starting containers..."
+            docker-compose up -d || docker compose up -d
+            
+            echo "⏳ Waiting for containers to be ready..."
+            sleep 15
+            
+            echo "✅ Checking container status..."
+            docker-compose ps || docker compose ps
+            
+            echo "🔄 Reloading parent nginx..."
+            sudo nginx -t && sudo systemctl reload nginx || sudo service nginx reload || echo "⚠️ Nginx reload skipped"
+            
+            echo "✅ Deployment completed!"
+          EOF
+
+      - name: Copy build files to server
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ${DEPLOY_PATH}/build"
+          scp -r build/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${DEPLOY_PATH}/build/
+
+      - name: Verify deployment
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          sleep 10
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
+            cd \${DEPLOY_PATH}
+            
+            echo "🔍 Checking container status..."
+            if ! (docker-compose ps || docker compose ps) | grep -q "Up"; then
+              echo "❌ Error: Containers are not running!"
+              echo "📋 Container logs:"
+              docker-compose logs --tail=50 || docker compose logs --tail=50
+              exit 1
+            fi
+            
+            if [ ! -d "build" ] || [ -z "\$(ls -A build)" ]; then
+              echo "❌ Error: Build directory is empty or not found!"
+              exit 1
+            fi
+            
+            echo "✅ Deployment verified successfully!"
+          EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Performing health check..."
+          sleep 5
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:8081/ || echo "000")
+          
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ] || [ "$HTTP_CODE" = "302" ]; then
+            echo "✅ Health check passed (HTTP $HTTP_CODE)"
+          else
+            echo "⚠️ Warning: Health check returned HTTP $HTTP_CODE"
+            echo "This might be normal if the service is still starting up"
+          fi
