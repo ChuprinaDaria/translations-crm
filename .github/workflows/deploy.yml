@@ -137,7 +137,7 @@ jobs:
             echo "✅ Using Docker Compose V2"
           else
             COMPOSE_CMD="docker-compose"
-            echo "ℹ️ Using Docker Compose V1 (legacy)"
+            echo "⚠️ Using Docker Compose V1 (legacy) - consider upgrading to Docker Compose V2"
           fi
           
           # Перевіряємо чи встановлений buildx, якщо ні - встановлюємо або використовуємо fallback
@@ -159,6 +159,14 @@ jobs:
           fi
           
           echo "▶️ Restarting services..."
+          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери
+          # щоб уникнути помилки ContainerConfig
+          if [ "$COMPOSE_CMD" = "docker-compose" ]; then
+            echo "🛑 Stopping old containers to avoid ContainerConfig error..."
+            $COMPOSE_CMD down backend 2>/dev/null || true
+            # Видаляємо старий контейнер якщо він існує
+            docker rm -f cafe_backend 2>/dev/null || true
+          fi
           $COMPOSE_CMD up -d
           
           echo "⏳ Waiting for backend to be healthy..."
