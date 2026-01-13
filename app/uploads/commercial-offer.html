@@ -293,6 +293,42 @@
             text-align: center;
         }
         
+        /* === АЛЬТЕРНАТИВИ СТРАВ === */
+        .item-row-alternative {
+            background-color: #FFF5E6;
+            border-left: 3px solid #FF8C00;
+        }
+        
+        .alternative-badge {
+            display: inline-block;
+            background-color: #FF8C00;
+            color: white;
+            font-size: 7pt;
+            font-weight: 700;
+            padding: 1mm 2mm;
+            border-radius: 3px;
+            margin-right: 2mm;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .alternative-hint {
+            display: block;
+            font-size: 8pt;
+            color: #FF8C00;
+            font-style: italic;
+            margin-top: 1mm;
+            margin-left: 0;
+        }
+        
+        /* === ІКОНКА ГОТУВАННЯ НА ЛОКАЦІЇ === */
+        .location-icon {
+            display: inline-block;
+            font-size: 10pt;
+            margin-left: 2mm;
+            vertical-align: middle;
+        }
+        
         .item-photo {
             width: 18mm;
             height: 18mm;
@@ -526,9 +562,25 @@
         </div>
         
         {% for item in section_items %}
-        <div class="item-row">
+        {% set is_alt = item.is_alternative or false %}
+        {% set alt_group = item.alternative_group_id or '' %}
+        <div class="item-row {% if is_alt %}item-row-alternative{% endif %}">
             <div class="item-row-inner">
-                <div class="item-cell name-col">{{ item.name }}</div>
+                <div class="item-cell name-col">
+                    {% if is_alt %}
+                    <span class="alternative-badge">АЛЬТЕРНАТИВА</span>
+                    {% endif %}
+                    {{ item.name }}
+                    {% if item.can_cook_on_location %}
+                    <span class="location-icon" title="Можна готувати на локації (будинок/палатка/вогонь)">🏠</span>
+                    {% endif %}
+                    {% if is_alt and alt_group %}
+                    {% set alt_items = fmt['items'] | selectattr('alternative_group_id', 'equalto', alt_group) | selectattr('name', 'ne', item.name) | list %}
+                    {% if alt_items %}
+                    <span class="alternative-hint">(або: {{ alt_items | map(attribute='name') | join(', ') }})</span>
+                    {% endif %}
+                    {% endif %}
+                </div>
                 <div class="item-cell photo-col">
                     {% if item.photo_src %}
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">
@@ -551,9 +603,25 @@
             <div class="category-pill">ІНШІ СТРАВИ</div>
         </div>
         {% for item in uncategorized %}
-        <div class="item-row">
+        {% set is_alt = item.is_alternative or false %}
+        {% set alt_group = item.alternative_group_id or '' %}
+        <div class="item-row {% if is_alt %}item-row-alternative{% endif %}">
             <div class="item-row-inner">
-                <div class="item-cell name-col">{{ item.name }}</div>
+                <div class="item-cell name-col">
+                    {% if is_alt %}
+                    <span class="alternative-badge">АЛЬТЕРНАТИВА</span>
+                    {% endif %}
+                    {{ item.name }}
+                    {% if item.can_cook_on_location %}
+                    <span class="location-icon" title="Можна готувати на локації (будинок/палатка/вогонь)">🏠</span>
+                    {% endif %}
+                    {% if is_alt and alt_group %}
+                    {% set alt_items = fmt['items'] | selectattr('alternative_group_id', 'equalto', alt_group) | selectattr('name', 'ne', item.name) | list %}
+                    {% if alt_items %}
+                    <span class="alternative-hint">(або: {{ alt_items | map(attribute='name') | join(', ') }})</span>
+                    {% endif %}
+                    {% endif %}
+                </div>
                 <div class="item-cell photo-col">
                     {% if item.photo_src %}
                     <img src="{{ item.photo_src }}" class="item-photo" alt="">

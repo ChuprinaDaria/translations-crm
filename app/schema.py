@@ -193,6 +193,11 @@ class KPItemCreate(BaseModel):
     price: Optional[float] = None
     weight: Optional[float] = None
     unit: Optional[str] = None
+    # Поля для альтернатив страв
+    is_alternative: Optional[bool] = False  # Чи є страва альтернативою
+    alternative_group_id: Optional[str] = None  # ID групи альтернатив
+    # Поле для позначення страв, які можна готувати на локації
+    can_cook_on_location: Optional[bool] = False  # Чи можна готувати страву на локації
 
 class EventFormatCreate(BaseModel):
     name: str  # Назва формату (наприклад, "Welcome drink", "Фуршет")
@@ -274,6 +279,11 @@ class KPItem(BaseModel):
     price: Optional[float] = None
     weight: Optional[Union[str, float, int]] = None  # Може бути число або рядок типу "150/75"
     unit: Optional[str] = None
+    # Поля для альтернатив страв
+    is_alternative: Optional[bool] = False  # Чи є страва альтернативою
+    alternative_group_id: Optional[str] = None  # ID групи альтернатив
+    # Поле для позначення страв, які можна готувати на локації
+    can_cook_on_location: Optional[bool] = False  # Чи можна готувати страву на локації
     
     @field_validator('weight', mode='before')
     @classmethod

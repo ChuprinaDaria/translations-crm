@@ -934,6 +934,11 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             # Зберігаємо також числові значення для підрахунків
             'price_raw': item.price or 0,
             'total_raw': (item.price or 0) * kp_item.quantity,
+            # Інформація про альтернативу
+            'is_alternative': getattr(kp_item, 'is_alternative', False),
+            'alternative_group_id': getattr(kp_item, 'alternative_group_id', None),
+            # Інформація про можливість готування на локації
+            'can_cook_on_location': getattr(kp_item, 'can_cook_on_location', False),
         }
         items_data.append(item_dict)
         total_quantity += kp_item.quantity

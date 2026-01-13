@@ -312,6 +312,11 @@ class KPItem(Base):
     price = Column(Float, nullable=True)
     weight = Column(Float, nullable=True)  # Вага в грамах (число)
     unit = Column(String, nullable=True)
+    # Поля для альтернатив страв
+    is_alternative = Column(Boolean, default=False, nullable=False)  # Чи є страва альтернативою
+    alternative_group_id = Column(String, nullable=True)  # ID групи альтернатив (страви з однаковим group_id - альтернативи одна одній)
+    # Поле для позначення страв, які можна готувати на локації
+    can_cook_on_location = Column(Boolean, default=False, nullable=False)  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
 
     kp = relationship("KP", back_populates="items")
     item = relationship("Item", back_populates="kp_items", lazy="joined")
