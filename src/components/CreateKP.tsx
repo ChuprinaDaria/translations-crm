@@ -97,6 +97,7 @@ interface Dish {
   price: number;
   photo_url: string;
   icon_name?: string;
+  can_cook_on_location?: boolean; // Чи можна готувати страву на локації
   category: string;
   subcategory: string;
 }
@@ -325,8 +326,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
   // Стан для альтернатив страв: {dishId: {isAlternative: boolean, groupId: string | null}}
   const [dishAlternatives, setDishAlternatives] = useState<Record<number, {isAlternative: boolean, groupId: string | null}>>({});
-  // Стан для страв, які можна готувати на локації: {dishId: boolean}
-  const [canCookOnLocation, setCanCookOnLocation] = useState<Record<number, boolean>>({});
   
   // State for dishes from API
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -799,7 +798,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         renamedCategories,
         dishCategoryAssignments,
         dishAlternatives,
-        canCookOnLocation,
       };
       localStorage.setItem('kp_form_data', JSON.stringify(formData));
     };
@@ -850,7 +848,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         setRenamedCategories(formData.renamedCategories || {});
         setDishCategoryAssignments(formData.dishCategoryAssignments || {});
         setDishAlternatives(formData.dishAlternatives || {});
-        setCanCookOnLocation(formData.canCookOnLocation || {});
       } catch (error) {
         console.error("Помилка завантаження даних з localStorage:", error);
       }
@@ -938,6 +935,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             price: item.price,
             photo_url: item.photo_url || "",
             icon_name: item.icon_name,
+            can_cook_on_location: item.can_cook_on_location || false,
             category: item.subcategory?.category?.name || "Інше",
             subcategory: item.subcategory?.name || "",
           }));
@@ -1034,7 +1032,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
           
           const quantities: Record<number, number> = {};
           const alternatives: Record<number, {isAlternative: boolean, groupId: string | null}> = {};
-          const canCook: Record<number, boolean> = {};
           kp.items.forEach(item => {
             if (item.item_id) {
               quantities[item.item_id] = item.quantity;
@@ -1045,15 +1042,10 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                   groupId: item.alternative_group_id || null,
                 };
               }
-              // Відновлюємо інформацію про можливість готування на локації
-              if (item.can_cook_on_location) {
-                canCook[item.item_id] = true;
-              }
             }
           });
           setDishQuantities(quantities);
           setDishAlternatives(alternatives);
-          setCanCookOnLocation(canCook);
         }
 
         // Завантажуємо обладнання та обслуговування (якщо є в API)
@@ -2029,8 +2021,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             // Додаємо інформацію про альтернативу
             is_alternative: dishAlt.isAlternative || false,
             alternative_group_id: dishAlt.groupId || null,
-            // Додаємо інформацію про можливість готування на локації
-            can_cook_on_location: canCookOnLocation[dishId] || false,
           });
         }
       });
@@ -2052,8 +2042,6 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
             // Додаємо інформацію про альтернативу
             is_alternative: dishAlt.isAlternative || false,
             alternative_group_id: dishAlt.groupId || null,
-            // Додаємо інформацію про можливість готування на локації
-            can_cook_on_location: canCookOnLocation[dishId] || false,
           });
         }
       }
@@ -3853,7 +3841,9 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                       isSelectedForFormat
                                         ? "border-blue-500 bg-blue-50"
                                         : isSelected
-                                        ? "border-[#FF5A00] bg-[#FF5A00]/5"
+                                        ? dishAlternatives[dish.id]?.isAlternative
+                                          ? "border-orange-400 bg-orange-50"
+                                          : "border-[#FF5A00] bg-[#FF5A00]/5"
                                         : "border-gray-200 hover:border-gray-300"
                                     }`}
                                   >
@@ -3877,23 +3867,21 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                       <div className="flex-1 min-w-0 overflow-hidden">
                                         <div className="flex items-start justify-between gap-2 mb-1">
                                           <h4 className="text-sm md:text-base text-gray-900 line-clamp-2 break-words flex items-center gap-1">
-                                            <span>{dish.name}</span>
+                                            {dishAlternatives[dish.id]?.isAlternative && (
+                                              <span className="text-xs bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded font-medium">
+                                                АЛЬТ
+                                              </span>
+                                            )}
+                                            <span className={dishAlternatives[dish.id]?.isAlternative ? 'text-orange-900' : ''}>{dish.name}</span>
                                             {dish.icon_name && (
                                               <span className="text-lg" title={getAllergenName(dish.icon_name)}>
                                                 {getAllergenIcon(dish.icon_name)}
                                               </span>
                                             )}
-                                            {canCookOnLocation[dish.id] && (
+                                            {dish.can_cook_on_location && (
                                               <span 
                                                 className="text-orange-600 ml-1" 
                                                 title="Можна готувати на локації (будинок/палатка/вогонь)"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setCanCookOnLocation(prev => ({
-                                                    ...prev,
-                                                    [dish.id]: !prev[dish.id]
-                                                  }));
-                                                }}
                                               >
                                                 <Home className="w-4 h-4" />
                                               </span>
@@ -3901,24 +3889,68 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                           </h4>
                                           <div className="flex items-center gap-1">
                                             {isSelected && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setCanCookOnLocation(prev => ({
-                                                    ...prev,
-                                                    [dish.id]: !prev[dish.id]
-                                                  }));
-                                                }}
-                                                className={`p-1 rounded transition-colors ${
-                                                  canCookOnLocation[dish.id] 
-                                                    ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' 
-                                                    : 'text-gray-400 hover:bg-gray-100 hover:text-orange-600'
-                                                }`}
-                                                title="Можна готувати на локації"
-                                              >
-                                                <Home className="w-4 h-4" />
-                                              </button>
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const dishAlt = dishAlternatives[dish.id] || {isAlternative: false, groupId: null};
+                                                    const isAlternative = dishAlt.isAlternative;
+                                                    
+                                                    if (isAlternative) {
+                                                      // Видаляємо з альтернатив
+                                                      setDishAlternatives(prev => {
+                                                        const newState = { ...prev };
+                                                        delete newState[dish.id];
+                                                        return newState;
+                                                      });
+                                                    } else {
+                                                      // Додаємо як альтернативу
+                                                      const categoryDishes = dishesByCategory[category] || [];
+                                                      const otherDishesInCategory = categoryDishes.filter(d => d.id !== dish.id && selectedDishes.includes(d.id));
+                                                      
+                                                      const newGroupId = `alt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                                      
+                                                      if (otherDishesInCategory.length > 0) {
+                                                        const otherNames = otherDishesInCategory.map(d => d.name).join(', ');
+                                                        if (confirm(
+                                                          `Додати інші обрані страви з категорії "${category}" як альтернативи до "${dish.name}"?\n\n${otherNames}`
+                                                        )) {
+                                                          // Додаємо всі страви з категорії до групи
+                                                          setDishAlternatives(prev => {
+                                                            const newState = { ...prev };
+                                                            newState[dish.id] = {isAlternative: true, groupId: newGroupId};
+                                                            otherDishesInCategory.forEach(otherDish => {
+                                                              newState[otherDish.id] = {isAlternative: true, groupId: newGroupId};
+                                                            });
+                                                            return newState;
+                                                          });
+                                                        } else {
+                                                          // Додаємо тільки цю страву
+                                                          setDishAlternatives(prev => ({
+                                                            ...prev,
+                                                            [dish.id]: {isAlternative: true, groupId: newGroupId}
+                                                          }));
+                                                        }
+                                                      } else {
+                                                        // Немає інших страв в категорії, додаємо тільки цю
+                                                        setDishAlternatives(prev => ({
+                                                          ...prev,
+                                                          [dish.id]: {isAlternative: true, groupId: newGroupId}
+                                                        }));
+                                                      }
+                                                    }
+                                                  }}
+                                                  className={`p-1 rounded transition-colors text-xs ${
+                                                    dishAlternatives[dish.id]?.isAlternative
+                                                      ? 'bg-orange-100 text-orange-600 hover:bg-orange-200' 
+                                                      : 'text-gray-400 hover:bg-gray-100 hover:text-orange-600'
+                                                  }`}
+                                                  title="Позначити як альтернативу"
+                                                >
+                                                  {dishAlternatives[dish.id]?.isAlternative ? '✓' : 'А'}
+                                                </button>
+                                              </>
                                             )}
                                             <Checkbox checked={isSelectedForFormat || isSelected} className="flex-shrink-0" />
                                           </div>
@@ -5875,7 +5907,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                                                 {getAllergenIcon(dish.icon_name)}
                                               </span>
                                             )}
-                                            {canCookOnLocation[dish.id] && (
+                                            {dish.can_cook_on_location && (
                                               <span 
                                                 className="text-orange-600" 
                                                 title="Можна готувати на локації (будинок/палатка/вогонь)"

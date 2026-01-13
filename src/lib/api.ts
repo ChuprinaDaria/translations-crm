@@ -83,6 +83,7 @@ export interface Item {
   unit?: string;
   photo_url?: string;
   icon_name?: string; // Назва іконки (emoji або назва іконки)
+  can_cook_on_location?: boolean; // Чи можна готувати страву на локації (будинок/палатка/вогонь)
   active: boolean;
   subcategory_id: number;
   subcategory?: Subcategory;
@@ -100,6 +101,7 @@ export interface ItemCreate {
   unit?: string;
   photo_url?: string;
   icon_name?: string; // Назва іконки (emoji або назва іконки)
+  can_cook_on_location?: boolean; // Чи можна готувати страву на локації (будинок/палатка/вогонь)
   active?: boolean;
   subcategory_id?: number;
   photo?: File; // Для завантаження файлу

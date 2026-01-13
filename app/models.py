@@ -51,6 +51,7 @@ class Item(Base):
 
     photo_url = Column(String, index=True)
     icon_name = Column(String, nullable=True)  # Іконка алергену (наприклад: "nuts,garlic")
+    can_cook_on_location = Column(Boolean, default=False, nullable=False)  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
 
     active = Column(Boolean, default=True)
     
@@ -315,8 +316,6 @@ class KPItem(Base):
     # Поля для альтернатив страв
     is_alternative = Column(Boolean, default=False, nullable=False)  # Чи є страва альтернативою
     alternative_group_id = Column(String, nullable=True)  # ID групи альтернатив (страви з однаковим group_id - альтернативи одна одній)
-    # Поле для позначення страв, які можна готувати на локації
-    can_cook_on_location = Column(Boolean, default=False, nullable=False)  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
 
     kp = relationship("KP", back_populates="items")
     item = relationship("Item", back_populates="kp_items", lazy="joined")

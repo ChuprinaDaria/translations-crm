@@ -937,8 +937,8 @@ def _generate_kp_pdf_internal(kp_id: int, template_id: int = None, db: Session =
             # Інформація про альтернативу
             'is_alternative': getattr(kp_item, 'is_alternative', False),
             'alternative_group_id': getattr(kp_item, 'alternative_group_id', None),
-            # Інформація про можливість готування на локації
-            'can_cook_on_location': getattr(kp_item, 'can_cook_on_location', False),
+            # Інформація про можливість готування на локації (беремо з самої страви)
+            'can_cook_on_location': getattr(item, 'can_cook_on_location', False) if item else False,
         }
         items_data.append(item_dict)
         total_quantity += kp_item.quantity

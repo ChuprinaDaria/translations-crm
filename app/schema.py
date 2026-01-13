@@ -46,6 +46,7 @@ class ItemBase(BaseModel):
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     icon_name: Optional[str] = None  # Іконка алергену
+    can_cook_on_location: Optional[bool] = False  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
     active: Optional[bool] = True
     
     @field_validator('weight', mode='before')
@@ -73,6 +74,7 @@ class ItemUpdate(BaseModel):
     unit: Optional[str] = None
     photo_url: Optional[str] = None
     icon_name: Optional[str] = None  # Іконка алергену
+    can_cook_on_location: Optional[bool] = None  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
     active: Optional[bool] = None
     
     @field_validator('weight', mode='before')
@@ -282,8 +284,6 @@ class KPItem(BaseModel):
     # Поля для альтернатив страв
     is_alternative: Optional[bool] = False  # Чи є страва альтернативою
     alternative_group_id: Optional[str] = None  # ID групи альтернатив
-    # Поле для позначення страв, які можна готувати на локації
-    can_cook_on_location: Optional[bool] = False  # Чи можна готувати страву на локації
     
     @field_validator('weight', mode='before')
     @classmethod

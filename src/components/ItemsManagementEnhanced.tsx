@@ -4,6 +4,7 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { toast } from "sonner";
 import { itemsApi, categoriesApi, subcategoriesApi, getImageUrl, type Item, type Category, type Subcategory, type ItemCreate } from "../lib/api";
 import { AllergenIconPicker, getAllergenIcon, getAllergenName } from "./AllergenIconPicker";
+import { Home } from "lucide-react";
 
 type SortBy = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "date-asc" | "date-desc";
 
@@ -51,6 +52,7 @@ export function ItemsManagementEnhanced() {
     unit: "",
     photo_url: "",
     icon_name: "",
+    can_cook_on_location: false,
     active: true,
     subcategory_id: 0,
   });
@@ -192,6 +194,7 @@ export function ItemsManagementEnhanced() {
       unit: "",
       photo_url: "",
       icon_name: "",
+      can_cook_on_location: false,
       active: true,
       subcategory_id: 0,
     });
@@ -216,6 +219,7 @@ export function ItemsManagementEnhanced() {
       unit: item.unit || "",
       photo_url: item.photo_url || "",
       icon_name: item.icon_name || "",
+      can_cook_on_location: item.can_cook_on_location || false,
       active: item.active,
       subcategory_id: item.subcategory_id,
     });
@@ -1108,6 +1112,19 @@ export function ItemsManagementEnhanced() {
                   onChange={(icon) => setFormData({...formData, icon_name: icon})}
                   label="Іконка алергену"
                 />
+              </div>
+              
+              {/* Can cook on location */}
+              <div className="col-span-2 flex items-center gap-2">
+                <Switch
+                  id="can_cook_on_location"
+                  checked={formData.can_cook_on_location || false}
+                  onCheckedChange={(checked) => setFormData({...formData, can_cook_on_location: checked})}
+                />
+                <Label htmlFor="can_cook_on_location" className="flex items-center gap-2">
+                  <Home className="w-4 h-4 text-orange-600" />
+                  Можна готувати на локації (будинок/палатка/вогонь)
+                </Label>
               </div>
               
               {/* Active */}

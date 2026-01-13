@@ -331,7 +331,6 @@ def create_kp(db: Session, kp_in: schemas.KPCreate, created_by_id: int | None = 
                 event_format_id=db_event_format_id,
                 is_alternative=getattr(it, "is_alternative", False) or False,
                 alternative_group_id=getattr(it, "alternative_group_id", None),
-                can_cook_on_location=getattr(it, "can_cook_on_location", False) or False,
             )
             db.add(kp_item)
     
@@ -560,7 +559,6 @@ def update_kp(db: Session, kp_id: int, kp_in: schemas.KPCreate):
                 event_format_id=db_event_format_id,
                 is_alternative=getattr(it, "is_alternative", False) or False,
                 alternative_group_id=getattr(it, "alternative_group_id", None),
-                can_cook_on_location=getattr(it, "can_cook_on_location", False) or False,
             )
             db.add(kp_item)
     
