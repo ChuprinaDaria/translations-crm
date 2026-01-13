@@ -159,20 +159,20 @@ jobs:
           fi
           
           echo "▶️ Restarting services..."
-          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери
+          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери cafe-crm
           # щоб уникнути помилки ContainerConfig
           if [ "$COMPOSE_CMD" = "docker-compose" ]; then
-            echo "🛑 Stopping old containers to avoid ContainerConfig error..."
-            $COMPOSE_CMD down backend 2>/dev/null || true
-            # Видаляємо старий контейнер якщо він існує
-            docker rm -f cafe_backend 2>/dev/null || true
+            echo "🛑 Stopping old cafe-crm containers to avoid ContainerConfig error..."
+            # Видаляємо тільки контейнери cafe-crm
+            docker stop cafe_backend cafe_postgres 2>/dev/null || true
+            docker rm -f cafe_backend cafe_postgres 2>/dev/null || true
           fi
           $COMPOSE_CMD up -d
           
-          echo "⏳ Waiting for backend to be healthy..."
-          sleep 10
+          echo "⏳ Waiting for services to be healthy..."
+          sleep 15
           
-          echo "🔍 Checking backend health..."
+          echo "🔍 Checking cafe-crm containers health..."
           # Використовуємо ту саму команду compose що і раніше
           if [ -z "$COMPOSE_CMD" ]; then
             if docker compose version > /dev/null 2>&1; then
@@ -182,15 +182,51 @@ jobs:
             fi
           fi
           
+          # Перевірка всіх cafe-crm контейнерів
+          HEALTH_CHECK_FAILED=0
+          
+          # Перевірка cafe_backend
           if docker ps | grep -q cafe_backend; then
-            echo "✅ Backend container is running"
+            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' cafe_backend 2>/dev/null || echo "not found")
+            BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' cafe_backend 2>/dev/null || echo "no healthcheck")
+            echo "✅ cafe_backend: Status=$BACKEND_STATUS, Health=$BACKEND_HEALTH"
+            if [ "$BACKEND_STATUS" != "running" ]; then
+              echo "❌ cafe_backend is not running!"
+              HEALTH_CHECK_FAILED=1
+            fi
           else
-            echo "❌ Backend container is not running!"
-            docker ps -a | grep cafe
-            echo "📋 Checking service status..."
-            $COMPOSE_CMD ps || true
+            echo "❌ cafe_backend container not found!"
+            HEALTH_CHECK_FAILED=1
+          fi
+          
+          # Перевірка cafe_postgres
+          if docker ps | grep -q cafe_postgres; then
+            POSTGRES_STATUS=$(docker inspect --format='{{.State.Status}}' cafe_postgres 2>/dev/null || echo "not found")
+            POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' cafe_postgres 2>/dev/null || echo "no healthcheck")
+            echo "✅ cafe_postgres: Status=$POSTGRES_STATUS, Health=$POSTGRES_HEALTH"
+            if [ "$POSTGRES_STATUS" != "running" ]; then
+              echo "❌ cafe_postgres is not running!"
+              HEALTH_CHECK_FAILED=1
+            fi
+          else
+            echo "❌ cafe_postgres container not found!"
+            HEALTH_CHECK_FAILED=1
+          fi
+          
+          # Показуємо статус всіх контейнерів
+          echo "📋 All cafe-crm containers status:"
+          $COMPOSE_CMD ps || docker ps --filter "name=cafe" --format "table {{.Names}}\t{{.Status}}\t{{.Health}}"
+          
+          if [ $HEALTH_CHECK_FAILED -eq 1 ]; then
+            echo "❌ Health check failed! Checking logs..."
+            echo "📋 Backend logs (last 50 lines):"
+            docker logs --tail=50 cafe_backend 2>&1 || true
+            echo "📋 Postgres logs (last 50 lines):"
+            docker logs --tail=50 cafe_postgres 2>&1 || true
             exit 1
           fi
+          
+          echo "✅ All cafe-crm containers are healthy!"
           
           echo "🔨 Building frontend..."
           rm -rf build/
