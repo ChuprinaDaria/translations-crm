@@ -83,23 +83,43 @@ jobs:
           cd /opt/cafe-crm
           
           echo "📥 Pulling latest code..."
-          # Не змінюємо remote URL - використовуємо той що вже налаштований
-          # Якщо на сервері репозиторій клонований через HTTPS - залишаємо HTTPS
-          # Якщо через SSH - залишаємо SSH
-          
-          # Додаємо GitHub до known_hosts на всяк випадок (для SSH)
+          # Налаштування для використання SSH з deploy key
           mkdir -p ~/.ssh
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 700 ~/.ssh
+          
+          # Додаємо GitHub до known_hosts
+          if ! grep -q "github.com" ~/.ssh/known_hosts 2>/dev/null; then
+            echo "🔧 Adding GitHub to known_hosts..."
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+            chmod 600 ~/.ssh/known_hosts
+          fi
+          
+          # Перевіряємо і налаштовуємо remote на SSH якщо потрібно
+          REMOTE_URL=$(git config --get remote.origin.url || echo "")
+          if [[ -z "$REMOTE_URL" ]]; then
+            echo "⚠️ No remote URL found"
+            exit 1
+          elif [[ "$REMOTE_URL" == https://github.com/* ]]; then
+            echo "🔧 Switching remote from HTTPS to SSH..."
+            git remote set-url origin git@github.com:Lazysoft-pl/cafe.git
+          elif [[ "$REMOTE_URL" == git@github.com:* ]]; then
+            echo "✅ Remote already configured for SSH"
+          else
+            echo "ℹ️ Using existing remote: $REMOTE_URL"
+          fi
           
           # Використовуємо fetch + reset
+          echo "📥 Fetching latest changes..."
           git fetch origin main || {
-            echo "⚠️ Git fetch failed. Checking remote configuration..."
+            echo "❌ Git fetch failed!"
+            echo "📋 Current remote configuration:"
             git remote -v
-            echo "ℹ️ If using HTTPS, ensure repository is public or configure access token"
-            echo "ℹ️ If using SSH, ensure SSH key is configured on server"
+            echo "🔍 Checking SSH connection to GitHub..."
+            ssh -T git@github.com 2>&1 | head -1 || echo "⚠️ SSH test failed"
             exit 1
           }
           git reset --hard origin/main
+          echo "✅ Code updated successfully"
           
           echo "📝 Creating .env file from secrets..."
           cat > .env << ENVFILE

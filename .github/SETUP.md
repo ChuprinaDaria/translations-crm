@@ -78,7 +78,51 @@ production
 
 ## Крок 3: Налаштування сервера
 
-### Додавання публічного ключа до authorized_keys
+### Налаштування Deploy Key для GitHub
+
+Якщо ви використовуєте Deploy Key (рекомендовано для приватних репозиторіїв):
+
+1. **На сервері** створіть SSH ключ для deploy:
+```bash
+ssh-keygen -t ed25519 -C "deploy@server" -f ~/.ssh/github_deploy_key
+```
+
+2. **Скопіюйте публічний ключ**:
+```bash
+cat ~/.ssh/github_deploy_key.pub
+```
+
+3. **Додайте ключ до GitHub**:
+   - Перейдіть в репозиторій на GitHub
+   - Settings → Deploy keys → Add deploy key
+   - Вставте публічний ключ
+   - Відмітьте "Allow write access" (якщо потрібно)
+
+4. **Налаштуйте SSH на сервері**:
+```bash
+# Додайте конфігурацію для GitHub
+cat >> ~/.ssh/config << EOF
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/github_deploy_key
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
+
+# Додайте GitHub до known_hosts
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+chmod 600 ~/.ssh/known_hosts
+```
+
+5. **Переконайтеся що remote налаштований на SSH**:
+```bash
+cd /opt/cafe-crm
+git remote set-url origin git@github.com:Lazysoft-pl/cafe.git
+git remote -v  # Перевірте що URL правильний
+```
+
+### Альтернатива: SSH ключ для GitHub Actions (якщо не використовуєте Deploy Key)
 
 На сервері:
 ```bash
