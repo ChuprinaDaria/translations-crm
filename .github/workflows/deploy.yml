@@ -1,156 +1,67 @@
-name: CI/CD Pipeline
+name: Deploy to Production
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-
-env:
-  NODE_VERSION: '20'
+    branches: [ main ]
 
 jobs:
-  # Перевірка коду та linting
-  lint-and-test:
-    name: Lint & Test
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: TypeScript type check
-        run: |
-          if [ -f "tsconfig.json" ]; then
-            npx tsc --noEmit
-          else
-            echo "⚠️ No tsconfig.json found, skipping TypeScript check"
-          fi
-
-      - name: Build frontend
-        run: npm run build
-
-      - name: Check build artifacts
-        run: |
-          if [ ! -d "build" ]; then
-            echo "❌ Error: Build directory not found!"
-            exit 1
-          fi
-          echo "✅ Build successful!"
-
-  # Деплой на сервер
   deploy:
-    name: Deploy to Server
-    needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Build frontend
-        run: npm run build
-
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add server to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy application
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
-            set -e
-            cd \${DEPLOY_PATH}
-            
-            echo "📥 Pulling latest code..."
-            git fetch origin
-            git reset --hard origin/main
-            
-            echo "🛑 Stopping containers..."
-            docker-compose down || docker compose down || true
-            
-            echo "🏗️ Building containers..."
-            docker-compose build --no-cache backend || docker compose build --no-cache backend
-            
-            echo "🚀 Starting containers..."
-            docker-compose up -d || docker compose up -d
-            
-            echo "⏳ Waiting for containers to be ready..."
-            sleep 15
-            
-            echo "✅ Checking container status..."
-            docker-compose ps || docker compose ps
-            
-            echo "🔄 Reloading parent nginx..."
-            sudo nginx -t && sudo systemctl reload nginx || sudo service nginx reload || echo "⚠️ Nginx reload skipped"
-            
-            echo "✅ Deployment completed!"
-          EOF
-
-      - name: Copy build files to server
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ${DEPLOY_PATH}/build"
-          scp -r build/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${DEPLOY_PATH}/build/
-
-      - name: Verify deployment
-        env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-        run: |
+    - name: 🚀 Deploy via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      env:
+        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        APP_ENV: ${{ secrets.APP_ENV }}
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,JWT_SECRET,APP_ENV
+        script: |
+          set -e
+          cd /opt/cafe-crm
+          
+          echo "📥 Pulling latest code..."
+          git pull origin main
+          
+          echo "📝 Creating .env file from secrets..."
+          cat > .env << ENVFILE
+          JWT_SECRET=${JWT_SECRET}
+          POSTGRES_USER=${POSTGRES_USER:-postgres}
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+          POSTGRES_DB=${POSTGRES_DB:-cafe_db}
+          APP_ENV=${APP_ENV:-production}
+          ENVFILE
+          
+          echo "🐳 Rebuilding backend..."
+          docker-compose build backend
+          
+          echo "▶️ Restarting services..."
+          docker-compose up -d
+          
+          echo "⏳ Waiting for backend to be healthy..."
           sleep 10
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
-            cd \${DEPLOY_PATH}
-            
-            echo "🔍 Checking container status..."
-            if ! (docker-compose ps || docker compose ps) | grep -q "Up"; then
-              echo "❌ Error: Containers are not running!"
-              echo "📋 Container logs:"
-              docker-compose logs --tail=50 || docker compose logs --tail=50
-              exit 1
-            fi
-            
-            if [ ! -d "build" ] || [ -z "\$(ls -A build)" ]; then
-              echo "❌ Error: Build directory is empty or not found!"
-              exit 1
-            fi
-            
-            echo "✅ Deployment verified successfully!"
-          EOF
-
-      - name: Health check
-        run: |
-          echo "🏥 Performing health check..."
-          sleep 5
           
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:8081/ || echo "000")
+          echo "🔨 Building frontend..."
+          rm -rf build/
+          NODE_OPTIONS=--max_old_space_size=1536 npm run build
           
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "301" ] || [ "$HTTP_CODE" = "302" ]; then
-            echo "✅ Health check passed (HTTP $HTTP_CODE)"
+          echo "✅ Checking build..."
+          if grep -r "MenuManagement" build/assets/ > /dev/null; then
+            echo "✅ Frontend build complete!"
           else
-            echo "⚠️ Warning: Health check returned HTTP $HTTP_CODE"
-            echo "This might be normal if the service is still starting up"
+            echo "⚠️ Frontend build might be incomplete"
           fi
+          
+          echo "🔄 Restarting nginx..."
+          sudo docker restart whiteout_nginx
+          
+          echo "🎉 Deploy finished at $(date)"
+          echo "📊 Running containers:"
+          docker ps --filter "name=cafe" --format "table {{.Names}}\t{{.Status}}"

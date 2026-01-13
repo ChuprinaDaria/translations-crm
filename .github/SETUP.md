@@ -27,23 +27,53 @@ cat ~/.ssh/github_actions_key
 -----END OPENSSH PRIVATE KEY-----
 ```
 
-### SERVER_HOST
+### SSH_HOST
 ```
 ваш-сервер.com
 або
 123.45.67.89
 ```
 
-### SERVER_USER
+### SSH_USER
 ```
-dziga
-(або ваш користувач)
+deploy
+(або ваш користувач для деплою)
 ```
 
-### DEPLOY_PATH
+### SSH_PORT
 ```
-/home/dziga/dzyga-catering.com.ua/crm
-(шлях до директорії проекту на сервері)
+22
+(стандартний порт SSH, або ваш кастомний порт)
+```
+
+### POSTGRES_USER
+```
+postgres
+(користувач PostgreSQL, опціонально - за замовчуванням postgres)
+```
+
+### POSTGRES_PASSWORD
+```
+ваш-пароль-postgres
+(пароль для PostgreSQL)
+```
+
+### POSTGRES_DB
+```
+cafe_db
+(назва бази даних, опціонально - за замовчуванням cafe_db)
+```
+
+### JWT_SECRET
+```
+ваш-секретний-ключ-jwt
+(секретний ключ для JWT токенів, обов'язково!)
+```
+
+### APP_ENV
+```
+production
+(середовище: production, staging, dev - опціонально, за замовчуванням production)
 ```
 
 ## Крок 3: Налаштування сервера
@@ -56,16 +86,17 @@ cat ~/.ssh/github_actions_key.pub >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 ```
 
-### Налаштування sudo для nginx reload (опціонально)
+### Налаштування sudo для docker restart nginx
 
-Якщо потрібен sudo для nginx reload, додайте в `/etc/sudoers`:
-```
-dziga ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
-dziga ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx
-dziga ALL=(ALL) NOPASSWD: /usr/sbin/service nginx reload
+Додайте права користувачу `deploy` на перезапуск nginx контейнера:
+
+```bash
+echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/docker restart whiteout_nginx" | sudo tee -a /etc/sudoers.d/deploy-docker
 ```
 
-Або використовуйте без sudo, якщо користувач має права.
+Це дозволить workflow перезапускати nginx контейнер без введення пароля.
+
+**Примітка:** Якщо ваш користувач має інше ім'я (не `deploy`), замініть його в команді.
 
 ## Крок 4: Перевірка
 
@@ -88,7 +119,7 @@ dziga ALL=(ALL) NOPASSWD: /usr/sbin/service nginx reload
 - Перевірте шлях до nginx: `which nginx`
 - Оновіть команду в workflow на правильний шлях
 
-### Помилка "DEPLOY_PATH not found"
-- Перевірте що шлях правильний
-- Перевірте що директорія існує на сервері
+### Помилка "cd /opt/cafe-crm: No such file or directory"
+- Перевірте що директорія `/opt/cafe-crm` існує на сервері
+- Або змініть шлях в workflow на правильний
 
