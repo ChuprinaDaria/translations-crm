@@ -237,13 +237,9 @@ jobs:
           echo "✅ All cafe-crm containers are healthy!"
           
           echo "🔨 Building frontend..."
-          # Встановлюємо залежності якщо потрібно
-          if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-lock.json" ]; then
-            echo "📦 Installing npm dependencies..."
-            npm install
-          else
-            echo "✅ Dependencies already installed"
-          fi
+          # Завжди встановлюємо залежності для гарантії що все актуально
+          echo "📦 Installing npm dependencies..."
+          npm ci || npm install
           
           rm -rf build/
           # Збільшуємо heap size для важких React/Vite проектів
