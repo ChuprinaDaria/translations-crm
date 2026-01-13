@@ -162,12 +162,20 @@ jobs:
           # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери cafe-crm
           # щоб уникнути помилки ContainerConfig
           if [ "$COMPOSE_CMD" = "docker-compose" ]; then
-            echo "🛑 Stopping old cafe-crm containers to avoid ContainerConfig error..."
-            # Видаляємо тільки контейнери cafe-crm
-            docker stop cafe_backend cafe_postgres 2>/dev/null || true
-            docker rm -f cafe_backend cafe_postgres 2>/dev/null || true
+            echo "🛑 Stopping and removing old cafe-crm containers to avoid ContainerConfig error..."
+            # Зупиняємо всі контейнери cafe-crm (включаючи старі з некоректними іменами)
+            docker ps -a --filter "name=cafe" --format "{{.Names}}" | xargs -r docker stop 2>/dev/null || true
+            docker ps -a --filter "name=cafe" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
+            
+            # Також видаляємо контейнери через compose (якщо вони є)
+            $COMPOSE_CMD down 2>/dev/null || true
+            
+            # Видаляємо всі контейнери що починаються з cafe_ (на випадок старих імен)
+            docker ps -a --filter "name=^/cafe_" --format "{{.Names}}" | sed 's|^/||' | xargs -r docker rm -f 2>/dev/null || true
           fi
-          $COMPOSE_CMD up -d
+          
+          # Використовуємо --force-recreate для уникнення проблем з рекреацією
+          $COMPOSE_CMD up -d --force-recreate
           
           echo "⏳ Waiting for services to be healthy..."
           sleep 15
