@@ -131,6 +131,15 @@ jobs:
           ENVFILE
           
           echo "🐳 Rebuilding backend..."
+          # Визначаємо яку версію compose використовувати (v2 або v1)
+          if docker compose version > /dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+            echo "✅ Using Docker Compose V2"
+          else
+            COMPOSE_CMD="docker-compose"
+            echo "ℹ️ Using Docker Compose V1 (legacy)"
+          fi
+          
           # Перевіряємо чи встановлений buildx, якщо ні - встановлюємо або використовуємо fallback
           if ! docker buildx version > /dev/null 2>&1; then
             echo "⚠️ Buildx not found, attempting to install..."
@@ -143,24 +152,35 @@ jobs:
           if docker buildx version > /dev/null 2>&1; then
             echo "✅ Using BuildKit with buildx"
             export DOCKER_BUILDKIT=1
-            COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build backend
+            COMPOSE_DOCKER_CLI_BUILD=1 $COMPOSE_CMD build backend
           else
             echo "ℹ️ Using legacy Docker builder"
-            docker-compose build backend
+            $COMPOSE_CMD build backend
           fi
           
           echo "▶️ Restarting services..."
-          docker-compose up -d
+          $COMPOSE_CMD up -d
           
           echo "⏳ Waiting for backend to be healthy..."
           sleep 10
           
           echo "🔍 Checking backend health..."
+          # Використовуємо ту саму команду compose що і раніше
+          if [ -z "$COMPOSE_CMD" ]; then
+            if docker compose version > /dev/null 2>&1; then
+              COMPOSE_CMD="docker compose"
+            else
+              COMPOSE_CMD="docker-compose"
+            fi
+          fi
+          
           if docker ps | grep -q cafe_backend; then
             echo "✅ Backend container is running"
           else
             echo "❌ Backend container is not running!"
             docker ps -a | grep cafe
+            echo "📋 Checking service status..."
+            $COMPOSE_CMD ps || true
             exit 1
           fi
           
