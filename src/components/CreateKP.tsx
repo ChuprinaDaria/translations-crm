@@ -267,7 +267,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("__all__");
   const [menus, setMenus] = useState<Menu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState<string>("");
   const [isApplyingMenu, setIsApplyingMenu] = useState(false);
@@ -1248,7 +1248,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
         dish.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         dish.description.toLowerCase().includes(searchQuery.toLowerCase());
       // Фільтр за випадаючим списком категорії/підкатегорії
-      const matchesCategoryFilter = !selectedCategoryFilter || 
+      const matchesCategoryFilter = selectedCategoryFilter === "__all__" || 
         dish.category === selectedCategoryFilter || 
         dish.subcategory === selectedCategoryFilter;
       // Якщо вибрана категорія через бейджі (для сумісності), показуємо тільки страви цієї категорії (точна відповідність)
@@ -3577,7 +3577,7 @@ export function CreateKP({ kpId, onClose }: CreateKPProps = {}) {
                           <SelectValue placeholder="Всі категорії" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Всі категорії</SelectItem>
+                          <SelectItem value="__all__">Всі категорії</SelectItem>
                           {/* Категорії */}
                           {Array.from(new Set(dishes.map((d) => d.category).filter(Boolean))).sort().map((category) => {
                             const count = dishes.filter((d) => d.category === category).length;

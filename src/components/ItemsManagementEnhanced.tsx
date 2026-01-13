@@ -15,9 +15,9 @@ export function ItemsManagementEnhanced() {
   
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [subcategoryFilter, setSubcategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("__all__");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("__all__");
+  const [statusFilter, setStatusFilter] = useState("__all__");
   const [priceFrom, setPriceFrom] = useState("");
   const [priceTo, setPriceTo] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("name-asc");
@@ -97,7 +97,7 @@ export function ItemsManagementEnhanced() {
 
   // Filtered subcategories for filter dropdown
   const filteredSubcategoriesForFilter = useMemo(() => {
-    if (!categoryFilter) return [];
+    if (categoryFilter === "__all__") return [];
     return subcategories.filter(sub => sub.category_id === parseInt(categoryFilter));
   }, [categoryFilter, subcategories]);
 
@@ -113,14 +113,14 @@ export function ItemsManagementEnhanced() {
     }
     
     // Category
-    if (categoryFilter) {
+    if (categoryFilter !== "__all__") {
       result = result.filter(item =>
         item.subcategory?.category_id === parseInt(categoryFilter)
       );
     }
     
     // Subcategory
-    if (subcategoryFilter) {
+    if (subcategoryFilter !== "__all__") {
       result = result.filter(item =>
         item.subcategory_id === parseInt(subcategoryFilter)
       );
@@ -171,9 +171,9 @@ export function ItemsManagementEnhanced() {
   // Reset filters
   const resetFilters = () => {
     setSearchQuery("");
-    setCategoryFilter("");
-    setSubcategoryFilter("");
-    setStatusFilter("");
+    setCategoryFilter("__all__");
+    setSubcategoryFilter("__all__");
+    setStatusFilter("__all__");
     setPriceFrom("");
     setPriceTo("");
     setSortBy("name-asc");
@@ -449,13 +449,13 @@ export function ItemsManagementEnhanced() {
             {/* Category */}
             <Select value={categoryFilter} onValueChange={(value) => {
               setCategoryFilter(value);
-              setSubcategoryFilter("");
+              setSubcategoryFilter("__all__");
             }}>
               <SelectTrigger>
                 <SelectValue placeholder="Всі категорії" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Всі категорії</SelectItem>
+                <SelectItem value="__all__">Всі категорії</SelectItem>
                 {categories.map(cat => (
                   <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
                 ))}
@@ -466,13 +466,13 @@ export function ItemsManagementEnhanced() {
             <Select 
               value={subcategoryFilter} 
               onValueChange={setSubcategoryFilter}
-              disabled={!categoryFilter}
+              disabled={categoryFilter === "__all__"}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Всі підкатегорії" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Всі підкатегорії</SelectItem>
+                <SelectItem value="__all__">Всі підкатегорії</SelectItem>
                 {filteredSubcategoriesForFilter.map(sub => (
                   <SelectItem key={sub.id} value={sub.id.toString()}>{sub.name}</SelectItem>
                 ))}
@@ -485,7 +485,7 @@ export function ItemsManagementEnhanced() {
                 <SelectValue placeholder="Всі ��татуси" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Всі статуси</SelectItem>
+                <SelectItem value="__all__">Всі статуси</SelectItem>
                 <SelectItem value="active">Активні</SelectItem>
                 <SelectItem value="inactive">Неактивні</SelectItem>
               </SelectContent>
@@ -598,16 +598,16 @@ export function ItemsManagementEnhanced() {
           <CardContent className="p-12 text-center">
             <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl text-gray-900 mb-2">
-              {searchQuery || categoryFilter || statusFilter 
+              {searchQuery || (categoryFilter !== "__all__") || (statusFilter !== "__all__") 
                 ? 'Товари не знайдено'
                 : 'Немає товарів'}
             </h3>
             <p className="text-gray-500 mb-6">
-              {searchQuery || categoryFilter || statusFilter
+              {searchQuery || (categoryFilter !== "__all__") || (statusFilter !== "__all__")
                 ? 'Спробуйте змінити параметри пошуку'
                 : 'Почніть з додавання вашого першого товару'}
             </p>
-            {!(searchQuery || categoryFilter || statusFilter) && (
+            {!(searchQuery || (categoryFilter !== "__all__") || (statusFilter !== "__all__")) && (
               <Button
                 onClick={handleCreate}
                 className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
@@ -1038,7 +1038,7 @@ export function ItemsManagementEnhanced() {
                     <SelectValue placeholder="Оберіть одиницю" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Не вказано</SelectItem>
+                    <SelectItem value="__none__">Не вказано</SelectItem>
                     <SelectItem value="г">грами (г)</SelectItem>
                     <SelectItem value="кг">кілограми (кг)</SelectItem>
                     <SelectItem value="мл">мілілітри (мл)</SelectItem>
