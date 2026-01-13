@@ -5,7 +5,62 @@ on:
     branches: [ main ]
 
 jobs:
+  # Перевірка перед деплоєм
+  check:
+    name: Check Frontend & Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install frontend dependencies
+      run: npm ci
+    
+    - name: TypeScript type check
+      run: |
+        if [ -f "tsconfig.json" ]; then
+          npx tsc --noEmit
+        else
+          echo "⚠️ No tsconfig.json found, skipping TypeScript check"
+        fi
+    
+    - name: Build frontend
+      run: npm run build
+    
+    - name: Verify frontend build
+      run: |
+        if [ ! -d "build" ]; then
+          echo "❌ Error: Build directory not found!"
+          exit 1
+        fi
+        if ! grep -r "MenuManagement" build/assets/ > /dev/null 2>&1; then
+          echo "⚠️ Warning: MenuManagement not found in build"
+        fi
+        echo "✅ Frontend build verified!"
+    
+    - name: Check backend files
+      run: |
+        if [ ! -f "app/main.py" ]; then
+          echo "❌ Error: Backend main.py not found!"
+          exit 1
+        fi
+        if [ ! -f "app/requirements.txt" ]; then
+          echo "❌ Error: Backend requirements.txt not found!"
+          exit 1
+        fi
+        echo "✅ Backend files verified!"
+
+  # Деплой на сервер
   deploy:
+    name: Deploy to Server
+    needs: check
     runs-on: ubuntu-latest
     
     steps:
@@ -28,7 +83,15 @@ jobs:
           cd /opt/cafe-crm
           
           echo "📥 Pulling latest code..."
-          git pull origin main
+          # Перевіряємо чи remote налаштований на SSH, якщо ні - налаштовуємо
+          REMOTE_URL=$(git config --get remote.origin.url)
+          if [[ "$REMOTE_URL" == https://github.com/* ]]; then
+            echo "🔧 Switching remote to SSH..."
+            git remote set-url origin git@github.com:Lazysoft-pl/cafe.git
+          fi
+          # Використовуємо fetch + reset для уникнення проблем з автентифікацією
+          git fetch origin main
+          git reset --hard origin/main
           
           echo "📝 Creating .env file from secrets..."
           cat > .env << ENVFILE
@@ -47,6 +110,15 @@ jobs:
           
           echo "⏳ Waiting for backend to be healthy..."
           sleep 10
+          
+          echo "🔍 Checking backend health..."
+          if docker ps | grep -q cafe_backend; then
+            echo "✅ Backend container is running"
+          else
+            echo "❌ Backend container is not running!"
+            docker ps -a | grep cafe
+            exit 1
+          fi
           
           echo "🔨 Building frontend..."
           rm -rf build/
