@@ -45,6 +45,7 @@ class ItemBase(BaseModel):
     volume: Optional[Union[str, float, int]] = None  # Об'єм (необов'язкове поле)
     unit: Optional[str] = None
     photo_url: Optional[str] = None
+    icon_name: Optional[str] = None  # Іконка алергену
     active: Optional[bool] = True
     
     @field_validator('weight', mode='before')
@@ -71,6 +72,7 @@ class ItemUpdate(BaseModel):
     volume: Optional[Union[str, float, int]] = None  # Об'єм (необов'язкове поле)
     unit: Optional[str] = None
     photo_url: Optional[str] = None
+    icon_name: Optional[str] = None  # Іконка алергену
     active: Optional[bool] = None
     
     @field_validator('weight', mode='before')

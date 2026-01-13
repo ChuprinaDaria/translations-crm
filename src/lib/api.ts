@@ -662,6 +662,7 @@ export const itemsApi = {
     if (data.active !== undefined) formData.append('active', data.active.toString());
     if (data.photo) formData.append('photo', data.photo);
     if (data.photo_url !== undefined) formData.append('photo_url', data.photo_url || '');
+    if (data.icon_name !== undefined) formData.append('icon_name', data.icon_name || '');
     
     return apiFetchMultipart<Item>('/items', formData, 'POST');
   },
@@ -703,6 +704,7 @@ export const itemsApi = {
     if (data.photo_url !== undefined) {
       formData.append('photo_url', data.photo_url || '');
     }
+    if (data.icon_name !== undefined) formData.append('icon_name', data.icon_name || '');
     
     console.log(`[API] PUT /items/${itemId}`, {
       name: data.name,

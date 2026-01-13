@@ -543,6 +543,7 @@ async def create_item(
     active: bool = Form(True),
     photo: UploadFile = File(None),
     photo_url: str = Form(None),
+    icon_name: str = Form(None),
     db: Session = Depends(get_db), 
     user = Depends(get_current_user)
 ):
@@ -565,6 +566,7 @@ async def create_item(
     volume_normalized = volume if volume and volume.strip() else None
     unit_normalized = unit if unit and unit.strip() else None
     description_normalized = description if description and description.strip() else None
+    icon_name_normalized = icon_name if icon_name and icon_name.strip() else None
     
     # Створюємо об'єкт ItemCreate
     item_data = schema.ItemCreate(
@@ -578,7 +580,8 @@ async def create_item(
         unit=unit_normalized,
         subcategory_id=subcategory_id,
         active=active,
-        photo_url=final_photo_url
+        photo_url=final_photo_url,
+        icon_name=icon_name_normalized
     )
     
     return crud.create_item(db, item_data)
@@ -596,6 +599,7 @@ async def update_item(
     volume: str = Form(None),
     unit: str = Form(None),
     subcategory_id: int = Form(None),
+    icon_name: str = Form(None),
     active: bool = Form(None),
     photo: UploadFile = File(None),
     photo_url: str = Form(None),
@@ -640,6 +644,7 @@ async def update_item(
     # Створюємо об'єкт ItemUpdate
     # name обов'язкове поле, тому якщо воно None або порожнє, не передаємо його в оновлення
     # (exclude_none=True в crud.update_item виключить None значення)
+    icon_name_normalized = icon_name if icon_name and icon_name.strip() else None
     item_data_dict = {
         'description': description_normalized,
         'price': price,
@@ -650,7 +655,8 @@ async def update_item(
         'unit': unit_normalized,
         'subcategory_id': subcategory_id,
         'active': active,
-        'photo_url': final_photo_url
+        'photo_url': final_photo_url,
+        'icon_name': icon_name_normalized
     }
     # Додаємо name тільки якщо воно передано і не порожнє
     if name and isinstance(name, str) and name.strip():

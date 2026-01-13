@@ -50,6 +50,7 @@ class Item(Base):
     description = Column(String, index=True)
 
     photo_url = Column(String, index=True)
+    icon_name = Column(String, nullable=True)  # Іконка алергену (наприклад: "nuts,garlic")
 
     active = Column(Boolean, default=True)
     
