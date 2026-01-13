@@ -237,6 +237,14 @@ jobs:
           echo "✅ All cafe-crm containers are healthy!"
           
           echo "🔨 Building frontend..."
+          # Встановлюємо залежності якщо потрібно
+          if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-lock.json" ]; then
+            echo "📦 Installing npm dependencies..."
+            npm install
+          else
+            echo "✅ Dependencies already installed"
+          fi
+          
           rm -rf build/
           # Збільшуємо heap size для важких React/Vite проектів
           NODE_OPTIONS=--max_old_space_size=4096 npm run build
