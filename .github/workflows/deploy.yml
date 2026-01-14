@@ -40,8 +40,8 @@ jobs:
           echo "❌ Error: Build directory not found!"
           exit 1
         fi
-        if ! grep -r "MenuManagement" build/assets/ > /dev/null 2>&1; then
-          echo "⚠️ Warning: MenuManagement not found in build"
+        if ! grep -r "Dashboard" build/assets/ > /dev/null 2>&1; then
+          echo "⚠️ Warning: Dashboard not found in build"
         fi
         echo "✅ Frontend build verified!"
     
@@ -80,7 +80,7 @@ jobs:
         envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,JWT_SECRET,APP_ENV
         script: |
           set -e
-          cd /opt/cafe-crm
+          cd /opt/crm
           
           echo "📥 Pulling latest code..."
           # Налаштування для використання SSH з deploy key
@@ -101,7 +101,7 @@ jobs:
             exit 1
           elif [[ "$REMOTE_URL" == https://github.com/* ]]; then
             echo "🔧 Switching remote from HTTPS to SSH..."
-            git remote set-url origin git@github.com:Lazysoft-pl/cafe.git
+            git remote set-url origin git@github.com:YOUR_ORG/YOUR_REPO.git
           elif [[ "$REMOTE_URL" == git@github.com:* ]]; then
             echo "✅ Remote already configured for SSH"
           else
@@ -126,7 +126,7 @@ jobs:
           JWT_SECRET=${JWT_SECRET}
           POSTGRES_USER=${POSTGRES_USER:-postgres}
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-          POSTGRES_DB=${POSTGRES_DB:-cafe_db}
+          POSTGRES_DB=${POSTGRES_DB:-crm_db}
           APP_ENV=${APP_ENV:-production}
           ENVFILE
           
@@ -159,19 +159,19 @@ jobs:
           fi
           
           echo "▶️ Restarting services..."
-          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери cafe-crm
+          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери crm
           # щоб уникнути помилки ContainerConfig
           if [ "$COMPOSE_CMD" = "docker-compose" ]; then
-            echo "🛑 Stopping and removing old cafe-crm containers to avoid ContainerConfig error..."
-            # Зупиняємо всі контейнери cafe-crm (включаючи старі з некоректними іменами)
-            docker ps -a --filter "name=cafe" --format "{{.Names}}" | xargs -r docker stop 2>/dev/null || true
-            docker ps -a --filter "name=cafe" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
+            echo "🛑 Stopping and removing old crm containers to avoid ContainerConfig error..."
+            # Зупиняємо всі контейнери crm (включаючи старі з некоректними іменами)
+            docker ps -a --filter "name=crm" --format "{{.Names}}" | xargs -r docker stop 2>/dev/null || true
+            docker ps -a --filter "name=crm" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
             
             # Також видаляємо контейнери через compose (якщо вони є)
             $COMPOSE_CMD down 2>/dev/null || true
             
-            # Видаляємо всі контейнери що починаються з cafe_ (на випадок старих імен)
-            docker ps -a --filter "name=^/cafe_" --format "{{.Names}}" | sed 's|^/||' | xargs -r docker rm -f 2>/dev/null || true
+            # Видаляємо всі контейнери що починаються з crm_ (на випадок старих імен)
+            docker ps -a --filter "name=^/crm_" --format "{{.Names}}" | sed 's|^/||' | xargs -r docker rm -f 2>/dev/null || true
           fi
           
           # Використовуємо --force-recreate для уникнення проблем з рекреацією
@@ -180,7 +180,7 @@ jobs:
           echo "⏳ Waiting for services to be healthy..."
           sleep 15
           
-          echo "🔍 Checking cafe-crm containers health..."
+          echo "🔍 Checking crm containers health..."
           # Використовуємо ту саму команду compose що і раніше
           if [ -z "$COMPOSE_CMD" ]; then
             if docker compose version > /dev/null 2>&1; then
@@ -190,51 +190,51 @@ jobs:
             fi
           fi
           
-          # Перевірка всіх cafe-crm контейнерів
+          # Перевірка всіх crm контейнерів
           HEALTH_CHECK_FAILED=0
           
-          # Перевірка cafe_backend
-          if docker ps | grep -q cafe_backend; then
-            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' cafe_backend 2>/dev/null || echo "not found")
-            BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' cafe_backend 2>/dev/null || echo "no healthcheck")
-            echo "✅ cafe_backend: Status=$BACKEND_STATUS, Health=$BACKEND_HEALTH"
+          # Перевірка crm_backend
+          if docker ps | grep -q crm_backend; then
+            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' crm_backend 2>/dev/null || echo "not found")
+            BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' crm_backend 2>/dev/null || echo "no healthcheck")
+            echo "✅ crm_backend: Status=$BACKEND_STATUS, Health=$BACKEND_HEALTH"
             if [ "$BACKEND_STATUS" != "running" ]; then
-              echo "❌ cafe_backend is not running!"
+              echo "❌ crm_backend is not running!"
               HEALTH_CHECK_FAILED=1
             fi
           else
-            echo "❌ cafe_backend container not found!"
+            echo "❌ crm_backend container not found!"
             HEALTH_CHECK_FAILED=1
           fi
           
-          # Перевірка cafe_postgres
-          if docker ps | grep -q cafe_postgres; then
-            POSTGRES_STATUS=$(docker inspect --format='{{.State.Status}}' cafe_postgres 2>/dev/null || echo "not found")
-            POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' cafe_postgres 2>/dev/null || echo "no healthcheck")
-            echo "✅ cafe_postgres: Status=$POSTGRES_STATUS, Health=$POSTGRES_HEALTH"
+          # Перевірка crm_postgres
+          if docker ps | grep -q crm_postgres; then
+            POSTGRES_STATUS=$(docker inspect --format='{{.State.Status}}' crm_postgres 2>/dev/null || echo "not found")
+            POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' crm_postgres 2>/dev/null || echo "no healthcheck")
+            echo "✅ crm_postgres: Status=$POSTGRES_STATUS, Health=$POSTGRES_HEALTH"
             if [ "$POSTGRES_STATUS" != "running" ]; then
-              echo "❌ cafe_postgres is not running!"
+              echo "❌ crm_postgres is not running!"
               HEALTH_CHECK_FAILED=1
             fi
           else
-            echo "❌ cafe_postgres container not found!"
+            echo "❌ crm_postgres container not found!"
             HEALTH_CHECK_FAILED=1
           fi
           
           # Показуємо статус всіх контейнерів
-          echo "📋 All cafe-crm containers status:"
-          $COMPOSE_CMD ps || docker ps --filter "name=cafe" --format "table {{.Names}}\t{{.Status}}\t{{.Health}}"
+          echo "📋 All crm containers status:"
+          $COMPOSE_CMD ps || docker ps --filter "name=crm" --format "table {{.Names}}\t{{.Status}}\t{{.Health}}"
           
           if [ $HEALTH_CHECK_FAILED -eq 1 ]; then
             echo "❌ Health check failed! Checking logs..."
             echo "📋 Backend logs (last 50 lines):"
-            docker logs --tail=50 cafe_backend 2>&1 || true
+            docker logs --tail=50 crm_backend 2>&1 || true
             echo "📋 Postgres logs (last 50 lines):"
-            docker logs --tail=50 cafe_postgres 2>&1 || true
+            docker logs --tail=50 crm_postgres 2>&1 || true
             exit 1
           fi
           
-          echo "✅ All cafe-crm containers are healthy!"
+          echo "✅ All crm containers are healthy!"
           
           echo "🔨 Building frontend..."
           # Завжди встановлюємо залежності для гарантії що все актуально
@@ -264,11 +264,11 @@ jobs:
             exit 1
           fi
           
-          # Перевіряємо наявність MenuManagement (базова перевірка)
-          if grep -r "MenuManagement" build/assets/ > /dev/null 2>&1; then
+          # Перевіряємо наявність Dashboard (базова перевірка)
+          if grep -r "Dashboard" build/assets/ > /dev/null 2>&1; then
             echo "✅ Frontend build complete and verified!"
           else
-            echo "⚠️ Warning: MenuManagement not found in build (might be minified)"
+            echo "⚠️ Warning: Dashboard not found in build (might be minified)"
             echo "ℹ️ Build directory structure:"
             ls -la build/ || true
           fi
@@ -278,4 +278,4 @@ jobs:
           
           echo "🎉 Deploy finished at $(date)"
           echo "📊 Running containers:"
-          docker ps --filter "name=cafe" --format "table {{.Names}}\t{{.Status}}"
+          docker ps --filter "name=crm" --format "table {{.Names}}\t{{.Status}}"

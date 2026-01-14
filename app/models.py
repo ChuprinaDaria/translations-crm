@@ -50,8 +50,6 @@ class Item(Base):
     description = Column(String, index=True)
 
     photo_url = Column(String, index=True)
-    icon_name = Column(String, nullable=True)  # Іконка алергену (наприклад: "nuts,garlic")
-    can_cook_on_location = Column(Boolean, default=False, nullable=False)  # Чи можна готувати страву на локації (будинок/палатка/вогонь)
 
     active = Column(Boolean, default=True)
     
@@ -108,7 +106,7 @@ class Template(Base):
     
     # Заголовок КП (редагований текст)
     title_text = Column(String, nullable=True, default="КОМЕРЦІЙНА ПРОПОЗИЦІЯ")
-    company_name = Column(String, nullable=True, default="ДЗИҐА КЕЙТЕРІНҐ")
+    company_name = Column(String, nullable=True)
     
     # Шрифти для різних елементів
     title_font = Column(String, nullable=True)       # Шрифт заголовка "КОМЕРЦІЙНА ПРОПОЗИЦІЯ..."
@@ -147,14 +145,7 @@ class Template(Base):
     show_service_block = Column(Boolean, default=True)
     show_transport_block = Column(Boolean, default=True)
     
-    # Секції меню (JSON масив категорій)
-    menu_sections = Column(JSON, default=lambda: [
-        "Холодні закуски", "Салати", "Гарячі страви", 
-        "Гарнір", "Десерти", "Напої"
-    ])
-    
     # Текстові налаштування
-    menu_title = Column(String, default="Меню")
     summary_title = Column(String, default="Підсумок")
     footer_text = Column(Text, nullable=True)
     
@@ -170,9 +161,6 @@ class Template(Base):
     
     # Галерея фото (до 9 фото, відображаються по 3 в рядок)
     gallery_photos = Column(JSON, nullable=True)  # Масив шляхів до фото галереї
-    
-    # Розділювач категорій страв (PNG зображення на всю ширину)
-    category_separator_image_url = Column(String, nullable=True)  # URL розділювача між категоріями страв
     
     # Умови бронювання (текст з пунктами)
     booking_terms = Column(Text, nullable=True)
@@ -351,38 +339,6 @@ class AppSetting(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
-class Menu(Base):
-    """
-    Готове меню (набір страв) для подальшого використання в КП.
-    Наприклад: \"Фуршет 55 осіб\", \"Діловий обід\" тощо.
-    """
-    __tablename__ = "menus"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)
-    description = Column(String, nullable=True)
-    event_format = Column(String, nullable=True)
-    people_count = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    items = relationship("MenuItem", back_populates="menu", cascade="all, delete-orphan")
-
-
-class MenuItem(Base):
-    """
-    Зв'язка меню та страви з кількістю порцій.
-    """
-    __tablename__ = "menu_items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    menu_id = Column(Integer, ForeignKey("menus.id"), nullable=False)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=False)
-    quantity = Column(Integer, default=1)
-
-    menu = relationship("Menu", back_populates="items")
-    item = relationship("Item", lazy="joined")
-
-
 class Client(Base):
     __tablename__ = "clients"
 
@@ -522,134 +478,6 @@ class CashbackTransaction(Base):
     # Відносини
     client = relationship("Client", back_populates="cashback_transactions")
     kp = relationship("KP")
-
-
-class Recipe(Base):
-    """
-    Техкарта (калькуляція) страви.
-    Містить інгредієнти та їх кількості для приготування однієї порції.
-    
-    Підтримує два типи:
-    - catering: проста структура (страва → інгредієнти)
-    - box: трирівнева структура (страва → компоненти → інгредієнти)
-    """
-    __tablename__ = "recipes"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(300), nullable=False, index=True)  # Назва страви
-    category = Column(String(100), nullable=True, index=True)  # Категорія (холодні, гарячі, etc.)
-    weight_per_portion = Column(Float, nullable=True)  # Вага однієї порції в грамах
-    notes = Column(Text, nullable=True)  # Примітки до техкарти (довільний текст)
-    
-    # Тип техкарти: 'catering' або 'box'
-    recipe_type = Column(String(20), default="catering", index=True)
-    
-    # Зв'язок з Item (якщо страва є в меню)
-    item_id = Column(Integer, ForeignKey("items.id"), nullable=True)
-    item = relationship("Item")
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Відносини
-    ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
-    components = relationship("RecipeComponent", back_populates="recipe", cascade="all, delete-orphan")
-
-
-class RecipeComponent(Base):
-    """
-    Компонент боксу (позначений маркером 'in' в Excel).
-    Використовується для трирівневої структури боксів.
-    
-    Приклад: Бокс "Сніданок" містить:
-    - 2 круасани (компонент)
-    - 1 йогурт (компонент)
-    Кожен компонент має свої інгредієнти.
-    """
-    __tablename__ = "recipe_components"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
-    
-    name = Column(String(300), nullable=False)  # Назва компонента
-    quantity_per_portion = Column(Float, default=1.0)  # Кількість на 1 порцію боксу
-    weight_per_portion = Column(Float, nullable=True)  # Вага компонента в грамах (з колонки B)
-    order_index = Column(Integer, default=0)  # Порядок відображення
-    
-    # Відносини
-    recipe = relationship("Recipe", back_populates="components")
-    ingredients = relationship("RecipeComponentIngredient", back_populates="component", cascade="all, delete-orphan")
-
-
-class RecipeIngredient(Base):
-    """
-    Інгредієнт техкарти - продукт та його кількість на 1 порцію страви.
-    Використовується для кейтерінгу (пряма структура: страва → інгредієнти).
-    """
-    __tablename__ = "recipe_ingredients"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
-    
-    product_name = Column(String(500), nullable=False, index=True)  # Назва продукту
-    weight_per_portion = Column(Float, nullable=False)  # Вага на 1 порцію в грамах
-    unit = Column(String(50), default="г")  # Одиниця виміру
-    order_index = Column(Integer, default=0)  # Порядок відображення
-    
-    # Відносини
-    recipe = relationship("Recipe", back_populates="ingredients")
-
-
-class RecipeComponentIngredient(Base):
-    """
-    Інгредієнт компонента боксу.
-    Використовується для трирівневої структури боксів.
-    
-    Формула розрахунку: вага × кількість_компонентів × кількість_порцій
-    """
-    __tablename__ = "recipe_component_ingredients"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    component_id = Column(Integer, ForeignKey("recipe_components.id", ondelete="CASCADE"), nullable=False)
-    
-    product_name = Column(String(500), nullable=False, index=True)  # Назва продукту
-    weight_per_unit = Column(Float, nullable=False)  # Вага на 1 одиницю компонента в грамах
-    unit = Column(String(50), default="г")  # Одиниця виміру
-    order_index = Column(Integer, default=0)  # Порядок відображення
-    
-    # Відносини
-    component = relationship("RecipeComponent", back_populates="ingredients")
-
-
-class CalculationsFile(Base):
-    """
-    Завантажений файл калькуляцій (техкарт).
-    Зберігаємо метадані + шлях до файлу на диску, щоб можна було показати в UI,
-    скачати та видалити.
-    """
-    __tablename__ = "calculations_files"
-
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(500), nullable=False)  # оригінальна назва файлу
-    stored_path = Column(String(1000), nullable=False)  # відносний шлях у папці app/uploads
-    recipe_type = Column(String(20), default="catering", index=True)  # catering | box
-    size_bytes = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Product(Base):
-    """
-    Продукт для закупки (словник продуктів).
-    """
-    __tablename__ = "products"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(300), nullable=False, unique=True, index=True)
-    category = Column(String(100), nullable=True, index=True)  # РИБНИЙ, М'ЯСНИЙ, ОВОЧІ, etc.
-    subcategory = Column(String(100), nullable=True)  # РИБА, КУРЯТИНА, etc.
-    unit = Column(String(50), default="г")  # Одиниця виміру
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Checklist(Base):

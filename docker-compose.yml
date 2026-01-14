@@ -3,11 +3,11 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: cafe_postgres
+    container_name: crm_postgres
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-cafe_db}
+      - POSTGRES_DB=${POSTGRES_DB:-crm_db}
     ports:
       - "5433:5432"
     volumes:
@@ -21,14 +21,14 @@ services:
 
   backend:
     build: ./app
-    container_name: cafe_backend
+    container_name: crm_backend
     networks:
       - default
       - whiteout_network
     expose:
       - "8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@cafe_postgres:5432/${POSTGRES_DB:-cafe_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@crm_postgres:5432/${POSTGRES_DB:-crm_db}
       - JWT_SECRET=${JWT_SECRET}
       - APP_ENV=${APP_ENV:-dev}
     volumes:
@@ -49,7 +49,7 @@ volumes:
 
 networks:
   default:
-    name: cafe-crm_default
+    name: crm_default
   whiteout_network:
     external: true
     name: whiteout-community_whiteout_network

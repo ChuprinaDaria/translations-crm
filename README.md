@@ -1,6 +1,6 @@
-# Cafe CRM Backend
+# CRM Base System
 
-FastAPI backend для CRM системи кафе.
+Модульна CRM система на базі FastAPI. Чиста база для будь-якого бізнесу.
 
 ## Структура проєкту
 
@@ -37,8 +37,8 @@ docker-compose up -d --build
 3. Або через Docker:
 ```bash
 cd app
-docker build -t cafe-backend .
-docker run -p 8000:8000 --env-file .env cafe-backend
+docker build -t crm-backend .
+docker run -p 8000:8000 --env-file .env crm-backend
 ```
 
 ### Без Docker
@@ -85,8 +85,19 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Deployment
 
-Backend розгортається на сервері: **157.180.36.97**
+Backend розгортається через Docker Compose або безпосередньо на сервері.
 
-API доступне за адресою: `http://157.180.36.97:8000`
-Swagger документація: `http://157.180.36.97:8000/docs`
+API доступне за адресою: `http://localhost:8000`
+Swagger документація: `http://localhost:8000/docs`
+
+## Структура модулів
+
+Система побудована на модульній архітектурі:
+- **Users** - управління користувачами та правами доступу
+- **Clients** - база клієнтів з системою лояльності
+- **KP (Commercial Proposals)** - комерційні пропозиції з PDF генерацією
+- **Templates** - шаблони для документів
+- **Items** - каталог товарів/послуг з категоріями
+- **Checklists** - чеклісти для збору інформації
+- **Questionnaires** - анкети клієнтів
 
