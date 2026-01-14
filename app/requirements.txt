@@ -18,6 +18,8 @@ h11==0.16.0
 httpcore==1.0.9
 httptools==0.7.1
 httpx==0.28.1
+arq==0.25.0
+redis==5.2.0
 idna==3.11
 jinja2==3.1.6
 markdown-it-py==4.0.0
@@ -29,6 +31,7 @@ psycopg2-binary==2.9.11
 pycparser==2.23
 pydantic==2.12.4
 pydantic-core==2.41.5
+pydantic-settings==2.6.1
 pydyf==0.11.0
 pygments==2.19.2
 pyjwt==2.10.1
