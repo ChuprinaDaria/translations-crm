@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { Alert, AlertDescription } from "../ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { authApi, tokenManager } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 
 interface LoginFormProps {
   onSuccess: () => void;
@@ -14,6 +15,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassword }: LoginFormProps) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,27 +34,52 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
         password
       });
       
+      // Очищаємо dev_mode при нормальному логіні
+      localStorage.removeItem('dev_mode');
+      
       tokenManager.setToken(token);
       onSuccess();
     } catch (err: any) {
       if (err.status === 422) {
-        setError("Невірний email або пароль");
+        setError(t("auth.login.errors.invalidCredentials"));
       } else if (err.status === 401) {
-        setError("Невірний email або пароль");
+        setError(t("auth.login.errors.invalidCredentials"));
       } else {
-        setError(err.data?.detail || "Помилка при вході. Спробуйте пізніше");
+        setError(err.data?.detail || t("auth.login.errors.loginError"));
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDevLogin = () => {
+    // Встановлюємо dev_mode для обходу автентифікації
+    localStorage.setItem('dev_mode', 'true');
+    
+    // Створюємо тестовий токен для розробки (на випадок якщо потрібен)
+    // Формат: header.payload.signature (мінімальний валідний JWT)
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({
+      sub: "1",
+      email: "dev@test.com",
+      role: "kp-manager",
+      is_admin: false,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 години
+    }));
+    const signature = "dev_signature"; // Фейкова підпис для розробки
+    const devToken = `${header}.${payload}.${signature}`;
+    
+    tokenManager.setToken(devToken);
+    console.log('[Dev] Dev mode enabled - skipping authentication');
+    onSuccess();
+  };
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Вхід в систему</CardTitle>
+        <CardTitle>{t("auth.login.title")}</CardTitle>
         <CardDescription>
-          Введіть свої дані для входу в CRM систему
+          {t("auth.login.description")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -65,7 +92,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("auth.login.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -78,7 +105,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Пароль</Label>
+            <Label htmlFor="password">{t("auth.login.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -99,12 +126,25 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Вхід...
+                {t("auth.login.loggingIn")}
               </>
             ) : (
-              "Увійти"
+              t("auth.login.loginButton")
             )}
           </Button>
+
+          {/* Dev Login Button - тільки для розробки */}
+          {import.meta.env.DEV && (
+            <Button
+              type="button"
+              onClick={handleDevLogin}
+              variant="outline"
+              className="w-full mt-2 border-gray-300 text-gray-600 hover:bg-gray-50"
+              disabled={loading}
+            >
+              🔧 Dev Login (без логіну)
+            </Button>
+          )}
 
           <div className="text-center text-sm mt-4 space-y-3">
             <div>
@@ -114,18 +154,18 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
                 className="text-[#FF5A00] hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={loading || !onSwitchToForgotPassword}
               >
-                Забули пароль?
+                {t("auth.login.forgotPassword")}
               </button>
             </div>
             <div>
-              <span className="text-gray-600">Немає акаунту? </span>
+              <span className="text-gray-600">{t("auth.login.noAccount")} </span>
               <button
                 type="button"
                 onClick={onSwitchToRegister}
                 className="text-[#FF5A00] hover:underline"
                 disabled={loading}
               >
-                Зареєструватися
+                {t("auth.login.register")}
               </button>
             </div>
           </div>

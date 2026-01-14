@@ -1,34 +1,23 @@
 import { useState, useEffect } from "react";
-import { Sidebar } from "./components/Sidebar";
-import { Header } from "./components/Header";
-import { DashboardEnhanced } from "./components/DashboardEnhanced";
-import { MenuManagement } from "./components/MenuManagement";
-import { EquipmentManagement } from "./components/EquipmentManagement";
-import { ServiceManagement } from "./components/ServiceManagement";
-import { CreateKP } from "./components/CreateKP";
-import { KPTemplates } from "./components/KPTemplates";
-import { KPArchive } from "./components/KPArchive";
-import { AllKP } from "./components/AllKP";
+import { Sidebar } from "./components/layout/Sidebar";
+import { Header } from "./components/layout/Header";
+import { DashboardPage } from "./modules/analytics/pages/DashboardPage";
+import { InboxPage } from "./modules/communications/pages/InboxPage";
+import { CRMPage } from "./modules/crm/pages/CRMPage";
+import { FinancePage } from "./modules/finance/pages/FinancePage";
+import { ClientListPage } from "./modules/crm/pages/ClientListPage";
 import { Settings } from "./components/Settings";
-import { Clients } from "./components/Clients";
-import { EventsCalendar } from "./components/EventsCalendar";
-import { UsersManagement } from "./components/UsersManagement";
-import { BenefitsManagement } from "./components/BenefitsManagement";
-import { ProcurementExcel } from "./components/ProcurementExcel";
-import { ServiceExcel } from "./components/ServiceExcel";
-import { RecipesManagement } from "./components/RecipesManagement";
-import { SalesDepartment } from "./components/SalesDepartment";
-import { AllQuestionnaires } from "./components/AllQuestionnaires";
-import { ChecklistManagement } from "./components/ChecklistManagement";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
+import { I18nProvider } from "./lib/i18n";
 import {
   Sheet,
   SheetContent,
   SheetTitle,
   SheetDescription,
 } from "./components/ui/sheet";
+// import { CommandPalette, useCommandPalette } from "./modules/command-palette";
 
 type UserRole =
   | "kp-manager"
@@ -44,13 +33,14 @@ const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [activeItem, setActiveItem] = useState("dashboard");
+  const [activeItem, setActiveItem] = useState("analytics");
   const [userRole] = useState<UserRole>("kp-manager");
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [editingKPId, setEditingKPId] = useState<number | null>(null);
+  // const commandPalette = useCommandPalette();
 
   // Load Gilroy font
   useEffect(() => {
@@ -84,9 +74,24 @@ function App() {
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = () => {
-      const isAuth = tokenManager.isAuthenticated();
-      setIsAuthenticated(isAuth);
-      setIsCheckingAuth(false);
+      try {
+        // Перевірка dev режиму (для розробки)
+        const devMode = import.meta.env.DEV && localStorage.getItem('dev_mode') === 'true';
+        if (devMode) {
+          console.log('[Dev] Dev mode enabled - skipping authentication');
+          setIsAuthenticated(true);
+          setIsCheckingAuth(false);
+          return;
+        }
+        
+        const isAuth = tokenManager.isAuthenticated();
+        setIsAuthenticated(isAuth);
+      } catch (error) {
+        console.error("Auth check error:", error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
     };
     
     checkAuth();
@@ -98,7 +103,7 @@ function App() {
       const isAuth = tokenManager.isAuthenticated();
       setIsAuthenticated(isAuth);
       if (!isAuth) {
-        setActiveItem("dashboard");
+        setActiveItem("analytics");
         setEditingKPId(null);
       }
     };
@@ -125,7 +130,7 @@ function App() {
         console.log('[Auth] Автоматичний логаут через 30 хвилин неактивності');
         authApi.logout();
         setIsAuthenticated(false);
-        setActiveItem("dashboard");
+        setActiveItem("analytics");
         setEditingKPId(null);
       }, INACTIVITY_TIMEOUT);
     };
@@ -138,7 +143,7 @@ function App() {
         console.log('[Auth] Сесія закінчилась через неактивність');
         authApi.logout();
         setIsAuthenticated(false);
-        setActiveItem("dashboard");
+        setActiveItem("analytics");
         setEditingKPId(null);
         return;
       }
@@ -179,8 +184,9 @@ function App() {
 
   const handleLogout = () => {
     authApi.logout(); // This will clear all localStorage including the token
+    localStorage.removeItem('dev_mode'); // Очищаємо dev_mode при виході
     setIsAuthenticated(false);
-    setActiveItem("dashboard");
+    setActiveItem("analytics");
   };
 
   // Show loading state while checking authentication
@@ -211,7 +217,11 @@ function App() {
 
   // Show auth page if not authenticated
   if (!isAuthenticated) {
-    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+    return (
+      <I18nProvider>
+        <AuthPage onAuthSuccess={handleAuthSuccess} />
+      </I18nProvider>
+    );
   }
 
   const getRoleLabel = (role: UserRole): string => {
@@ -231,228 +241,35 @@ function App() {
       string,
       { label: string; href?: string }[]
     > = {
-      dashboard: [{ label: "Dashboard / Огляд" }],
-      "create-kp": [
-        { label: "КП", href: "#" },
-        { label: "Створити КП" },
-      ],
-      "all-kp": [
-        { label: "КП", href: "#" },
-        { label: "Усі КП" },
-      ],
-      "menu-dishes": [
-        { label: "КП", href: "#" },
-        { label: "Меню та страви" },
-      ],
-      "kp-templates": [
-        { label: "КП", href: "#" },
-        { label: "Шаблони КП" },
-      ],
-      "kp-archive": [
-        { label: "КП", href: "#" },
-        { label: "Архів КП" },
-      ],
-      "checklists": [
-        { label: "Відділ Продажів", href: "#" },
-        { label: "Чекліст" },
-      ],
-      "all-questionnaires": [
-        { label: "Відділ Продажів", href: "#" },
-        { label: "Анкети" },
-      ],
-      "my-kp": [
-        { label: "Продажі", href: "#" },
-        { label: "Мої КП" },
-      ],
-      "sent-to-service": [
-        { label: "Продажі", href: "#" },
-        { label: "Відправлені у сервіс" },
-      ],
-      "procurement-excel": [
-        { label: "Продажі", href: "#" },
-        { label: "Excel для закупівлі" },
-      ],
-      "service-templates": [
-        { label: "Сервіс", href: "#" },
-        { label: "Шаблони сервірування" },
-      ],
-      "equipment-textile": [
-        { label: "Сервіс", href: "#" },
-        { label: "Обладнання і текстиль" },
-      ],
-      "file-editing": [
-        { label: "Сервіс", href: "#" },
-        { label: "Редагування файлу" },
-      ],
-      "approved-files": [
-        { label: "Сервіс", href: "#" },
-        { label: "Погоджені файли" },
-      ],
-      calendar: [
-        { label: "Загальні", href: "#" },
-        { label: "Календар подій" },
-      ],
-      clients: [
-        { label: "Загальні", href: "#" },
-        { label: "Клієнти" },
-      ],
-      users: [
-        { label: "Загальні", href: "#" },
-        { label: "Користувачі" },
-      ],
-      settings: [
-        { label: "Загальні", href: "#" },
-        { label: "Налаштування" },
-      ],
-      "users-access": [
-        { label: "Загальні", href: "#" },
-        { label: "Користувачі і доступи" },
-      ],
-      benefits: [
-        { label: "Загальні", href: "#" },
-        { label: "Бенфіти" },
-      ],
+      inbox: [{ label: "Inbox" }],
+      crm: [{ label: "CRM" }],
+      finance: [{ label: "Finance" }],
+      clients: [{ label: "Clients" }],
+      analytics: [{ label: "Analytics" }],
+      settings: [{ label: "Settings" }],
     };
 
     return (
-      breadcrumbMap[activeItem] || [{ label: "Dashboard" }]
+      breadcrumbMap[activeItem] || [{ label: "Analytics" }]
     );
   };
 
   const renderContent = () => {
     switch (activeItem) {
-      case "dashboard":
-        return <DashboardEnhanced userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
-      case "create-kp":
-        return <CreateKP kpId={editingKPId} onClose={() => setEditingKPId(null)} />;
-      case "menu-dishes":
-        return <MenuManagement />;
-      case "equipment":
-        return <EquipmentManagement />;
-      case "service":
-        return <ServiceManagement />;
-      case "kp-templates":
-        return <KPTemplates />;
-      case "kp-archive":
-        return <KPArchive />;
-      case "calendar":
-        return <EventsCalendar />;
-      case "all-kp":
-        return <AllKP onEditKP={(kpId) => {
-          setEditingKPId(kpId);
-          setActiveItem("create-kp");
-        }} />;
-      case "client-questionnaires":
-        return <SalesDepartment />;
-      case "checklists":
-        return <ChecklistManagement />;
-      case "all-questionnaires":
-        return (
-          <AllQuestionnaires
-            onCreate={() => {
-              // Переходимо в розділ відділу продажів для створення/редагування анкети
-              setActiveItem("client-questionnaires");
-            }}
-            onEdit={(questionnaireId) => {
-              // TODO: Відкрити форму редагування анкети по ID
-              setActiveItem("client-questionnaires");
-            }}
-          />
-        );
-      case "my-kp":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">Мої КП</h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                КП призначені вам будуть тут
-              </p>
-            </div>
-          </div>
-        );
-      case "sent-to-service":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Відправлені у сервіс
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                КП відправлені в сервісний відділ будуть тут
-              </p>
-            </div>
-          </div>
-        );
-      case "procurement-excel":
-        return <ProcurementExcel />;
-      case "recipes-management":
-        return <RecipesManagement />;
-      case "service-excel":
-        return <ServiceExcel />;
-      case "service-templates":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Шаблони сервірування
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Шаблони: Фуршет, Банкет, Кава-брейк будуть тут
-              </p>
-            </div>
-          </div>
-        );
-      case "equipment-textile":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Обладнання і текстиль
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                База обладнання та текстилю буде тут
-              </p>
-            </div>
-          </div>
-        );
-      case "file-editing":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Редагування файлу
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Редагування сервісних файлів буде тут
-              </p>
-            </div>
-          </div>
-        );
-      case "approved-files":
-        return (
-          <div className="space-y-6">
-            <h1 className="text-2xl text-gray-900">
-              Погоджені файли
-            </h1>
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <p className="text-gray-600">
-                Файли погоджені клієнтом будуть тут
-              </p>
-            </div>
-          </div>
-        );
+      case "inbox":
+        return <InboxPage />;
+      case "crm":
+        return <CRMPage />;
+      case "finance":
+        return <FinancePage />;
       case "clients":
-        return <Clients />;
-      case "users":
-        return <UsersManagement />;
+        return <ClientListPage />;
+      case "analytics":
+        return <DashboardPage userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
       case "settings":
         return <Settings />;
-      case "users-access":
-        return <UsersManagement />;
-      case "benefits":
-        return <BenefitsManagement />;
       default:
-        return <DashboardEnhanced userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
+        return <DashboardPage userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
     }
   };
 
@@ -464,7 +281,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <I18nProvider>
+      <div className="min-h-screen bg-gray-50">
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Sidebar
@@ -512,7 +330,16 @@ function App() {
       </div>
 
       <Toaster position="top-right" />
-    </div>
+      
+      {/* Command Palette - доступний скрізь */}
+      {/* {isAuthenticated && (
+        <CommandPalette
+          open={commandPalette.open}
+          onOpenChange={commandPalette.setOpen}
+        />
+      )} */}
+      </div>
+    </I18nProvider>
   );
 }
 

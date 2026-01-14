@@ -1,0 +1,234 @@
+{
+  "auth": {
+    "title": "CRM Система",
+    "login": {
+      "title": "Вхід в систему",
+      "description": "Введіть свої дані для входу в CRM систему",
+      "email": "Email",
+      "password": "Пароль",
+      "loginButton": "Увійти",
+      "loggingIn": "Вхід...",
+      "forgotPassword": "Забули пароль?",
+      "noAccount": "Немає акаунту?",
+      "register": "Зареєструватися",
+      "errors": {
+        "invalidCredentials": "Невірний email або пароль",
+        "loginError": "Помилка при вході. Спробуйте пізніше"
+      }
+    },
+    "register": {
+      "title": "Реєстрація",
+      "description": "Створіть новий акаунт для доступу до CRM системи",
+      "firstName": "Ім'я",
+      "lastName": "Прізвище",
+      "email": "Email",
+      "password": "Пароль",
+      "confirmPassword": "Підтвердіть пароль",
+      "registerButton": "Зареєструватися",
+      "registering": "Реєстрація...",
+      "success": "Реєстрація успішна! Перенаправлення на сторінку входу...",
+      "hasAccount": "Вже є акаунт?",
+      "login": "Увійти",
+      "errors": {
+        "fillAll": "Заповніть всі поля",
+        "invalidEmail": "Невірний формат email",
+        "passwordMin": "Пароль повинен містити мінімум 6 символів",
+        "passwordsNotMatch": "Паролі не співпадають",
+        "invalidData": "Невірні дані. Перевірте правильність введення",
+        "userExists": "Користувач з таким email вже існує",
+        "registerError": "Помилка при реєстрації. Спробуйте пізніше"
+      },
+      "passwordStrength": {
+        "weak": "Слабкий",
+        "medium": "Середній",
+        "good": "Хороший",
+        "strong": "Сильний",
+        "label": "Надійність"
+      },
+      "passwordMatch": {
+        "match": "Паролі співпадають",
+        "notMatch": "Паролі не співпадають"
+      }
+    },
+    "footer": "© 2024 CRM Система. Всі права захищені."
+  },
+  "dashboard": {
+    "title": "Панель Аналітики",
+    "subtitle": "Огляд ключових метрик та бізнес-статистики",
+    "kpis": {
+      "totalRevenue": {
+        "title": "Загальний дохід (місячний)",
+        "subtitle": "Дохід за поточний місяць"
+      },
+      "pendingPayments": {
+        "title": "Очікуючі платежі",
+        "subtitle": "Потребує уваги"
+      },
+      "activeOrders": {
+        "title": "Активні замовлення",
+        "subtitle": "В процесі виконання"
+      },
+      "unreadMessages": {
+        "title": "Непрочитані повідомлення",
+        "subtitle": "Нові ліди"
+      },
+      "trend": "зростання"
+    },
+    "charts": {
+      "revenue": {
+        "title": "Огляд доходів"
+      },
+      "orderStatus": {
+        "title": "Розподіл статусів замовлень"
+      }
+    },
+    "transactions": {
+      "title": "Останні транзакції",
+      "columns": {
+        "orderNo": "№ замовлення",
+        "client": "Клієнт",
+        "date": "Дата",
+        "amount": "Сума",
+        "method": "Метод",
+        "status": "Статус"
+      },
+      "status": {
+        "paid": "Сплачено",
+        "pending": "Очікується"
+      },
+      "method": {
+        "transfer": "Переказ",
+        "card": "Картка"
+      }
+    }
+  },
+  "kanban": {
+    "title": "CRM Kanban",
+    "columns": {
+      "doWykonania": "До виконання",
+      "doPoswiadczenia": "До підтвердження",
+      "doWydania": "До видачі",
+      "ustne": "Усне",
+      "closed": "Закрито"
+    },
+    "status": {
+      "doWykonania": "До виконання",
+      "doPoswiadczenia": "До підтвердження",
+      "doWydania": "До видачі",
+      "ustne": "Усне",
+      "closed": "Закрито"
+    },
+    "priority": {
+      "high": "Важливо"
+    },
+    "deadline": {
+      "today": "Сьогодні",
+      "tomorrow": "Завтра",
+      "overdue": "Просрочено {{days}} дн",
+      "overdueOne": "Просрочено 1 дн"
+    }
+  },
+  "orderDetails": {
+    "created": "Створено",
+    "tabs": {
+      "details": "Деталі",
+      "files": "Файли",
+      "history": "Історія"
+    },
+    "client": {
+      "title": "Клієнт",
+      "edit": "Редагувати"
+    },
+    "timeline": {
+      "title": "Таймлайн",
+      "deadline": "Термін виконання",
+      "presets": {
+        "today": "Сьогодні",
+        "tomorrow": "Завтра",
+        "nextWeek": "Через тиждень"
+      },
+      "close": "Термін наближається",
+      "overdue": "Термін минув"
+    },
+    "financial": {
+      "title": "Фінанси",
+      "totalAmount": "Загальна сума",
+      "paymentStatus": "Статус оплати",
+      "paid": "Сплачено",
+      "unpaid": "Не сплачено",
+      "markAsPaid": "Позначити як сплачено"
+    },
+    "orderInfo": {
+      "title": "Інформація про замовлення",
+      "orderNumber": "Номер замовлення",
+      "status": "Статус",
+      "priority": "Пріоритет",
+      "priorityHigh": "Високий",
+      "priorityMedium": "Середній",
+      "priorityLow": "Низький",
+      "notes": "Примітки",
+      "notesPlaceholder": "Додаткові примітки до замовлення..."
+    },
+    "files": {
+      "title": "Файли",
+      "attached": "Прикріплені файли",
+      "dropzone": {
+        "title": "Перетягніть файли сюди",
+        "subtitle": "або натисніть, щоб вибрати",
+        "button": "Вибрати файли"
+      }
+    },
+    "history": {
+      "title": "Історія",
+      "empty": "Немає історії змін"
+    },
+    "actions": {
+      "cancel": "Скасувати",
+      "save": "Зберегти зміни"
+    }
+  },
+  "finance": {
+    "title": "Фінанси",
+    "payments": {
+      "title": "Платежі",
+      "export": "Експорт в Excel",
+      "exporting": "Експорт...",
+      "exportSuccess": "Платежі експортовано в Excel",
+      "exportError": "Не вдалося експортувати платежі",
+      "loading": "Завантаження...",
+      "noPayments": "Немає платежів для відображення",
+      "loadError": "Не вдалося завантажити платежі",
+      "columns": {
+        "lp": "LP",
+        "orderNumber": "Numer zlecenia",
+        "serviceDate": "Data wykonania usługi",
+        "buyerName": "Nabywca (Imię i nazwisko)",
+        "amountGross": "Kwota płatności brutto",
+        "paymentDate": "Data płatności",
+        "postingDate": "Data nabicia na KF",
+        "paymentMethod": "Sposób płatności",
+        "receiptNumber": "Numer dowodu sprzedaży",
+        "notes": "Uwagi"
+      },
+      "paymentMethods": {
+        "transfer": "Przelew",
+        "card": "Karta",
+        "blik": "BLIK",
+        "cash": "Gotówka"
+      },
+      "editPayment": "Редагувати платіж",
+      "rowColor": "Колір рядка",
+      "colorPreview": "Попередній перегляд кольору",
+      "hiddenNotes": "Приховані примітки",
+      "hiddenNotesPlaceholder": "Введіть приховані примітки, які будуть показані при наведенні...",
+      "hiddenNotesHint": "Ці примітки будуть показані при наведенні на іконку",
+      "removeNotes": "Видалити примітки",
+      "quickColorSelect": "Швидкий вибір кольору",
+      "removeColor": "Видалити колір",
+      "existingNotes": "Існуючі примітки",
+      "addNewNote": "Додати нову примітку",
+      "addNote": "Додати примітку"
+    }
+  }
+}
+

@@ -8,7 +8,7 @@ from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
 import models
 
-router = APIRouter(prefix="/crm", tags=["crm"])
+router = APIRouter(tags=["crm"])
 
 
 @router.get("/clients")

@@ -17,10 +17,13 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./temp.db")
+    DB_URL: str = DATABASE_URL
     
     # Security
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
-    JWT_ALGORITHM: str = "HS256"
+    SECRET_KEY: str = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", ""))
+    JWT_SECRET: str = SECRET_KEY
+    ALGORITHM: str = "HS256"
+    JWT_ALGORITHM: str = ALGORITHM
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
     # CORS

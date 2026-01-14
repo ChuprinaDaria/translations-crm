@@ -13,7 +13,7 @@ import {
 } from "./ui/table";
 import { clientsApi, questionnairesApi, type Client } from "../lib/api";
 import { toast } from "sonner";
-import { ClientDetailsDialog } from "./ClientDetailsDialog";
+import { ClientDetailsDialog } from "../modules/crm/components/ClientDetailsDialog";
 import { QuestionnaireForm } from "./QuestionnaireForm";
 import { QuestionnaireWizardForm } from "./QuestionnaireWizardForm";
 

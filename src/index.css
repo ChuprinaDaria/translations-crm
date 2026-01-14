@@ -99,6 +99,15 @@
     --color-gray-900: oklch(.21 .034 264.665);
     --color-black: #000;
     --color-white: #fff;
+    /* Універсальні кольори фону для візуального відокремлення блоків */
+    --color-bg-blue: rgba(239, 246, 255, 1); /* світло-голубий */
+    --color-bg-pink: rgb(255, 240, 240); /* світло-рожевий */
+    --color-bg-purple-light: rgba(250, 230, 255, 1); /* світло-фіолетовий */
+    --color-bg-purple: rgba(220, 183, 225, 1); /* фіолетовий (темніший за purple-light) */
+    --color-bg-green-light: rgba(236, 253, 245, 1); /* світло-зелений */
+    --color-bg-green: rgba(209, 250, 229, 1); /* зелений */
+    --color-bg-pink-light: rgba(255, 229, 229, 1); /* світло-рожевий */
+    --color-bg-yellow: rgba(254, 252, 232, 1); /* світло-жовтий */
     --spacing: .25rem;
     --container-xs: 20rem;
     --container-sm: 24rem;

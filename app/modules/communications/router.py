@@ -12,7 +12,7 @@ from modules.communications.providers.base import Message
 from tasks.webhook_tasks import process_meta_webhook_task
 import models
 
-router = APIRouter(prefix="/communications", tags=["communications"])
+router = APIRouter(tags=["communications"])
 
 
 @router.get("/inbox")

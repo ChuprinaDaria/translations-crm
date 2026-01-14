@@ -6,12 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { Alert, AlertDescription } from "../ui/alert";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { authApi } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 
 interface RegisterFormProps {
   onSwitchToLogin: () => void;
 }
 
 export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
+  const { t } = useI18n();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,22 +25,22 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
   const validateForm = (): boolean => {
     if (!firstName || !lastName || !email || !password) {
-      setError("Заповніть всі поля");
+      setError(t("auth.register.errors.fillAll"));
       return false;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Невірний формат email");
+      setError(t("auth.register.errors.invalidEmail"));
       return false;
     }
 
     if (password.length < 6) {
-      setError("Пароль повинен містити мінімум 6 символів");
+      setError(t("auth.register.errors.passwordMin"));
       return false;
     }
 
     if (password !== confirmPassword) {
-      setError("Паролі не співпадають");
+      setError(t("auth.register.errors.passwordsNotMatch"));
       return false;
     }
 
@@ -69,11 +71,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       }, 2000);
     } catch (err: any) {
       if (err.status === 422) {
-        setError("Невірні дані. Перевірте правильність введення");
+        setError(t("auth.register.errors.invalidData"));
       } else if (err.status === 400) {
-        setError(err.data?.detail || "Користувач з таким email вже існує");
+        setError(err.data?.detail || t("auth.register.errors.userExists"));
       } else {
-        setError(err.data?.detail || "Помилка при реєстрації. Спробуйте пізніше");
+        setError(err.data?.detail || t("auth.register.errors.registerError"));
       }
     } finally {
       setLoading(false);
@@ -91,7 +93,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     if (/[^a-zA-Z0-9]/.test(password)) strength++;
 
     const colors = ["bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-green-500"];
-    const labels = ["Слабкий", "Середній", "Хороший", "Сильний"];
+    const labels = [
+      t("auth.register.passwordStrength.weak"),
+      t("auth.register.passwordStrength.medium"),
+      t("auth.register.passwordStrength.good"),
+      t("auth.register.passwordStrength.strong")
+    ];
     
     return {
       color: colors[Math.min(strength - 1, 3)],
@@ -106,9 +113,9 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Реєстрація</CardTitle>
+        <CardTitle>{t("auth.register.title")}</CardTitle>
         <CardDescription>
-          Створіть новий акаунт для доступу до CRM системи
+          {t("auth.register.description")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -117,7 +124,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
             <Alert className="bg-green-50 border-green-200">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                Реєстрація успішна! Перенаправлення на сторінку входу...
+                {t("auth.register.success")}
               </AlertDescription>
             </Alert>
           )}
@@ -129,11 +136,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="firstName">Ім'я</Label>
+            <Label htmlFor="firstName">{t("auth.register.firstName")}</Label>
             <Input
               id="firstName"
               type="text"
-              placeholder="Іван"
+              placeholder={t("auth.register.firstName")}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               required
@@ -142,11 +149,11 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="lastName">Прізвище</Label>
+            <Label htmlFor="lastName">{t("auth.register.lastName")}</Label>
             <Input
               id="lastName"
               type="text"
-              placeholder="Петренко"
+              placeholder={t("auth.register.lastName")}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               required
@@ -155,7 +162,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("auth.register.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -168,7 +175,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Пароль</Label>
+            <Label htmlFor="password">{t("auth.register.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -188,7 +195,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                   />
                 </div>
                 <p className="text-xs text-gray-600">
-                  Надійність: {passwordStrength.label}
+                  {t("auth.register.passwordStrength.label")}: {passwordStrength.label}
                 </p>
               </div>
             )}
@@ -211,12 +218,12 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 {password === confirmPassword ? (
                   <>
                     <CheckCircle2 className="h-3 w-3 text-green-600" />
-                    <span className="text-green-600">Паролі співпадають</span>
+                    <span className="text-green-600">{t("auth.register.passwordMatch.match")}</span>
                   </>
                 ) : (
                   <>
                     <AlertCircle className="h-3 w-3 text-red-600" />
-                    <span className="text-red-600">Паролі не співпадають</span>
+                    <span className="text-red-600">{t("auth.register.passwordMatch.notMatch")}</span>
                   </>
                 )}
               </div>
@@ -231,22 +238,22 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Реєстрація...
+                {t("auth.register.registering")}
               </>
             ) : (
-              "Зареєструватися"
+              t("auth.register.registerButton")
             )}
           </Button>
 
           <div className="text-center text-sm">
-            <span className="text-gray-600">Вже є акаунт? </span>
+            <span className="text-gray-600">{t("auth.register.hasAccount")} </span>
             <button
               type="button"
               onClick={onSwitchToLogin}
               className="text-[#FF5A00] hover:underline"
               disabled={loading}
             >
-              Увійти
+              {t("auth.register.login")}
             </button>
           </div>
         </form>

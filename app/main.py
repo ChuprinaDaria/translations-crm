@@ -1,95 +1,65 @@
-import os
-from pathlib import Path
-
-import db
-from db import SessionLocal
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
-import crud
-import schema
-from routes import router as items_router
-
-
-app = FastAPI()
-
-# Базова директорія модуля `app` і абсолютний шлях до `uploads`
-BASE_DIR = Path(__file__).resolve().parent
-UPLOADS_DIR = BASE_DIR / "uploads"
-
-
-def init_default_template():
-    """Ініціалізує дефолтний шаблон якщо він не існує."""
-    session = SessionLocal()
-    try:
-        # Перевіряємо чи є дефолтний шаблон
-        default_template = crud.get_default_template(session)
-        if not default_template:
-            # Перевіряємо чи існує файл commercial-offer.html в директорії uploads
-            template_path = UPLOADS_DIR / "commercial-offer.html"
-            if template_path.exists():
-                template_data = schema.TemplateCreate(
-                    name="Стандартний шаблон",
-                    filename="commercial-offer.html",
-                    description="Стандартний шаблон комерційної пропозиції",
-                    is_default=True,
-                )
-                crud.create_template(session, template_data)
-                print("Default template created successfully")
-            else:
-                print(f"Warning: Template file not found at {template_path}")
-    except Exception as e:
-        print(f"Error initializing default template: {e}")
-    finally:
-        session.close()
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from core.db import Base, engine
+from core.config import settings
+from modules.auth.router import router as auth_router
+from modules.auth.models import User
+from modules.crm.router import router as crm_router
+from modules.crm.models import Client, Order
+from modules.finance.router import router as finance_router
+from modules.finance.models import Transaction
+from modules.communications.router import router as communications_router
+from modules.communications.models import Conversation, Message
+from modules.smart_paste.router import router as smart_paste_router
+from modules.drag_upload.router import router as drag_upload_router
+from modules.audio_notes.router import router as audio_notes_router
 
 
-ENV = os.getenv("APP_ENV", "dev")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await engine.dispose()
 
-# Тимчасово дозволяємо всі origins для тесту
-allowed = ["*"]
-# if ENV == "dev":
-#     allowed = ["*"]
-# else:
-#     # Production CORS - allow frontend from dzyga-catering.com.ua
-#     allowed = [
-#         "https://crm.dzyga-catering.com.ua",
-#         "http://157.180.36.97",
-#         "http://157.180.36.97:8000",
-#         "http://157.180.36.97:8080",
-#         "https://157.180.36.97:8443"
-#     ]
+
+app = FastAPI(
+    title="CRM System",
+    lifespan=lifespan
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed,
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(items_router)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()}
+    )
 
 
-"""
-Ініціалізація директорій для статичних файлів
-"""
-# Основна директорія uploads та піддиректорії
-photos_dir = UPLOADS_DIR / "photos"
-photos_dir.mkdir(parents=True, exist_ok=True)
-
-template_previews_dir = UPLOADS_DIR / "template-previews"
-template_previews_dir.mkdir(parents=True, exist_ok=True)
-
-branding_dir = UPLOADS_DIR / "branding"
-branding_dir.mkdir(parents=True, exist_ok=True)
-
-# Монтуємо статичні файли (віддаємо все, що лежить в uploads)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": str(exc)}
+    )
 
 
-# Ініціалізуємо дефолтний шаблон при старті
-@app.on_event("startup")
-async def startup_event():
-    init_default_template()
+app.include_router(auth_router, prefix="/auth")
+app.include_router(crm_router, prefix="/api/v1/crm")
+app.include_router(finance_router, prefix="/api/v1/finance")
+app.include_router(communications_router, prefix="/api/v1/inbox")
+app.include_router(smart_paste_router, prefix="/api/v1")
+app.include_router(drag_upload_router, prefix="/api/v1")
+app.include_router(audio_notes_router, prefix="/api/v1")

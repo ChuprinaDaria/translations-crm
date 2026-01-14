@@ -2,6 +2,8 @@ import { useState } from "react";
 import { LoginForm } from "./LoginForm";
 import { RegisterForm } from "./RegisterForm";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
+import { useI18n } from "../../lib/i18n";
+import { LanguageSwitcher } from "../LanguageSwitcher";
 
 interface AuthPageProps {
   onAuthSuccess: () => void;
@@ -9,10 +11,16 @@ interface AuthPageProps {
 
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [mode, setMode] = useState<"login" | "register" | "forgotPassword">("login");
+  const { t } = useI18n();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Language Switcher */}
+        <div className="absolute top-4 right-4">
+          <LanguageSwitcher />
+        </div>
+
         {/* Logo/Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[#FF5A00] rounded-2xl mb-4">
@@ -30,10 +38,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
               />
             </svg>
           </div>
-          <h1 className="text-2xl text-gray-900 mb-2">CRM Система</h1>
-          <p className="text-gray-600">
-            Комерційні пропозиції • Продажі • Сервіс
-          </p>
+          <h1 className="text-2xl text-gray-900 mb-2">{t("auth.title")}</h1>
         </div>
 
         {/* Auth Forms */}
@@ -55,7 +60,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
         {/* Footer */}
         <p className="text-center text-xs text-gray-500 mt-8">
-          © 2024 CRM Система. Всі права захищені.
+          {t("auth.footer")}
         </p>
       </div>
     </div>
