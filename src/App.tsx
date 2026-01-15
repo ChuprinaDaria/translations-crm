@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { DashboardPage } from "./modules/analytics/pages/DashboardPage";
-import { InboxPage } from "./modules/communications/pages/InboxPage";
+import { InboxPageEnhanced } from "./modules/communications/pages/InboxPageEnhanced";
 import { CRMPage } from "./modules/crm/pages/CRMPage";
 import { FinancePage } from "./modules/finance/pages/FinancePage";
 import { ClientListPage } from "./modules/crm/pages/ClientListPage";
@@ -42,19 +42,16 @@ function App() {
   const [editingKPId, setEditingKPId] = useState<number | null>(null);
   // const commandPalette = useCommandPalette();
 
-  // Load Gilroy font
+  // Load Google Fonts (Inter as Gilroy replacement)
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "preconnect";
-    link.href = "https://fonts.cdnfonts.com";
+    link.href = "https://fonts.googleapis.com";
     document.head.appendChild(link);
     
     const fontLink = document.createElement("link");
-    fontLink.href = "https://fonts.cdnfonts.com/css/gilroy";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap";
     fontLink.rel = "stylesheet";
-    fontLink.onerror = () => {
-      console.warn("Failed to load Gilroy font from CDN");
-    };
     document.head.appendChild(fontLink);
     
     return () => {
@@ -257,7 +254,7 @@ function App() {
   const renderContent = () => {
     switch (activeItem) {
       case "inbox":
-        return <InboxPage />;
+        return <InboxPageEnhanced />;
       case "crm":
         return <CRMPage />;
       case "finance":
@@ -325,7 +322,7 @@ function App() {
         />
 
         <main className="pt-16">
-          <div className="p-4 md:p-6">{renderContent()}</div>
+          <div className={activeItem === 'inbox' ? '' : 'p-4 md:p-6'}>{renderContent()}</div>
         </main>
       </div>
 

@@ -113,29 +113,32 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
             {section.items.map((item) => {
               const isActive = activeItem === item.id;
               return (
-                <button
-                  key={item.id}
-                  onClick={() => onItemClick(item.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative",
-                    isActive
-                      ? "bg-[#FF5A00]/10 text-[#FF5A00] border-l-4 border-[#FF5A00] ml-0"
-                      : "hover:bg-gray-200/50 text-gray-700 hover:text-gray-900"
-                  )}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <span className={cn(isActive ? "text-[#FF5A00]" : "text-gray-600")}>
-                    {item.icon}
-                  </span>
-                  {!isCollapsed && (
-                    <>
-                      <span className={cn("flex-1 text-left text-sm", isActive && "font-semibold")}>
-                        {item.label}
-                      </span>
-                      <InfoTooltip content={item.tooltip} />
-                    </>
-                  )}
-                </button>
+                <div key={item.id} className="relative">
+                  <button
+                    onClick={() => onItemClick(item.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative",
+                      isActive
+                        ? "bg-[#FF5A00]/10 text-[#FF5A00] border-l-4 border-[#FF5A00] ml-0"
+                        : "hover:bg-gray-200/50 text-gray-700 hover:text-gray-900"
+                    )}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <span className={cn(isActive ? "text-[#FF5A00]" : "text-gray-600", "shrink-0")}>
+                      {item.icon}
+                    </span>
+                    {!isCollapsed && (
+                      <>
+                        <span className={cn("flex-1 text-left text-sm", isActive && "font-semibold")}>
+                          {item.label}
+                        </span>
+                        <div className="shrink-0 pointer-events-auto z-10" onClick={(e) => e.stopPropagation()}>
+                          <InfoTooltip content={item.tooltip} />
+                        </div>
+                      </>
+                    )}
+                  </button>
+                </div>
               );
             })}
           </div>

@@ -28,7 +28,7 @@ export function KanbanColumn({ id, title, orders, onCardClick }: KanbanColumnPro
       </div>
 
       {/* Scrollable Content */}
-      <ScrollArea className="flex-1 bg-muted/50 rounded-b-lg">
+      <ScrollArea className="flex-1 rounded-b-lg">
         <div
           ref={setNodeRef}
           className={cn(

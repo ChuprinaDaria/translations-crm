@@ -15,10 +15,15 @@ export function InfoTooltip({ content }: InfoTooltipProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button className="inline-flex items-center justify-center opacity-40 hover:opacity-100 transition-opacity">
+          <span 
+            className="inline-flex items-center justify-center opacity-40 hover:opacity-100 transition-opacity cursor-help"
+            role="button"
+            tabIndex={0}
+            aria-label="Інформація"
+          >
             <HelpCircle className="w-3.5 h-3.5 text-gray-500" />
             <span className="sr-only">Інформація</span>
-          </button>
+          </span>
         </TooltipTrigger>
         <TooltipContent>
           <p className="text-sm">{content}</p>

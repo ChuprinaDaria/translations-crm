@@ -279,11 +279,10 @@ export function InboxPage() {
                         {formatTime(conversation.lastMessageTime)}
                       </span>
                       {conversation.unreadCount > 0 && (
-                        <Badge
-                          className="bg-[#FF5A00] text-white border-0 h-5 min-w-5 px-1.5 text-xs"
-                        >
-                          {conversation.unreadCount}
-                        </Badge>
+                        <div className="relative flex items-center justify-center shrink-0 w-3 h-3">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+                          <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+                        </div>
                       )}
                     </div>
                   </div>

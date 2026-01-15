@@ -3,6 +3,7 @@ from enum import Enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from sqlalchemy import String, Text, ForeignKey, DateTime
+from sqlalchemy.types import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -62,8 +63,15 @@ class Message(Base):
     type: Mapped[MessageType] = mapped_column(String, nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[MessageStatus] = mapped_column(String, default=MessageStatus.QUEUED, nullable=False, index=True)
-    attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
-    meta_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # Use JSONB on Postgres, JSON elsewhere (e.g. SQLite dev fallback).
+    attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+    )
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+    )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
