@@ -1,0 +1,239 @@
+{
+  "auth": {
+    "title": "CRM System",
+    "login": {
+      "title": "Login",
+      "description": "Enter your credentials to access the CRM system",
+      "email": "Email",
+      "password": "Password",
+      "loginButton": "Sign In",
+      "loggingIn": "Signing in...",
+      "forgotPassword": "Forgot password?",
+      "noAccount": "Don't have an account?",
+      "register": "Sign Up",
+      "errors": {
+        "invalidCredentials": "Invalid email or password",
+        "loginError": "Login error. Please try again later"
+      }
+    },
+    "register": {
+      "title": "Registration",
+      "description": "Create a new account to access the CRM system",
+      "firstName": "First Name",
+      "lastName": "Last Name",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "registerButton": "Sign Up",
+      "registering": "Registering...",
+      "success": "Registration successful! Redirecting to login page...",
+      "hasAccount": "Already have an account?",
+      "login": "Sign In",
+      "errors": {
+        "fillAll": "Please fill all fields",
+        "invalidEmail": "Invalid email format",
+        "passwordMin": "Password must contain at least 6 characters",
+        "passwordsNotMatch": "Passwords do not match",
+        "invalidData": "Invalid data. Please check your input",
+        "userExists": "User with this email already exists",
+        "registerError": "Registration error. Please try again later"
+      },
+      "passwordStrength": {
+        "weak": "Weak",
+        "medium": "Medium",
+        "good": "Good",
+        "strong": "Strong",
+        "label": "Password Strength"
+      },
+      "passwordMatch": {
+        "match": "Passwords match",
+        "notMatch": "Passwords do not match"
+      }
+    },
+    "footer": "© 2024 CRM System. All rights reserved."
+  },
+  "dashboard": {
+    "title": "Analytics Dashboard",
+    "subtitle": "Overview of key metrics and business statistics",
+    "kpis": {
+      "totalRevenue": {
+        "title": "Total Revenue (Monthly)",
+        "subtitle": "Revenue for current month"
+      },
+      "pendingPayments": {
+        "title": "Pending Payments",
+        "subtitle": "Requires attention"
+      },
+      "activeOrders": {
+        "title": "Active Orders",
+        "subtitle": "In progress"
+      },
+      "unreadMessages": {
+        "title": "Unread Messages",
+        "subtitle": "New leads"
+      },
+      "trend": "growth"
+    },
+    "charts": {
+      "revenue": {
+        "title": "Revenue Overview"
+      },
+      "orderStatus": {
+        "title": "Order Status Distribution"
+      }
+    },
+    "transactions": {
+      "title": "Recent Transactions",
+      "columns": {
+        "orderNo": "Order No",
+        "client": "Client",
+        "date": "Date",
+        "amount": "Amount",
+        "method": "Method",
+        "status": "Status"
+      },
+      "status": {
+        "paid": "Paid",
+        "pending": "Pending"
+      },
+      "method": {
+        "transfer": "Transfer",
+        "card": "Card"
+      }
+    }
+  },
+  "kanban": {
+    "title": "Kanban",
+    "columns": {
+      "new": "New",
+      "inProgress": "In Progress",
+      "ready": "Ready",
+      "paid": "Paid",
+      "issued": "Issued",
+      "doWykonania": "To Do",
+      "doPoswiadczenia": "To Confirm",
+      "doWydania": "To Issue",
+      "ustne": "Verbal",
+      "closed": "Closed"
+    },
+    "status": {
+      "doWykonania": "To Do",
+      "doPoswiadczenia": "To Confirm",
+      "doWydania": "To Issue",
+      "ustne": "Verbal",
+      "closed": "Closed"
+    },
+    "priority": {
+      "high": "Important"
+    },
+    "deadline": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "overdue": "Overdue {{days}} days",
+      "overdueOne": "Overdue 1 day"
+    }
+  },
+  "orderDetails": {
+    "created": "Created",
+    "tabs": {
+      "details": "Details",
+      "files": "Files",
+      "history": "History"
+    },
+    "client": {
+      "title": "Client",
+      "edit": "Edit"
+    },
+    "timeline": {
+      "title": "Timeline",
+      "deadline": "Deadline",
+      "presets": {
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "nextWeek": "Next Week"
+      },
+      "close": "Deadline approaching",
+      "overdue": "Deadline passed"
+    },
+    "financial": {
+      "title": "Financial",
+      "totalAmount": "Total Amount",
+      "paymentStatus": "Payment Status",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "markAsPaid": "Mark as Paid"
+    },
+    "orderInfo": {
+      "title": "Order Information",
+      "orderNumber": "Order Number",
+      "status": "Status",
+      "priority": "Priority",
+      "priorityHigh": "High",
+      "priorityMedium": "Medium",
+      "priorityLow": "Low",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional notes to the order..."
+    },
+    "files": {
+      "title": "Files",
+      "attached": "Attached Files",
+      "dropzone": {
+        "title": "Drag files here",
+        "subtitle": "or click to select",
+        "button": "Select Files"
+      }
+    },
+    "history": {
+      "title": "History",
+      "empty": "No change history"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "save": "Save Changes"
+    }
+  },
+  "finance": {
+    "title": "Finance",
+    "payments": {
+      "title": "Payments",
+      "export": "Export to Excel",
+      "exporting": "Exporting...",
+      "exportSuccess": "Payments exported to Excel",
+      "exportError": "Failed to export payments",
+      "loading": "Loading...",
+      "noPayments": "No payments to display",
+      "loadError": "Failed to load payments",
+      "columns": {
+        "lp": "LP",
+        "orderNumber": "Order Number",
+        "serviceDate": "Service Date",
+        "buyerName": "Buyer (Name and Surname)",
+        "amountGross": "Gross Payment Amount",
+        "paymentDate": "Payment Date",
+        "postingDate": "Posting Date to KF",
+        "paymentMethod": "Payment Method",
+        "receiptNumber": "Receipt Number",
+        "notes": "Notes"
+      },
+      "paymentMethods": {
+        "transfer": "Transfer",
+        "card": "Card",
+        "blik": "BLIK",
+        "cash": "Cash"
+      },
+      "editPayment": "Edit Payment",
+      "rowColor": "Row Color",
+      "colorPreview": "Color Preview",
+      "hiddenNotes": "Hidden Notes",
+      "hiddenNotesPlaceholder": "Enter hidden notes that will be shown on hover...",
+      "hiddenNotesHint": "These notes will be shown when hovering over the icon",
+      "removeNotes": "Remove Notes",
+      "quickColorSelect": "Quick Color Select",
+      "removeColor": "Remove Color",
+      "existingNotes": "Existing Notes",
+      "addNewNote": "Add New Note",
+      "addNote": "Add Note"
+    }
+  }
+}
+

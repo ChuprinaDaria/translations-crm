@@ -5,34 +5,33 @@ services:
     image: postgres:15-alpine
     container_name: crm_postgres
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-translator}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-traslatorini2025}
       - POSTGRES_DB=${POSTGRES_DB:-crm_db}
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-translator}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    build: ./app
+    build: ./backend
     container_name: crm_backend
     networks:
       - default
-      - whiteout_network
     expose:
       - "8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@crm_postgres:5432/${POSTGRES_DB:-crm_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-translator}:${POSTGRES_PASSWORD:-traslatorini2025}@crm_postgres:5432/${POSTGRES_DB:-crm_db}
       - JWT_SECRET=${JWT_SECRET}
       - APP_ENV=${APP_ENV:-dev}
     volumes:
-      - ./app/uploads:/app/uploads
+      - ./backend/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,6 +49,3 @@ volumes:
 networks:
   default:
     name: crm_default
-  whiteout_network:
-    external: true
-    name: whiteout-community_whiteout_network

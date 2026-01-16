@@ -1,0 +1,239 @@
+{
+  "auth": {
+    "title": "System CRM",
+    "login": {
+      "title": "Logowanie",
+      "description": "Wprowadź swoje dane, aby zalogować się do systemu CRM",
+      "email": "Email",
+      "password": "Hasło",
+      "loginButton": "Zaloguj się",
+      "loggingIn": "Logowanie...",
+      "forgotPassword": "Zapomniałeś hasła?",
+      "noAccount": "Nie masz konta?",
+      "register": "Zarejestruj się",
+      "errors": {
+        "invalidCredentials": "Nieprawidłowy email lub hasło",
+        "loginError": "Błąd podczas logowania. Spróbuj ponownie później"
+      }
+    },
+    "register": {
+      "title": "Rejestracja",
+      "description": "Utwórz nowe konto, aby uzyskać dostęp do systemu CRM",
+      "firstName": "Imię",
+      "lastName": "Nazwisko",
+      "email": "Email",
+      "password": "Hasło",
+      "confirmPassword": "Potwierdź hasło",
+      "registerButton": "Zarejestruj się",
+      "registering": "Rejestracja...",
+      "success": "Rejestracja zakończona sukcesem! Przekierowywanie do strony logowania...",
+      "hasAccount": "Masz już konto?",
+      "login": "Zaloguj się",
+      "errors": {
+        "fillAll": "Wypełnij wszystkie pola",
+        "invalidEmail": "Nieprawidłowy format email",
+        "passwordMin": "Hasło musi zawierać minimum 6 znaków",
+        "passwordsNotMatch": "Hasła nie pasują",
+        "invalidData": "Nieprawidłowe dane. Sprawdź poprawność wprowadzenia",
+        "userExists": "Użytkownik z tym emailem już istnieje",
+        "registerError": "Błąd podczas rejestracji. Spróbuj ponownie później"
+      },
+      "passwordStrength": {
+        "weak": "Słabe",
+        "medium": "Średnie",
+        "good": "Dobre",
+        "strong": "Silne",
+        "label": "Siła hasła"
+      },
+      "passwordMatch": {
+        "match": "Hasła pasują",
+        "notMatch": "Hasła nie pasują"
+      }
+    },
+    "footer": "© 2024 System CRM. Wszelkie prawa zastrzeżone."
+  },
+  "dashboard": {
+    "title": "Panel Analizy",
+    "subtitle": "Przegląd kluczowych metryk i statystyk biznesowych",
+    "kpis": {
+      "totalRevenue": {
+        "title": "Przychód całkowity (miesięczny)",
+        "subtitle": "Przychód za bieżący miesiąc"
+      },
+      "pendingPayments": {
+        "title": "Oczekujące płatności",
+        "subtitle": "Wymaga uwagi"
+      },
+      "activeOrders": {
+        "title": "Aktywne zamówienia",
+        "subtitle": "W trakcie realizacji"
+      },
+      "unreadMessages": {
+        "title": "Nieprzeczytane wiadomości",
+        "subtitle": "Nowe leady"
+      },
+      "trend": "wzrost"
+    },
+    "charts": {
+      "revenue": {
+        "title": "Przegląd przychodów"
+      },
+      "orderStatus": {
+        "title": "Rozkład statusów zamówień"
+      }
+    },
+    "transactions": {
+      "title": "Ostatnie transakcje",
+      "columns": {
+        "orderNo": "Nr zamówienia",
+        "client": "Klient",
+        "date": "Data",
+        "amount": "Kwota",
+        "method": "Metoda",
+        "status": "Status"
+      },
+      "status": {
+        "paid": "Opłacone",
+        "pending": "Oczekujące"
+      },
+      "method": {
+        "transfer": "Przelew",
+        "card": "Karta"
+      }
+    }
+  },
+  "kanban": {
+    "title": "Kanban",
+    "columns": {
+      "new": "Nowe",
+      "inProgress": "W trakcie",
+      "ready": "Gotowe",
+      "paid": "Opłacone",
+      "issued": "Wydane",
+      "doWykonania": "Do wykonania",
+      "doPoswiadczenia": "Do poświadczenia",
+      "doWydania": "Do wydania",
+      "ustne": "Ustne",
+      "closed": "Zamknięte"
+    },
+    "status": {
+      "doWykonania": "Do wykonania",
+      "doPoswiadczenia": "Do poświadczenia",
+      "doWydania": "Do wydania",
+      "ustne": "Ustne",
+      "closed": "Zamknięte"
+    },
+    "priority": {
+      "high": "Ważne"
+    },
+    "deadline": {
+      "today": "Dzisiaj",
+      "tomorrow": "Jutro",
+      "overdue": "Przeterminowane {{days}} dni",
+      "overdueOne": "Przeterminowane 1 dzień"
+    }
+  },
+  "orderDetails": {
+    "created": "Utworzono",
+    "tabs": {
+      "details": "Szczegóły",
+      "files": "Pliki",
+      "history": "Historia"
+    },
+    "client": {
+      "title": "Klient",
+      "edit": "Edytuj"
+    },
+    "timeline": {
+      "title": "Harmonogram",
+      "deadline": "Termin wykonania",
+      "presets": {
+        "today": "Dzisiaj",
+        "tomorrow": "Jutro",
+        "nextWeek": "Za tydzień"
+      },
+      "close": "Termin zbliża się",
+      "overdue": "Termin minął"
+    },
+    "financial": {
+      "title": "Finanse",
+      "totalAmount": "Kwota całkowita",
+      "paymentStatus": "Status płatności",
+      "paid": "Opłacone",
+      "unpaid": "Nieopłacone",
+      "markAsPaid": "Oznacz jako opłacone"
+    },
+    "orderInfo": {
+      "title": "Informacje o zamówieniu",
+      "orderNumber": "Numer zamówienia",
+      "status": "Status",
+      "priority": "Priorytet",
+      "priorityHigh": "Wysoki",
+      "priorityMedium": "Średni",
+      "priorityLow": "Niski",
+      "notes": "Notatki",
+      "notesPlaceholder": "Dodatkowe notatki do zamówienia..."
+    },
+    "files": {
+      "title": "Pliki",
+      "attached": "Załączone pliki",
+      "dropzone": {
+        "title": "Przeciągnij pliki tutaj",
+        "subtitle": "lub kliknij, aby wybrać",
+        "button": "Wybierz pliki"
+      }
+    },
+    "history": {
+      "title": "Historia",
+      "empty": "Brak historii zmian"
+    },
+    "actions": {
+      "cancel": "Anuluj",
+      "save": "Zapisz zmiany"
+    }
+  },
+  "finance": {
+    "title": "Finanse",
+    "payments": {
+      "title": "Płatności",
+      "export": "Eksportuj do Excel",
+      "exporting": "Eksportowanie...",
+      "exportSuccess": "Płatności wyeksportowano do Excel",
+      "exportError": "Nie udało się wyeksportować płatności",
+      "loading": "Ładowanie...",
+      "noPayments": "Brak płatności do wyświetlenia",
+      "loadError": "Nie udało się załadować płatności",
+      "columns": {
+        "lp": "LP",
+        "orderNumber": "Numer zlecenia",
+        "serviceDate": "Data wykonania usługi",
+        "buyerName": "Nabywca (Imię i nazwisko)",
+        "amountGross": "Kwota płatności brutto",
+        "paymentDate": "Data płatności",
+        "postingDate": "Data nabicia na KF",
+        "paymentMethod": "Sposób płatności",
+        "receiptNumber": "Numer dowodu sprzedaży",
+        "notes": "Uwagi"
+      },
+      "paymentMethods": {
+        "transfer": "Przelew",
+        "card": "Karta",
+        "blik": "BLIK",
+        "cash": "Gotówka"
+      },
+      "editPayment": "Edytuj płatność",
+      "rowColor": "Kolor wiersza",
+      "colorPreview": "Podgląd koloru",
+      "hiddenNotes": "Ukryte notatki",
+      "hiddenNotesPlaceholder": "Wprowadź ukryte notatki, które będą wyświetlane po najechaniu...",
+      "hiddenNotesHint": "Te notatki będą wyświetlane po najechaniu na ikonę",
+      "removeNotes": "Usuń notatki",
+      "quickColorSelect": "Szybki wybór koloru",
+      "removeColor": "Usuń kolor",
+      "existingNotes": "Istniejące notatki",
+      "addNewNote": "Dodaj nową notatkę",
+      "addNote": "Dodaj notatkę"
+    }
+  }
+}
+
