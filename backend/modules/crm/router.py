@@ -41,21 +41,75 @@ def create_client(
     db: Session = Depends(get_db),
     user: auth_models.User = Depends(get_current_user_db),
 ):
-    """Create a new client. Checks for duplicates by phone/email/telegram."""
-    # Check for existing client by phone
-    existing = db.query(models.Client).filter(models.Client.phone == client_in.phone).first()
-    if existing:
-        raise HTTPException(
-            status_code=400, 
-            detail={
-                "type": "duplicate_client",
-                "client_id": str(existing.id),
-                "message": f"Клієнт вже існує: {existing.full_name}"
-            }
-        )
+    """Create a new client. Checks for duplicates by phone/email/telegram external_id."""
+    from modules.communications.models import Conversation, PlatformEnum
     
-    # Check by email if provided
-    if client_in.email:
+    # Check by conversation_id first if provided
+    if client_in.conversation_id:
+        existing_conv = db.query(Conversation).filter(
+            Conversation.id == client_in.conversation_id
+        ).first()
+        
+        # If conversation already has a client, return that client
+        if existing_conv and existing_conv.client_id:
+            existing_client = db.query(models.Client).filter(
+                models.Client.id == existing_conv.client_id
+            ).first()
+            if existing_client:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "type": "duplicate_client",
+                        "client_id": str(existing_client.id),
+                        "message": f"Клієнт вже існує: {existing_client.full_name}"
+                    }
+                )
+    
+    # For Telegram/WhatsApp/Instagram: Check if there's already a conversation with this external_id
+    # that has a client_id - this means this Telegram session already has a client
+    # Skip this check if conversation_id is provided (we already checked it above)
+    if client_in.platform and client_in.external_id and not client_in.conversation_id:
+        try:
+            platform_enum = PlatformEnum(client_in.platform.lower())
+            existing_conv = db.query(Conversation).filter(
+                Conversation.platform == platform_enum,
+                Conversation.external_id == client_in.external_id,
+                Conversation.client_id.isnot(None)
+            ).first()
+            
+            if existing_conv and existing_conv.client_id:
+                existing_client = db.query(models.Client).filter(
+                    models.Client.id == existing_conv.client_id
+                ).first()
+                if existing_client:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "type": "duplicate_client",
+                            "client_id": str(existing_client.id),
+                            "message": f"Клієнт вже існує: {existing_client.full_name}"
+                        }
+                    )
+        except ValueError:
+            # Invalid platform enum, ignore
+            pass
+    
+    # For non-Telegram sources or when external_id is not provided:
+    # Check for existing client by phone (only if not from Telegram with unique external_id)
+    if not (client_in.source == models.ClientSource.TELEGRAM and client_in.external_id):
+        existing = db.query(models.Client).filter(models.Client.phone == client_in.phone).first()
+        if existing:
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "type": "duplicate_client",
+                    "client_id": str(existing.id),
+                    "message": f"Клієнт вже існує: {existing.full_name}"
+                }
+            )
+    
+    # Check by email if provided (only if not from Telegram with unique external_id)
+    if client_in.email and not (client_in.source == models.ClientSource.TELEGRAM and client_in.external_id):
         existing = db.query(models.Client).filter(models.Client.email == client_in.email).first()
         if existing:
             raise HTTPException(
@@ -79,7 +133,56 @@ def create_client(
     db.commit()
     db.refresh(client)
     
+    # Link conversation to client if conversation_id or external_id provided
+    if client_in.conversation_id:
+        conversation = db.query(Conversation).filter(Conversation.id == client_in.conversation_id).first()
+        if conversation:
+            conversation.client_id = client.id
+            db.commit()
+    elif client_in.platform and client_in.external_id:
+        try:
+            platform_enum = PlatformEnum(client_in.platform.lower())
+            conversation = db.query(Conversation).filter(
+                Conversation.platform == platform_enum,
+                Conversation.external_id == client_in.external_id
+            ).first()
+            if conversation:
+                conversation.client_id = client.id
+                db.commit()
+        except ValueError:
+            pass
+    
     return client
+
+
+@router.get("/clients/search-by-phone/{phone}")
+def search_client_by_phone(
+    phone: str,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Search client by phone number."""
+    # Clean phone number for search
+    cleaned_phone = ''.join(filter(str.isdigit, phone))
+    
+    # Search for client
+    clients = db.query(models.Client).all()
+    for client in clients:
+        client_phone_cleaned = ''.join(filter(str.isdigit, client.phone))
+        if client_phone_cleaned == cleaned_phone or client_phone_cleaned.endswith(cleaned_phone[-9:]):
+            return {
+                "found": True, 
+                "client": {
+                    "id": str(client.id),
+                    "full_name": client.full_name,
+                    "name": client.full_name,  # For backward compatibility
+                    "phone": client.phone,
+                    "email": client.email,
+                    "source": client.source,
+                }
+            }
+    
+    return {"found": False, "client": None}
 
 
 @router.get("/clients/{client_id}", response_model=schemas.ClientRead)
@@ -738,10 +841,10 @@ def create_translation_request(
     # TODO: Send email/telegram/whatsapp notification to translator
     # This would call a service to send the actual message
     
-    return translation_request
+    return schemas.TranslationRequestRead.model_validate(translation_request)
 
 
-@router.post("/translation-requests/{request_id}/accept")
+@router.post("/translation-requests/{request_id}/accept", response_model=schemas.TranslationRequestRead)
 def accept_translation_request(
     request_id: int,
     db: Session = Depends(get_db),
@@ -774,14 +877,14 @@ def accept_translation_request(
         db, request.order_id, translator_uuid, user.id
     )
     
-    # TODO: Update order with translator info
-    # TODO: Send email to client (optional)
-    
+    # Load translator without circular references
     db.refresh(request)
-    return request
+    
+    # Return using schema to avoid circular references
+    return schemas.TranslationRequestRead.model_validate(request)
 
 
-@router.post("/translation-requests/{request_id}/decline")
+@router.post("/translation-requests/{request_id}/decline", response_model=schemas.TranslationRequestRead)
 def decline_translation_request(
     request_id: int,
     notes: Optional[str] = None,
@@ -807,20 +910,8 @@ def decline_translation_request(
         request.notes = notes
     db.commit()
     
-    # TODO: Add internal note about decline
-    # from modules.crm.models import InternalNote, EntityType
-    # note = InternalNote(
-    #     entity_type=EntityType.ORDER,
-    #     entity_id=str(request.order_id),
-    #     author_id=user.id,
-    #     author_name=user.email,
-    #     text=f"[{request.translator.name}] Відхилив запит: {notes or 'Не вказано причини'}",
-    # )
-    # db.add(note)
-    # db.commit()
-    
     db.refresh(request)
-    return request
+    return schemas.TranslationRequestRead.model_validate(request)
 
 
 @router.get("/orders/{order_id}/translation-requests", response_model=List[schemas.TranslationRequestRead])

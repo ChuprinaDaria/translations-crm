@@ -1123,6 +1123,8 @@ export interface TelegramAccount {
   id: number;
   name: string;
   phone?: string;
+  api_id?: number;
+  api_hash?: string;
   is_active: boolean;
   created_at?: string;
 }
@@ -1131,6 +1133,8 @@ export interface TelegramAccountCreate {
   name: string;
   phone?: string;
   session_string: string;
+  api_id?: number;
+  api_hash?: string;
 }
 
 export interface SmtpSettings {
@@ -1391,6 +1395,28 @@ export const settingsApi = {
     formData.append("api_hash", data.api_hash);
     formData.append("sender_name", data.sender_name);
     return apiFetchMultipart<{ status: string }>("/settings/telegram-config", formData, "POST");
+  },
+
+  async generateTelegramSession(data: {
+    api_id: string;
+    api_hash: string;
+    phone: string;
+    code?: string;
+    password?: string;
+    session_id?: string;
+  }): Promise<{ status: string; session_string?: string; message?: string; session_id?: string }> {
+    const formData = new FormData();
+    formData.append("api_id", data.api_id);
+    formData.append("api_hash", data.api_hash);
+    formData.append("phone", data.phone);
+    if (data.code) formData.append("code", data.code);
+    if (data.password) formData.append("password", data.password);
+    if (data.session_id) formData.append("session_id", data.session_id);
+    return apiFetchMultipart<{ status: string; session_string?: string; message?: string; session_id?: string }>(
+      "/settings/telegram-session/generate",
+      formData,
+      "POST"
+    );
   },
 
   async importMenuCsv(file: File): Promise<{ status: string; created: number }> {

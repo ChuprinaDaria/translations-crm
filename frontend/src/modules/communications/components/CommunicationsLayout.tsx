@@ -22,6 +22,8 @@ interface CommunicationsLayoutProps {
   sidebar: React.ReactNode;
   contextPanel?: React.ReactNode;
   onSearch?: (query: string) => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 /**
@@ -35,18 +37,21 @@ export function CommunicationsLayout({
   sidebar,
   contextPanel,
   onSearch,
+  isSidebarOpen: externalSidebarOpen,
+  onToggleSidebar,
 }: CommunicationsLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
+  const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
+  
+  // Використовуємо external state якщо передано, інакше internal
+  const isSidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen;
 
   // Responsive detection
   useEffect(() => {
     const checkBreakpoint = () => {
       setIsMobile(window.innerWidth < 640);
-      setIsTablet(window.innerWidth >= 640 && window.innerWidth < 1024);
     };
 
     checkBreakpoint();
@@ -60,10 +65,26 @@ export function CommunicationsLayout({
     onSearch?.(value);
   };
 
+  // Використовуємо callback для toggle sidebar
+  const handleToggleSidebar = () => {
+    if (onToggleSidebar) {
+      onToggleSidebar();
+    } else {
+      setInternalSidebarOpen(!internalSidebarOpen);
+    }
+  };
+
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 shrink-0">
+    <div 
+      className="bg-gray-50"
+      style={{
+        display: 'grid',
+        gridTemplateRows: '64px 1fr',
+        height: 'calc(100dvh - 4rem)',
+      }}
+    >
+      {/* Header - row 1: fixed 64px */}
+      <header className="border-b border-gray-200 bg-white flex items-center justify-between px-4">
         <div className="flex items-center gap-4 flex-1 max-w-md">
           {/* Search */}
           <div className="relative flex-1">
@@ -80,22 +101,6 @@ export function CommunicationsLayout({
               aria-label="Search conversations"
             />
           </div>
-
-          {/* Mobile menu button - справа від пошуку */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden shrink-0"
-            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            aria-label="Toggle sidebar"
-            aria-expanded={isMobileSidebarOpen}
-          >
-            {isMobileSidebarOpen ? (
-              <X className="w-5 h-5" />
-            ) : (
-              <Menu className="w-5 h-5" />
-            )}
-          </Button>
         </div>
 
         {/* Right side actions */}
@@ -106,11 +111,15 @@ export function CommunicationsLayout({
               variant="ghost"
               size="sm"
               onClick={() => setIsContextPanelOpen(!isContextPanelOpen)}
-              className="hidden md:flex"
+              className="hidden md:flex text-gray-700 hover:text-gray-900"
               aria-label="Toggle context panel"
               aria-expanded={isContextPanelOpen}
             >
-              {isContextPanelOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {isContextPanelOpen ? (
+                <X className="w-5 h-5 text-gray-700" />
+              ) : (
+                <Menu className="w-5 h-5 text-gray-700" />
+              )}
             </Button>
           )}
           {/* Context panel toggle - Mobile */}
@@ -119,32 +128,20 @@ export function CommunicationsLayout({
               variant="ghost"
               size="sm"
               onClick={() => setIsContextPanelOpen(true)}
-              className="md:hidden"
+              className="md:hidden text-gray-700 hover:text-gray-900"
               aria-label="Open context panel"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5 h-5 text-gray-700" />
             </Button>
           )}
         </div>
       </header>
 
-      {/* Main content area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Desktop/Tablet */}
-        <aside
-          className={cn(
-            'w-60 border-r border-gray-200 bg-white flex flex-col shrink-0',
-            'hidden md:flex',
-            'transition-sidebar'
-          )}
-          aria-label="Conversations sidebar"
-        >
-          {sidebar}
-        </aside>
-
-        {/* Chat Area */}
+      {/* Main content area - takes remaining height */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Chat Area - fills available space */}
         <main 
-          className="flex-1 flex flex-col overflow-hidden bg-white"
+          className="flex-1 min-w-0 bg-white h-full"
           role="main"
           aria-label="Chat area"
         >
@@ -155,7 +152,7 @@ export function CommunicationsLayout({
         {contextPanel && !isMobile && (
           <aside
             className={cn(
-              'w-80 border-l border-gray-200 bg-white flex flex-col shrink-0',
+              'w-80 h-full border-l border-gray-200 bg-white flex flex-col shrink-0 overflow-hidden',
               'hidden lg:flex',
               isContextPanelOpen && 'lg:flex',
               'transition-sidebar'
@@ -167,9 +164,15 @@ export function CommunicationsLayout({
         )}
       </div>
 
-      {/* Mobile Sidebar Drawer - Opens from RIGHT */}
-      <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent side="right" className="w-[280px] sm:w-[320px] p-0">
+      {/* Sidebar Drawer - Opens from RIGHT (works on all screen sizes) */}
+      <Sheet
+        open={isSidebarOpen}
+        onOpenChange={(open) => {
+          if (open === isSidebarOpen) return;
+          handleToggleSidebar();
+        }}
+      >
+        <SheetContent side="right" hideOverlay className="w-[300px] sm:w-[340px] p-0 z-[60] shadow-2xl border-l border-gray-200">
           <SheetHeader className="p-4 border-b">
             <SheetTitle>Розмови</SheetTitle>
           </SheetHeader>

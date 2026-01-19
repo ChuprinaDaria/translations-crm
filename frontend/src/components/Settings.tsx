@@ -14,7 +14,6 @@ import {
   type BrandingSettings,
   type TelegramAccount,
   type SmtpSettings,
-  type TelegramApiConfig,
 } from "../lib/api";
 import { officesApi, type Office, type OfficeCreate } from "../modules/crm/api/offices";
 
@@ -27,8 +26,16 @@ export function Settings() {
   const [telegramAccounts, setTelegramAccounts] = useState<TelegramAccount[]>([]);
   const [newTgName, setNewTgName] = useState("");
   const [newTgPhone, setNewTgPhone] = useState("");
-  const [newTgSession, setNewTgSession] = useState("");
+  const [newTgApiId, setNewTgApiId] = useState("");
+  const [newTgApiHash, setNewTgApiHash] = useState("");
   const [isSavingTg, setIsSavingTg] = useState(false);
+  
+  // Стани для inline генерації session
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [telegramCode, setTelegramCode] = useState("");
+  const [telegramPassword, setTelegramPassword] = useState("");
+  const [sessionId, setSessionId] = useState("");
 
   const [smtp, setSmtp] = useState<SmtpSettings>({
     host: "",
@@ -39,15 +46,56 @@ export function Settings() {
     from_name: "",
   });
 
-  const [telegramApi, setTelegramApi] = useState<TelegramApiConfig>({
-    api_id: "",
-    api_hash: "",
-    sender_name: "",
-  });
-
   // Offices state
   const [offices, setOffices] = useState<Office[]>([]);
   const [isLoadingOffices, setIsLoadingOffices] = useState(false);
+
+  // Функція для створення акаунта
+  const handleCreateAccount = async (sessionString: string) => {
+    if (!sessionString) {
+      toast.error("Session string не може бути порожнім");
+      return;
+    }
+    if (!newTgName) {
+      toast.error("Вкажіть назву акаунта");
+      return;
+    }
+    
+    setIsSavingTg(true);
+    try {
+      const created = await settingsApi.createTelegramAccount({
+        name: newTgName,
+        phone: newTgPhone || undefined,
+        session_string: sessionString.trim(),
+        api_id: newTgApiId ? parseInt(newTgApiId) : undefined,
+        api_hash: newTgApiHash || undefined,
+      });
+      setTelegramAccounts((prev) => [...prev, created]);
+      // Reset all fields
+      setNewTgName("");
+      setNewTgPhone("");
+      setNewTgApiId("");
+      setNewTgApiHash("");
+      setCodeSent(false);
+      setTelegramCode("");
+      setTelegramPassword("");
+      setSessionId("");
+      toast.success("Telegram акаунт додано");
+    } catch (error: any) {
+      console.error(error);
+      const message =
+        error?.detail ||
+        error?.message ||
+        "Не вдалося додати Telegram акаунт";
+      toast.error(
+        typeof message === "string"
+          ? message
+          : "Не вдалося додати Telegram акаунт"
+      );
+    } finally {
+      setIsSavingTg(false);
+    }
+  };
   const [isSavingOffice, setIsSavingOffice] = useState(false);
   const [newOffice, setNewOffice] = useState<OfficeCreate>({
     name: "",
@@ -63,16 +111,14 @@ export function Settings() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [brandingData, tgAccounts, smtpSettings, tgConfig] = await Promise.all([
+        const [brandingData, tgAccounts, smtpSettings] = await Promise.all([
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
           settingsApi.getSmtpSettings(),
-          settingsApi.getTelegramApiConfig(),
         ]);
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
         setSmtp(smtpSettings);
-        setTelegramApi(tgConfig);
       } catch (error) {
         console.error(error);
       }
@@ -459,206 +505,243 @@ export function Settings() {
 
         {/* Telegram Tab */}
         <TabsContent value="telegram" className="mt-0 space-y-6">
+          {/* Список доданих акаунтів */}
           <Card>
             <CardHeader>
-              <CardTitle>Telegram API налаштування</CardTitle>
+              <CardTitle>Додані Telegram акаунти ({telegramAccounts.length})</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Дані доступу до Telegram API, які використовуються для підключення
-                акаунтів (через session string) та відправки КП в Telegram.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tg-api-id">API ID</Label>
-                  <Input
-                    id="tg-api-id"
-                    value={telegramApi.api_id}
-                    onChange={(e) =>
-                      setTelegramApi({ ...telegramApi, api_id: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tg-api-hash">API HASH</Label>
-                  <Input
-                    id="tg-api-hash"
-                    value={telegramApi.api_hash}
-                    onChange={(e) =>
-                      setTelegramApi({ ...telegramApi, api_hash: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="tg-sender-name">Назва відправника</Label>
-                  <Input
-                    id="tg-sender-name"
-                    value={telegramApi.sender_name}
-                    onChange={(e) =>
-                      setTelegramApi({
-                        ...telegramApi,
-                        sender_name: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                  onClick={async () => {
-                    try {
-                      await settingsApi.updateTelegramApiConfig(telegramApi);
-                      toast.success("Telegram API налаштування збережено");
-                    } catch (error) {
-                      console.error(error);
-                      toast.error("Не вдалося зберегти Telegram API налаштування");
-                    }
-                  }}
-                >
-                  Зберегти Telegram API
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Telegram акаунти для відправки КП</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600">
-            Тут можна додати Telegram акаунти (звичайні, не боти), з яких буде
-            відправлятися КП клієнтам. Потрібно попередньо згенерувати{" "}
-            <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">
-              session string
-            </span>{" "}
-            за допомогою інструменту на базі Telethon.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="tg-name">Назва акаунта в системі</Label>
-              <Input
-                id="tg-name"
-                placeholder="Наприклад: Менеджер Іван"
-                value={newTgName}
-                onChange={(e) => setNewTgName(e.target.value)}
-              />
-
-              <Label htmlFor="tg-phone">Телефон акаунта (опційно)</Label>
-              <Input
-                id="tg-phone"
-                placeholder="+380..."
-                value={newTgPhone}
-                onChange={(e) => setNewTgPhone(e.target.value)}
-              />
-
-              <Label htmlFor="tg-session">Session string (обовʼязково)</Label>
-              <textarea
-                id="tg-session"
-                className="w-full px-3 py-2 border rounded-md text-xs font-mono min-h-[80px]"
-                placeholder="Вставте сюди згенерований session string Telethon..."
-                value={newTgSession}
-                onChange={(e) => setNewTgSession(e.target.value)}
-              />
-
-              <div className="flex justify-end pt-2">
-                <Button
-                  type="button"
-                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                  disabled={isSavingTg || !newTgName || !newTgSession}
-                  onClick={async () => {
-                    setIsSavingTg(true);
-                    try {
-                      const created = await settingsApi.createTelegramAccount({
-                        name: newTgName,
-                        phone: newTgPhone || undefined,
-                        session_string: newTgSession.trim(),
-                      });
-                      setTelegramAccounts((prev) => [...prev, created]);
-                      setNewTgName("");
-                      setNewTgPhone("");
-                      setNewTgSession("");
-                      toast.success("Telegram акаунт додано");
-                    } catch (error: any) {
-                      console.error(error);
-                      const message =
-                        error?.detail ||
-                        error?.message ||
-                        "Не вдалося додати Telegram акаунт";
-                      toast.error(
-                        typeof message === "string"
-                          ? message
-                          : "Не вдалося додати Telegram акаунт"
-                      );
-                    } finally {
-                      setIsSavingTg(false);
-                    }
-                  }}
-                >
-                  {isSavingTg ? "Збереження..." : "Додати акаунт"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Поточні акаунти</Label>
+            <CardContent>
               {telegramAccounts.length === 0 ? (
-                <p className="text-xs text-gray-500">
-                  Ще не додано жодного Telegram акаунта.
+                <p className="text-sm text-gray-500">
+                  Ще не додано жодного Telegram акаунта. Додайте акаунт нижче.
                 </p>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-2">
+                <div className="space-y-3">
                   {telegramAccounts.map((acc) => (
                     <div
                       key={acc.id}
-                      className="flex items-center justify-between gap-2 text-xs border-b last:border-b-0 pb-1 last:pb-0"
+                      className="flex items-start justify-between gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <div>
-                        <div className="font-medium text-gray-900">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 mb-1">
                           {acc.name}
                         </div>
                         {acc.phone && (
-                          <div className="text-gray-500">{acc.phone}</div>
+                          <div className="text-sm text-gray-600 mb-1">
+                            📱 {acc.phone}
+                          </div>
+                        )}
+                        {acc.api_id && acc.api_hash && (
+                          <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block mt-1">
+                            🔑 API: {acc.api_id} / {acc.api_hash.substring(0, 12)}...
+                          </div>
                         )}
                       </div>
                       <Button
                         type="button"
                         variant="outline"
-                        size="xs"
-                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        size="sm"
+                        className="text-red-600 border-red-200 hover:bg-red-50 shrink-0"
                         onClick={async () => {
-                          try {
-                            await settingsApi.deleteTelegramAccount(acc.id);
-                            setTelegramAccounts((prev) =>
-                              prev.filter((a) => a.id !== acc.id)
-                            );
-                            toast.success("Акаунт видалено");
-                          } catch (error) {
-                            console.error(error);
-                            toast.error("Не вдалося видалити акаунт");
+                          if (confirm(`Видалити акаунт "${acc.name}"?`)) {
+                            try {
+                              await settingsApi.deleteTelegramAccount(acc.id);
+                              setTelegramAccounts((prev) =>
+                                prev.filter((a) => a.id !== acc.id)
+                              );
+                              toast.success("Акаунт видалено");
+                            } catch (error) {
+                              console.error(error);
+                              toast.error("Не вдалося видалити акаунт");
+                            }
                           }
                         }}
                       >
-                        Видалити
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <p className="text-xs text-gray-500">
-            Відправка КП в Telegram працює від імені цих акаунтів. Клієнти мають
-            бути в контактах або доступні за вказаним номером телефону.
-          </p>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Додати акаунт менеджера</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!codeSent ? (
+                /* Крок 1: Введення даних та запит коду */
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-name">Назва акаунта в системі *</Label>
+                    <Input
+                      id="tg-name"
+                      placeholder="Наприклад: Менеджер Іван"
+                      value={newTgName}
+                      onChange={(e) => setNewTgName(e.target.value)}
+                      disabled={isGenerating}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-phone">Телефон акаунта *</Label>
+                    <Input
+                      id="tg-phone"
+                      placeholder="+380..."
+                      value={newTgPhone}
+                      onChange={(e) => setNewTgPhone(e.target.value)}
+                      disabled={isGenerating}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tg-account-api-id">API ID *</Label>
+                      <Input
+                        id="tg-account-api-id"
+                        type="number"
+                        placeholder="Введіть API ID"
+                        value={newTgApiId}
+                        onChange={(e) => setNewTgApiId(e.target.value)}
+                        disabled={isGenerating}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tg-account-api-hash">API Hash *</Label>
+                      <Input
+                        id="tg-account-api-hash"
+                        placeholder="Введіть API Hash"
+                        value={newTgApiHash}
+                        onChange={(e) => setNewTgApiHash(e.target.value)}
+                        disabled={isGenerating}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    API ID та API Hash можна отримати на{" "}
+                    <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      my.telegram.org/apps
+                    </a>
+                  </p>
+
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      type="button"
+                      className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                      disabled={isGenerating || !newTgName || !newTgPhone || !newTgApiId || !newTgApiHash}
+                      onClick={async () => {
+                        if (!newTgApiId || !newTgApiHash || !newTgPhone) {
+                          toast.error("Заповніть всі обов'язкові поля");
+                          return;
+                        }
+                        
+                        setIsGenerating(true);
+                        try {
+                          const result = await settingsApi.generateTelegramSession({
+                            api_id: newTgApiId,
+                            api_hash: newTgApiHash,
+                            phone: newTgPhone,
+                          });
+                          if (result.status === "code_sent") {
+                            setCodeSent(true);
+                            setSessionId(result.session_id || "");
+                            toast.success("Код відправлено в Telegram!");
+                          } else if (result.status === "success" && result.session_string) {
+                            await handleCreateAccount(result.session_string);
+                          }
+                        } catch (error: any) {
+                          toast.error(error?.data?.detail || error?.message || "Помилка при відправці коду");
+                        } finally {
+                          setIsGenerating(false);
+                        }
+                      }}
+                    >
+                      {isGenerating ? "Відправка..." : "Отримати код"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Крок 2: Введення коду та підтвердження */
+                <div className="space-y-4">
+                  <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                    📱 Код відправлено на <strong>{newTgPhone}</strong>. Перевірте Telegram.
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-code">Код з Telegram *</Label>
+                    <Input
+                      id="tg-code"
+                      placeholder="Введіть код"
+                      value={telegramCode}
+                      onChange={(e) => setTelegramCode(e.target.value)}
+                      disabled={isGenerating}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-password">Пароль 2FA (якщо встановлено)</Label>
+                    <Input
+                      id="tg-password"
+                      type="password"
+                      placeholder="Опційно"
+                      value={telegramPassword}
+                      onChange={(e) => setTelegramPassword(e.target.value)}
+                      disabled={isGenerating}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={isGenerating}
+                      onClick={() => {
+                        setCodeSent(false);
+                        setTelegramCode("");
+                        setTelegramPassword("");
+                        setSessionId("");
+                      }}
+                    >
+                      Скасувати
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1 bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                      disabled={isGenerating || !telegramCode}
+                      onClick={async () => {
+                        setIsGenerating(true);
+                        try {
+                          const result = await settingsApi.generateTelegramSession({
+                            api_id: newTgApiId,
+                            api_hash: newTgApiHash,
+                            phone: newTgPhone,
+                            code: telegramCode,
+                            password: telegramPassword || undefined,
+                            session_id: sessionId,
+                          });
+                          if (result.status === "success" && result.session_string) {
+                            await handleCreateAccount(result.session_string);
+                          } else {
+                            toast.error("Не вдалося отримати session");
+                          }
+                        } catch (error: any) {
+                          toast.error(error?.data?.detail || error?.message || "Помилка авторизації");
+                        } finally {
+                          setIsGenerating(false);
+                        }
+                      }}
+                    >
+                      {isGenerating ? "Авторизація..." : "Підтвердити"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* SMTP Tab */}
@@ -751,6 +834,7 @@ export function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+
     </div>
   );
 }

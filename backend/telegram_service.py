@@ -43,18 +43,31 @@ async def _send_kp_telegram_async(
     pdf_content: bytes,
     pdf_filename: str,
     message: Optional[str] = None,
+    api_id: Optional[int] = None,
+    api_hash: Optional[str] = None,
 ) -> None:
     """
     Відправляє PDF‑файл КП користувачу в Telegram за номером телефону.
     Працює від імені звичайного акаунта (не бота).
+    
+    Args:
+        session_string: Session string для Telegram акаунта
+        to_phone: Номер телефону отримувача
+        pdf_content: Вміст PDF файлу
+        pdf_filename: Ім'я PDF файлу
+        message: Додаткове повідомлення
+        api_id: API ID для цього акаунта (якщо не вказано - використовується глобальне)
+        api_hash: API Hash для цього акаунта (якщо не вказано - використовується глобальне)
     """
     cfg = _load_telegram_config()
-    api_id = cfg["api_id"]
-    api_hash = cfg["api_hash"]
+    
+    # Використовуємо api_id/api_hash з акаунта, якщо вказано, інакше - глобальні
+    api_id = api_id if api_id is not None else cfg["api_id"]
+    api_hash = api_hash if api_hash is not None else cfg["api_hash"]
     sender_name = cfg["sender_name"]
 
     if not api_id or not api_hash:
-        raise ValueError("Telegram API налаштування не задані. Заповніть їх у налаштуваннях системи.")
+        raise ValueError("Telegram API налаштування не задані. Заповніть їх у налаштуваннях системи або для конкретного акаунта.")
 
     # Створюємо клієнта Telethon з сесії користувача
     client = TelegramClient(StringSession(session_string), api_id, api_hash)
@@ -93,10 +106,21 @@ def send_kp_telegram(
     pdf_content: bytes,
     pdf_filename: str,
     message: Optional[str] = None,
+    api_id: Optional[int] = None,
+    api_hash: Optional[str] = None,
 ) -> None:
     """
     Синхронна обгортка над асинхронною функцією відправки.
     Викликається з роутів FastAPI.
+    
+    Args:
+        session_string: Session string для Telegram акаунта
+        to_phone: Номер телефону отримувача
+        pdf_content: Вміст PDF файлу
+        pdf_filename: Ім'я PDF файлу
+        message: Додаткове повідомлення
+        api_id: API ID для цього акаунта (якщо не вказано - використовується глобальне)
+        api_hash: API Hash для цього акаунта (якщо не вказано - використовується глобальне)
     """
     asyncio.run(
         _send_kp_telegram_async(
@@ -105,6 +129,8 @@ def send_kp_telegram(
             pdf_content=pdf_content,
             pdf_filename=pdf_filename,
             message=message,
+            api_id=api_id,
+            api_hash=api_hash,
         )
     )
 

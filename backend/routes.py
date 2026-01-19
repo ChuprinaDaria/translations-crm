@@ -1707,6 +1707,8 @@ def create_kp(kp_in: schema.KPCreate, db: Session = Depends(get_db), user = Depe
                         pdf_content=pdf_bytes,
                         pdf_filename=pdf_filename,
                         message=kp_in.telegram_message,
+                        api_id=account.api_id,
+                        api_hash=account.api_hash,
                     )
             except Exception as e:
                 print(f"Error sending Telegram after KP creation: {e}")
@@ -1774,6 +1776,8 @@ def update_kp(
                     pdf_content=pdf_bytes,
                     pdf_filename=pdf_filename,
                     message=kp_in.telegram_message,
+                    api_id=account.api_id,
+                    api_hash=account.api_hash,
                 )
         except Exception as e:
             print(f"Error sending Telegram after KP update: {e}")
@@ -1917,6 +1921,8 @@ def send_kp_by_telegram(
             pdf_content=pdf_bytes,
             pdf_filename=pdf_filename,
             message=telegram_request.message,
+            api_id=account.api_id,
+            api_hash=account.api_hash,
         )
         
         # Зберігаємо телефон клієнта в КП, якщо його ще не було
@@ -2330,6 +2336,129 @@ def delete_telegram_account(
     if not deleted:
         raise HTTPException(status_code=404, detail="Telegram account not found")
     return {"status": "success"}
+
+
+# Тимчасове зберігання сесій для генерації session string
+_telegram_sessions = {}
+
+@router.post("/settings/telegram-session/generate")
+async def generate_telegram_session(
+    api_id: str = Form(""),
+    api_hash: str = Form(""),
+    phone: str = Form(""),
+    code: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Генерує Telegram session string.
+    
+    Крок 1: Відправляє код підтвердження (без code)
+    Крок 2: Підтверджує код і повертає session string (з code)
+    """
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+    import uuid
+    
+    if not api_id or not api_hash or not phone:
+        raise HTTPException(400, "Потрібно вказати api_id, api_hash та phone")
+    
+    try:
+        api_id_int = int(api_id)
+    except ValueError:
+        raise HTTPException(400, "api_id має бути числом")
+    
+    # Якщо це перший крок (відправка коду)
+    if not code:
+        try:
+            session = StringSession()
+            client = TelegramClient(session, api_id_int, api_hash)
+            await client.connect()
+            
+            if await client.is_user_authorized():
+                # Вже авторизовано - генеруємо session string одразу
+                session_string = client.session.save()
+                await client.disconnect()
+                return {
+                    "status": "success",
+                    "session_string": session_string,
+                    "message": "Session string згенеровано"
+                }
+            
+            # Відправляємо код
+            sent_code = await client.send_code_request(phone)
+            session_id_str = str(uuid.uuid4())
+            # Зберігаємо сесію для використання на другому кроці
+            _telegram_sessions[session_id_str] = {
+                "session_string": session.save(),
+                "api_id": api_id_int,
+                "api_hash": api_hash,
+                "phone": phone,
+                "phone_code_hash": sent_code.phone_code_hash,  # Зберігаємо hash для підтвердження
+            }
+            await client.disconnect()
+            
+            return {
+                "status": "code_sent",
+                "session_id": session_id_str,
+                "message": "Код відправлено в Telegram. Введіть код для підтвердження."
+            }
+        except Exception as e:
+            raise HTTPException(500, f"Помилка при відправці коду: {str(e)}")
+    
+    # Якщо це другий крок (підтвердження коду)
+    if code and session_id:
+        try:
+            # Відновлюємо сесію
+            if session_id not in _telegram_sessions:
+                raise HTTPException(400, "Сесія не знайдена. Почніть спочатку.")
+            
+            session_data = _telegram_sessions[session_id]
+            session = StringSession(session_data["session_string"])
+            client = TelegramClient(session, session_data["api_id"], session_data["api_hash"])
+            await client.connect()
+            
+            try:
+                # Використовуємо phone_code_hash для підтвердження коду
+                await client.sign_in(
+                    session_data["phone"], 
+                    code,
+                    phone_code_hash=session_data.get("phone_code_hash")
+                )
+            except Exception as e:
+                # Можливо потрібен пароль 2FA
+                if "password" in str(e).lower() or "two" in str(e).lower():
+                    if not password:
+                        await client.disconnect()
+                        raise HTTPException(400, "Потрібен пароль 2FA")
+                    await client.sign_in(password=password)
+                else:
+                    await client.disconnect()
+                    raise HTTPException(400, f"Помилка авторизації: {str(e)}")
+            
+            # Генеруємо session string
+            session_string = client.session.save()
+            await client.disconnect()
+            
+            # Видаляємо тимчасову сесію
+            del _telegram_sessions[session_id]
+            
+            return {
+                "status": "success",
+                "session_string": session_string,
+                "message": "Session string успішно згенеровано!"
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            if session_id in _telegram_sessions:
+                del _telegram_sessions[session_id]
+            raise HTTPException(500, f"Помилка при генерації session string: {str(e)}")
+    
+    raise HTTPException(400, "Невідомий крок")
+
 
 # Categories
 @router.get("/categories", response_model=list[schema.Category])

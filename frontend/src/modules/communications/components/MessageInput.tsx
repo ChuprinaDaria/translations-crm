@@ -12,12 +12,50 @@ interface MessageInputProps {
   isLoading?: boolean;
 }
 
+// Supported file types
+const ACCEPTED_FILE_TYPES = [
+  // Images
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/bmp',
+  'image/heic',
+  'image/heif',
+  // Documents
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Text
+  'text/plain',
+  'text/csv',
+  // Archives
+  'application/zip',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  // Audio/Video
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+].join(',');
+
+// Max file size: 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
 /**
  * Message Input компонент
  * Features:
  * - Textarea з auto-resize
  * - File upload (drag-n-drop)
- * - Send button (Ctrl+Enter shortcut)
+ * - Enter для відправки, Shift+Enter для нового рядка
  */
 export function MessageInput({
   onSend,
@@ -28,6 +66,7 @@ export function MessageInput({
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,15 +91,44 @@ export function MessageInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    // Enter без модифікаторів - відправити повідомлення
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       handleSend();
+    }
+    // Shift+Enter - новий рядок (дефолтна поведінка textarea)
+  };
+
+  const validateAndAddFiles = (files: File[]) => {
+    setFileError(null);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+    
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: файл завеликий (макс. 50 МБ)`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+    
+    if (errors.length > 0) {
+      setFileError(errors.join('; '));
+      setTimeout(() => setFileError(null), 5000);
+    }
+    
+    if (validFiles.length > 0) {
+      setAttachments((prev) => [...prev, ...validFiles]);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setAttachments((prev) => [...prev, ...files]);
+    validateAndAddFiles(files);
+    // Reset input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const removeAttachment = (index: number) => {
@@ -81,7 +149,7 @@ export function MessageInput({
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    setAttachments((prev) => [...prev, ...files]);
+    validateAndAddFiles(files);
   };
 
   const canSend = (message.trim() || attachments.length > 0) && !disabled && !isLoading;
@@ -110,12 +178,20 @@ export function MessageInput({
         </div>
       )}
 
+      {/* File Error */}
+      {fileError && (
+        <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+          {fileError}
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="flex items-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
           multiple
+          accept={ACCEPTED_FILE_TYPES}
           className="hidden"
           onChange={handleFileSelect}
         />
@@ -164,7 +240,7 @@ export function MessageInput({
 
       {/* Hint */}
       <p className="text-xs text-gray-400 mt-1 px-1">
-        Натисніть Ctrl+Enter для відправки
+        Enter — відправити · Shift+Enter — новий рядок · Перетягніть файли для прикріплення
       </p>
     </div>
   );

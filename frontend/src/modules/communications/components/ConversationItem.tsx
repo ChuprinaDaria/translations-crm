@@ -1,4 +1,5 @@
 import React from 'react';
+import { Image, FileText, Mic, Video, File } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../../../components/ui/avatar';
 import { PlatformIcon } from './PlatformIcon';
 import { cn } from '../../../components/ui/utils';
@@ -71,6 +72,45 @@ export function ConversationItem({
     .toUpperCase()
     .slice(0, 2);
 
+  // Parse last message for media content
+  const formatLastMessage = (message?: string) => {
+    if (!message) return { text: 'Немає повідомлень', icon: null };
+    
+    // Check for image
+    if (message.match(/^\[Image:\s*.+\]$/i) || message.match(/^\[Фото\]$/i) || message.startsWith('📷')) {
+      return { text: 'Фото', icon: <Image className="w-3 h-3 text-gray-500 inline mr-1" /> };
+    }
+    
+    // Check for document/file
+    if (message.match(/^\[Document:\s*.+\]$/i) || message.match(/^\[File:\s*.+\]$/i) || message.match(/^\[Документ\]$/i)) {
+      return { text: 'Документ', icon: <FileText className="w-3 h-3 text-gray-500 inline mr-1" /> };
+    }
+    
+    // Check for voice message
+    if (message.match(/^\[Voice\]$/i) || message.match(/^\[Audio\]$/i) || message.match(/^\[Голосове повідомлення\]$/i)) {
+      return { text: 'Голосове повідомлення', icon: <Mic className="w-3 h-3 text-gray-500 inline mr-1" /> };
+    }
+    
+    // Check for video
+    if (message.match(/^\[Video:\s*.+\]$/i) || message.match(/^\[Відео\]$/i)) {
+      return { text: 'Відео', icon: <Video className="w-3 h-3 text-gray-500 inline mr-1" /> };
+    }
+    
+    // Check for sticker
+    if (message.match(/^\[Sticker\]$/i) || message.match(/^\[Стікер\]$/i)) {
+      return { text: 'Стікер', icon: null };
+    }
+    
+    // Check for any file attachment pattern
+    if (message.match(/^\[.+\.\w{2,4}\]$/i)) {
+      return { text: 'Файл', icon: <File className="w-3 h-3 text-gray-500 inline mr-1" /> };
+    }
+    
+    return { text: message, icon: null };
+  };
+
+  const lastMessageFormatted = formatLastMessage(conversation.last_message || conversation.subject);
+
   return (
     <button
       onClick={onClick}
@@ -112,8 +152,9 @@ export function ConversationItem({
         </div>
 
         {/* Last Message */}
-        <p className="text-xs text-gray-600 truncate mb-1">
-          {conversation.last_message || conversation.subject || 'Немає повідомлень'}
+        <p className="text-xs text-gray-600 truncate mb-1 flex items-center">
+          {lastMessageFormatted.icon}
+          <span className="truncate">{lastMessageFormatted.text}</span>
         </p>
 
         {/* Footer: Time + Unread Indicator */}

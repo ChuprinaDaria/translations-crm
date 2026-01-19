@@ -20,6 +20,9 @@ import {
   Download,
   Eye,
   Edit2,
+  Building,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -39,22 +42,24 @@ const ORDER_STATUSES = [
   { key: 'issued_sent', label: 'Видано' },
 ];
 
-interface InternalNote {
+export interface InternalNote {
   id: string;
   author: string;
   content: string;
   created_at: string;
 }
 
-interface Document {
+export interface ClientDocument {
   id: string;
   name: string;
   size: number;
+  url?: string;
   created_at: string;
   order_id?: string;
+  order_number?: string;
 }
 
-interface Payment {
+export interface ClientPayment {
   id: string;
   amount: number;
   method: string;
@@ -64,39 +69,57 @@ interface Payment {
   order_number?: string;
 }
 
-interface DeliveryInfo {
+export interface DeliveryInfo {
   id: string;
   order_id: string;
   order_number: string;
-  method: 'inpost' | 'pickup';
+  method: 'inpost' | 'pickup' | 'office';
   tracking_number?: string;
   address?: string;
   status: 'pending' | 'in_transit' | 'delivered';
   delivered_at?: string;
 }
 
-interface TranslatorInfo {
+export interface TranslatorInfo {
   id: number;
   name: string;
   orders_count: number;
   languages: string[];
 }
 
+// Backward compatibility aliases
+type Document = ClientDocument;
+type Payment = ClientPayment;
+
 interface ClientTabContentProps {
   client: Client;
   orders: Order[];
+  documents?: ClientDocument[];
+  payments?: ClientPayment[];
+  translators?: TranslatorInfo[];
+  deliveries?: DeliveryInfo[];
+  notes?: InternalNote[];
   onEditClient: () => void;
   onOpenOrder: (orderId: string, orderNumber: string) => void;
   onCreateOrder: () => void;
+  onDeleteClient?: (clientId: string) => void;
+  onAddNote?: (content: string) => void;
   isLoading?: boolean;
 }
 
 export function ClientTabContent({
   client,
   orders,
+  documents = [],
+  payments = [],
+  translators = [],
+  deliveries = [],
+  notes = [],
   onEditClient,
   onOpenOrder,
   onCreateOrder,
+  onDeleteClient,
+  onAddNote,
   isLoading = false,
 }: ClientTabContentProps) {
   const [expandedSections, setExpandedSections] = useState({
@@ -109,34 +132,8 @@ export function ClientTabContent({
   });
   const [showAllOrders, setShowAllOrders] = useState(false);
   const [newNote, setNewNote] = useState('');
-
-  // Mock data - in real app would be loaded from API
-  const [documents] = useState<Document[]>([
-    { id: '1', name: 'TRC_translated_dnk.pdf', size: 2.3 * 1024 * 1024, created_at: '2026-01-15', order_id: 'order-1' },
-    { id: '2', name: 'TRC_original_dnk.pdf', size: 1.8 * 1024 * 1024, created_at: '2026-01-02', order_id: 'order-1' },
-    { id: '3', name: 'Zaswiadczenie_ang.pdf', size: 0.9 * 1024 * 1024, created_at: '2026-01-10', order_id: 'order-2' },
-  ]);
-
-  const [payments] = useState<Payment[]>([
-    { id: '1', amount: 200, method: 'Przelew24', status: 'completed', created_at: '2026-01-15', order_number: '#N/01/02/01/26/dnk' },
-    { id: '2', amount: 150, method: 'Stripe', status: 'completed', created_at: '2026-01-10', order_number: '#N/03/02/01/26/ang' },
-  ]);
-
-  const [translators] = useState<TranslatorInfo[]>([
-    { id: 1, name: 'Олена Kowalska', orders_count: 3, languages: ['Данська', 'Німецька'] },
-    { id: 2, name: 'Марта Nowak', orders_count: 1, languages: ['Англійська'] },
-  ]);
-
-  const [deliveries] = useState<DeliveryInfo[]>([
-    { id: '1', order_id: 'order-1', order_number: '#N/01', method: 'inpost', tracking_number: 'XYZ123456789', status: 'delivered', delivered_at: '2026-01-16' },
-    { id: '2', order_id: 'order-2', order_number: '#N/03', method: 'pickup', address: 'Warszawa Centrum', status: 'delivered', delivered_at: '2026-01-11' },
-  ]);
-
-  const [notes] = useState<InternalNote[]>([
-    { id: '1', author: 'Оля', content: 'Клієнт дуже задоволений, хоче більше співпраці', created_at: '2026-01-15T10:30:00' },
-    { id: '2', author: 'Марта', content: 'Запитав про термінову доставку', created_at: '2026-01-10T14:20:00' },
-    { id: '3', author: 'Оля', content: 'VIP клієнт, завжди дає чайові', created_at: '2026-01-05T09:15:00' },
-  ]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -165,6 +162,70 @@ export function ClientTabContent({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Parse files from order description
+  const parseFilesFromDescription = (description: string | null | undefined): Array<{ name: string; url: string }> => {
+    if (!description) return [];
+    
+    const files: Array<{ name: string; url: string }> = [];
+    // Pattern: "Файл: filename (url)" or "Файл: filename (url)\n\nФайл: filename2 (url2)"
+    const filePattern = /Файл:\s*([^\n(]+)\s*\(([^)]+)\)/g;
+    let match;
+    
+    while ((match = filePattern.exec(description)) !== null) {
+      files.push({
+        name: match[1].trim(),
+        url: match[2].trim(),
+      });
+    }
+    
+    return files;
+  };
+
+  // Collect all documents from all orders
+  const allDocuments: ClientDocument[] = [];
+  
+  orders.forEach((order) => {
+    // Parse files from description
+    const filesFromDescription = parseFilesFromDescription(order.description);
+    
+    // Add file from file_url if exists
+    if (order.file_url) {
+      const fileName = order.file_url.split('/').pop() || 'Файл';
+      // Check if this file is not already in description
+      const isInDescription = filesFromDescription.some(f => f.url === order.file_url);
+      if (!isInDescription) {
+        allDocuments.push({
+          id: `${order.id}-file_url`,
+          name: fileName,
+          size: 0,
+          created_at: order.created_at,
+          url: order.file_url,
+          order_id: order.id,
+          order_number: order.order_number,
+        });
+      }
+    }
+    
+    // Add files from description
+    filesFromDescription.forEach((file, index) => {
+      allDocuments.push({
+        id: `${order.id}-desc-${index}`,
+        name: file.name,
+        size: 0,
+        created_at: order.created_at,
+        url: file.url,
+        order_id: order.id,
+        order_number: order.order_number,
+      });
+    });
+  });
+
+  // Merge with provided documents (if any) and remove duplicates
+  const mergedDocuments = [...allDocuments, ...documents];
+  const uniqueDocuments = mergedDocuments.filter((doc, index, self) => 
+    index === self.findIndex(d => d.id === doc.id || (d.url === doc.url && d.order_id === doc.order_id))
+  );
+
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
@@ -184,6 +245,8 @@ export function ClientTabContent({
         return Instagram;
       case 'email':
         return Mail;
+      case 'office_visit':
+        return Building;
       default:
         return Globe;
     }
@@ -200,8 +263,32 @@ export function ClientTabContent({
         return 'text-pink-500';
       case 'email':
         return 'text-gray-500';
+      case 'office_visit':
+        return 'text-purple-500';
       default:
         return 'text-gray-600';
+    }
+  };
+
+  const getSourceLabel = (source: string) => {
+    switch (source) {
+      case 'telegram':
+      case 'tg':
+        return 'Telegram';
+      case 'whatsapp':
+        return 'WhatsApp';
+      case 'instagram':
+        return 'Instagram';
+      case 'email':
+        return 'Email';
+      case 'facebook':
+        return 'Facebook';
+      case 'manual':
+        return 'Formularz kontaktowy';
+      case 'office_visit':
+        return 'Візит в офіс';
+      default:
+        return source;
     }
   };
 
@@ -262,7 +349,7 @@ export function ClientTabContent({
               <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                 <span className={cn('flex items-center gap-1', getSourceColor(client.source))}>
                   <SourceIcon className="w-4 h-4" />
-                  {client.source}
+                  {getSourceLabel(client.source)}
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
@@ -271,11 +358,74 @@ export function ClientTabContent({
               </div>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={onEditClient}>
-            <Edit2 className="w-4 h-4 mr-2" />
-            Редагувати
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onEditClient}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              Редагувати
+            </Button>
+            {onDeleteClient && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-medium text-red-800">Видалити клієнта?</h4>
+                <p className="text-sm text-red-700 mt-1">
+                  Це видалить клієнта <strong>{client.full_name}</strong> разом з усіма його даними:
+                </p>
+                <ul className="text-sm text-red-700 mt-2 list-disc list-inside space-y-1">
+                  <li>{orders.length} замовлень</li>
+                  <li>Всі документи та файли</li>
+                  <li>Історія оплат</li>
+                  <li>Всі розмови та повідомлення</li>
+                </ul>
+                <p className="text-sm text-red-800 font-medium mt-2">
+                  ⚠️ Цю дію неможливо відмінити!
+                </p>
+                <div className="flex items-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeleting}
+                  >
+                    Скасувати
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      try {
+                        await onDeleteClient?.(client.id);
+                      } finally {
+                        setIsDeleting(false);
+                        setShowDeleteConfirm(false);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {isDeleting ? 'Видалення...' : 'Так, видалити клієнта'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Basic info */}
         <div className="bg-gray-50 rounded-xl p-4 space-y-3">
@@ -298,7 +448,7 @@ export function ClientTabContent({
             )}
             <div className="flex items-center gap-2">
               <SourceIcon className={cn('w-4 h-4', getSourceColor(client.source))} />
-              <span className="text-gray-700">Джерело: {client.source}</span>
+              <span className="text-gray-700">Джерело: {getSourceLabel(client.source)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-gray-400" />
@@ -443,7 +593,7 @@ export function ClientTabContent({
           >
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
-              <span className="font-medium">Документи ({documents.length} файлів)</span>
+              <span className="font-medium">Документи ({uniqueDocuments.length} файлів)</span>
             </div>
             {expandedSections.documents ? (
               <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -454,30 +604,58 @@ export function ClientTabContent({
 
           {expandedSections.documents && (
             <div className="border-t px-4 py-3 space-y-2">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-blue-500" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">{doc.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {formatDate(doc.created_at)} · {formatFileSize(doc.size)}
+              {uniqueDocuments.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <FileText className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Немає документів</p>
+                </div>
+              ) : (
+                uniqueDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <FileText className="w-5 h-5 text-blue-500 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-gray-700 truncate">{doc.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {formatDate(doc.created_at)} · {formatFileSize(doc.size)}
+                          {doc.order_number && (
+                            <span className="ml-2 text-blue-600">· {doc.order_number}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {doc.order_id && doc.order_number && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => onOpenOrder(doc.order_id!, doc.order_number!)}
+                        >
+                          Замовлення
+                        </Button>
+                      )}
+                      {doc.url && (
+                        <>
+                          <Button variant="ghost" size="sm" className="w-8 h-8 p-0" asChild>
+                            <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                              <Eye className="w-4 h-4" />
+                            </a>
+                          </Button>
+                          <Button variant="ghost" size="sm" className="w-8 h-8 p-0" asChild>
+                            <a href={doc.url} download={doc.name}>
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -508,31 +686,38 @@ export function ClientTabContent({
 
           {expandedSections.payments && (
             <div className="border-t px-4 py-3 space-y-2">
-              {payments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'w-2 h-2 rounded-full',
-                        payment.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'
-                      )}
-                    />
-                    <div>
-                      <div className="text-sm text-gray-700">
-                        {formatDate(payment.created_at)} · {payment.method}
+              {payments.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Немає оплат</p>
+                </div>
+              ) : (
+                payments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          'w-2 h-2 rounded-full',
+                          payment.status === 'completed' ? 'bg-green-500' : 'bg-yellow-500'
+                        )}
+                      />
+                      <div>
+                        <div className="text-sm text-gray-700">
+                          {formatDate(payment.created_at)} · {payment.method}
+                        </div>
+                        <div className="text-xs text-gray-500">{payment.order_number}</div>
                       </div>
-                      <div className="text-xs text-gray-500">{payment.order_number}</div>
+                    </div>
+                    <div className="font-medium text-gray-900">
+                      {formatAmount(payment.amount)}
+                      {payment.status === 'completed' && <span className="ml-1 text-green-500">✓</span>}
                     </div>
                   </div>
-                  <div className="font-medium text-gray-900">
-                    {formatAmount(payment.amount)}
-                    {payment.status === 'completed' && <span className="ml-1 text-green-500">✓</span>}
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -556,27 +741,34 @@ export function ClientTabContent({
 
           {expandedSections.translators && (
             <div className="border-t px-4 py-3 space-y-2">
-              {translators.map((translator) => (
-                <div
-                  key={translator.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                      <User className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">{translator.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {translator.languages.join(', ')}
+              {translators.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Немає призначених перекладачів</p>
+                </div>
+              ) : (
+                translators.map((translator) => (
+                  <div
+                    key={translator.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                        <User className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">{translator.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {translator.languages.join(', ')}
+                        </div>
                       </div>
                     </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {translator.orders_count} замовлень
+                    </Badge>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {translator.orders_count} замовлень
-                  </Badge>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -600,48 +792,55 @@ export function ClientTabContent({
 
           {expandedSections.delivery && (
             <div className="border-t px-4 py-3 space-y-2">
-              {deliveries.map((delivery) => (
-                <div
-                  key={delivery.id}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <Truck
-                      className={cn(
-                        'w-5 h-5',
-                        delivery.status === 'delivered' ? 'text-green-500' : 'text-orange-500'
-                      )}
-                    />
-                    <div>
-                      <div className="text-sm text-gray-700">
-                        {delivery.order_number} →{' '}
-                        {delivery.method === 'inpost' ? 'InPost' : 'Samovyviz'}
-                        {delivery.tracking_number && `: ${delivery.tracking_number}`}
-                        {delivery.address && `: ${delivery.address}`}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {delivery.status === 'delivered' && delivery.delivered_at
-                          ? `Доставлено ${formatDate(delivery.delivered_at)}`
-                          : delivery.status === 'in_transit'
-                          ? 'В дорозі'
-                          : 'Очікується'}
+              {deliveries.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <Truck className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Немає інформації про доставку</p>
+                </div>
+              ) : (
+                deliveries.map((delivery) => (
+                  <div
+                    key={delivery.id}
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Truck
+                        className={cn(
+                          'w-5 h-5',
+                          delivery.status === 'delivered' ? 'text-green-500' : 'text-orange-500'
+                        )}
+                      />
+                      <div>
+                        <div className="text-sm text-gray-700">
+                          {delivery.order_number} →{' '}
+                          {delivery.method === 'inpost' ? 'InPost' : delivery.method === 'office' ? 'Офіс' : 'Самовивіз'}
+                          {delivery.tracking_number && `: ${delivery.tracking_number}`}
+                          {delivery.address && `: ${delivery.address}`}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {delivery.status === 'delivered' && delivery.delivered_at
+                            ? `Доставлено ${formatDate(delivery.delivered_at)}`
+                            : delivery.status === 'in_transit'
+                            ? 'В дорозі'
+                            : 'Очікується'}
+                        </div>
                       </div>
                     </div>
+                    {delivery.tracking_number && (
+                      <Button variant="ghost" size="sm" asChild>
+                        <a
+                          href={`https://inpost.pl/sledzenie-przesylek?number=${delivery.tracking_number}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </Button>
+                    )}
                   </div>
-                  {delivery.tracking_number && (
-                    <Button variant="ghost" size="sm" asChild>
-                      <a
-                        href={`https://inpost.pl/sledzenie-przesylek?number=${delivery.tracking_number}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -665,14 +864,21 @@ export function ClientTabContent({
 
           {expandedSections.notes && (
             <div className="border-t px-4 py-3 space-y-3">
-              {notes.map((note) => (
-                <div key={note.id} className="p-3 bg-yellow-50 rounded-lg border border-yellow-100">
-                  <div className="text-xs text-yellow-700 mb-1">
-                    [{note.author}, {formatDateTime(note.created_at)}]
-                  </div>
-                  <p className="text-sm text-gray-700">{note.content}</p>
+              {notes.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  <StickyNote className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">Немає нотаток</p>
                 </div>
-              ))}
+              ) : (
+                notes.map((note) => (
+                  <div key={note.id} className="p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                    <div className="text-xs text-yellow-700 mb-1">
+                      [{note.author}, {formatDateTime(note.created_at)}]
+                    </div>
+                    <p className="text-sm text-gray-700">{note.content}</p>
+                  </div>
+                ))
+              )}
 
               <div className="pt-2 border-t">
                 <Textarea
@@ -686,6 +892,12 @@ export function ClientTabContent({
                   size="sm"
                   className="bg-yellow-500 hover:bg-yellow-600"
                   disabled={!newNote.trim()}
+                  onClick={() => {
+                    if (onAddNote && newNote.trim()) {
+                      onAddNote(newNote.trim());
+                      setNewNote('');
+                    }
+                  }}
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Додати нотатку

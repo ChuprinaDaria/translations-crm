@@ -10,6 +10,7 @@ import {
   Package,
   Calendar,
   X,
+  Building,
 } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
@@ -40,6 +41,7 @@ const platformIcons: Record<string, { icon: React.ElementType; color: string; la
   email: { icon: MessageSquare, color: 'text-gray-500', label: 'Email' },
   facebook: { icon: MessageSquare, color: 'text-blue-600', label: 'Facebook' },
   manual: { icon: Phone, color: 'text-gray-600', label: 'Formularz' },
+  office_visit: { icon: Building, color: 'text-purple-500', label: 'Візит в офіс' },
   meta: { icon: MessageSquare, color: 'text-blue-500', label: 'Meta' },
   tg: { icon: MessageSquare, color: 'text-blue-400', label: 'Telegram' },
 };
@@ -78,6 +80,7 @@ const SOURCES = [
   { id: 'email', label: 'Email' },
   { id: 'facebook', label: 'Facebook' },
   { id: 'manual', label: 'Formularz kontaktowy' },
+  { id: 'office_visit', label: 'Візит в офіс' },
   { id: 'meta', label: 'Meta' },
   { id: 'tg', label: 'Telegram (TG)' },
 ];

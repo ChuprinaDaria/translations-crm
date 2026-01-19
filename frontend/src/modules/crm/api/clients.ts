@@ -5,16 +5,20 @@ export interface Client {
   full_name: string;
   email?: string;
   phone: string;
-  source: "email" | "telegram" | "whatsapp" | "instagram" | "facebook" | "manual";
+  source: "email" | "telegram" | "whatsapp" | "instagram" | "facebook" | "manual" | "office_visit";
   created_at: string;
   orders?: Order[];
 }
 
 export interface ClientCreate {
-  full_name: string;
+  full_name?: string;
+  name?: string; // For backward compatibility
   email?: string;
   phone: string;
-  source?: "email" | "telegram" | "whatsapp" | "instagram" | "facebook" | "manual";
+  source?: "email" | "telegram" | "whatsapp" | "instagram" | "facebook" | "manual" | "office_visit";
+  conversation_id?: string;
+  external_id?: string;
+  platform?: string;
 }
 
 export interface TranslationRequest {
@@ -136,12 +140,23 @@ export const clientsApi = {
       cleanedClient.email = client.email.trim();
     }
     
-    // Validate and set source (must be one of: 'email', 'telegram', 'whatsapp', 'instagram', 'facebook', 'manual')
-    const validSources = ['email', 'telegram', 'whatsapp', 'instagram', 'facebook', 'manual'];
+    // Validate and set source (must be one of: 'email', 'telegram', 'whatsapp', 'instagram', 'facebook', 'manual', 'office_visit')
+    const validSources = ['email', 'telegram', 'whatsapp', 'instagram', 'facebook', 'manual', 'office_visit'];
     const sourceValue = client.source && validSources.includes(client.source) 
       ? client.source 
       : 'manual';
     cleanedClient.source = sourceValue;
+    
+    // Add conversation info for duplicate checking by external_id
+    if (client.conversation_id) {
+      cleanedClient.conversation_id = client.conversation_id;
+    }
+    if (client.external_id) {
+      cleanedClient.external_id = client.external_id;
+    }
+    if (client.platform) {
+      cleanedClient.platform = client.platform;
+    }
     
     console.log('[API] Creating client with data:', cleanedClient);
     console.log('[API] Original client data:', client);
@@ -169,6 +184,15 @@ export const clientsApi = {
     return apiFetch(`/crm/clients/${clientId}`, {
       method: "DELETE",
     });
+  },
+
+  /**
+   * Search client by phone number
+   */
+  async searchByPhone(phone: string): Promise<{ found: boolean; client: Client | null }> {
+    return apiFetch<{ found: boolean; client: Client | null }>(
+      `/crm/clients/search-by-phone/${encodeURIComponent(phone)}`
+    );
   },
 };
 

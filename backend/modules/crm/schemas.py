@@ -13,6 +13,17 @@ class ClientCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: str = Field(..., min_length=1)
     source: Optional[ClientSource] = ClientSource.MANUAL
+    conversation_id: Optional[UUID] = None  # Optional conversation ID for duplicate checking
+    external_id: Optional[str] = None  # Optional external_id (Telegram username/phone/chat_id) for duplicate checking
+    platform: Optional[str] = None  # Optional platform (telegram, whatsapp, etc.) for duplicate checking
+    
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """Convert empty string to None for optional email field"""
+        if v == '' or v is None:
+            return None
+        return v
 
 
 class ClientRead(BaseModel):

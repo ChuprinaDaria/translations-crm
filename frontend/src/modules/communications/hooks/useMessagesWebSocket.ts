@@ -1,0 +1,161 @@
+/**
+ * WebSocket hook for real-time message updates
+ */
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { Message, ConversationListItem } from '../api/inbox';
+
+export interface WebSocketMessage {
+  type: 'new_message' | 'message_status' | 'conversation_update' | 'connection_established';
+  conversation_id?: string;
+  message?: Message;
+  conversation?: Partial<ConversationListItem>;
+}
+
+interface UseMessagesWebSocketOptions {
+  userId: string;
+  onNewMessage?: (message: Message, conversationId: string) => void;
+  onConversationUpdate?: (conversation: Partial<ConversationListItem>) => void;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+}
+
+export function useMessagesWebSocket({
+  userId,
+  onNewMessage,
+  onConversationUpdate,
+  onConnect,
+  onDisconnect,
+}: UseMessagesWebSocketOptions) {
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
+  
+  // Store callbacks in refs to avoid re-creating connection on callback changes
+  const onNewMessageRef = useRef(onNewMessage);
+  const onConversationUpdateRef = useRef(onConversationUpdate);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+    onConversationUpdateRef.current = onConversationUpdate;
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+  }, [onNewMessage, onConversationUpdate, onConnect, onDisconnect]);
+
+  const connect = useCallback(() => {
+    // Don't connect if already connected or connecting
+    if (wsRef.current?.readyState === WebSocket.OPEN || 
+        wsRef.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    // Determine WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+    const port = '8000'; // Backend port
+    const wsUrl = `${protocol}//${host}:${port}/api/v1/communications/ws/${userId}`;
+
+    console.log('[WebSocket] Connecting to:', wsUrl);
+    
+    try {
+      wsRef.current = new WebSocket(wsUrl);
+
+      wsRef.current.onopen = () => {
+        console.log('[WebSocket] Connected');
+        setIsConnected(true);
+        onConnectRef.current?.();
+
+        // Clear any pending reconnect
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+      };
+
+      wsRef.current.onmessage = (event) => {
+        // Handle ping/pong - don't try to parse as JSON
+        if (event.data === 'pong') {
+          return;
+        }
+        
+        try {
+          const data: WebSocketMessage = JSON.parse(event.data);
+          console.log('[WebSocket] Message received:', data);
+          setLastMessage(data);
+
+          if (data.type === 'new_message' && data.message && data.conversation_id) {
+            onNewMessageRef.current?.(data.message, data.conversation_id);
+          }
+
+          if (data.type === 'conversation_update' && data.conversation) {
+            onConversationUpdateRef.current?.(data.conversation);
+          }
+        } catch (e) {
+          console.error('[WebSocket] Failed to parse message:', e, event.data);
+        }
+      };
+
+      wsRef.current.onclose = (event) => {
+        console.log('[WebSocket] Disconnected:', event.code, event.reason);
+        setIsConnected(false);
+        onDisconnectRef.current?.();
+
+        // Attempt to reconnect after 5 seconds (only if not a clean close)
+        if (event.code !== 1000 && !reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('[WebSocket] Attempting to reconnect...');
+            reconnectTimeoutRef.current = null;
+            connect();
+          }, 5000);
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('[WebSocket] Error:', error);
+      };
+    } catch (error) {
+      console.error('[WebSocket] Failed to connect:', error);
+    }
+  }, [userId]); // Only depends on userId
+
+  const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close(1000, 'Component unmounting'); // Clean close
+      wsRef.current = null;
+    }
+  }, []);
+
+  const sendPing = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send('ping');
+    }
+  }, []);
+
+  // Connect on mount, disconnect on unmount
+  useEffect(() => {
+    connect();
+
+    // Send ping every 30 seconds to keep connection alive
+    const pingInterval = setInterval(sendPing, 30000);
+
+    return () => {
+      clearInterval(pingInterval);
+      disconnect();
+    };
+  }, [userId]); // Only reconnect if userId changes
+
+  return {
+    isConnected,
+    lastMessage,
+    connect,
+    disconnect,
+  };
+}

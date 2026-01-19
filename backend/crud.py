@@ -807,6 +807,8 @@ def create_telegram_account(db: Session, account_in: schemas.TelegramAccountCrea
         name=account_in.name,
         phone=account_in.phone,
         session_string=account_in.session_string,
+        api_id=account_in.api_id,
+        api_hash=account_in.api_hash,
         is_active=True,
     )
     db.add(db_account)

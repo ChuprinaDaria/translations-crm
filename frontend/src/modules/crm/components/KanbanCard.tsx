@@ -5,8 +5,7 @@ import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
-import { NotesManager, Note } from "../../../components/NotesManager";
-import { notesApi, type InternalNote } from "../api/notes";
+import { OrderNotesSheet } from "./OrderNotesSheet";
 import { cn } from "../../../components/ui/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -25,7 +24,18 @@ export interface Order {
   clientName: string;
   clientId?: string;
   deadline: Date;
-  status: "DO_WYKONANIA" | "DO_POSWIADCZENIA" | "DO_WYDANIA" | "USTNE" | "CLOSED";
+  status:
+    | "DO_WYKONANIA"
+    | "DO_POSWIADCZENIA"
+    | "DO_WYDANIA"
+    | "USTNE"
+    | "CLOSED"
+    | "NEW"
+    | "IN_PROGRESS"
+    | "READY"
+    | "PAID"
+    | "ISSUED"
+    | "oplacone";
   priority?: "high" | "medium" | "low";
   managerName?: string;
   managerAvatar?: string;
@@ -40,6 +50,11 @@ export interface Order {
   translatorDeadline?: Date | string;
   translatorFee?: number;
   notesCount?: number;
+  description?: string;
+  file_url?: string;
+  // Додаткові поля для автоматичної логіки
+  transactions?: Array<{ type: string; amount: number }>;
+  delivery?: { method: string; delivered_at?: string; tracking_number?: string };
 }
 
 interface KanbanCardProps {
@@ -47,6 +62,7 @@ interface KanbanCardProps {
   onClick: () => void;
   onClientClick?: (clientId: string) => void;
   onTranslatorChange?: (orderId: string, translatorId: string) => void;
+  onSendTranslationRequest?: (orderId: string) => void;
   translators?: Translator[];
   isDragging?: boolean;
   isOverlay?: boolean;
@@ -64,6 +80,7 @@ export function KanbanCard({
 }: KanbanCardProps) {
   const { t } = useI18n();
   const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
+  const [mouseDownPosition, setMouseDownPosition] = useState<{ x: number; y: number } | null>(null);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const deadlineDate = new Date(order.deadline);
@@ -74,8 +91,10 @@ export function KanbanCard({
   const getBorderColor = () => {
     if (isOverdue) return "border-red-500";
     if (isToday) return "border-red-400";
-    if (order.status === "CLOSED") return "border-green-300";
-    if (order.status === "DO_WYDANIA") return "border-blue-300";
+    if (order.status === "CLOSED" || order.status === "ISSUED") return "border-green-300";
+    if (order.status === "DO_WYDANIA" || order.status === "READY") return "border-blue-300";
+    if (order.status === "PAID" || order.status === "oplacone") return "border-emerald-300";
+    if (order.status === "DO_POSWIADCZENIA" || order.status === "IN_PROGRESS") return "border-yellow-300";
     return "border-gray-200";
   };
 
@@ -88,13 +107,20 @@ export function KanbanCard({
     // Для різних статусів використовуємо універсальні кольори фону
     switch (order.status) {
       case "CLOSED":
-        return { backgroundColor: 'var(--color-bg-green)' }; // зелений
+      case "ISSUED":
+        return { backgroundColor: 'var(--color-bg-green)' }; // зелений - видано
       case "DO_WYDANIA":
-        return { backgroundColor: 'var(--color-bg-blue)' }; // голубий
+      case "READY":
+        return { backgroundColor: 'var(--color-bg-blue)' }; // голубий - готове
+      case "PAID":
+      case "oplacone":
+        return { backgroundColor: 'var(--color-bg-emerald)' }; // смарагдовий - оплачено
       case "DO_POSWIADCZENIA":
-        return { backgroundColor: 'var(--color-bg-yellow)' }; // жовтий
+      case "IN_PROGRESS":
+        return { backgroundColor: 'var(--color-bg-yellow)' }; // жовтий - в роботі
       case "DO_WYKONANIA":
-        return { backgroundColor: 'var(--color-bg-green-light)' }; // світло-зелений
+      case "NEW":
+        return { backgroundColor: 'var(--color-bg-green-light)' }; // світло-зелений - нове
       case "USTNE":
         return { backgroundColor: 'var(--color-bg-purple-light)' }; // світло-фіолетовий
       default:
@@ -105,12 +131,17 @@ export function KanbanCard({
   const getStatusColor = () => {
     switch (order.status) {
       case "CLOSED":
+      case "ISSUED":
         return "text-green-600";
       case "DO_WYDANIA":
+      case "READY":
+      case "PAID":
         return "text-blue-600";
       case "DO_POSWIADCZENIA":
+      case "IN_PROGRESS":
         return "text-yellow-600";
       case "DO_WYKONANIA":
+      case "NEW":
         return "text-gray-600";
       case "USTNE":
         return "text-purple-600";
@@ -220,10 +251,43 @@ export function KanbanCard({
       .slice(0, 2);
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Якщо клік був на інтерактивному елементі (кнопка, select тощо), не обробляємо
+    const target = e.target as HTMLElement;
+    if (target.closest('button, select, [role="button"], [role="combobox"]')) {
+      return;
+    }
+    
+    // Перевіряємо, чи це не був drag (переміщення миші під час натискання)
+    if (mouseDownPosition) {
+      const deltaX = Math.abs(e.clientX - mouseDownPosition.x);
+      const deltaY = Math.abs(e.clientY - mouseDownPosition.y);
+      // Якщо миша перемістилася більше ніж на 5px, це drag, а не click
+      if (deltaX > 5 || deltaY > 5) {
+        return;
+      }
+    }
+    
+    onClick();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Зберігаємо позицію миші при натисканні
+    setMouseDownPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    // Очищаємо позицію через невеликий час
+    setTimeout(() => setMouseDownPosition(null), 100);
+  };
+
   const cardContent = (
     <Card
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onClick={handleCardClick}
       className={cn(
-        "p-4 transition-all duration-200",
+        "p-4 transition-all duration-200 cursor-pointer",
         "hover:shadow-lg hover:border-orange-500/50 hover:-translate-y-0.5",
         getBorderColor(),
         isDragging && "opacity-50",
@@ -235,8 +299,7 @@ export function KanbanCard({
         {/* Header: Order Number */}
         <div className="flex items-start justify-between gap-2">
           <h3 
-            onClick={onClick}
-            className="font-semibold text-gray-900 text-sm truncate cursor-pointer hover:text-[#FF5A00] transition-colors"
+            className="font-semibold text-gray-900 text-sm truncate hover:text-[#FF5A00] transition-colors"
           >
             {order.orderNumber}
           </h3>
@@ -365,71 +428,38 @@ export function KanbanCard({
             <span className="truncate">{order.clientName}</span>
           </div>
 
-          {/* Notes Count / Button */}
-          <div className="pt-1 border-t border-gray-200">
-            <NotesManager
-              entityId={order.id}
-              entityName={order.orderNumber}
-              iconSize="sm"
-              onLoad={async () => {
-                try {
-                  const internalNotes = await notesApi.getNotes('order', order.id);
-                  // Конвертуємо InternalNote в Note формат
-                  return internalNotes.map((note: InternalNote) => ({
-                    id: note.id.toString(),
-                    text: note.text,
-                    created_by: note.author_name,
-                    created_at: note.created_at,
-                  }));
-                } catch (error) {
-                  console.error('Error loading notes:', error);
-                  return [];
-                }
-              }}
-              onAddNote={async (note: Note) => {
-                try {
-                  // Додаємо нову нотатку через API і повертаємо з правильним ID
-                  const createdNote = await notesApi.createNote({
-                    entity_type: 'order',
-                    entity_id: order.id,
-                    text: note.text,
-                  });
-                  // Повертаємо нотатку в форматі Note з правильним ID
-                  return {
-                    id: createdNote.id.toString(),
-                    text: createdNote.text,
-                    created_by: createdNote.author_name,
-                    created_at: createdNote.created_at,
-                  };
-                } catch (error) {
-                  console.error('Error adding note:', error);
-                  throw error;
-                }
-              }}
-              onRemoveNote={async (noteId: string) => {
-                try {
-                  // Видаляємо нотатку через API
-                  const noteIdNum = parseInt(noteId);
-                  if (!isNaN(noteIdNum)) {
-                    await notesApi.deleteNote(noteIdNum);
-                  }
-                } catch (error) {
-                  console.error('Error removing note:', error);
-                  throw error;
-                }
-              }}
+          {/* Details and Notes Buttons */}
+          <div className="pt-1 border-t border-gray-200 flex gap-1">
+            <OrderNotesSheet
+              order={order}
+              defaultTab="details"
               trigger={
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#FF5A00] transition-colors w-full justify-start h-auto py-1 px-0"
+                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#FF5A00] transition-colors flex-1 justify-start h-auto py-1 px-0"
+                >
+                  <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
+                  <span>Деталі</span>
+                </Button>
+              }
+            />
+            <OrderNotesSheet
+              order={order}
+              defaultTab="notes"
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#FF5A00] transition-colors flex-1 justify-start h-auto py-1 px-0"
                 >
                   <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
                   <span>
                     {order.notesCount !== undefined && order.notesCount > 0
-                      ? `${order.notesCount} нотатки`
-                      : 'Додати нотатку'}
+                      ? `${order.notesCount}`
+                      : 'Нотатки'}
                   </span>
                 </Button>
               }

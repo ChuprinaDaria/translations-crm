@@ -288,7 +288,7 @@ export function ContextPanel({
                   onClick={onCreateOrder}
                   size="sm"
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   📝 Нове замовлення
@@ -301,7 +301,7 @@ export function ContextPanel({
                   onClick={onSendPaymentLink}
                   size="sm"
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                 >
                   <CreditCard className="w-4 h-4 mr-2" />
                   💳 Відправити оплату
@@ -314,7 +314,7 @@ export function ContextPanel({
                   onClick={onSendTrackingStatus}
                   size="sm"
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                 >
                   <Package className="w-4 h-4 mr-2" />
                   📦 Відправити статус
@@ -327,7 +327,7 @@ export function ContextPanel({
                   onClick={onAddInternalNote}
                   size="sm"
                   variant="outline"
-                  className="w-full justify-start"
+                  className="w-full justify-start bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   📝 Нотатка
@@ -361,7 +361,7 @@ export function ContextPanel({
                     variant="outline"
                     size="sm"
                     onClick={onDownloadAllFiles}
-                    className="h-8"
+                    className="h-8 bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Завантажити всі

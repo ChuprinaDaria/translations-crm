@@ -1,125 +1,843 @@
 """
-Communications routes - unified inbox endpoints з підтримкою провайдерів.
+Communications routes - unified inbox endpoints for Telegram, Email, etc.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import Dict
+from sqlalchemy import func, desc, or_, distinct
+from typing import Optional, List, Dict
+from uuid import UUID
+from pathlib import Path
+from pydantic import BaseModel
+import logging
+import json
+import uuid as uuid_module
+import os
 
 from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
-from modules.communications.providers.factory import ProviderFactory
-from modules.communications.providers.base import Message
-from tasks.webhook_tasks import process_meta_webhook_task
+from modules.communications.models import (
+    Conversation, 
+    Message, 
+    PlatformEnum, 
+    MessageDirection, 
+    MessageType, 
+    MessageStatus
+)
+from modules.communications import schemas
+from modules.crm.models import Client, ClientSource
 import models
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["communications"])
 
+# WebSocket connection manager for real-time messages
+class MessagesConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+    
+    async def connect(self, user_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+        logger.info(f"WebSocket connected for user: {user_id}")
+    
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+            logger.info(f"WebSocket disconnected for user: {user_id}")
+    
+    async def send_message(self, user_id: str, message: dict):
+        if user_id in self.active_connections:
+            try:
+                await self.active_connections[user_id].send_json(message)
+            except Exception as e:
+                logger.error(f"Error sending message to {user_id}: {e}")
+                self.disconnect(user_id)
+    
+    async def broadcast(self, message: dict):
+        logger.info(f"Broadcasting message to {len(self.active_connections)} connections: {message.get('type')}")
+        if not self.active_connections:
+            logger.warning("No active WebSocket connections to broadcast to!")
+            return
+        for user_id, connection in list(self.active_connections.items()):
+            try:
+                logger.info(f"Sending to user: {user_id}")
+                await connection.send_json(message)
+                logger.info(f"Successfully sent to user: {user_id}")
+            except Exception as e:
+                logger.error(f"Error broadcasting to {user_id}: {e}")
+                self.disconnect(user_id)
 
-@router.get("/inbox")
+messages_manager = MessagesConnectionManager()
+
+
+# WebSocket endpoint is defined in main.py to avoid middleware issues
+
+
+@router.get("/inbox", response_model=schemas.InboxResponse)
 def get_inbox(
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
-):
-    """Get unified inbox (Telegram, Meta, Email messages)."""
-    # TODO: Implement unified inbox
-    return {"messages": [], "channels": ["telegram", "email", "meta"]}
-
-
-@router.post("/send/meta")
-async def send_meta_message(
-    recipient_id: str,
-    message: str,
-    provider_type: str = "meta",
+    filter: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user_db),
 ):
     """
-    Відправити повідомлення через Meta API.
+    Get unified inbox conversations.
     
-    Args:
-        recipient_id: ID отримувача в Meta
-        message: Текст повідомлення
-        provider_type: Тип провайдера ("meta" або "twilio")
+    - filter: 'all', 'new' (unread), 'in_progress', 'needs_reply', 'archived'
+    - platform: 'telegram', 'whatsapp', 'email', 'facebook', 'instagram'
+    - search: search in client name or message content
     """
-    # TODO: Отримати конфігурацію провайдера з БД або env
-    config = {
-        "access_token": "YOUR_META_ACCESS_TOKEN",
-        "app_secret": "YOUR_APP_SECRET",
-        "verify_token": "YOUR_VERIFY_TOKEN",
-        "phone_number_id": "YOUR_PHONE_NUMBER_ID",  # Для WhatsApp
-    }
+    from sqlalchemy.orm import lazyload
+    from sqlalchemy import text
     
-    provider = ProviderFactory.create_provider(provider_type, config)
+    # Build base query with joins
+    query = db.query(
+        Conversation.id,
+        Conversation.client_id,
+        Conversation.platform,
+        Conversation.external_id,
+        Conversation.subject,
+        Conversation.created_at,
+        Conversation.updated_at,
+        func.count(Message.id).filter(
+            Message.status != MessageStatus.READ, 
+            Message.direction == MessageDirection.INBOUND
+        ).label('unread_count'),
+        func.max(Message.created_at).label('last_message_time'),
+    ).outerjoin(Message, Message.conversation_id == Conversation.id)
     
-    if not provider:
-        raise HTTPException(status_code=400, detail=f"Invalid provider type: {provider_type}")
+    # Add Client join if search is needed
+    if search:
+        query = query.outerjoin(Client, Conversation.client_id == Client.id)
     
-    message_obj = Message(
-        recipient_id=recipient_id,
-        text=message
+    # Apply platform filter
+    if platform:
+        try:
+            platform_enum = PlatformEnum(platform)
+            query = query.filter(Conversation.platform == platform_enum)
+        except ValueError:
+            pass
+    
+    # Apply search filter
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(
+            Client.name.ilike(search_pattern),
+            Client.full_name.ilike(search_pattern),
+            Conversation.external_id.ilike(search_pattern),
+            Conversation.subject.ilike(search_pattern),
+        ))
+    
+    # GROUP BY - include Client columns if search is active
+    group_by_cols = [
+        Conversation.id,
+        Conversation.client_id,
+        Conversation.platform,
+        Conversation.external_id,
+        Conversation.subject,
+        Conversation.created_at,
+        Conversation.updated_at,
+    ]
+    if search:
+        group_by_cols.extend([Client.id, Client.name, Client.full_name])
+    
+    query = query.group_by(*group_by_cols)
+    
+    # Apply filter
+    if filter == 'new':
+        # Only conversations with unread messages
+        query = query.having(func.count(Message.id).filter(
+            Message.status != MessageStatus.READ, 
+            Message.direction == MessageDirection.INBOUND
+        ) > 0)
+    
+    # Get total - count all results before pagination
+    # Create a subquery from the grouped query
+    total_subquery = query.statement.alias()
+    total = db.query(func.count()).select_from(total_subquery).scalar() or 0
+    
+    # Order by last message time (nulls last)
+    query = query.order_by(desc('last_message_time'))
+    
+    # Apply pagination
+    results = query.offset(offset).limit(limit).all()
+    
+    # Build response
+    conversations = []
+    unread_total = 0
+    
+    # Get client IDs for batch loading
+    client_ids = [r.client_id for r in results if r.client_id]
+    clients_map = {}
+    if client_ids:
+        clients = db.query(Client).filter(Client.id.in_(client_ids)).all()
+        clients_map = {c.id: c for c in clients}
+    
+    for row in results:
+        # Get last message
+        last_message = db.query(Message)\
+            .filter(Message.conversation_id == row.id)\
+            .order_by(desc(Message.created_at))\
+            .first()
+        
+        # Get client name from map
+        client_name = None
+        if row.client_id and row.client_id in clients_map:
+            client = clients_map[row.client_id]
+            client_name = getattr(client, 'name', None) or getattr(client, 'full_name', None)
+        
+        conversations.append(schemas.ConversationListItem(
+            id=row.id,
+            platform=row.platform,
+            external_id=row.external_id,
+            subject=row.subject,
+            client_id=row.client_id,
+            client_name=client_name,
+            unread_count=row.unread_count or 0,
+            last_message=last_message.content if last_message else None,
+            last_message_at=last_message.created_at if last_message else None,
+            updated_at=row.updated_at,
+        ))
+        unread_total += row.unread_count or 0
+    
+    return schemas.InboxResponse(
+        conversations=conversations,
+        total=total,
+        unread_total=unread_total,
     )
-    
-    result = await provider.send_message(message_obj)
-    
-    if not result.success:
-        raise HTTPException(status_code=500, detail=result.error)
-    
-    return {"status": "success", "message_id": result.message_id}
 
 
-@router.get("/webhook/meta/verify")
-def verify_meta_webhook(
-    mode: str,
-    token: str,
-    challenge: str,
+@router.get("/conversations/{conversation_id}", response_model=schemas.ConversationWithMessages)
+def get_conversation(
+    conversation_id: UUID,
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
 ):
-    """
-    Верифікація webhook від Meta (GET запит).
+    """Get conversation with all messages."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     
-    Meta надсилає GET запит для верифікації webhook.
-    """
-    # TODO: Отримати verify_token з конфігурації
-    verify_token = "YOUR_VERIFY_TOKEN"
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     
-    if mode == "subscribe" and token == verify_token:
-        return int(challenge)
-    else:
-        raise HTTPException(status_code=403, detail="Verification failed")
+    # Get messages ordered by created_at
+    messages = db.query(Message)\
+        .filter(Message.conversation_id == conversation_id)\
+        .order_by(Message.created_at)\
+        .all()
+    
+    # Count unread
+    unread_count = db.query(func.count(Message.id))\
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.status != MessageStatus.READ,
+            Message.direction == MessageDirection.INBOUND
+        ).scalar() or 0
+    
+    # Get last message
+    last_message = messages[-1] if messages else None
+    
+    return schemas.ConversationWithMessages(
+        id=conversation.id,
+        client_id=conversation.client_id,
+        platform=conversation.platform,
+        external_id=conversation.external_id,
+        subject=conversation.subject,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        messages=[schemas.MessageRead.model_validate(m) for m in messages],
+        unread_count=unread_count,
+        last_message=schemas.MessageRead.model_validate(last_message) if last_message else None,
+    )
 
 
-@router.post("/webhook/meta")
-async def receive_meta_webhook(
-    request: Request,
+@router.post("/conversations/{conversation_id}/messages", response_model=schemas.MessageRead)
+async def send_message(
+    conversation_id: UUID,
+    request: schemas.MessageSendRequest,
     db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
 ):
-    """
-    Обробка webhook від Meta (POST запит).
+    """Send a message in a conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     
-    Meta надсилає POST запит з повідомленнями.
-    """
-    # Отримуємо підпис з заголовків
-    signature = request.headers.get("X-Hub-Signature-256", "")
-    payload = await request.body()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
     
-    # TODO: Отримати конфігурацію провайдера
-    config = {
-        "app_secret": "YOUR_APP_SECRET",
-    }
+    # Create message in DB
+    message = Message(
+        conversation_id=conversation_id,
+        direction=MessageDirection.OUTBOUND,
+        type=MessageType.TEXT,
+        content=request.content,
+        status=MessageStatus.QUEUED,
+        attachments=request.attachments,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
     
-    provider = ProviderFactory.create_provider("meta", config)
+    # Send via appropriate service based on platform
+    try:
+        if conversation.platform == PlatformEnum.TELEGRAM:
+            from modules.communications.services.telegram import TelegramService
+            service = TelegramService(db)
+            await service.send_message(
+                conversation_id=conversation_id,
+                content=request.content,
+                attachments=request.attachments,
+            )
+            message.status = MessageStatus.SENT
+        else:
+            # Other platforms - mark as sent for now
+            message.status = MessageStatus.SENT
+        
+        from datetime import datetime
+        message.sent_at = datetime.utcnow()
+        db.commit()
+        db.refresh(message)
+        
+        # Broadcast to WebSocket
+        await messages_manager.broadcast({
+            "type": "new_message",
+            "conversation_id": str(conversation_id),
+            "message": {
+                "id": str(message.id),
+                "conversation_id": str(message.conversation_id),
+                "direction": str(message.direction),
+                "type": str(message.type),
+                "content": message.content,
+                "status": str(message.status),
+                "attachments": message.attachments,
+                "created_at": message.created_at.isoformat(),
+                "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to send message: {e}")
+        message.status = MessageStatus.FAILED
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
     
-    if not provider:
-        raise HTTPException(status_code=500, detail="Provider not configured")
+    return schemas.MessageRead.model_validate(message)
+
+
+@router.post("/conversations/{conversation_id}/mark-read")
+def mark_conversation_read(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Mark all messages in conversation as read."""
+    db.query(Message).filter(
+        Message.conversation_id == conversation_id,
+        Message.direction == MessageDirection.INBOUND,
+        Message.status != MessageStatus.READ,
+    ).update({Message.status: MessageStatus.READ})
     
-    # Перевіряємо підпис
-    is_valid = await provider.verify_webhook(signature, payload)
-    
-    if not is_valid:
-        raise HTTPException(status_code=403, detail="Invalid webhook signature")
-    
-    # Обробляємо webhook асинхронно
-    webhook_data = await request.json()
-    await process_meta_webhook_task({}, webhook_data)
+    db.commit()
     
     return {"status": "ok"}
+
+
+@router.post("/conversations/{conversation_id}/create-client")
+def create_client_from_conversation(
+    conversation_id: UUID,
+    data: Optional[schemas.ClientFromConversation] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Create a client from conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if conversation.client_id:
+        return {"client_id": str(conversation.client_id), "status": "already_exists"}
+    
+    # Map platform to client source
+    platform_to_source = {
+        PlatformEnum.TELEGRAM: ClientSource.TELEGRAM,
+        PlatformEnum.WHATSAPP: ClientSource.WHATSAPP,
+        PlatformEnum.EMAIL: ClientSource.EMAIL,
+        PlatformEnum.INSTAGRAM: ClientSource.INSTAGRAM,
+        PlatformEnum.FACEBOOK: ClientSource.FACEBOOK,
+    }
+    client_source = platform_to_source.get(conversation.platform, ClientSource.MANUAL)
+    
+    # Create client with source from conversation platform
+    client = Client(
+        full_name=data.name if data and data.name else f"Клієнт {conversation.external_id}",
+        phone=data.phone if data and data.phone else (conversation.external_id if conversation.platform == PlatformEnum.TELEGRAM else ""),
+        email=data.email if data and data.email else (conversation.external_id if conversation.platform == PlatformEnum.EMAIL else None),
+        source=client_source,
+    )
+    db.add(client)
+    db.flush()
+    
+    # Link conversation to client
+    conversation.client_id = client.id
+    db.commit()
+    
+    return {"client_id": str(client.id), "status": "created"}
+
+
+@router.post("/conversations/{conversation_id}/link-client/{client_id}")
+def link_client_to_conversation(
+    conversation_id: UUID,
+    client_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Link an existing client to conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    if conversation.client_id:
+        return {"client_id": str(conversation.client_id), "status": "already_linked"}
+    
+    # Link conversation to client
+    conversation.client_id = client.id
+    db.commit()
+    
+    return {"client_id": str(client.id), "status": "linked"}
+
+
+@router.post("/conversations/{conversation_id}/quick-action")
+def quick_action(
+    conversation_id: UUID,
+    request: schemas.QuickActionRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Handle quick actions on conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    action = request.action
+    
+    if action == "download_files":
+        # Get all file attachments from conversation
+        messages_with_files = db.query(Message).filter(
+            Message.conversation_id == conversation_id,
+            Message.attachments.isnot(None),
+        ).all()
+        
+        files = []
+        for msg in messages_with_files:
+            if msg.attachments:
+                files.extend(msg.attachments)
+        
+        return {"status": "success", "files_downloaded": len(files), "files": files}
+    
+    elif action == "create_order":
+        # Create order from conversation
+        return {"status": "success", "order_id": None, "message": "Order creation not implemented"}
+    
+    elif action == "mark_important":
+        # Mark conversation as important (would need a field for this)
+        return {"status": "success", "important": True}
+    
+    return {"status": "error", "message": f"Unknown action: {action}"}
+
+
+# File upload configuration
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+UPLOADS_DIR = BASE_DIR / "uploads" / "messages"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Max file size: 50MB
+MAX_FILE_SIZE = 50 * 1024 * 1024
+
+# Allowed file types
+ALLOWED_TYPES = {
+    # Images
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/heic', 'image/heif',
+    # Documents
+    'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    # Text
+    'text/plain', 'text/csv',
+    # Archives
+    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+    # Audio/Video
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'video/mp4', 'video/webm', 'video/quicktime',
+}
+
+
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Upload a file attachment for messages."""
+    # Validate content type
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type not allowed: {file.content_type}")
+    
+    # Read file content
+    content = await file.read()
+    
+    # Validate size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)} MB")
+    
+    # Generate unique filename
+    ext = Path(file.filename).suffix.lower() if file.filename else ''
+    unique_id = str(uuid_module.uuid4())
+    filename = f"{unique_id}{ext}"
+    
+    # Save file
+    file_path = UPLOADS_DIR / filename
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Determine file type category
+    mime_type = file.content_type or ''
+    if mime_type.startswith('image/'):
+        file_type = 'image'
+    elif mime_type.startswith('video/'):
+        file_type = 'video'
+    elif mime_type.startswith('audio/'):
+        file_type = 'audio'
+    elif mime_type == 'application/pdf' or 'document' in mime_type or 'msword' in mime_type or 'spreadsheet' in mime_type:
+        file_type = 'document'
+    else:
+        file_type = 'file'
+    
+    return {
+        "id": unique_id,
+        "filename": file.filename,
+        "type": file_type,
+        "url": f"/api/v1/communications/files/{filename}",
+        "mime_type": file.content_type,
+        "size": len(content),
+    }
+
+
+@router.get("/files/{filename}")
+async def get_file(filename: str):
+    """Download a file attachment."""
+    file_path = UPLOADS_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(file_path, filename=filename)
+
+
+class PaymentLinkRequest(BaseModel):
+    amount: Optional[float] = None
+    currency: str = "pln"
+
+
+@router.post("/orders/{order_id}/payment-link")
+async def create_payment_link(
+    order_id: UUID,
+    request: PaymentLinkRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Create Stripe payment link for order."""
+    from modules.crm.models import Order
+    
+    amount = request.amount
+    currency = request.currency
+    
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # If amount not provided, calculate from order or use default
+    if not amount:
+        # Try to get amount from order transactions or use a default
+        amount = 100.0  # Default, should be replaced with actual order amount
+    
+    try:
+        import stripe
+        import os
+        
+        stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+        if not stripe.api_key:
+            raise HTTPException(status_code=500, detail="Stripe API key not configured")
+        
+        # Create Price
+        price = stripe.Price.create(
+            unit_amount=int(amount * 100),  # Stripe works in cents
+            currency=currency,
+            product_data={
+                "name": f"Замовлення {order.order_number}",
+            },
+        )
+
+        # Create Payment Link
+        payment_link = stripe.PaymentLink.create(
+            line_items=[
+                {
+                    "price": price.id,
+                    "quantity": 1,
+                },
+            ],
+            metadata={
+                "order_id": str(order.id),
+            },
+            after_completion={
+                "type": "redirect",
+                "redirect": {
+                    "url": f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/orders/{order.id}/success"
+                }
+            }
+        )
+
+        return {
+            "payment_link": payment_link.url,
+            "order_id": str(order.id),
+            "amount": amount,
+            "currency": currency,
+        }
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Stripe library not installed")
+    except Exception as e:
+        logger.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment link: {str(e)}")
+
+
+@router.get("/orders/{order_id}/tracking")
+async def get_tracking(
+    order_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Get InPost tracking number for order."""
+    from modules.crm.models import Order
+    
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    try:
+        import httpx
+        import os
+        
+        inpost_api_key = os.getenv("INPOST_API_KEY")
+        if not inpost_api_key:
+            raise HTTPException(status_code=500, detail="InPost API key not configured")
+        
+        base_url = "https://api-shipx-pl.easypack24.net/v1"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{base_url}/shipments",
+                headers={
+                    "Authorization": f"Bearer {inpost_api_key}",
+                },
+                params={
+                    "order_id": str(order.id),
+                }
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                tracking_number = data.get("tracking_number") or data.get("number")
+                
+                if tracking_number:
+                    return {
+                        "number": tracking_number,
+                        "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+                        "order_id": str(order.id),
+                    }
+            
+            return {
+                "number": None,
+                "trackingUrl": None,
+                "message": "Tracking number not found",
+                "order_id": str(order.id),
+            }
+    except ImportError:
+        raise HTTPException(status_code=500, detail="httpx library not installed")
+    except Exception as e:
+        logger.error(f"InPost API error: {e}")
+        return {
+            "number": None,
+            "trackingUrl": None,
+            "message": f"Error: {str(e)}",
+            "order_id": str(order.id),
+        }
+
+
+@router.post("/clients/{client_id}/update-contact")
+async def update_client_contact(
+    client_id: UUID,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Update client email or phone and optionally link conversation."""
+    from modules.crm.models import Client
+    
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    email = data.get("email")
+    phone = data.get("phone")
+    conversation_id = data.get("conversation_id")  # Опціонально: ID conversation для прив'язки
+    
+    if email:
+        client.email = email
+    if phone:
+        client.phone = phone
+    
+    # Якщо передано conversation_id, прив'язуємо conversation до клієнта
+    if conversation_id:
+        try:
+            conv_uuid = UUID(conversation_id) if isinstance(conversation_id, str) else conversation_id
+            conversation = db.query(Conversation).filter(Conversation.id == conv_uuid).first()
+            if conversation and not conversation.client_id:
+                conversation.client_id = client.id
+        except (ValueError, TypeError):
+            # Ігноруємо помилки парсингу UUID
+            pass
+    
+    db.commit()
+    db.refresh(client)
+    
+    return {
+        "client_id": str(client.id),
+        "email": client.email,
+        "phone": client.phone,
+        "conversation_linked": conversation_id is not None,
+    }
+
+
+class AddFileRequest(BaseModel):
+    file_url: str
+    file_name: str
+
+
+class AddAddressRequest(BaseModel):
+    address: str
+    is_paczkomat: bool
+    paczkomat_code: Optional[str] = None
+
+
+@router.post("/orders/{order_id}/add-file")
+async def add_file_to_order(
+    order_id: UUID,
+    request: AddFileRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Add file to order."""
+    from modules.crm.models import Order
+    
+    file_url = request.file_url
+    file_name = request.file_name
+    
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Update order file_url if not set, or append to description
+    if not order.file_url:
+        order.file_url = file_url
+    else:
+        # Append to description
+        if order.description:
+            order.description += f"\n\nФайл: {file_name} ({file_url})"
+        else:
+            order.description = f"Файл: {file_name} ({file_url})"
+    
+    db.commit()
+    db.refresh(order)
+    
+    return {
+        "order_id": str(order.id),
+        "file_url": order.file_url,
+        "message": "File added to order",
+    }
+
+
+@router.post("/orders/{order_id}/add-address")
+async def add_address_to_order(
+    order_id: UUID,
+    request: AddAddressRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Add address or paczkomat to order."""
+    from modules.crm.models import Order
+    from datetime import date
+    from decimal import Decimal
+    
+    address = request.address
+    is_paczkomat = request.is_paczkomat
+    paczkomat_code = request.paczkomat_code
+    
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Add address/paczkomat to description
+    if is_paczkomat and paczkomat_code:
+        address_text = f"Доставка: InPost пачкомат {paczkomat_code}\nАдреса: {address}\nВартість доставки: 13.99 zł"
+    else:
+        address_text = f"Доставка: Адреса\n{address}"
+    
+    if order.description:
+        order.description += f"\n\n{address_text}"
+    else:
+        order.description = address_text
+    
+    # Note: Transaction creation requires payment_date, service_date, receipt_number, payment_method
+    # Delivery cost (13.99 zł) is added to description for now
+    # Transaction can be created manually later if needed
+    
+    db.commit()
+    db.refresh(order)
+    
+    return {
+        "order_id": str(order.id),
+        "message": "Address added to order",
+        "delivery_cost": 13.99 if is_paczkomat else None,
+    }
+
+
+# Helper function to notify about new incoming messages
+async def notify_new_message(message: Message, conversation: Conversation):
+    """Send WebSocket notification about new message."""
+    await messages_manager.broadcast({
+        "type": "new_message",
+        "conversation_id": str(conversation.id),
+        "message": {
+            "id": str(message.id),
+            "conversation_id": str(message.conversation_id),
+            "direction": str(message.direction),
+            "type": str(message.type),
+            "content": message.content,
+            "status": str(message.status),
+            "attachments": message.attachments,
+            "created_at": message.created_at.isoformat(),
+            "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+        },
+        "conversation": {
+            "id": str(conversation.id),
+            "platform": str(conversation.platform),
+            "external_id": conversation.external_id,
+            "client_name": conversation.client.name if conversation.client else None,
+        }
+    })

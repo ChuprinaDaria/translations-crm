@@ -2,7 +2,7 @@
 TelegramService - обробка Telegram повідомлень через Telethon.
 """
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from uuid import UUID
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -15,15 +15,22 @@ from modules.communications.models import (
     MessageDirection,
     MessageType,
     MessageStatus,
+    Message,
 )
 from modules.communications.services.base import MessengerService
 from modules.communications.models import Conversation
+
+if TYPE_CHECKING:
+    from modules.communications.models import Message as MessageModel
+else:
+    MessageModel = Message
 from core.database import SessionLocal
 import sys
 import os
 # Add parent directory to path for crud import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 import crud
+import models
 
 
 class TelegramService(MessengerService):
@@ -38,26 +45,44 @@ class TelegramService(MessengerService):
             config: Конфігурація (api_id, api_hash, session_string)
         """
         if config is None:
-            config = self._load_config()
+            config = self._load_config(db)
         super().__init__(db, config)
         self._client: Optional[TelegramClient] = None
     
     def get_platform(self) -> PlatformEnum:
         return PlatformEnum.TELEGRAM
     
-    def _load_config(self) -> Dict[str, Any]:
-        """Завантажити конфігурацію з бази даних або env."""
-        db = SessionLocal()
-        try:
-            settings = crud.get_telegram_api_settings(db)
-        finally:
-            db.close()
+    def _load_config(self, db: Session) -> Dict[str, Any]:
+        """Завантажити конфігурацію з активного Telegram акаунта."""
+        from models import TelegramAccount
         
-        import os
+        # Get first active Telegram account
+        account = db.query(TelegramAccount).filter(
+            TelegramAccount.is_active == True,
+            TelegramAccount.session_string.isnot(None),
+            TelegramAccount.api_id.isnot(None),
+            TelegramAccount.api_hash.isnot(None),
+        ).first()
+        
+        if not account:
+            # Fallback to env or old settings
+            import os
+            db = SessionLocal()
+            try:
+                settings = crud.get_telegram_api_settings(db)
+            finally:
+                db.close()
+            
+            return {
+                "api_id": int(settings.get("telegram_api_id") or os.getenv("TELEGRAM_API_ID", "0")),
+                "api_hash": settings.get("telegram_api_hash") or os.getenv("TELEGRAM_API_HASH", ""),
+                "session_string": settings.get("telegram_session_string") or os.getenv("TELEGRAM_SESSION_STRING", ""),
+            }
+        
         return {
-            "api_id": int(settings.get("telegram_api_id") or os.getenv("TELEGRAM_API_ID", "0")),
-            "api_hash": settings.get("telegram_api_hash") or os.getenv("TELEGRAM_API_HASH", ""),
-            "session_string": settings.get("telegram_session_string") or os.getenv("TELEGRAM_SESSION_STRING", ""),
+            "api_id": account.api_id,
+            "api_hash": account.api_hash,
+            "session_string": account.session_string,
         }
     
     async def _get_client(self) -> TelegramClient:
@@ -82,9 +107,8 @@ class TelegramService(MessengerService):
         content: str,
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> "MessageModel":
+    ) -> MessageModel:
         """Відправити повідомлення в Telegram."""
-        from modules.communications.models import Message as MessageModel
         
         # Отримати розмову
         conversation = self.db.query(Conversation).filter(
@@ -108,25 +132,135 @@ class TelegramService(MessengerService):
         try:
             # Відправити через Telegram
             client = await self._get_client()
-            entity = await client.get_entity(conversation.external_id)
+            
+            # Parse external_id - could be phone number, username, or chat_id
+            external_id = conversation.external_id
+            entity = None
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Try different methods to get entity
+            try:
+                if external_id.startswith('+'):
+                    # Phone number - try direct lookup first
+                    try:
+                        entity = await client.get_entity(external_id)
+                        logger.info(f"Found entity by phone: {external_id}")
+                    except Exception:
+                        # If direct lookup fails, search in dialogs
+                        logger.info(f"Direct lookup failed for {external_id}, searching in dialogs...")
+                        phone_digits = external_id.replace('+', '').replace(' ', '').replace('-', '')
+                        async for dialog in client.iter_dialogs():
+                            if hasattr(dialog.entity, 'phone'):
+                                dialog_phone = dialog.entity.phone.replace(' ', '').replace('-', '')
+                                if dialog_phone == phone_digits or dialog_phone.endswith(phone_digits[-9:]):
+                                    entity = dialog.entity
+                                    logger.info(f"Found entity in dialogs by phone: {external_id}")
+                                    break
+                elif external_id.startswith('@'):
+                    # Username
+                    entity = await client.get_entity(external_id)
+                    logger.info(f"Found entity by username: {external_id}")
+                else:
+                    # Try as chat_id (integer) first
+                    try:
+                        chat_id = int(external_id)
+                        entity = await client.get_entity(chat_id)
+                        logger.info(f"Found entity by chat_id: {chat_id}")
+                    except (ValueError, TypeError):
+                        # If not a number, try as string (username without @)
+                        try:
+                            entity = await client.get_entity(external_id)
+                        except Exception:
+                            # Last resort: try with @ prefix
+                            entity = await client.get_entity(f"@{external_id}")
+            except Exception as e:
+                logger.error(f"Failed to get Telegram entity for {external_id}: {e}")
+                # Last attempt: search in dialogs by ID
+                try:
+                    async for dialog in client.iter_dialogs():
+                        dialog_id_str = str(dialog.id)
+                        if dialog_id_str == external_id or dialog_id_str == external_id.replace('+', ''):
+                            entity = dialog.entity
+                            logger.info(f"Found entity in dialogs by ID: {external_id}")
+                            break
+                except Exception as search_error:
+                    logger.error(f"Failed to search dialogs: {search_error}")
+                
+                if entity is None:
+                    raise ValueError(f"Could not find Telegram contact for {external_id}. Error: {str(e)}")
+            
+            if entity is None:
+                raise ValueError(f"Could not resolve Telegram entity for {external_id}")
             
             # Якщо є вкладення, відправити файли
             if attachments:
+                from pathlib import Path
+                base_dir = Path(__file__).resolve().parent.parent.parent
+                uploads_dir = base_dir / "uploads" / "messages"
+                
+                logger.info(f"📎 Processing {len(attachments)} attachments for Telegram message")
+                logger.info(f"📎 Attachments data: {attachments}")
                 files = []
                 for att in attachments:
-                    # Тут потрібно завантажити файл з URL або шляху
-                    # files.append(att["path"])
-                    pass
-                await client.send_message(entity, content, file=files if files else None)
+                    url = att.get("url", "")
+                    logger.info(f"📎 Processing attachment: {att}, URL: {url}")
+                    if url:
+                        # Extract filename from URL - handle both /api/v1/... and /files/... formats
+                        # Remove query parameters if any
+                        url_clean = url.split("?")[0]
+                        # Get filename from URL - handle /api/v1/communications/files/filename format
+                        if "/files/" in url_clean:
+                            filename = url_clean.split("/files/")[-1]
+                        else:
+                            filename = url_clean.split("/")[-1]
+                        file_path = uploads_dir / filename
+                        
+                        logger.info(f"📁 Looking for file: {file_path} (from URL: {url}, extracted filename: {filename})")
+                        
+                        if file_path.exists():
+                            files.append(str(file_path))
+                            logger.info(f"✅ File found: {file_path}")
+                        else:
+                            logger.warning(f"⚠️ File not found: {file_path}")
+                            # Try alternative path - maybe file is in different location
+                            alt_path = base_dir / "uploads" / filename
+                            if alt_path.exists():
+                                files.append(str(alt_path))
+                                logger.info(f"✅ File found in alternative location: {alt_path}")
+                            else:
+                                logger.error(f"❌ File not found in any location: {filename}")
+                                logger.error(f"❌ Uploads dir exists: {uploads_dir.exists()}, path: {uploads_dir}")
+                                if uploads_dir.exists():
+                                    existing_files = list(uploads_dir.glob("*"))
+                                    logger.error(f"❌ Existing files in uploads_dir: {[f.name for f in existing_files[:10]]}")
+                    else:
+                        logger.warning(f"⚠️ Attachment has no URL: {att}")
+                
+                if files:
+                    logger.info(f"📤 Sending {len(files)} file(s) via Telegram")
+                    # Send with attachments
+                    await client.send_file(entity, files, caption=content if content else None)
+                    logger.info(f"✅ Files sent successfully via Telegram")
+                else:
+                    logger.warning(f"⚠️ No valid files found, sending text only")
+                    # No valid files, just send text
+                    if content:
+                        await client.send_message(entity, content)
             else:
                 await client.send_message(entity, content)
+            
+            logger.info(f"✅ Telegram message sent successfully to {external_id}")
             
             # Оновити статус
             message.status = MessageStatus.SENT
             message.sent_at = datetime.utcnow()
             self.db.commit()
+            logger.info(f"✅ Message status updated to SENT in database")
             
         except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error sending Telegram message: {e}")
             message.status = MessageStatus.FAILED
             self.db.commit()
             raise
@@ -140,9 +274,8 @@ class TelegramService(MessengerService):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> "MessageModel":
+    ) -> MessageModel:
         """Обробити вхідне повідомлення з Telegram."""
-        from modules.communications.models import Message as MessageModel
         
         # Отримати або створити розмову
         conversation = await self.get_or_create_conversation(
@@ -160,6 +293,15 @@ class TelegramService(MessengerService):
             attachments=attachments,
             metadata=metadata,
         )
+        
+        # Notify via WebSocket
+        try:
+            from modules.communications.router import notify_new_message
+            await notify_new_message(message, conversation)
+        except Exception as e:
+            # Don't fail if WebSocket notification fails
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to send WebSocket notification: {e}")
         
         return message
     

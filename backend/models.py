@@ -275,7 +275,8 @@ class Benefit(Base):
 class TelegramAccount(Base):
     """
     Обліковий запис Telegram, з якого можуть надсилатися КП.
-    Зберігаємо лише метадані та session_string (створюється окремим інструментом).
+    Зберігаємо метадані, session_string та API credentials (створюється окремим інструментом).
+    Кожен акаунт може мати свої власні api_id/api_hash для підтримки до 10+ особистих акаунтів.
     """
     __tablename__ = "telegram_accounts"
 
@@ -283,6 +284,8 @@ class TelegramAccount(Base):
     name = Column(String, nullable=False, index=True)          # Назва в UI (наприклад, "Менеджер 1")
     phone = Column(String, nullable=True, index=True)          # Телефон акаунта (для інформації)
     session_string = Column(String, nullable=False)            # Секретна сесія Telethon
+    api_id = Column(Integer, nullable=True)                    # API ID для цього акаунта (якщо не вказано - використовується глобальне)
+    api_hash = Column(String, nullable=True)                   # API Hash для цього акаунта (якщо не вказано - використовується глобальне)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

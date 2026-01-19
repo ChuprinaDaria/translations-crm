@@ -30,6 +30,12 @@ class MessageType(str, Enum):
     TEXT = "text"
     HTML = "html"
     FILE = "file"
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    DOCUMENT = "document"
+    STICKER = "sticker"
+    VOICE = "voice"
 
 
 class MessageStatus(str, Enum):

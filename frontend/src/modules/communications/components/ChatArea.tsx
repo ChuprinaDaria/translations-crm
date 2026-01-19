@@ -1,6 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import { Plus, Download, FileText, Star, User } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '../../../components/ui/avatar';
 import { Button } from '../../../components/ui/button';
 import {
   DropdownMenu,
@@ -9,9 +8,9 @@ import {
   DropdownMenuTrigger,
 } from '../../../components/ui/dropdown-menu';
 import { MessageBubble } from './MessageBubble';
-import { PlatformIcon } from './PlatformIcon';
 import { MessageInput } from './MessageInput';
 import { EmptyStates } from './EmptyState';
+import { QuickActionsSidebar } from './QuickActionsSidebar';
 
 export interface Message {
   id: string;
@@ -50,139 +49,172 @@ interface ChatAreaProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
   isLoading?: boolean;
   onQuickAction?: (action: string, data?: Record<string, any>) => void;
+  isSidebarOpen?: boolean;
+  clientId?: string;
+  orderId?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  onAddEmail?: (email: string) => void;
+  onAddPhone?: (phone: string) => void;
+  onAddFile?: (fileUrl: string, fileName: string) => void;
+  onAddFileAutoCreateOrder?: (fileUrl: string, fileName: string) => void;
+  onAddAddress?: (address: string, isPaczkomat: boolean, paczkomatCode?: string) => void;
+  onPaymentClick?: () => void;
+  onTrackingClick?: () => void;
+  onClientClick?: () => void;
+  onOrderClick?: () => void;
+  onDocumentsClick?: () => void;
+  onToggleSidebar?: () => void;
 }
 
-/**
- * Область чату з повідомленнями
- * Структура:
- * 1. Header з інфо про контакт + дії
- * 2. Messages list (scroll to bottom on new)
- * 3. Input area з attachments
- */
 export function ChatArea({
   conversation,
   messages,
   onSendMessage,
   isLoading = false,
   onQuickAction,
+  isSidebarOpen,
+  clientId,
+  orderId,
+  clientEmail,
+  clientPhone,
+  onAddEmail,
+  onAddPhone,
+  onAddFile,
+  onAddFileAutoCreateOrder,
+  onAddAddress,
+  onPaymentClick,
+  onTrackingClick,
+  onClientClick,
+  onOrderClick,
+  onDocumentsClick,
+  onToggleSidebar,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
+    }
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom('smooth');
   }, [messages]);
+
+  useLayoutEffect(() => {
+    scrollToBottom('auto');
+  }, [conversation?.id]);
 
   if (!conversation) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="h-full flex items-center justify-center bg-gray-50">
         <EmptyStates.NoMessages />
       </div>
     );
   }
 
-  const displayName = conversation.client_name || conversation.external_id || 'Unknown';
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-10 h-10">
-            <AvatarImage src={conversation.client_avatar} />
-            <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-medium">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900">{displayName}</span>
-              <PlatformIcon platform={conversation.platform} className="w-4 h-4" />
-            </div>
-            <span className="text-xs text-gray-500 capitalize">
-              {conversation.platform === 'telegram' && 'Telegram'}
-              {conversation.platform === 'whatsapp' && 'WhatsApp'}
-              {conversation.platform === 'email' && 'Email'}
-              {conversation.platform === 'facebook' && 'Facebook'}
-              {conversation.platform === 'instagram' && 'Instagram'}
-            </span>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="flex items-center gap-2">
+    <div className="h-full w-full flex overflow-hidden">
+      {/* Main Chat Column - use grid for stable layout */}
+      <div 
+        className="flex-1 min-w-0 overflow-hidden"
+        style={{
+          display: 'grid',
+          gridTemplateRows: '48px 1fr auto',
+          height: '100%',
+        }}
+      >
+        {/* Header - row 1: fixed 48px */}
+        <header className="border-b border-gray-200 bg-white flex items-center justify-between px-4">
+          <div className="flex-1" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" className="border-gray-300 hover:bg-gray-50">
-                <Plus className="w-4 h-4 mr-2" />
-                Швидкі дії
+              <Button size="sm" variant="outline" className="border-gray-300 hover:bg-gray-50 h-8 flex-shrink-0">
+                <Plus className="w-4 h-4 mr-1" />
+                Дії
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onClick={() => onQuickAction?.('create_client')}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={() => onQuickAction?.('create_client')} className="cursor-pointer">
                 <User className="w-4 h-4 mr-2" />
                 Створити клієнта
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onQuickAction?.('download_files')}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={() => onQuickAction?.('download_files')} className="cursor-pointer">
                 <Download className="w-4 h-4 mr-2" />
                 Завантажити всі файли
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onQuickAction?.('create_order')}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={() => onQuickAction?.('create_order')} className="cursor-pointer">
                 <FileText className="w-4 h-4 mr-2" />
                 Створити замовлення
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onQuickAction?.('mark_important')}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={() => onQuickAction?.('mark_important')} className="cursor-pointer">
                 <Star className="w-4 h-4 mr-2" />
                 Позначити важливим
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </header>
+
+        {/* Messages - row 2: takes remaining space, scrollable */}
+        <div 
+          ref={messagesContainerRef}
+          className="overflow-y-auto overflow-x-hidden bg-gray-50"
+        >
+          <div className="p-4 space-y-3">
+            {isLoading && messages.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">Завантаження...</div>
+            ) : messages.length === 0 ? (
+              <div className="flex items-center justify-center py-20">
+                <EmptyStates.NoMessages />
+              </div>
+            ) : (
+              messages.map((message) => (
+                <MessageBubble 
+                  key={message.id} 
+                  message={message} 
+                  platform={conversation.platform}
+                  clientId={clientId}
+                  orderId={orderId}
+                  clientEmail={clientEmail}
+                  clientPhone={clientPhone}
+                  onAddEmail={onAddEmail}
+                  onAddPhone={onAddPhone}
+                  onAddFile={onAddFile}
+                  onAddFileAutoCreateOrder={onAddFileAutoCreateOrder}
+                  onAddAddress={onAddAddress}
+                />
+              ))
+            )}
+            <div ref={messagesEndRef} className="h-1" />
+          </div>
+        </div>
+
+        {/* Input - row 3: auto height, always at bottom */}
+        <div className="bg-white border-t border-gray-200">
+          <MessageInput
+            onSend={onSendMessage}
+            disabled={isLoading}
+            isLoading={isLoading}
+          />
         </div>
       </div>
 
-      {/* Messages List */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {isLoading && messages.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">Завантаження повідомлень...</div>
-          ) : messages.length === 0 ? (
-            <EmptyStates.NoMessages />
-          ) : (
-            messages.map((message) => (
-              <MessageBubble key={message.id} message={message} platform={conversation.platform} />
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input Area - Fixed at bottom */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white">
-        <MessageInput
-          onSend={onSendMessage}
-          disabled={isLoading}
-          isLoading={isLoading}
+      {/* Quick Actions Sidebar - fixed width */}
+      <div className="flex-shrink-0 h-full">
+        <QuickActionsSidebar
+          isSidebarOpen={isSidebarOpen}
+          clientId={clientId}
+          orderId={orderId}
+          onPaymentClick={onPaymentClick || (() => {})}
+          onTrackingClick={onTrackingClick || (() => {})}
+          onClientClick={onClientClick || (() => {})}
+          onOrderClick={onOrderClick || (() => {})}
+          onDocumentsClick={onDocumentsClick || (() => {})}
+          onToggleSidebar={onToggleSidebar}
         />
       </div>
     </div>
   );
 }
-

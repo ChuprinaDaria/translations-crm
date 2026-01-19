@@ -113,6 +113,16 @@ export function ClientTabsArea({
   };
 
   if (tabs.length === 0) {
+    // If children are provided (like client list), show them instead of empty state
+    if (children) {
+      return (
+        <div className="h-full flex flex-col">
+          {children}
+        </div>
+      );
+    }
+    
+    // Otherwise show empty state
     return (
       <div className="h-full flex flex-col items-center justify-center bg-gray-50 text-gray-500">
         <User className="w-16 h-16 mb-4 text-[#FF5A00] opacity-30" />

@@ -2,9 +2,7 @@
  * Inbox API - unified inbox endpoints
  */
 import { apiFetch } from '../../../lib/api';
-
-// Mock data для розробки
-const USE_MOCK_DATA = true; // Змінити на false коли API буде готове
+import { getToken } from '../../../lib/api/token';
 
 export interface ConversationListItem {
   id: string;
@@ -67,211 +65,11 @@ export interface InboxQueryParams {
   offset?: number;
 }
 
-// Mock data
-const mockConversations: ConversationListItem[] = [
-  {
-    id: '1',
-    platform: 'telegram',
-    external_id: '+380931234567',
-    subject: undefined,
-    client_id: 'client-1',
-    client_name: 'Олександр Петренко',
-    unread_count: 2,
-    last_message: 'Дякую за швидку відповідь!',
-    last_message_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    platform: 'whatsapp',
-    external_id: '+380501234567',
-    subject: undefined,
-    client_id: 'client-2',
-    client_name: 'Марія Коваленко',
-    unread_count: 0,
-    last_message: 'Можна детальніше про меню?',
-    last_message_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    platform: 'email',
-    external_id: 'client@example.com',
-    subject: 'Комерційна пропозиція',
-    client_id: undefined,
-    client_name: 'Володимир Сидоренко',
-    unread_count: 1,
-    last_message: 'Надішліть, будь ласка, комерційну пропозицію',
-    last_message_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '4',
-    platform: 'facebook',
-    external_id: 'fb-123456',
-    subject: undefined,
-    client_id: 'client-4',
-    client_name: 'Анна Мельник',
-    unread_count: 0,
-    last_message: 'Дякую!',
-    last_message_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '5',
-    platform: 'telegram',
-    external_id: '+380671234567',
-    subject: undefined,
-    client_id: undefined,
-    client_name: 'Іван Іваненко',
-    unread_count: 5,
-    last_message: 'Привіт! Цікавить банкетне меню',
-    last_message_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-  },
-];
-
-const mockMessages: Record<string, Message[]> = {
-  '1': [
-    {
-      id: 'msg-1-1',
-      conversation_id: '1',
-      direction: 'inbound',
-      type: 'text',
-      content: 'Добрий день! Чи можна замовити кейтеринг на 50 осіб?',
-      status: 'read',
-      created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-1-2',
-      conversation_id: '1',
-      direction: 'outbound',
-      type: 'text',
-      content: 'Добрий день! Так, звичайно. Коли вам потрібно?',
-      status: 'read',
-      created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-1-3',
-      conversation_id: '1',
-      direction: 'inbound',
-      type: 'text',
-      content: 'Наступного тижня, в п\'ятницю',
-      status: 'read',
-      created_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-1-4',
-      conversation_id: '1',
-      direction: 'outbound',
-      type: 'text',
-      content: 'Відмінно! Надішлю вам комерційну пропозицію за 5 хвилин.',
-      status: 'read',
-      created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-1-5',
-      conversation_id: '1',
-      direction: 'inbound',
-      type: 'text',
-      content: 'Дякую за швидку відповідь!',
-      status: 'sent',
-      created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    },
-  ],
-  '2': [
-    {
-      id: 'msg-2-1',
-      conversation_id: '2',
-      direction: 'inbound',
-      type: 'text',
-      content: 'Привіт! Цікавить банкетне меню',
-      status: 'read',
-      created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-2-2',
-      conversation_id: '2',
-      direction: 'outbound',
-      type: 'text',
-      content: 'Привіт! Надішлю вам меню зараз',
-      status: 'read',
-      created_at: new Date(Date.now() - 2.5 * 60 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 2.5 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'msg-2-3',
-      conversation_id: '2',
-      direction: 'inbound',
-      type: 'text',
-      content: 'Можна детальніше про меню?',
-      status: 'read',
-      created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    },
-  ],
-  '3': [
-    {
-      id: 'msg-3-1',
-      conversation_id: '3',
-      direction: 'inbound',
-      type: 'html',
-      content: 'Добрий день! Надішліть, будь ласка, комерційну пропозицію для корпоративного заходу на 100 осіб.',
-      status: 'read',
-      created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      sent_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ],
-};
-
 export const inboxApi = {
   /**
    * Get unified inbox conversations
    */
   async getInbox(params?: InboxQueryParams): Promise<InboxResponse> {
-    if (USE_MOCK_DATA) {
-      console.log('[Inbox API] Using mock data, params:', params);
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      let filtered = [...mockConversations];
-      
-      // Apply filters
-      if (params?.search) {
-        const searchLower = params.search.toLowerCase();
-        filtered = filtered.filter(conv => 
-          conv.client_name?.toLowerCase().includes(searchLower) ||
-          conv.last_message?.toLowerCase().includes(searchLower) ||
-          conv.external_id.toLowerCase().includes(searchLower)
-        );
-      }
-      
-      if (params?.platform) {
-        filtered = filtered.filter(conv => conv.platform === params.platform);
-      }
-      
-      if (params?.filter === 'new') {
-        filtered = filtered.filter(conv => conv.unread_count > 0);
-      }
-      
-      const unreadTotal = filtered.reduce((sum, conv) => sum + conv.unread_count, 0);
-      
-      const result = {
-        conversations: filtered,
-        total: filtered.length,
-        unread_total: unreadTotal,
-      };
-      
-      console.log('[Inbox API] Returning mock conversations:', result);
-      return result;
-    }
-    
     const queryParams = new URLSearchParams();
     if (params?.filter) queryParams.append('filter', params.filter);
     if (params?.platform) queryParams.append('platform', params.platform);
@@ -288,29 +86,6 @@ export const inboxApi = {
    * Get conversation with messages
    */
   async getConversation(conversationId: string): Promise<ConversationWithMessages> {
-    if (USE_MOCK_DATA) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      const conversation = mockConversations.find(c => c.id === conversationId);
-      if (!conversation) {
-        throw new Error('Conversation not found');
-      }
-      
-      const messages = mockMessages[conversationId] || [];
-      
-      return {
-        id: conversation.id,
-        platform: conversation.platform,
-        external_id: conversation.external_id,
-        subject: conversation.subject,
-        client_id: conversation.client_id,
-        messages: messages,
-        unread_count: conversation.unread_count,
-        last_message: messages.length > 0 ? messages[messages.length - 1] : undefined,
-      };
-    }
-    
     return apiFetch<ConversationWithMessages>(
       `/communications/conversations/${conversationId}`
     );
@@ -320,39 +95,6 @@ export const inboxApi = {
    * Send message
    */
   async sendMessage(conversationId: string, content: string, attachments?: FileAttachment[]): Promise<Message> {
-    if (USE_MOCK_DATA) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const newMessage: Message = {
-        id: `msg-${conversationId}-${Date.now()}`,
-        conversation_id: conversationId,
-        direction: 'outbound',
-        type: 'text',
-        content,
-        status: 'sent',
-        attachments,
-        created_at: new Date().toISOString(),
-        sent_at: new Date().toISOString(),
-      };
-      
-      // Add to mock messages
-      if (!mockMessages[conversationId]) {
-        mockMessages[conversationId] = [];
-      }
-      mockMessages[conversationId].push(newMessage);
-      
-      // Update conversation last message
-      const conversation = mockConversations.find(c => c.id === conversationId);
-      if (conversation) {
-        conversation.last_message = content;
-        conversation.last_message_at = new Date().toISOString();
-        conversation.updated_at = new Date().toISOString();
-      }
-      
-      return newMessage;
-    }
-    
     return apiFetch<Message>(
       `/communications/conversations/${conversationId}/messages`,
       {
@@ -366,6 +108,16 @@ export const inboxApi = {
   },
 
   /**
+   * Mark conversation as read
+   */
+  async markConversationRead(conversationId: string): Promise<void> {
+    return apiFetch(
+      `/communications/conversations/${conversationId}/mark-read`,
+      { method: 'POST' }
+    );
+  },
+
+  /**
    * Create client from conversation
    */
   async createClientFromConversation(conversationId: string, data?: {
@@ -374,19 +126,6 @@ export const inboxApi = {
     email?: string;
     company_name?: string;
   }): Promise<{ client_id: string }> {
-    if (USE_MOCK_DATA) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const conversation = mockConversations.find(c => c.id === conversationId);
-      if (conversation) {
-        conversation.client_id = `client-${conversationId}`;
-        conversation.client_name = data?.name || conversation.client_name || 'Новий клієнт';
-      }
-      
-      return { client_id: `client-${conversationId}` };
-    }
-    
     return apiFetch<{ client_id: string }>(
       `/communications/conversations/${conversationId}/create-client`,
       {
@@ -397,26 +136,18 @@ export const inboxApi = {
   },
 
   /**
+   * Link existing client to conversation
+   */
+  async linkClientToConversation(conversationId: string, clientId: string): Promise<{ client_id: string; status: string }> {
+    return apiFetch(`/communications/conversations/${conversationId}/link-client/${clientId}`, {
+      method: 'POST',
+    });
+  },
+
+  /**
    * Quick action
    */
   async quickAction(conversationId: string, action: string, data?: Record<string, any>): Promise<any> {
-    if (USE_MOCK_DATA) {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Mock actions
-      switch (action) {
-        case 'download_files':
-          return { status: 'success', files_downloaded: 0 };
-        case 'create_order':
-          return { status: 'success', order_id: `order-${Date.now()}` };
-        case 'mark_important':
-          return { status: 'success', important: true };
-        default:
-          return { status: 'success' };
-      }
-    }
-    
     return apiFetch(
       `/communications/conversations/${conversationId}/quick-action`,
       {
@@ -425,5 +156,83 @@ export const inboxApi = {
       }
     );
   },
-};
 
+  /**
+   * Upload file attachment
+   */
+  async uploadFile(file: File): Promise<FileAttachment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = getToken();
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch('/api/v1/communications/upload', {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+    
+    return response.json();
+  },
+
+  /**
+   * Create payment link for order
+   */
+  async createPaymentLink(orderId: string, amount?: number, currency: string = 'pln'): Promise<{ payment_link: string; order_id: string; amount: number; currency: string }> {
+    return apiFetch(`/communications/orders/${orderId}/payment-link`, {
+      method: 'POST',
+      body: JSON.stringify({ amount, currency }),
+    });
+  },
+
+  /**
+   * Get tracking number for order
+   */
+  async getTracking(orderId: string): Promise<{ number: string | null; trackingUrl: string | null; order_id: string }> {
+    return apiFetch(`/communications/orders/${orderId}/tracking`);
+  },
+
+  /**
+   * Update client contact info
+   */
+  async updateClientContact(clientId: string, data: { email?: string; phone?: string; conversation_id?: string }): Promise<{ client_id: string; email?: string; phone?: string; conversation_linked?: boolean }> {
+    return apiFetch(`/communications/clients/${clientId}/update-contact`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Add file to order
+   */
+  async addFileToOrder(orderId: string, fileUrl: string, fileName: string): Promise<{ order_id: string; file_url: string; message: string }> {
+    return apiFetch(`/communications/orders/${orderId}/add-file`, {
+      method: 'POST',
+      body: JSON.stringify({ file_url: fileUrl, file_name: fileName }),
+    });
+  },
+
+  /**
+   * Add address or paczkomat to order
+   */
+  async addAddressToOrder(orderId: string, address: string, isPaczkomat: boolean, paczkomatCode?: string): Promise<{ order_id: string; message: string }> {
+    return apiFetch(`/communications/orders/${orderId}/add-address`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        address, 
+        is_paczkomat: isPaczkomat, 
+        paczkomat_code: paczkomatCode 
+      }),
+    });
+  },
+};

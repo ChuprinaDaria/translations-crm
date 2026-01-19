@@ -29,6 +29,7 @@ class ClientSource(str, Enum):
     INSTAGRAM = "instagram"
     FACEBOOK = "facebook"
     MANUAL = "manual"
+    OFFICE_VISIT = "office_visit"
 
 
 class EntityType(str, Enum):
@@ -162,7 +163,7 @@ class Translator(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     languages: Mapped[list["TranslatorLanguage"]] = relationship("TranslatorLanguage", back_populates="translator", lazy="selectin", cascade="all, delete-orphan")
-    translation_requests: Mapped[list["TranslationRequest"]] = relationship("TranslationRequest", back_populates="translator", lazy="selectin", cascade="all, delete-orphan")
+    translation_requests: Mapped[list["TranslationRequest"]] = relationship("TranslationRequest", back_populates="translator", lazy="noload", cascade="all, delete-orphan")
 
 
 class TranslatorLanguage(Base):
@@ -175,7 +176,7 @@ class TranslatorLanguage(Base):
     rate_per_page: Mapped[float] = mapped_column(Float, nullable=False)
     specializations: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array: ["TRC", "Umowy", "Szkolne"]
     
-    translator: Mapped["Translator"] = relationship("Translator", back_populates="languages", lazy="joined")
+    translator: Mapped["Translator"] = relationship("Translator", back_populates="languages", lazy="noload")
 
 
 class TranslationRequestStatus(str, Enum):
@@ -203,6 +204,6 @@ class TranslationRequest(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     
-    order: Mapped["Order"] = relationship("Order", back_populates="translation_requests", lazy="joined")
-    translator: Mapped["Translator"] = relationship("Translator", back_populates="translation_requests", lazy="joined")
+    order: Mapped["Order"] = relationship("Order", back_populates="translation_requests", lazy="selectin")
+    translator: Mapped["Translator"] = relationship("Translator", back_populates="translation_requests", lazy="selectin")
 

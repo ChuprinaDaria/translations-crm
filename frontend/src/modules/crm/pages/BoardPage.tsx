@@ -21,7 +21,6 @@ import {
 import { cn } from "../../../components/ui/utils";
 import { KanbanColumn } from "../components/KanbanColumn";
 import { KanbanCard, Order, Translator } from "../components/KanbanCard";
-import { OrderDetailSheet } from "../components/OrderDetailSheet";
 import { SendTranslationRequestDialog } from "../components/SendTranslationRequestDialog";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -35,15 +34,39 @@ type ColumnId = "NEW" | "IN_PROGRESS" | "READY" | "PAID" | "ISSUED";
 // Map frontend column to backend status format
 const statusMap: Record<ColumnId, string> = {
   NEW: "do_wykonania",
+  PAID: "oplacone", // Новий статус для оплачених
   IN_PROGRESS: "do_poswiadczenia",
   READY: "do_wydania",
-  PAID: "do_wydania", // Використовуємо do_wydania для оплачених, можна додати payment_status
   ISSUED: "closed",
 };
 
 // Map backend status to frontend column
-function mapStatusToColumn(status: string): ColumnId {
+function mapStatusToColumn(status: string, order?: any): ColumnId {
+  // Автоматична логіка: якщо є транзакція income → PAID
+  if (order?.transactions?.some((t: any) => t.type === "income")) {
+    // Перевіряємо чи не видано (ISSUED має пріоритет)
+    if (status === "CLOSED" || status === "closed") {
+      return "ISSUED";
+    }
+    // Якщо доставка InPost і delivered_at встановлено → ISSUED
+    if (order?.delivery?.method === "inpost" && order?.delivery?.delivered_at) {
+      return "ISSUED";
+    }
+    return "PAID";
+  }
+
   switch (status) {
+    case "NEW":
+      return "NEW";
+    case "PAID":
+    case "oplacone":
+      return "PAID";
+    case "IN_PROGRESS":
+      return "IN_PROGRESS";
+    case "READY":
+      return "READY";
+    case "ISSUED":
+      return "ISSUED";
     case "DO_WYKONANIA":
     case "do_wykonania":
       return "NEW";
@@ -68,8 +91,6 @@ export function BoardPage() {
   const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   
@@ -101,15 +122,32 @@ export function BoardPage() {
           (t: any) => t.type === "income"
         )?.amount;
 
+        // Автоматична зміна статусу на основі транзакцій та доставки
+        let autoStatus = order.status.toUpperCase();
+        
+        // Якщо є транзакція income → PAID (якщо ще не ISSUED)
+        if (order.transactions?.some((t: any) => t.type === "income")) {
+          // Перевіряємо доставку InPost
+          const delivery = (order as any).delivery || (order as any).deliveries?.[0];
+          if (delivery?.method === "inpost" && delivery?.delivered_at) {
+            autoStatus = "ISSUED";
+          } else if (autoStatus !== "CLOSED" && autoStatus !== "ISSUED") {
+            autoStatus = "PAID";
+          }
+        }
+
         return {
           id: order.id,
           orderNumber: order.order_number,
           clientName: order.client?.full_name || "Невідомий клієнт",
           clientId: order.client_id,
-          deadline: order.deadline ? new Date(order.deadline) : undefined,
-          status: order.status.toUpperCase() as any,
+          deadline: order.deadline
+            ? new Date(order.deadline)
+            : new Date(order.created_at ?? Date.now()),
+          status: autoStatus as any,
           managerName: "Менеджер", // TODO: Get from order.manager
           description: order.description,
+          file_url: order.file_url,
           // Тип документа - можна витягти з description або додати окреме поле
           documentType: order.description?.split(" ")[0] || "Документ",
           // Ціна для клієнта
@@ -120,7 +158,10 @@ export function BoardPage() {
           translatorRate: acceptedRequest?.offered_rate,
           translatorFee: acceptedRequest?.offered_rate, // Можна розрахувати на основі обсягу
           translatorDeadline: acceptedRequest?.response_at ? new Date(acceptedRequest.response_at) : undefined,
-        };
+          // Зберігаємо оригінальні дані для автоматичної логіки
+          transactions: order.transactions,
+          delivery: (order as any).delivery || (order as any).deliveries?.[0],
+        } as Order;
       });
 
       // Map API translators to display format
@@ -132,6 +173,17 @@ export function BoardPage() {
 
       setOrders(mappedOrders);
       setTranslators(mappedTranslators);
+
+      // Автоматична зміна статусу для замовлень з транзакціями або доставкою
+      const statusUpdates: Promise<void>[] = [];
+      for (const order of mappedOrders) {
+        const apiOrder = ordersData.find(o => o.id === order.id);
+        if (apiOrder) {
+          statusUpdates.push(checkAndUpdateOrderStatus(order, apiOrder));
+        }
+      }
+      // Виконуємо всі оновлення паралельно
+      await Promise.allSettled(statusUpdates);
     } catch (error: any) {
       toast.error(`Помилка завантаження даних: ${error?.message || "Невідома помилка"}`);
     } finally {
@@ -139,12 +191,47 @@ export function BoardPage() {
     }
   };
 
-  // Create columns with translations and icons
+  // Функція для перевірки та автоматичного оновлення статусу замовлення
+  const checkAndUpdateOrderStatus = async (order: Order, apiOrder: any): Promise<void> => {
+    const hasIncomeTransaction = apiOrder.transactions?.some((t: any) => t.type === "income");
+    const delivery = apiOrder.delivery || apiOrder.deliveries?.[0];
+    const isInPostDelivered = delivery?.method === "inpost" && delivery?.delivered_at;
+    const currentStatus = order.status;
+
+    let newStatus: string | null = null;
+
+    // Логіка автоматичної зміни статусу
+    if (isInPostDelivered && currentStatus !== "ISSUED" && currentStatus !== "CLOSED") {
+      // InPost доставлено → ISSUED
+      newStatus = "closed";
+    } else if (hasIncomeTransaction && currentStatus !== "PAID" && currentStatus !== "oplacone" && currentStatus !== "ISSUED" && currentStatus !== "CLOSED") {
+      // Є оплата → PAID (якщо не видано)
+      newStatus = "oplacone";
+    }
+
+    if (newStatus) {
+      try {
+        await ordersApi.updateOrder(order.id, { status: newStatus as any });
+        // Оновлюємо локальний стан без перезавантаження всіх даних
+        setOrders((prevOrders) =>
+          prevOrders.map((o) =>
+            o.id === order.id
+              ? { ...o, status: newStatus === "closed" ? "ISSUED" : "PAID" as any }
+              : o
+          )
+        );
+      } catch (error: any) {
+        console.error(`Помилка автоматичного оновлення статусу для замовлення ${order.id}:`, error);
+      }
+    }
+  };
+
+  // Create columns with translations and icons - новий порядок: 1) NEW, 2) PAID, 3) IN_PROGRESS, 4) READY, 5) ISSUED
   const columns = [
     { id: "NEW" as ColumnId, title: t("kanban.columns.new"), icon: Inbox },
+    { id: "PAID" as ColumnId, title: t("kanban.columns.paid"), icon: Wallet },
     { id: "IN_PROGRESS" as ColumnId, title: t("kanban.columns.inProgress"), icon: RefreshCw },
     { id: "READY" as ColumnId, title: t("kanban.columns.ready"), icon: CheckCircle2 },
-    { id: "PAID" as ColumnId, title: t("kanban.columns.paid"), icon: Wallet },
     { id: "ISSUED" as ColumnId, title: t("kanban.columns.issued"), icon: Package },
   ] as const;
 
@@ -158,7 +245,11 @@ export function BoardPage() {
 
   const getOrdersByStatus = useCallback(
     (columnId: ColumnId) => {
-      return orders.filter((order) => mapStatusToColumn(order.status) === columnId);
+      return orders.filter((order) => {
+        // Перевіряємо автоматичну логіку з урахуванням транзакцій та доставки
+        const actualStatus = mapStatusToColumn(order.status, order);
+        return actualStatus === columnId;
+      });
     },
     [orders]
   );
@@ -186,7 +277,7 @@ export function BoardPage() {
     if (!order) return;
 
     // Don't update if status hasn't changed
-    const currentColumn = mapStatusToColumn(order.status);
+    const currentColumn = mapStatusToColumn(order.status, order);
     if (currentColumn === newStatus) return;
 
     // Optimistic UI: Immediately update local state
@@ -227,8 +318,7 @@ export function BoardPage() {
   };
 
   const handleCardClick = (order: Order) => {
-    setSelectedOrder(order);
-    setIsSheetOpen(true);
+    // Order details now open via OrderNotesSheet in KanbanCard
   };
 
   const handleSaveOrder = (updatedOrder: Order) => {
@@ -310,7 +400,6 @@ export function BoardPage() {
         {/* Main Kanban Area */}
         <div className={cn(
           "flex-1 transition-all duration-300",
-          isSheetOpen && "mr-96"
         )}>
           <DndContext
             sensors={sensors}
@@ -359,15 +448,6 @@ export function BoardPage() {
           </DndContext>
         </div>
 
-        {/* Right Sidebar - Order Details */}
-        {isSheetOpen && (
-          <OrderDetailSheet
-            order={selectedOrder}
-            open={isSheetOpen}
-            onOpenChange={setIsSheetOpen}
-            onSave={handleSaveOrder}
-          />
-        )}
       </div>
 
       {/* Send Translation Request Dialog */}

@@ -6,7 +6,8 @@ import { Label } from '../../../../components/ui/label';
 import { Alert, AlertDescription } from '../../../../components/ui/alert';
 import { AlertCircle, User, Mail, Phone, MessageSquare, Instagram } from 'lucide-react';
 import { toast } from 'sonner';
-import { clientsApi } from '../../../../lib/api';
+import { clientsApi } from '../../../crm/api/clients';
+import { inboxApi } from '../../api/inbox';
 import type { Conversation } from '../ContextPanel';
 
 interface CreateClientDialogProps {
@@ -57,8 +58,11 @@ export function CreateClientDialog({
   }, [conversation, open]);
 
   // Перевірка на існуючого клієнта
+  // Для Telegram: не перевіряємо по телефону, бо різні Telegram сесії мають різні external_id
+  // Перевірка буде на бекенді по external_id
   useEffect(() => {
-    if (phone && open) {
+    // Тільки перевіряємо по телефону якщо це НЕ Telegram з external_id
+    if (phone && open && !(conversation?.platform === 'telegram' && conversation?.external_id)) {
       const checkClient = async () => {
         try {
           const result = await clientsApi.searchByPhone(phone);
@@ -80,7 +84,7 @@ export function CreateClientDialog({
     } else {
       setExistingClient(null);
     }
-  }, [phone, open]);
+  }, [phone, open, conversation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,13 +101,21 @@ export function CreateClientDialog({
 
     setIsLoading(true);
     try {
+      // Визначаємо джерело з платформи conversation
+      const source = conversation?.platform || 'manual';
+      
       const client = await clientsApi.createClient({
-        full_name: name.trim(),
+        name: name.trim(),
         email: email.trim() || undefined,
         phone: phone.trim(),
+        source: source, // Telegram, WhatsApp, Email, etc.
+        // Pass conversation info for duplicate checking by external_id
+        conversation_id: conversation?.id,
+        external_id: conversation?.external_id,
+        platform: conversation?.platform,
       });
 
-      toast.success('Клієнт створено успішно');
+      toast.success(`Клієнт створено успішно (джерело: ${getSourceLabel()})`);
       onSuccess?.(client.id.toString());
       handleClose();
     } catch (error: any) {
@@ -125,10 +137,18 @@ export function CreateClientDialog({
     onOpenChange(false);
   };
 
-  const handleOpenExisting = () => {
-    if (existingClient) {
-      onSuccess?.(existingClient.id);
-      handleClose();
+  const handleOpenExisting = async () => {
+    if (existingClient && conversation) {
+      try {
+        // Прив'язуємо існуючого клієнта до conversation
+        await inboxApi.linkClientToConversation(conversation.id, existingClient.id);
+        toast.success('Клієнт прив\'язано до розмови');
+        onSuccess?.(existingClient.id);
+        handleClose();
+      } catch (error: any) {
+        console.error('Error linking client:', error);
+        toast.error(error?.message || 'Помилка прив\'язки клієнта');
+      }
     }
   };
 

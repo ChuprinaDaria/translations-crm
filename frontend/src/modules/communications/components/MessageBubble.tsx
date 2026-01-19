@@ -1,5 +1,5 @@
-import React from 'react';
-import { Check, CheckCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { AttachmentPreview } from './AttachmentPreview';
 import { cn } from '../../../components/ui/utils';
@@ -10,7 +10,7 @@ export interface Message {
   id: string;
   conversation_id: string;
   direction: 'inbound' | 'outbound';
-  type: 'text' | 'html' | 'file';
+  type: 'text' | 'html' | 'file' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'voice';
   content: string;
   status: 'queued' | 'sent' | 'read' | 'failed';
   attachments?: Array<{
@@ -27,9 +27,26 @@ export interface Message {
   created_at: string;
 }
 
+interface DetectedData {
+  type: 'email' | 'phone' | 'amount' | 'address' | 'paczkomat';
+  value: string;
+  original?: string;
+  isPaczkomat?: boolean;
+  paczkomatCode?: string;
+}
+
 interface MessageBubbleProps {
   message: Message;
   platform: 'telegram' | 'whatsapp' | 'email' | 'facebook' | 'instagram';
+  clientId?: string;
+  orderId?: string;
+  clientEmail?: string; // Email клієнта, якщо вже є
+  clientPhone?: string; // Телефон клієнта, якщо вже є
+  onAddEmail?: (email: string) => void;
+  onAddPhone?: (phone: string) => void;
+  onAddFile?: (fileUrl: string, fileName: string) => void;
+  onAddFileAutoCreateOrder?: (fileUrl: string, fileName: string) => void; // Create order and add file
+  onAddAddress?: (address: string, isPaczkomat: boolean, paczkomatCode?: string) => void; // Add address or paczkomat to order
 }
 
 /**
@@ -48,10 +65,169 @@ interface MessageBubbleProps {
  *               │ 10:30 ✓✓                │
  *               └─────────────────────────┘
  */
-export function MessageBubble({ message, platform }: MessageBubbleProps) {
+// Check if content is a placeholder for media (e.g., "[Image: photo.jpg]")
+function isMediaPlaceholder(content: string, attachments?: Message['attachments']): boolean {
+  if (!content || !attachments || attachments.length === 0) return false;
+  
+  // Check for common media placeholder patterns
+  const placeholderPatterns = [
+    /^\[Image:\s*.+\]$/i,
+    /^\[Video:\s*.+\]$/i,
+    /^\[Audio:\s*.+\]$/i,
+    /^\[Document:\s*.+\]$/i,
+    /^\[File:\s*.+\]$/i,
+    /^\[Sticker\]$/i,
+    /^\[Voice\]$/i,
+    /^\[Фото\]$/i,
+    /^\[Відео\]$/i,
+    /^\[Документ\]$/i,
+    /^\[Голосове повідомлення\]$/i,
+  ];
+  
+  return placeholderPatterns.some(pattern => pattern.test(content.trim()));
+}
+
+export function MessageBubble({ 
+  message, 
+  platform,
+  clientId,
+  orderId,
+  clientEmail,
+  clientPhone,
+  onAddEmail,
+  onAddPhone,
+  onAddFile,
+  onAddFileAutoCreateOrder,
+  onAddAddress,
+}: MessageBubbleProps) {
   const isOutbound = message.direction === 'outbound';
   const isRead = message.status === 'read';
   const isFailed = message.status === 'failed';
+  const [detectedData, setDetectedData] = useState<DetectedData[]>([]);
+  const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
+
+  // Функція для нормалізації телефону для порівняння
+  const normalizePhone = (phone: string): string => {
+    return phone.replace(/[\s-()]/g, '').toLowerCase();
+  };
+
+  // Auto-detect email, phone, and amounts in inbound messages
+  useEffect(() => {
+    if (!isOutbound && message.content) {
+      const detected: DetectedData[] = [];
+
+      // Email detection
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const emails = message.content.match(emailRegex);
+      if (emails) {
+        emails.forEach(email => {
+          detected.push({ type: 'email', value: email });
+        });
+      }
+
+      // Phone detection (Polish format: +48 or 9 digits)
+      const phoneRegex = /(\+48\s?)?(\d{3}[\s-]?\d{3}[\s-]?\d{3}|\d{9})/g;
+      const phones = message.content.match(phoneRegex);
+      if (phones) {
+        phones.forEach(phone => {
+          const normalized = phone.replace(/[\s-]/g, '');
+          const formatted = normalized.startsWith('+48') ? normalized : `+48${normalized}`;
+          detected.push({ 
+            type: 'phone', 
+            value: formatted,
+            original: phone 
+          });
+        });
+      }
+
+      // Amount detection (Polish zł format)
+      const amountRegex = /(\d+)\s*(zł|zl|złotych|pln)/gi;
+      const amounts = message.content.match(amountRegex);
+      if (amounts) {
+        amounts.forEach(amount => {
+          const value = amount.replace(/[^\d]/g, '');
+          if (parseInt(value) > 0 && parseInt(value) < 100000) {
+            detected.push({ type: 'amount', value, original: amount });
+          }
+        });
+      }
+
+      // InPost Paczkomat detection (format: WRO01M, WNC01M, etc. - код з 3-6 букв/цифр, потім поштовий індекс, місто, вулиця)
+      // Pattern: код (3-6 символів), поштовий індекс (XX-XXX), місто (жирний або звичайний), вулиця з номером
+      // Можливі формати:
+      // - WRO01M, 51-180 **Wrocław**, Pełczyńska 63
+      // - WRO01M, 51-180 Wrocław, Pełczyńska 63
+      const paczkomatPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let paczkomatMatch;
+      while ((paczkomatMatch = paczkomatPattern.exec(message.content)) !== null) {
+        const code = paczkomatMatch[1].trim();
+        const postalCode = paczkomatMatch[2].trim();
+        const city = paczkomatMatch[3].trim().replace(/\*\*/g, '');
+        const street = paczkomatMatch[4].trim();
+        const fullAddress = `${code}, ${postalCode} ${city}, ${street}`;
+        detected.push({
+          type: 'paczkomat',
+          value: fullAddress,
+          original: paczkomatMatch[0],
+          isPaczkomat: true,
+          paczkomatCode: code,
+        });
+      }
+
+      // Regular address detection (поштовий індекс, місто, вулиця)
+      // Pattern: поштовий індекс (XX-XXX), місто, вулиця з номером (без коду пачкомату)
+      // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
+      const addressPattern = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let addressMatch;
+      while ((addressMatch = addressPattern.exec(message.content)) !== null) {
+        const postalCode = addressMatch[1].trim();
+        const city = addressMatch[2].trim().replace(/\*\*/g, '');
+        const street = addressMatch[3].trim();
+        
+        // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
+        const beforeAddress = message.content.substring(Math.max(0, addressMatch.index - 30), addressMatch.index);
+        const hasPaczkomatCode = /[A-Z]{3,6}\d{0,3}[A-Z]{0,3},/.test(beforeAddress);
+        
+        // Перевіряємо, чи це не вже визначений пачкомат
+        const isAlreadyPaczkomat = detected.some(d => d.isPaczkomat && d.value.includes(postalCode) && d.value.includes(city));
+        
+        if (!hasPaczkomatCode && !isAlreadyPaczkomat) {
+          const fullAddress = `${postalCode} ${city}, ${street}`;
+          detected.push({
+            type: 'address',
+            value: fullAddress,
+            original: addressMatch[0],
+            isPaczkomat: false,
+          });
+        }
+      }
+
+      setDetectedData(detected);
+    }
+  }, [message.content, isOutbound]);
+
+  const handleAdd = (item: DetectedData) => {
+    console.log('handleAdd called:', item, { onAddEmail: !!onAddEmail, onAddPhone: !!onAddPhone });
+    
+    // Перевіряємо, чи є callback перед викликом
+    if (item.type === 'email') {
+      if (onAddEmail) {
+        console.log('Calling onAddEmail with:', item.value);
+        onAddEmail(item.value);
+        setAddedItems(new Set(addedItems).add(item.value));
+      } else {
+        console.warn('onAddEmail callback is not provided');
+      }
+    } else if (item.type === 'phone') {
+      if (onAddPhone) {
+        console.log('Calling onAddPhone with:', item.value);
+        onAddPhone(item.value);
+        setAddedItems(new Set(addedItems).add(item.value));
+      } else {
+        console.warn('onAddPhone callback is not provided');
+      }
+    }
+  };
 
   const formatTime = (dateStr: string) => {
     try {
@@ -89,23 +265,160 @@ export function MessageBubble({ message, platform }: MessageBubbleProps) {
 
         {/* Message content */}
         <div className={cn('space-y-2', isOutbound && 'text-white', !isOutbound && 'pl-8')}>
-          {/* Text content */}
-          {message.content && (
+          {/* Text content - hide placeholder text for media messages */}
+          {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
             <p className="text-sm whitespace-pre-wrap break-words">
               {message.content}
             </p>
           )}
 
+          {/* Detected email/phone/address buttons (only for inbound) */}
+          {!isOutbound && detectedData.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {detectedData.map((item, index) => {
+                if (item.type === 'amount') return null; // Amounts handled separately
+                
+                // Перевіряємо, чи email/phone вже є в клієнта
+                const alreadyInClient = 
+                  (item.type === 'email' && clientEmail && clientEmail.toLowerCase() === item.value.toLowerCase()) ||
+                  (item.type === 'phone' && clientPhone && normalizePhone(clientPhone) === normalizePhone(item.value));
+                
+                // Не показуємо, якщо вже є в клієнта (тільки для email/phone)
+                if (alreadyInClient && (item.type === 'email' || item.type === 'phone')) return null;
+                
+                const isAdded = addedItems.has(item.value);
+                // Перевіряємо наявність callback
+                const hasCallback = 
+                  (item.type === 'email' && onAddEmail) || 
+                  (item.type === 'phone' && onAddPhone) ||
+                  ((item.type === 'address' || item.type === 'paczkomat') && onAddAddress && orderId);
+                
+                // Для адрес/пачкоматів потрібен orderId
+                if ((item.type === 'address' || item.type === 'paczkomat') && !orderId) return null;
+                
+                return (
+                  <button
+                    key={`${item.type}-${index}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!isAdded && hasCallback) {
+                        if (item.type === 'email' || item.type === 'phone') {
+                        handleAdd(item);
+                        } else if ((item.type === 'address' || item.type === 'paczkomat') && onAddAddress) {
+                          onAddAddress(item.value, item.isPaczkomat || false, item.paczkomatCode);
+                          setAddedItems(new Set(addedItems).add(item.value));
+                        }
+                      }
+                    }}
+                    disabled={isAdded || !hasCallback}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium',
+                      'transition-all duration-200',
+                      isAdded 
+                        ? 'bg-green-100 text-green-700 cursor-default'
+                        : hasCallback
+                        ? 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm hover:shadow cursor-pointer active:scale-95'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
+                    )}
+                    style={{ pointerEvents: isAdded || !hasCallback ? 'none' : 'auto' }}
+                  >
+                    {item.type === 'email' ? (
+                      <Mail className="w-4 h-4" />
+                    ) : item.type === 'phone' ? (
+                      <Phone className="w-4 h-4" />
+                    ) : item.isPaczkomat ? (
+                      <Package className="w-4 h-4" />
+                    ) : (
+                      <MapPin className="w-4 h-4" />
+                    )}
+                    <span className="flex-1 text-left truncate">
+                      {item.type === 'email' ? item.value : item.original || item.value}
+                    </span>
+                    {isAdded ? (
+                      <span className="text-green-600">✓ Додано</span>
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="space-y-2">
-              {message.attachments.map((attachment, index) => (
-                <AttachmentPreview
-                  key={attachment.id || index}
-                  attachment={attachment}
-                  isInbound={!isOutbound}
-                />
-              ))}
+              {message.attachments.map((attachment, index) => {
+                const fileKey = attachment.url || attachment.id || `file-${index}`;
+                const isFileAdded = addedItems.has(fileKey);
+                
+                return (
+                  <div key={attachment.id || index}>
+                    <AttachmentPreview
+                      attachment={attachment}
+                      isInbound={!isOutbound}
+                    />
+                    {/* Add to order button for inbound files */}
+                    {!isOutbound && attachment.url && (
+                      <>
+                        {/* If order exists - add to existing order */}
+                        {orderId && onAddFile && (
+                          <button
+                            onClick={() => {
+                              onAddFile(attachment.url!, attachment.filename || 'file');
+                              setAddedItems(new Set(addedItems).add(fileKey));
+                            }}
+                            disabled={isFileAdded}
+                            className={cn(
+                              'w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium',
+                              'transition-all duration-200',
+                              isFileAdded
+                                ? 'bg-green-100 text-green-700 cursor-default'
+                                : 'bg-purple-500 text-white hover:bg-purple-600'
+                            )}
+                          >
+                            {isFileAdded ? (
+                              <span>✓ Додано до замовлення</span>
+                            ) : (
+                              <>
+                                <Plus className="w-4 h-4" />
+                                <span>Додати до замовлення</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {/* If no order but has client - create order and add file */}
+                        {!orderId && clientId && onAddFileAutoCreateOrder && (
+                          <button
+                            onClick={() => {
+                              onAddFileAutoCreateOrder(attachment.url!, attachment.filename || 'file');
+                              setAddedItems(new Set(addedItems).add(fileKey));
+                            }}
+                            disabled={isFileAdded}
+                            className={cn(
+                              'w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium',
+                              'transition-all duration-200',
+                              isFileAdded
+                                ? 'bg-green-100 text-green-700 cursor-default'
+                                : 'bg-orange-500 text-white hover:bg-orange-600'
+                            )}
+                          >
+                            {isFileAdded ? (
+                              <span>✓ Замовлення створено, файл додано</span>
+                            ) : (
+                              <>
+                                <Plus className="w-4 h-4" />
+                                <span>Створити замовлення + додати файл</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 

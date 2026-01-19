@@ -552,6 +552,8 @@ class TelegramSendRequest(BaseModel):
 class TelegramAccountBase(BaseModel):
     name: str
     phone: Optional[str] = None
+    api_id: Optional[int] = None  # API ID для цього акаунта (якщо не вказано - використовується глобальне)
+    api_hash: Optional[str] = None  # API Hash для цього акаунта (якщо не вказано - використовується глобальне)
 
 
 class TelegramAccountCreate(TelegramAccountBase):

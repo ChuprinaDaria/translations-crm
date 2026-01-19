@@ -31,6 +31,12 @@ class MessageSend(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class MessageSendRequest(BaseModel):
+    """Схема для API запиту на відправку повідомлення."""
+    content: str
+    attachments: Optional[List[Dict[str, Any]]] = None
+
+
 class EmailMessageCreate(MessageCreate):
     subject: str
     to: List[EmailStr]
@@ -149,7 +155,6 @@ class ClientFromConversation(BaseModel):
 
 class QuickActionRequest(BaseModel):
     """Схема для швидких дій."""
-    conversation_id: UUID
     action: str  # "create_client", "download_files", "create_order", "mark_important"
     data: Optional[Dict[str, Any]] = None
 

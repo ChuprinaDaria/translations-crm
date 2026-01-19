@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Package,
   User,
@@ -8,10 +8,8 @@ import {
   FileText,
   CreditCard,
   Truck,
-  Clock,
   Calendar,
   CheckCircle2,
-  Circle,
   Users,
   StickyNote,
   Plus,
@@ -19,18 +17,15 @@ import {
   Download,
   Eye,
   Edit2,
-  AlertCircle,
-  ArrowRight,
   DollarSign,
-  Percent,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { ScrollArea } from '../../../components/ui/scroll-area';
 import { Textarea } from '../../../components/ui/textarea';
 import { cn } from '../../../components/ui/utils';
-import type { Order, TimelineStep, TranslationRequest } from '../api/clients';
-import { ProgressTimeline, type TimelineStep as ProgressTimelineStep } from './ProgressTimeline';
+import type { Order } from '../api/clients';
+import { ProgressTimeline } from './ProgressTimeline';
 
 // Timeline step definitions
 const TIMELINE_STEPS = [
@@ -57,6 +52,7 @@ interface Document {
   size: number;
   created_at: string;
   uploaded_by?: string;
+  url?: string;
 }
 
 interface PaymentInfo {
@@ -102,46 +98,108 @@ export function OrderTabContent({
   isLoading = false,
 }: OrderTabContentProps) {
   const [newNote, setNewNote] = useState('');
+  const incomeTransactions = order.transactions?.filter((t) => t.type === 'income') ?? [];
+  const latestIncome = [...incomeTransactions].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )[0];
+  const acceptedRequest = order.translation_requests?.find((req) => req.status === 'accepted');
+  const translationRequests = [...(order.translation_requests ?? [])].sort(
+    (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+  );
+  const completedTranslation = order.timeline_steps?.some(
+    (step) => step.step_type === 'translation_ready' && step.completed
+  );
 
-  // Mock data - in real app would be loaded from API
-  const [documents] = useState<Document[]>([
-    { id: '1', name: 'TRC_original_dnk.pdf', type: 'original', size: 1.8 * 1024 * 1024, created_at: '2026-01-02', uploaded_by: 'Клієнт' },
-    { id: '2', name: 'TRC_translated_dnk.pdf', type: 'translated', size: 2.3 * 1024 * 1024, created_at: '2026-01-04', uploaded_by: 'Олена Kowalska' },
-  ]);
+  // Parse files from description and file_url
+  const parseFilesFromDescription = (description: string | null | undefined): Array<{ name: string; url: string }> => {
+    if (!description) return [];
+    
+    const files: Array<{ name: string; url: string }> = [];
+    // Pattern: "Файл: filename (url)" or "Файл: filename (url)\n\nФайл: filename2 (url2)"
+    const filePattern = /Файл:\s*([^\n(]+)\s*\(([^)]+)\)/g;
+    let match;
+    
+    while ((match = filePattern.exec(description)) !== null) {
+      files.push({
+        name: match[1].trim(),
+        url: match[2].trim(),
+      });
+    }
+    
+    return files;
+  };
 
-  const [payment] = useState<PaymentInfo>({
-    method: 'Przelew24',
-    amount: 200,
-    status: 'completed',
-    paid_at: '2026-01-02T10:15:00',
-    transaction_id: 'P24_XYZ123456',
+  const filesFromDescription = parseFilesFromDescription(order.description);
+  const documents: Document[] = [];
+  
+  // Add file from file_url if exists
+  if (order.file_url) {
+    const fileName = order.file_url.split('/').pop() || 'Файл';
+    // Check if this file is not already in description
+    const isInDescription = filesFromDescription.some(f => f.url === order.file_url);
+    if (!isInDescription) {
+      documents.push({
+        id: `${order.id}-file_url`,
+        name: fileName,
+          type: 'original',
+          size: 0,
+          created_at: order.created_at,
+          uploaded_by: order.client?.full_name,
+        url: order.file_url,
+      });
+    }
+  }
+  
+  // Add files from description
+  filesFromDescription.forEach((file, index) => {
+    documents.push({
+      id: `${order.id}-desc-${index}`,
+      name: file.name,
+      type: 'original',
+      size: 0,
+      created_at: order.created_at,
+      uploaded_by: order.client?.full_name,
+      url: file.url,
+    });
   });
 
-  const [delivery] = useState<DeliveryInfo>({
-    method: 'inpost',
-    tracking_number: 'XYZ123456789',
-    status: 'delivered',
-    created_at: '2026-01-05T10:00:00',
-    delivered_at: '2026-01-16T14:30:00',
-  });
+  const payment: PaymentInfo | null = latestIncome
+    ? {
+        method: latestIncome.description || 'Оплата',
+        amount: latestIncome.amount,
+        status: 'completed',
+        paid_at: latestIncome.created_at,
+        transaction_id: String(latestIncome.id),
+      }
+    : null;
 
-  const [translator] = useState<TranslatorDetails>({
-    id: 1,
-    name: 'Олена Kowalska',
-    email: 'olena@example.com',
-    phone: '+48 987 654 321',
-    rate: 60,
-    deadline: '2026-01-04T18:00:00',
-    status: 'completed',
-    accepted_at: '2026-01-02T11:30:00',
-    completed_at: '2026-01-04T16:00:00',
-  });
+  const delivery = (order as { delivery?: DeliveryInfo }).delivery ?? null;
 
-  const [notes] = useState<InternalNote[]>([
-    { id: '1', author: 'Оля', content: 'Клієнт просив терміново', created_at: '2026-01-02T09:30:00' },
-    { id: '2', author: 'Марта', content: 'Олена взяла в роботу', created_at: '2026-01-02T11:45:00' },
-    { id: '3', author: 'Оля', content: 'Переклад готовий, якість ок', created_at: '2026-01-04T16:15:00' },
-  ]);
+  const translator: TranslatorDetails | null = acceptedRequest
+    ? {
+        id: acceptedRequest.translator_id,
+        name: acceptedRequest.translator?.name || `ID ${acceptedRequest.translator_id}`,
+        email: '',
+        phone: '',
+        rate: acceptedRequest.offered_rate,
+        deadline: order.deadline,
+        status: completedTranslation ? 'completed' : 'accepted',
+        accepted_at: acceptedRequest.response_at,
+      }
+    : null;
+
+  const notes: InternalNote[] = [];
+
+  // Helper to normalize file URL
+  const normalizeFileUrl = (url: string | undefined): string | undefined => {
+    if (!url) return undefined;
+    // If URL starts with /api/, prepend API_BASE_URL
+    if (url.startsWith('/api/')) {
+      // In browser, relative URLs work, but for download we might need full URL
+      return url;
+    }
+    return url;
+  };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('uk-UA', {
@@ -198,42 +256,54 @@ export function OrderTabContent({
           break;
         case 'payment_link_sent':
           if (step?.completed) {
-            const meta = step.metadata ? JSON.parse(step.metadata) : null;
-            details = `${payment.method}: ${formatAmount(payment.amount)}`;
+            details = payment
+              ? `${payment.method}: ${formatAmount(payment.amount)}`
+              : 'Лінк оплати надіслано';
           }
           break;
         case 'payment_received':
           if (step?.completed) {
-            details = `${payment.method}: ${formatAmount(payment.amount)} (успішно)`;
+            details = payment
+              ? `${payment.method}: ${formatAmount(payment.amount)} (успішно)`
+              : 'Оплату отримано';
           }
           break;
         case 'translator_assigned':
           if (step?.completed) {
-            details = `${translator.name} (${formatAmount(translator.rate)})`;
-            if (translator.accepted_at) {
-              subDetails = `Прийнято: ${formatDateTime(translator.accepted_at)}`;
+            if (translator) {
+              details = `${translator.name} (${formatAmount(translator.rate)})`;
+              if (translator.accepted_at) {
+                subDetails = `Прийнято: ${formatDateTime(translator.accepted_at)}`;
+              }
+            } else {
+              details = 'Перекладача призначено';
             }
           }
           break;
         case 'translation_ready':
           if (step?.completed) {
-            details = translator.name;
-            if (translator.completed_at && translator.deadline) {
-              const completed = new Date(translator.completed_at);
+            details = translator?.name || 'Переклад готовий';
+            if (step.completed_at && translator?.deadline) {
+              const completed = new Date(step.completed_at);
               const deadline = new Date(translator.deadline);
-              subDetails = completed <= deadline ? 'Завершено вчасно ✅' : 'Завершено із запізненням';
+              subDetails =
+                completed <= deadline ? 'Завершено вчасно ✅' : 'Завершено із запізненням';
             }
           }
           break;
         case 'issued_sent':
           if (step?.completed) {
-            if (delivery.method === 'inpost') {
-              details = `InPost: ${delivery.tracking_number}`;
+            if (delivery) {
+              if (delivery.method === 'inpost') {
+                details = `InPost: ${delivery.tracking_number}`;
+              } else {
+                details = `Samovyviz: ${delivery.address}`;
+              }
+              if (delivery.delivered_at) {
+                subDetails = `Доставлено: ${formatDate(delivery.delivered_at)} ✅`;
+              }
             } else {
-              details = `Samovyviz: ${delivery.address}`;
-            }
-            if (delivery.delivered_at) {
-              subDetails = `Доставлено: ${formatDate(delivery.delivered_at)} ✅`;
+              details = 'Видано/відправлено';
             }
           }
           break;
@@ -251,8 +321,8 @@ export function OrderTabContent({
 
   const timeline = getTimelineData();
   const completedSteps = timeline.filter((s) => s.completed).length;
-  const totalPrice = order.transactions?.reduce((sum, t) => t.type === 'income' ? sum + t.amount : sum, 0) || payment.amount;
-  const translatorFee = translator.rate;
+  const totalPrice = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const translatorFee = translator?.rate || 0;
   const profit = totalPrice - translatorFee;
   const profitPercent = totalPrice > 0 ? Math.round((profit / totalPrice) * 100) : 0;
 
@@ -368,7 +438,7 @@ export function OrderTabContent({
                 <div className="flex items-start gap-3">
                   <FileText className="w-5 h-5 text-gray-400 mt-0.5" />
                   <span className="text-gray-700 leading-relaxed">
-                  {order.description || 'TRC (Присяжний переклад)'}
+                  {order.description || 'Не вказано'}
                 </span>
               </div>
               {order.deadline && (
@@ -419,67 +489,83 @@ export function OrderTabContent({
             Перекладач
           </h3>
           
-          <div className="flex items-start gap-5">
-            <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-              <User className="w-7 h-7 text-purple-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-lg text-gray-900">{translator.name}</div>
-              
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-gray-700">{translator.email}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-gray-700">{translator.phone}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <DollarSign className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-gray-700">Гонорар: <span className="font-semibold text-purple-600">{formatAmount(translator.rate)}</span></span>
-                </div>
-                {translator.deadline && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-                    <span className="text-gray-700">Дедлайн: <span className="font-medium">{formatDateTime(translator.deadline)}</span></span>
-                  </div>
-                )}
+          {!translator ? (
+            <div className="text-sm text-gray-500">Немає призначеного перекладача</div>
+          ) : (
+            <div className="flex items-start gap-5">
+              <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                <User className="w-7 h-7 text-purple-600" />
               </div>
-              
-              {/* Status */}
-              <div className="mt-4">
-                <Badge
-                  className={cn(
-                    'px-3 py-1 text-sm',
-                    translator.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
-                    translator.status === 'accepted' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                    'bg-yellow-100 text-yellow-700 border border-yellow-200'
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-lg text-gray-900">{translator.name}</div>
+                
+                <div className="mt-3 space-y-2">
+                  {translator.email && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                      <span className="text-gray-700">{translator.email}</span>
+                    </div>
                   )}
-                >
-                  {translator.status === 'completed' ? '✓ Завершено вчасно' :
-                   translator.status === 'accepted' ? '→ Прийнято' : '⏳ Очікує'}
-                </Badge>
-              </div>
-
-              {/* Request history */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Історія запитів:</div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <span className="text-gray-400">•</span>
-                    <span>[02.01 11:00] Відправлено запит (Email)</span>
+                  {translator.phone && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                      <span className="text-gray-700">{translator.phone}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-sm">
+                    <DollarSign className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span className="text-gray-700">Гонорар: <span className="font-semibold text-purple-600">{formatAmount(translator.rate)}</span></span>
                   </div>
-                  {translator.accepted_at && (
-                    <div className="flex items-center gap-2 text-emerald-600">
-                      <span className="text-emerald-400">•</span>
-                      <span>[{formatDateTime(translator.accepted_at)}] ✅ Прийнято</span>
+                  {translator.deadline && (
+                    <div className="flex items-center gap-3 text-sm">
+                      <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                      <span className="text-gray-700">Дедлайн: <span className="font-medium">{formatDateTime(translator.deadline)}</span></span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Status */}
+                <div className="mt-4">
+                  <Badge
+                    className={cn(
+                      'px-3 py-1 text-sm',
+                      translator.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
+                      translator.status === 'accepted' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                      'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                    )}
+                  >
+                    {translator.status === 'completed' ? '✓ Завершено вчасно' :
+                     translator.status === 'accepted' ? '→ Прийнято' : '⏳ Очікує'}
+                  </Badge>
+                </div>
+
+                {/* Request history */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Історія запитів:</div>
+                  {translationRequests.length === 0 ? (
+                    <div className="text-sm text-gray-500">Немає запитів</div>
+                  ) : (
+                    <div className="space-y-2 text-sm">
+                      {translationRequests.map((req) => (
+                        <div
+                          key={req.id}
+                          className={cn(
+                            "flex items-center gap-2",
+                            req.status === 'accepted' ? 'text-emerald-600' : 'text-gray-600'
+                          )}
+                        >
+                          <span className={req.status === 'accepted' ? 'text-emerald-400' : 'text-gray-400'}>•</span>
+                          <span>
+                            [{formatDateTime(req.sent_at)}] {req.status === 'accepted' ? '✅ Прийнято' : 'Відправлено запит'} ({req.sent_via})
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Payment Section */}
@@ -489,46 +575,52 @@ export function OrderTabContent({
             Оплата
           </h3>
           
-          <div className="grid grid-cols-2 gap-5">
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Метод</div>
-              <div className="font-semibold text-gray-900">{payment.method}</div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Сума</div>
-              <div className="font-bold text-lg text-emerald-600">{formatAmount(payment.amount)}</div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</div>
-              <Badge className={cn(
-                'px-3 py-1',
-                payment.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
-                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                'bg-red-100 text-red-700 border border-red-200'
-              )}>
-                {payment.status === 'completed' ? '✅ Оплачено' :
-                 payment.status === 'pending' ? '⏳ Очікує' : '✗ Помилка'}
-              </Badge>
-            </div>
-            {payment.paid_at && (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Дата оплати</div>
-                <div className="font-medium text-gray-900">{formatDateTime(payment.paid_at)}</div>
+          {!payment ? (
+            <div className="text-sm text-gray-500">Немає даних про оплату</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Метод</div>
+                  <div className="font-semibold text-gray-900">{payment.method}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Сума</div>
+                  <div className="font-bold text-lg text-emerald-600">{formatAmount(payment.amount)}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</div>
+                  <Badge className={cn(
+                    'px-3 py-1',
+                    payment.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
+                    payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                    'bg-red-100 text-red-700 border border-red-200'
+                  )}>
+                    {payment.status === 'completed' ? '✅ Оплачено' :
+                     payment.status === 'pending' ? '⏳ Очікує' : '✗ Помилка'}
+                  </Badge>
+                </div>
+                {payment.paid_at && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Дата оплати</div>
+                    <div className="font-medium text-gray-900">{formatDateTime(payment.paid_at)}</div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          
-          {payment.transaction_id && (
-            <div className="mt-5 pt-4 border-t border-gray-200">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Transaction ID</div>
-              <div className="font-mono text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{payment.transaction_id}</div>
-            </div>
+              
+              {payment.transaction_id && (
+                <div className="mt-5 pt-4 border-t border-gray-200">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Transaction ID</div>
+                  <div className="font-mono text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{payment.transaction_id}</div>
+                </div>
+              )}
+              
+              <Button variant="outline" size="sm" className="mt-5">
+                <Eye className="w-4 h-4 mr-2" />
+                Переглянути чек
+              </Button>
+            </>
           )}
-          
-          <Button variant="outline" size="sm" className="mt-5">
-            <Eye className="w-4 h-4 mr-2" />
-            Переглянути чек
-          </Button>
         </div>
 
         {/* Delivery Section */}
@@ -538,51 +630,57 @@ export function OrderTabContent({
             Доставка
           </h3>
           
-          <div className="grid grid-cols-2 gap-5">
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Спосіб</div>
-              <div className="font-semibold text-gray-900">
-                {delivery.method === 'inpost' ? 'InPost (Paczkomat)' : 'Самовивіз'}
+          {!delivery ? (
+            <div className="text-sm text-gray-500">Немає даних про доставку</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Спосіб</div>
+                  <div className="font-semibold text-gray-900">
+                    {delivery.method === 'inpost' ? 'InPost (Paczkomat)' : 'Самовивіз'}
+                  </div>
+                </div>
+                {delivery.tracking_number && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Tracking</div>
+                    <div className="font-mono text-sm text-gray-900">{delivery.tracking_number}</div>
+                  </div>
+                )}
+                {delivery.created_at && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Створено</div>
+                    <div className="font-medium text-gray-900">{formatDateTime(delivery.created_at)}</div>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</div>
+                  <Badge className={cn(
+                    'px-3 py-1',
+                    delivery.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                    delivery.status === 'in_transit' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                    'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                  )}>
+                    {delivery.status === 'delivered' 
+                      ? `✓ Доставлено ${delivery.delivered_at ? formatDate(delivery.delivered_at) : ''}` 
+                      : delivery.status === 'in_transit' ? '📦 В дорозі' : '⏳ Очікується'}
+                  </Badge>
+                </div>
               </div>
-            </div>
-            {delivery.tracking_number && (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Tracking</div>
-                <div className="font-mono text-sm text-gray-900">{delivery.tracking_number}</div>
-              </div>
-            )}
-            {delivery.created_at && (
-              <div className="space-y-1">
-                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Створено</div>
-                <div className="font-medium text-gray-900">{formatDateTime(delivery.created_at)}</div>
-              </div>
-            )}
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Статус</div>
-              <Badge className={cn(
-                'px-3 py-1',
-                delivery.status === 'delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
-                delivery.status === 'in_transit' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                'bg-yellow-100 text-yellow-700 border border-yellow-200'
-              )}>
-                {delivery.status === 'delivered' 
-                  ? `✓ Доставлено ${delivery.delivered_at ? formatDate(delivery.delivered_at) : ''}` 
-                  : delivery.status === 'in_transit' ? '📦 В дорозі' : '⏳ Очікується'}
-              </Badge>
-            </div>
-          </div>
-          
-          {delivery.tracking_number && (
-            <Button variant="outline" size="sm" className="mt-5" asChild>
-              <a
-                href={`https://inpost.pl/sledzenie-przesylek?number=${delivery.tracking_number}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Відстежити посилку
-              </a>
-            </Button>
+              
+              {delivery.tracking_number && (
+                <Button variant="outline" size="sm" className="mt-5" asChild>
+                  <a
+                    href={`https://inpost.pl/sledzenie-przesylek?number=${delivery.tracking_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Відстежити посилку
+                  </a>
+                </Button>
+              )}
+            </>
           )}
         </div>
 
@@ -597,48 +695,70 @@ export function OrderTabContent({
           </h3>
           
           <div className="space-y-3">
-            {documents.map((doc) => (
-              <div
-                key={doc.id}
-                className={cn(
-                  "flex items-center justify-between p-4 rounded-xl border",
-                  doc.type === 'original' 
-                    ? 'bg-gray-50 border-gray-200' 
-                    : 'bg-blue-50/50 border-blue-200'
-                )}
-              >
-                <div className="flex items-center gap-4 min-w-0 flex-1">
-                  <div className={cn(
-                    'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-                    doc.type === 'original' ? 'bg-gray-200' : 'bg-blue-200'
-                  )}>
-                  <FileText className={cn(
-                    'w-5 h-5',
-                      doc.type === 'original' ? 'text-gray-600' : 'text-blue-600'
-                  )} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{doc.name}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {formatDate(doc.created_at)} · {formatFileSize(doc.size)}
+            {documents.length === 0 ? (
+              <div className="text-sm text-gray-500">Немає документів</div>
+            ) : (
+              documents.map((doc) => (
+                <div
+                  key={doc.id}
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-xl border",
+                    doc.type === 'original' 
+                      ? 'bg-gray-50 border-gray-200' 
+                      : 'bg-blue-50/50 border-blue-200'
+                  )}
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className={cn(
+                      'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                      doc.type === 'original' ? 'bg-gray-200' : 'bg-blue-200'
+                    )}>
+                    <FileText className={cn(
+                      'w-5 h-5',
+                        doc.type === 'original' ? 'text-gray-600' : 'text-blue-600'
+                    )} />
                     </div>
-                    {doc.uploaded_by && (
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-800 truncate">{doc.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5">
-                        {doc.type === 'original' ? '📄 Оригінал від' : '📝 Переклад від'} {doc.uploaded_by}
+                        {formatDate(doc.created_at)} · {formatFileSize(doc.size)}
                       </div>
+                      {doc.uploaded_by && (
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {doc.type === 'original' ? '📄 Оригінал від' : '📝 Переклад від'} {doc.uploaded_by}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    {doc.url && (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          asChild
+                        >
+                          <a href={normalizeFileUrl(doc.url)} download={doc.name} target="_blank" rel="noopener noreferrer">
+                      <Download className="w-4 h-4" />
+                          </a>
+                    </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          asChild
+                        >
+                          <a href={normalizeFileUrl(doc.url)} target="_blank" rel="noopener noreferrer">
+                      <Eye className="w-4 h-4" />
+                          </a>
+                    </Button>
+                      </>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0 ml-3">
-                  <Button variant="outline" size="sm" className="h-8">
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8">
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -653,16 +773,20 @@ export function OrderTabContent({
           </h3>
           
           <div className="space-y-4">
-            {notes.map((note) => (
-              <div key={note.id} className="p-4 bg-amber-50/70 rounded-xl border border-amber-200">
-                <div className="flex items-center gap-2 text-xs text-amber-700 mb-2">
-                  <span className="font-semibold">{note.author}</span>
-                  <span className="text-amber-500">•</span>
-                  <span>{formatDateTime(note.created_at)}</span>
+            {notes.length === 0 ? (
+              <div className="text-sm text-gray-500">Немає нотаток</div>
+            ) : (
+              notes.map((note) => (
+                <div key={note.id} className="p-4 bg-amber-50/70 rounded-xl border border-amber-200">
+                  <div className="flex items-center gap-2 text-xs text-amber-700 mb-2">
+                    <span className="font-semibold">{note.author}</span>
+                    <span className="text-amber-500">•</span>
+                    <span>{formatDateTime(note.created_at)}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{note.content}</p>
                 </div>
-                <p className="text-sm text-gray-700 leading-relaxed">{note.content}</p>
-              </div>
-            ))}
+              ))
+            )}
 
             <div className="pt-4 border-t border-gray-200">
               <Textarea

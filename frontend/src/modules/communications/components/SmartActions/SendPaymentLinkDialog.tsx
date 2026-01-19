@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from '../../../../components/ui/label';
 import { CreditCard, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { inboxApi } from '../../api/inbox';
 
 interface Order {
   id: string;
@@ -47,24 +48,16 @@ export function SendPaymentLinkDialog({
 
     setIsLoading(true);
     try {
-      // TODO: Викликати API для генерації лінка на оплату
-      // const response = await paymentsApi.generatePaymentLink({
-      //   order_id: selectedOrderId,
-      //   provider: paymentProvider,
-      // });
+      // Call the API to create payment link
+      const response = await inboxApi.createPaymentLink(
+        selectedOrderId,
+        selectedOrder?.total_amount,
+        'pln'
+      );
 
-      // Mock для тестування
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const mockLink = `https://secure.przelew24.pl/trnRequest/${Date.now()}`;
-      setPaymentLink(mockLink);
-
-      // TODO: Викликати API для автоматизації Timeline (етап 3)
-      // await timelineApi.markPaymentLinkSent(selectedOrderId, mockLink);
-
-      // Автоматично відправляємо в чат
-      // await inboxApi.sendMessage(conversationId, `Лінк на оплату: ${mockLink}`);
+      setPaymentLink(response.payment_link);
       
-      toast.success('Лінк на оплату згенеровано та відправлено');
+      toast.success('Лінк на оплату згенеровано');
       onSuccess?.();
     } catch (error: any) {
       console.error('Error generating payment link:', error);

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { X } from "lucide-react";
+import { X, Plus, Trash2 } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import { NotesManager, Note } from "../../../components/NotesManager";
 import { notesApi, type InternalNote } from "../api/notes";
 import { timelineApi, type TimelineStep } from "../api/timeline";
+import { translatorsApi, type Translator, type TranslationRequest } from "../api/translators";
 import {
   Select,
   SelectContent,
@@ -34,13 +35,24 @@ import {
   DollarSign,
   Clock,
   Edit,
-  StickyNote
+  StickyNote,
+  Users
 } from "lucide-react";
 import { useI18n } from "../../../lib/i18n";
 import { cn } from "../../../components/ui/utils";
 import { formatDistanceToNow } from "date-fns";
 import { pl, uk, enUS, type Locale } from "date-fns/locale";
 import { ProgressTimelineCompact } from './ProgressTimelineCompact';
+import { toast } from "sonner";
+
+// Interface for translator assignment on order
+interface OrderTranslator {
+  id: string;
+  translatorId: number;
+  translatorName: string;
+  fee: number;
+  deadline?: string;
+}
 
 interface OrderDetailSheetProps {
   order: Order | null;
@@ -66,6 +78,79 @@ const localeMap: Record<string, Locale> = {
   en: enUS,
 };
 
+// Mini form for adding a translator
+function AddTranslatorForm({
+  availableTranslators,
+  onAdd,
+  isLoading,
+}: {
+  availableTranslators: Translator[];
+  onAdd: (translatorId: number, fee: number) => void;
+  isLoading: boolean;
+}) {
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [fee, setFee] = useState<number>(0);
+
+  const selectedTranslator = availableTranslators.find(t => String(t.id) === selectedId);
+
+  const handleAdd = () => {
+    if (!selectedId || fee <= 0) return;
+    onAdd(Number(selectedId), fee);
+    setSelectedId("");
+    setFee(0);
+  };
+
+  // Auto-set fee when translator selected
+  useEffect(() => {
+    if (selectedTranslator && selectedTranslator.languages.length > 0) {
+      setFee(selectedTranslator.languages[0].rate_per_page || 0);
+    }
+  }, [selectedTranslator]);
+
+  if (isLoading) {
+    return <div className="text-xs text-gray-500 text-center py-2">Завантаження...</div>;
+  }
+
+  return (
+    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+      <Select value={selectedId} onValueChange={setSelectedId}>
+        <SelectTrigger className="flex-1 h-8 text-xs bg-white">
+          <SelectValue placeholder="Обрати перекладача..." />
+        </SelectTrigger>
+        <SelectContent>
+          {availableTranslators.length === 0 ? (
+            <SelectItem value="none" disabled>Немає доступних перекладачів</SelectItem>
+          ) : (
+            availableTranslators.map((t) => (
+              <SelectItem key={t.id} value={String(t.id)}>
+                {t.name} {t.languages[0] && `(${t.languages[0].rate_per_page} zł)`}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+      <Input
+        type="number"
+        value={fee || ""}
+        onChange={(e) => setFee(Number(e.target.value))}
+        className="w-20 h-8 text-xs"
+        placeholder="Гонорар"
+      />
+      <span className="text-xs text-gray-500">zł</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 px-2"
+        onClick={handleAdd}
+        disabled={!selectedId || fee <= 0}
+      >
+        <Plus className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
+
 const TIMELINE_STEPS = [
   { type: 'client_created', label: 'Створено клієнта' },
   { type: 'order_created', label: 'Створено замовлення' },
@@ -87,6 +172,11 @@ export function OrderDetailSheet({
   const [activeTab, setActiveTab] = useState("details");
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  
+  // Translators state
+  const [availableTranslators, setAvailableTranslators] = useState<Translator[]>([]);
+  const [orderTranslators, setOrderTranslators] = useState<OrderTranslator[]>([]);
+  const [isLoadingTranslators, setIsLoadingTranslators] = useState(false);
   
   const {
     register,
@@ -205,10 +295,12 @@ export function OrderDetailSheet({
 
   const activePreset = getActivePreset();
 
-  // Завантаження timeline при відкритті
+  // Завантаження timeline та перекладачів при відкритті
   useEffect(() => {
     if (open && order?.id) {
       loadTimeline();
+      loadTranslators();
+      loadOrderTranslators();
     }
   }, [open, order?.id]);
 
@@ -225,6 +317,94 @@ export function OrderDetailSheet({
       setIsLoadingTimeline(false);
     }
   };
+
+  const loadTranslators = async () => {
+    try {
+      const translators = await translatorsApi.getTranslators({ status: 'active' });
+      setAvailableTranslators(translators);
+    } catch (error) {
+      console.error('Error loading translators:', error);
+    }
+  };
+
+  const loadOrderTranslators = async () => {
+    if (!order?.id) return;
+    setIsLoadingTranslators(true);
+    try {
+      const requests = await translatorsApi.getOrderTranslationRequests(order.id);
+      // Convert accepted requests to order translators
+      const acceptedTranslators = requests
+        .filter((req: TranslationRequest) => req.status === 'accepted')
+        .map((req: TranslationRequest) => ({
+          id: String(req.id),
+          translatorId: req.translator_id,
+          translatorName: req.translator?.name || 'Перекладач',
+          fee: req.offered_rate,
+          deadline: req.response_at,
+        }));
+      setOrderTranslators(acceptedTranslators);
+    } catch (error) {
+      console.error('Error loading order translators:', error);
+      setOrderTranslators([]);
+    } finally {
+      setIsLoadingTranslators(false);
+    }
+  };
+
+  const handleAddTranslator = async (translatorId: number, fee: number) => {
+    if (!order?.id) return;
+    if (orderTranslators.length >= 10) {
+      toast.error('Максимум 10 перекладачів на замовлення');
+      return;
+    }
+    
+    const translator = availableTranslators.find(t => t.id === translatorId);
+    if (!translator) return;
+
+    try {
+      const request = await translatorsApi.createTranslationRequest({
+        order_id: order.id,
+        translator_id: translatorId,
+        sent_via: 'telegram',
+        offered_rate: fee,
+      });
+      
+      // Auto-accept the request for immediate assignment
+      await translatorsApi.acceptTranslationRequest(request.id);
+      
+      setOrderTranslators(prev => [...prev, {
+        id: String(request.id),
+        translatorId: translatorId,
+        translatorName: translator.name,
+        fee: fee,
+      }]);
+      
+      toast.success(`Перекладач ${translator.name} призначений`);
+    } catch (error: any) {
+      console.error('Error adding translator:', error);
+      toast.error(error?.message || 'Помилка призначення перекладача');
+    }
+  };
+
+  const handleRemoveTranslator = async (orderTranslatorId: string) => {
+    try {
+      // Just remove from local state for now
+      // TODO: Add API endpoint to remove translator from order
+      setOrderTranslators(prev => prev.filter(t => t.id !== orderTranslatorId));
+      toast.success('Перекладача видалено');
+    } catch (error) {
+      console.error('Error removing translator:', error);
+      toast.error('Помилка видалення перекладача');
+    }
+  };
+
+  const handleUpdateTranslatorFee = (orderTranslatorId: string, newFee: number) => {
+    setOrderTranslators(prev => prev.map(t => 
+      t.id === orderTranslatorId ? { ...t, fee: newFee } : t
+    ));
+  };
+
+  const totalTranslatorFees = orderTranslators.reduce((sum, t) => sum + t.fee, 0);
 
   // Визначаємо завершені етапи
   const completedStepTypes = new Set(
@@ -252,38 +432,14 @@ export function OrderDetailSheet({
   const dateLocale = localeMap[currentLang] || pl;
 
   return (
-    <aside className="w-96 border-l border-gray-200 bg-white flex flex-col shrink-0 h-full">
+    <aside className="w-[400px] border-l border-gray-200 bg-white flex flex-col shrink-0 h-full">
       <div className="flex flex-col h-full overflow-hidden">
         {/* Sticky Header */}
         <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex-shrink-0">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="text-lg font-bold font-mono text-gray-900 truncate">
-                  {order.orderNumber}
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold text-gray-900 truncate">
+              Деталі замовлення
                 </h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={handleCopyOrderNumber}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4 text-gray-400" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500">
-                {t("orderDetails.created")} {order.created_at 
-                  ? getRelativeDate(new Date(order.created_at))
-                  : getRelativeDate(new Date())
-                }
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {getStatusBadge(order.status)}
               <Button
                 variant="ghost"
                 size="sm"
@@ -292,7 +448,6 @@ export function OrderDetailSheet({
               >
                 <X className="h-4 w-4 text-gray-400" />
               </Button>
-            </div>
           </div>
         </div>
 
@@ -309,10 +464,10 @@ export function OrderDetailSheet({
           <ScrollArea className="flex-1 px-4 min-h-0">
             <form onSubmit={handleSubmit(onSubmit)} id="order-form">
               {/* Tab: Details */}
-              <TabsContent value="details" className="mt-4 space-y-4 pb-4">
+              <TabsContent value="details" className="mt-3 space-y-3 pb-4">
                 {/* Client Section */}
                 <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-blue)' }}>
-                  <CardContent className="p-4 rounded-xl">
+                  <CardContent className="p-3 rounded-xl">
                     <div className="flex items-center justify-between mb-3">
                       <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold">
                         {t("orderDetails.client.title")}
@@ -349,38 +504,13 @@ export function OrderDetailSheet({
 
                 {/* Timeline Section */}
                 <Card className="rounded-xl border-black/5" style={{ backgroundColor: 'var(--color-bg-pink)' }}>
-                  <CardContent className="p-5 rounded-xl" style={{ color: 'var(--color-black)', backgroundColor: 'var(--color-bg-purple-light)' }}>
-                    {(isDeadlineClose(order.deadline) || isDeadlineOverdue(order.deadline)) && (
-                      <p className={cn(
-                        "text-xs mb-4 px-3 py-2 rounded-lg",
-                        isDeadlineOverdue(order.deadline) ? "text-red-600 bg-red-50" : "text-orange-600 bg-orange-50"
-                      )}>
-                        {isDeadlineOverdue(order.deadline) 
-                          ? t("orderDetails.timeline.overdue")
-                          : t("orderDetails.timeline.close")
-                        }
-                      </p>
-                    )}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
+                  <CardContent className="p-3 rounded-xl" style={{ color: 'var(--color-black)', backgroundColor: 'var(--color-bg-purple-light)' }}>
+                    <div className="space-y-3">
                       <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold">
                         {t("orderDetails.timeline.title")}
                       </Label>
-                        <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
-                          {completedSteps}/{totalSteps} ({Math.round((completedSteps / totalSteps) * 100)}%)
-                            </span>
-                        </div>
-                        
-                      {/* Progress Timeline - компактна версія для бокової панелі */}
-                      <ProgressTimelineCompact 
-                        steps={TIMELINE_STEPS.map((step, index) => ({
-                          step: index + 1,
-                          completed: completedStepTypes.has(step.type as any),
-                        }))}
-                        completedSteps={completedSteps}
-                      />
                       
-                      <div className="space-y-2 mt-4">
+                      <div className="space-y-2">
                         <div className="space-y-1.5">
                           <Label htmlFor="deadline" className="text-xs font-normal text-gray-700">
                             {t("orderDetails.timeline.deadline")}
@@ -503,7 +633,7 @@ export function OrderDetailSheet({
 
                 {/* Financial Micro-View */}
                 <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-green-light)' }}>
-                  <CardContent className="p-4 rounded-xl">
+                  <CardContent className="p-3 rounded-xl">
                     <div className="space-y-3">
                       <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold">
                         {t("orderDetails.financial.title")}
@@ -614,74 +744,90 @@ export function OrderDetailSheet({
                   </CardContent>
                 </Card>
 
-                {/* Order Details */}
+                {/* Translators Section */}
+                <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-purple-light)' }}>
+                  <CardContent className="p-3 rounded-xl">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold flex items-center gap-2">
+                          <Users className="w-4 h-4" />
+                          Перекладачі ({orderTranslators.length}/10)
+                        </Label>
+                        {totalTranslatorFees > 0 && (
+                          <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
+                            Разом: {totalTranslatorFees} zł
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Current translators */}
+                      {orderTranslators.length > 0 && (
+                        <div className="space-y-2">
+                          {orderTranslators.map((translator) => (
+                            <div 
+                              key={translator.id} 
+                              className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200"
+                            >
+                              <Avatar className="w-7 h-7">
+                                <AvatarFallback className="bg-purple-200 text-purple-800 text-xs">
+                                  {translator.translatorName.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {translator.translatorName}
+                                </p>
+                              </div>
+                              <Input
+                                type="number"
+                                value={translator.fee}
+                                onChange={(e) => handleUpdateTranslatorFee(translator.id, Number(e.target.value))}
+                                className="w-20 h-7 text-xs text-right"
+                                placeholder="0"
+                              />
+                              <span className="text-xs text-gray-500">zł</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleRemoveTranslator(translator.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add new translator */}
+                      {orderTranslators.length < 10 && (
+                        <AddTranslatorForm
+                          availableTranslators={availableTranslators.filter(
+                            t => !orderTranslators.some(ot => ot.translatorId === t.id)
+                          )}
+                          onAdd={handleAddTranslator}
+                          isLoading={isLoadingTranslators}
+                        />
+                      )}
+
+                      {orderTranslators.length === 0 && !isLoadingTranslators && (
+                        <p className="text-xs text-gray-500 text-center py-2">
+                          Ще немає призначених перекладачів
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Notes Section */}
+                {order?.id && (
                 <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-yellow)' }}>
-                  <CardContent className="p-4 rounded-xl">
+                    <CardContent className="p-3 rounded-xl">
                     <div className="space-y-3">
                       <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold">
-                        {t("orderDetails.orderInfo.title")}
+                          Нотатки
                       </Label>
-
-                      <div className="space-y-2">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="orderNumber" className="text-xs font-normal text-gray-700">
-                            {t("orderDetails.orderInfo.orderNumber")}
-                          </Label>
-                          <Input
-                            id="orderNumber"
-                            {...register("orderNumber", { required: true })}
-                            className="h-9 bg-white font-mono text-sm rounded-lg"
-                            placeholder="N/01/02/01/26/dnk"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="status" className="text-xs font-normal text-gray-700">
-                              {t("orderDetails.orderInfo.status")}
-                            </Label>
-                            <Select
-                              value={watch("status")}
-                              onValueChange={(value) => setValue("status", value as Order["status"])}
-                            >
-                              <SelectTrigger className="h-9 bg-white text-sm rounded-lg">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="DO_WYKONANIA">{t("kanban.status.doWykonania")}</SelectItem>
-                                <SelectItem value="DO_POSWIADCZENIA">{t("kanban.status.doPoswiadczenia")}</SelectItem>
-                                <SelectItem value="DO_WYDANIA">{t("kanban.status.doWydania")}</SelectItem>
-                                <SelectItem value="USTNE">{t("kanban.status.ustne")}</SelectItem>
-                                <SelectItem value="CLOSED">{t("kanban.status.closed")}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label htmlFor="priority" className="text-xs font-normal text-gray-700">
-                              {t("orderDetails.orderInfo.priority")}
-                            </Label>
-                            <Select
-                              value={watch("priority")}
-                              onValueChange={(value) => setValue("priority", value as "high" | "medium" | "low")}
-                            >
-                              <SelectTrigger className="h-9 bg-white text-sm rounded-lg">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="high">{t("orderDetails.orderInfo.priorityHigh")}</SelectItem>
-                                <SelectItem value="medium">{t("orderDetails.orderInfo.priorityMedium")}</SelectItem>
-                                <SelectItem value="low">{t("orderDetails.orderInfo.priorityLow")}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="notes" className="text-xs font-normal text-gray-700">
-                            {t("orderDetails.orderInfo.notes")}
-                          </Label>
-                          {order?.id && (
                             <NotesManager
                               entityId={order.id}
                               entityName={order.orderNumber}
@@ -689,7 +835,6 @@ export function OrderDetailSheet({
                               onLoad={async () => {
                                 try {
                                   const internalNotes = await notesApi.getNotes('order', order.id);
-                                  // Конвертуємо InternalNote в Note формат
                                   return internalNotes.map((note: InternalNote) => ({
                                     id: note.id.toString(),
                                     text: note.text,
@@ -703,13 +848,11 @@ export function OrderDetailSheet({
                               }}
                               onAddNote={async (note: Note) => {
                                 try {
-                                  // Додаємо нову нотатку через API і повертаємо з правильним ID
                                   const createdNote = await notesApi.createNote({
                                     entity_type: 'order',
                                     entity_id: order.id,
                                     text: note.text,
                                   });
-                                  // Повертаємо нотатку в форматі Note з правильним ID
                                   return {
                                     id: createdNote.id.toString(),
                                     text: createdNote.text,
@@ -723,7 +866,6 @@ export function OrderDetailSheet({
                               }}
                               onRemoveNote={async (noteId: string) => {
                                 try {
-                                  // Видаляємо нотатку через API
                                   const noteIdNum = parseInt(noteId);
                                   if (!isNaN(noteIdNum)) {
                                     await notesApi.deleteNote(noteIdNum);
@@ -741,16 +883,14 @@ export function OrderDetailSheet({
                                   className="w-full h-9 justify-start text-sm"
                                 >
                                   <StickyNote className="w-4 h-4 mr-2" />
-                                  {t("orderDetails.orderInfo.notes")}
+                              Додати нотатку
                                 </Button>
                               }
                             />
-                          )}
-                        </div>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
+                )}
               </TabsContent>
 
               {/* Tab: Files */}
@@ -760,47 +900,96 @@ export function OrderDetailSheet({
                     {t("orderDetails.files.title")}
                   </Label>
                   
-                  {/* Dropzone */}
-                  <Card className="border-2 border-dashed border-gray-300 hover:border-orange-400 transition-colors">
+                  {/* Parse files from description and file_url */}
+                  {(() => {
+                    const parseFilesFromDescription = (description: string | null | undefined): Array<{ name: string; url: string }> => {
+                      if (!description) return [];
+                      
+                      const files: Array<{ name: string; url: string }> = [];
+                      const filePattern = /Файл:\s*([^\n(]+)\s*\(([^)]+)\)/g;
+                      let match;
+                      
+                      while ((match = filePattern.exec(description)) !== null) {
+                        files.push({
+                          name: match[1].trim(),
+                          url: match[2].trim(),
+                        });
+                      }
+                      
+                      return files;
+                    };
+
+                    const filesFromDescription = parseFilesFromDescription(order?.description);
+                    const allFiles: Array<{ name: string; url: string }> = [];
+                    
+                    // Add file from file_url if exists
+                    if (order?.file_url) {
+                      const fileName = order.file_url.split('/').pop() || 'Файл';
+                      const isInDescription = filesFromDescription.some(f => f.url === order.file_url);
+                      if (!isInDescription) {
+                        allFiles.push({ name: fileName, url: order.file_url });
+                      }
+                    }
+                    
+                    // Add files from description
+                    allFiles.push(...filesFromDescription);
+
+                    const getImageUrl = (imagePath?: string | null): string | undefined => {
+                      if (!imagePath) return undefined;
+                      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                        return imagePath;
+                      }
+                      if (imagePath.startsWith('/api/v1')) {
+                        return imagePath;
+                      }
+                      return `/api/v1/${imagePath}`;
+                    };
+
+                    if (allFiles.length === 0) {
+                      return (
+                        <Card className="border-2 border-dashed border-gray-300">
                     <CardContent className="p-8 text-center">
-                      <Upload className="h-10 w-10 mx-auto mb-3 text-gray-400" />
-                      <p className="text-sm text-gray-600 mb-1">
-                        {t("orderDetails.files.dropzone.title")}
-                      </p>
-                      <p className="text-xs text-gray-500 mb-4">
-                        {t("orderDetails.files.dropzone.subtitle")}
-                      </p>
-                      <Button type="button" variant="outline" size="sm">
-                        {t("orderDetails.files.dropzone.button")}
-                      </Button>
+                            <FileText className="h-10 w-10 mx-auto mb-3 text-gray-400" />
+                            <p className="text-sm text-gray-600">
+                              Немає файлів
+                            </p>
                     </CardContent>
                   </Card>
+                      );
+                    }
 
-                  {/* File List */}
+                    return (
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                      {t("orderDetails.files.attached")}
-                    </Label>
-                    <div className="space-y-2">
-                      {/* Mock files - will be replaced with real data */}
-                      <Card>
+                        {allFiles.map((file, index) => {
+                          const fileUrl = getImageUrl(file.url);
+                          return (
+                            <Card key={index}>
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <FileText className="h-5 w-5 text-red-600" />
-                              <div>
-                                <p className="text-sm font-medium">document.pdf</p>
-                                <p className="text-xs text-gray-500">2.4 MB</p>
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <FileText className="h-5 w-5 text-red-600 flex-shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium truncate">{file.name}</p>
+                                      <p className="text-xs text-gray-500">Файл замовлення</p>
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm">
+                                  {fileUrl && (
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <Button variant="ghost" size="sm" asChild>
+                                        <a href={fileUrl} download={file.name} target="_blank" rel="noopener noreferrer">
                               <Download className="h-4 w-4" />
+                                        </a>
                             </Button>
+                                    </div>
+                                  )}
                           </div>
                         </CardContent>
                       </Card>
+                          );
+                        })}
                     </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </TabsContent>
 
