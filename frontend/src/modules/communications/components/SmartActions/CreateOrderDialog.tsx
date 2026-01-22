@@ -19,80 +19,36 @@ interface CreateOrderDialogProps {
   onSuccess?: (orderId: string) => void;
 }
 
-// Категорії документів
-const DOCUMENT_CATEGORIES = [
-  { value: 'TRC', label: 'TRC' },
-  { value: 'Umowy', label: 'Umowy' },
-  { value: 'Szkolne', label: 'Szkolne' },
-  { value: 'Dyplomy', label: 'Dyplomy' },
-  { value: 'Medyczne', label: 'Medyczne' },
-  { value: 'Prawne', label: 'Prawne' },
-  { value: 'Biznesowe', label: 'Biznesowe' },
-  { value: 'Techniczne', label: 'Techniczne' },
-] as const;
+// Типи документів (спрощений список)
+const DOCUMENT_TYPES_SIMPLE = [
+  { value: 'trc', label: 'TRC - Присяжний переклад', icon: '📜' },
+  { value: 'umowa', label: 'Umowa - Договір', icon: '📄' },
+  { value: 'zaswiadczenie', label: 'Zaświadczenie - Довідка', icon: '📋' },
+  { value: 'szkolne', label: 'Szkolne - Шкільні документи', icon: '🎓' },
+  { value: 'samochodowe', label: 'Samochodowe - Автомобільні', icon: '🚗' },
+  { value: 'inne', label: 'Inne - Інше', icon: '📁' },
+];
 
-// Точні типи документів по категоріях
-const DOCUMENT_TYPES: Record<string, Array<{ value: string; label: string }>> = {
-  TRC: [
-    { value: 'akt_urodzenia', label: 'Akt urodzenia' },
-    { value: 'akt_malzenstwa', label: 'Akt małżeństwa' },
-    { value: 'akt_zgonu', label: 'Akt zgonu' },
-  ],
-  Umowy: [
-    { value: 'umowa', label: 'Umowa' },
-    { value: 'umowa_najmu', label: 'Umowa najmu' },
-    { value: 'umowa_pracy', label: 'Umowa o pracę' },
-    { value: 'umowa_sprzedazy', label: 'Umowa sprzedaży' },
-    { value: 'umowa_uslugi', label: 'Umowa o świadczenie usług' },
-  ],
-  Szkolne: [
-    { value: 'swiadectwo', label: 'Świadectwo ukończenia szkoły' },
-    { value: 'swiadectwo_maturalne', label: 'Świadectwo maturalne' },
-    { value: 'zaświadczenie_szkolne', label: 'Zaświadczenie szkolne' },
-  ],
-  Dyplomy: [
-    { value: 'dyplom', label: 'Dyplom' },
-    { value: 'suplement_dyplomu', label: 'Suplement do dyplomu' },
-    { value: 'dyplom_licencjacki', label: 'Dyplom licencjacki' },
-    { value: 'dyplom_magisterski', label: 'Dyplom magisterski' },
-  ],
-  Medyczne: [
-    { value: 'wypis_medyczny', label: 'Wypis medyczny' },
-    { value: 'diagnoza', label: 'Diagnoza' },
-    { value: 'wyniki_badan', label: 'Wyniki badań' },
-    { value: 'skierowanie', label: 'Skierowanie' },
-    { value: 'zgoda_na_leczenie', label: 'Zgoda na leczenie' },
-    { value: 'recepta', label: 'Recepta' },
-  ],
-  Prawne: [
-    { value: 'pozew', label: 'Pozew' },
-    { value: 'wyrok', label: 'Wyrok' },
-    { value: 'pelnomocnictwo', label: 'Pełnomocnictwo' },
-    { value: 'akt_notarialny', label: 'Akt notarialny' },
-    { value: 'zawierdzenie_niekaralnosci', label: 'Zaświadczenie o niekaralności' },
-    { value: 'wyrok_sadowy', label: 'Wyrok sądowy' },
-  ],
-  Biznesowe: [
-    { value: 'faktura', label: 'Faktura' },
-    { value: 'statut_spolki', label: 'Statut spółki' },
-    { value: 'odpis_krs', label: 'Odpis z KRS' },
-    { value: 'zawierdzenie_skarbowe', label: 'Zaświadczenie skarbowe' },
-    { value: 'umowa_biznesowa', label: 'Umowa biznesowa' },
-  ],
-  Techniczne: [
-    { value: 'dowod_rejestracyjny', label: 'Dowód rejestracyjny' },
-    { value: 'prawo_jazdy', label: 'Prawo jazdy' },
-    { value: 'certyfikat', label: 'Certyfikat techniczny' },
-    { value: 'instrukcja', label: 'Instrukcja obsługi' },
-  ],
-};
-
+// Мови/напрямки перекладу
 const LANGUAGES = [
-  { value: 'uk', label: 'Українська' },
-  { value: 'pl', label: 'Польська' },
-  { value: 'en', label: 'Англійська' },
-  { value: 'de', label: 'Німецька' },
-  { value: 'fr', label: 'Французька' },
+  { value: 'uk-pl', label: 'Українська → Польська' },
+  { value: 'pl-uk', label: 'Польська → Українська' },
+  { value: 'uk-en', label: 'Українська → Англійська' },
+  { value: 'en-uk', label: 'Англійська → Українська' },
+  { value: 'pl-en', label: 'Польська → Англійська' },
+  { value: 'en-pl', label: 'Англійська → Польська' },
+  { value: 'uk-de', label: 'Українська → Німецька' },
+  { value: 'de-uk', label: 'Німецька → Українська' },
+  { value: 'ru-pl', label: 'Російська → Польська' },
+  { value: 'pl-ru', label: 'Польська → Російська' },
+];
+
+// Способи оплати
+const PAYMENT_METHODS = [
+  { value: 'none', label: 'Не оплачено' },
+  { value: 'cash', label: '💵 Готівка' },
+  { value: 'card', label: '💳 Картка' },
+  { value: 'transfer', label: '🏦 Переказ' },
 ];
 
 export function CreateOrderDialog({
@@ -101,13 +57,13 @@ export function CreateOrderDialog({
   clientId,
   onSuccess,
 }: CreateOrderDialogProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [documentType, setDocumentType] = useState('');
   const [customDocumentType, setCustomDocumentType] = useState('');
   const [language, setLanguage] = useState('');
   const [deadline, setDeadline] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('none');
   
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<'office' | 'inpost_courier' | 'inpost_locker'>('office');
@@ -151,13 +107,8 @@ export function CreateOrderDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedCategory || !language) {
-      toast.error('Заповніть обов\'язкові поля');
-      return;
-    }
-    
-    if (customDocumentType && !customDocumentType.trim()) {
-      toast.error('Введіть тип документа');
+    if ((!documentType && !customDocumentType) || !language) {
+      toast.error('Заповніть обов\'язкові поля: тип документа та мова');
       return;
     }
     
@@ -194,20 +145,15 @@ export function CreateOrderDialog({
       if (customDocumentType) {
         finalDocumentType = customDocumentType;
       } else if (documentType) {
-        // Знаходимо тип в обраній категорії
-        const categoryTypes = DOCUMENT_TYPES[selectedCategory] || [];
-        const foundType = categoryTypes.find(t => t.value === documentType);
+        const foundType = DOCUMENT_TYPES_SIMPLE.find(t => t.value === documentType);
         finalDocumentType = foundType?.label || documentType;
-      } else if (selectedCategory) {
-        // Якщо вибрана тільки категорія
-        const category = DOCUMENT_CATEGORIES.find(c => c.value === selectedCategory);
-        finalDocumentType = category?.label || selectedCategory;
       }
       
       // Формуємо опис з полів діалогу
       const orderDescriptionParts = [
         `Тип документа: ${finalDocumentType}`,
         `Мова: ${LANGUAGES.find(l => l.value === language)?.label || language}`,
+        paymentMethod !== 'none' ? `Оплата: ${PAYMENT_METHODS.find(p => p.value === paymentMethod)?.label || paymentMethod}` : null,
         description ? `Опис: ${description}` : null,
         price ? `Ціна: ${price} zł` : null,
       ];
@@ -240,28 +186,31 @@ export function CreateOrderDialog({
         description: orderDescription || undefined,
         deadline: deadline ? `${deadline}T23:59:59.000Z` : undefined,
         office_id: deliveryMethod === 'office' && officeId ? parseInt(officeId) : undefined,
-        status: 'do_wykonania',
+        status: paymentMethod !== 'none' ? 'oplacone' : 'do_wykonania',
+        language: language || undefined,
+        translation_type: documentType || customDocumentType || undefined,
+        payment_method: paymentMethod !== 'none' ? paymentMethod : undefined,
       });
 
-      toast.success('Замовлення створено успішно');
+      toast.success('Zlecenie zostało utworzone');
       onSuccess?.(order.id);
       handleClose();
     } catch (error: any) {
       console.error('Error creating order:', error);
-      toast.error(error?.message || 'Помилка створення замовлення');
+      toast.error(error?.message || 'Błąd tworzenia zlecenia');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
-    setSelectedCategory('');
     setDocumentType('');
     setCustomDocumentType('');
     setLanguage('');
     setDeadline('');
     setPrice('');
     setDescription('');
+    setPaymentMethod('none');
     setDeliveryMethod('office');
     setOfficeId('');
     setCourierAddress('');
@@ -340,7 +289,7 @@ export function CreateOrderDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
-            📝 Нове замовлення
+            📝 Nowe zlecenie
           </DialogTitle>
         </DialogHeader>
 
@@ -351,98 +300,47 @@ export function CreateOrderDialog({
               Тип документа <span className="text-red-500">*</span>
             </Label>
             
-            {/* Категорії як кнопки */}
-            <div className="flex flex-wrap gap-2">
-              {DOCUMENT_CATEGORIES.map((category) => (
+            {/* Типи документів як кнопки */}
+            <div className="grid grid-cols-2 gap-2">
+              {DOCUMENT_TYPES_SIMPLE.map((type) => (
                 <Button
-                  key={category.value}
+                  key={type.value}
                   type="button"
-                  variant={selectedCategory === category.value ? "default" : "outline"}
+                  variant={documentType === type.value ? "default" : "outline"}
                   size="sm"
                   onClick={() => {
-                    setSelectedCategory(category.value);
-                    setDocumentType(''); // Скидаємо точний тип при зміні категорії
+                    setDocumentType(type.value);
                     setCustomDocumentType('');
                   }}
-                  className={
-                    selectedCategory === category.value
+                  className={`justify-start ${
+                    documentType === type.value
                       ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
                       : ""
-                  }
+                  }`}
                 >
-                  {category.label}
+                  <span className="mr-2">{type.icon}</span>
+                  {type.label.split(' - ')[0]}
                 </Button>
               ))}
             </div>
             
-            {/* Точні типи з обраної категорії */}
-            {selectedCategory && DOCUMENT_TYPES[selectedCategory] && (
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-600">
-                  Оберіть точний тип (опціонально):
-                </Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={!documentType ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setDocumentType('');
-                      setCustomDocumentType('');
-                    }}
-                    className={
-                      !documentType
-                        ? "bg-blue-600 hover:bg-blue-700 text-white"
-                        : ""
-                    }
-                  >
-                    Тільки {DOCUMENT_CATEGORIES.find(c => c.value === selectedCategory)?.label}
-                  </Button>
-                  {DOCUMENT_TYPES[selectedCategory].map((type) => (
-                    <Button
-                      key={type.value}
-                      type="button"
-                      variant={documentType === type.value ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setDocumentType(type.value);
-                        setCustomDocumentType('');
-                      }}
-                      className={
-                        documentType === type.value
-                          ? "bg-blue-600 hover:bg-blue-700 text-white"
-                          : ""
-                      }
-                    >
-                      {type.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
             {/* Кастомний тип документа */}
-            {selectedCategory && (
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-600">
-                  Або введіть власний тип:
-                </Label>
-                <Input
-                  value={customDocumentType}
-                  onChange={(e) => {
-                    setCustomDocumentType(e.target.value);
-                    if (e.target.value) {
-                      setDocumentType(''); // Скидаємо вибір точного типу
-                    }
-                  }}
-                  placeholder="Введіть тип документа вручну..."
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-500">
-                  Наприклад: Tłumaczenia przysięgłe dotyczą dokumentów urzędowych...
-                </p>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label className="text-sm text-gray-600">
+                Або введіть власний тип:
+              </Label>
+              <Input
+                value={customDocumentType}
+                onChange={(e) => {
+                  setCustomDocumentType(e.target.value);
+                  if (e.target.value) {
+                    setDocumentType(''); // Скидаємо вибір типу
+                  }
+                }}
+                placeholder="Введіть тип документа вручну..."
+                className="w-full"
+              />
+            </div>
           </div>
 
           {/* Мова */}
@@ -498,6 +396,31 @@ export function CreateOrderDialog({
                 zł
               </span>
             </div>
+          </div>
+
+          {/* Спосіб оплати */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4" />
+              Статус оплати
+            </Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((method) => (
+                  <SelectItem key={method.value} value={method.value}>
+                    {method.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {paymentMethod !== 'none' && (
+              <p className="text-xs text-green-600">
+                ✅ Zlecenie zostanie utworzone ze statusem "Opłacone"
+              </p>
+            )}
           </div>
 
           {/* Спосіб доставки */}
@@ -660,7 +583,7 @@ export function CreateOrderDialog({
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Додаткові деталі замовлення..."
+              placeholder="Dodatkowe szczegóły zlecenia..."
               rows={3}
             />
           </div>
@@ -670,7 +593,7 @@ export function CreateOrderDialog({
               Скасувати
             </Button>
             <Button type="submit" disabled={isLoading} className="bg-[#FF5A00] hover:bg-[#FF5A00]/90">
-              {isLoading ? 'Створення...' : 'Створити замовлення'}
+              {isLoading ? 'Tworzenie...' : 'Utwórz zlecenie'}
             </Button>
           </DialogFooter>
         </form>

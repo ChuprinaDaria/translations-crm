@@ -7,6 +7,7 @@ import { CRMPage } from "./modules/crm/pages/CRMPage";
 import { FinancePage } from "./modules/finance/pages/FinancePage";
 import { ClientsPageEnhanced } from "./modules/crm/pages/ClientsPageEnhanced";
 import { TranslatorsPage } from "./modules/crm/pages/TranslatorsPage";
+import { LanguagesPage } from "./modules/crm/pages/LanguagesPage";
 import { Settings } from "./components/Settings";
 import { AuthPage } from "./components/auth/AuthPage";
 import { Toaster } from "./components/ui/sonner";
@@ -244,6 +245,7 @@ function App() {
       finance: [{ label: "Finance" }],
       clients: [{ label: "Clients" }],
       translators: [{ label: "Translators" }],
+      languages: [{ label: "Мови" }],
       analytics: [{ label: "Analytics" }],
       settings: [{ label: "Settings" }],
     };
@@ -265,6 +267,8 @@ function App() {
         return <ClientsPageEnhanced />;
       case "translators":
         return <TranslatorsPage />;
+      case "languages":
+        return <LanguagesPage />;
       case "analytics":
         return <DashboardPage userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
       case "settings":

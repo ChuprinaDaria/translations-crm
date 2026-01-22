@@ -46,7 +46,7 @@ export function QuickActions({
     },
     {
       icon: FileText,
-      label: 'Створити замовлення',
+      label: 'Utwórz zlecenie',
       onClick: onCreateOrder,
       variant: 'outline' as const,
     },

@@ -168,5 +168,18 @@ export const translatorsApi = {
   async getOrderTranslationRequests(orderId: string): Promise<TranslationRequest[]> {
     return apiFetch<TranslationRequest[]>(`/crm/orders/${orderId}/translation-requests`);
   },
+
+  /**
+   * Update translation request
+   */
+  async updateTranslationRequest(
+    requestId: number,
+    data: { offered_rate?: number; notes?: string; status?: 'pending' | 'accepted' | 'declined' }
+  ): Promise<TranslationRequest> {
+    return apiFetch<TranslationRequest>(`/crm/translation-requests/${requestId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
 };
 

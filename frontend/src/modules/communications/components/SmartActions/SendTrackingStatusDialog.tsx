@@ -84,7 +84,7 @@ export function SendTrackingStatusDialog({
       return officeAddress || 'Адреса офісу не вказана';
     }
     
-    return `✅ Ваше замовлення готове!
+    return `✅ Twoje zlecenie jest gotowe!
 
 Можете забрати за адресою:
 📍 ${office.name}
@@ -108,7 +108,7 @@ export function SendTrackingStatusDialog({
     e.preventDefault();
     
     if (!selectedOrderId) {
-      toast.error('Оберіть замовлення');
+      toast.error('Wybierz zlecenie');
       return;
     }
 
@@ -123,7 +123,7 @@ export function SendTrackingStatusDialog({
       
       if (deliveryType === 'inpost') {
         const trackingLink = `https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`;
-        message = `Ваше замовлення відправлено. Трек: ${trackingLink}`;
+        message = `Twoje zlecenie zostało wysłane. Numer śledzenia: ${trackingLink}`;
       } else {
         message = formatOfficeMessage(office);
       }
@@ -162,10 +162,10 @@ export function SendTrackingStatusDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Оберіть замовлення */}
           <div className="space-y-2">
-            <Label htmlFor="order-select">Оберіть замовлення</Label>
+            <Label htmlFor="order-select">Wybierz zlecenie</Label>
             <Select value={selectedOrderId} onValueChange={setSelectedOrderId} required>
               <SelectTrigger id="order-select">
-                <SelectValue placeholder="Оберіть замовлення" />
+                <SelectValue placeholder="Wybierz zlecenie" />
               </SelectTrigger>
               <SelectContent>
                 {orders.length === 0 ? (
@@ -228,7 +228,7 @@ export function SendTrackingStatusDialog({
             ) : (
               <p className="text-sm text-gray-700 whitespace-pre-line">
                 {deliveryType === 'inpost' && trackingNumber ? (
-                  <>Ваше замовлення відправлено. Трек: <a href={`https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{trackingNumber}</a></>
+                  <>Twoje zlecenie zostało wysłane. Numer śledzenia: <a href={`https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{trackingNumber}</a></>
                 ) : deliveryType === 'pickup' ? (
                   formatOfficeMessage(office)
                 ) : (

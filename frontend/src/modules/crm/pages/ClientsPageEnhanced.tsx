@@ -118,6 +118,48 @@ export function ClientsPageEnhanced() {
     }
   }, [activeTabId]);
 
+  // Listen for order updates to sync with client card
+  useEffect(() => {
+    const handleOrderUpdate = async (event: CustomEvent) => {
+      const { orderId, clientId } = event.detail;
+      
+      // Якщо відкрита картка клієнта, оновлюємо дані
+      if (activeClient && clientId && activeClient.id === clientId) {
+        await loadClientData(clientId);
+      }
+      
+      // Якщо відкрите замовлення, оновлюємо його
+      if (activeOrder && activeOrder.id === orderId) {
+        await loadOrderData(orderId);
+      }
+      
+      // Оновлюємо список клієнтів для відображення актуальних сум
+      await loadClients();
+    };
+
+    const handleTranslatorsUpdate = async (event: CustomEvent) => {
+      const { orderId, clientId } = event.detail;
+      
+      // Якщо відкрита картка клієнта, оновлюємо дані
+      if (activeClient && clientId && activeClient.id === clientId) {
+        await loadClientData(clientId);
+      }
+      
+      // Якщо відкрите замовлення, оновлюємо його
+      if (activeOrder && activeOrder.id === orderId) {
+        await loadOrderData(orderId);
+      }
+    };
+
+    window.addEventListener('orderUpdated', handleOrderUpdate as EventListener);
+    window.addEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('orderUpdated', handleOrderUpdate as EventListener);
+      window.removeEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+    };
+  }, [activeClient, activeOrder]);
+
   const loadClients = async () => {
     try {
       setIsLoading(true);

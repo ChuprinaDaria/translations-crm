@@ -516,7 +516,7 @@ export function ClientTabContent({
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <div className="font-medium text-gray-900">
-                              {order.order_number}
+                              Nr. {order.order_number}
                             </div>
                             <div className="text-xs text-gray-500">
                               {formatDate(order.created_at)}
@@ -622,7 +622,7 @@ export function ClientTabContent({
                         <div className="text-xs text-gray-500">
                           {formatDate(doc.created_at)} · {formatFileSize(doc.size)}
                           {doc.order_number && (
-                            <span className="ml-2 text-blue-600">· {doc.order_number}</span>
+                            <span className="ml-2 text-blue-600">· Nr. {doc.order_number}</span>
                           )}
                         </div>
                       </div>
@@ -635,7 +635,7 @@ export function ClientTabContent({
                           className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           onClick={() => onOpenOrder(doc.order_id!, doc.order_number!)}
                         >
-                          Замовлення
+                          Zlecenie
                         </Button>
                       )}
                       {doc.url && (
@@ -708,7 +708,7 @@ export function ClientTabContent({
                         <div className="text-sm text-gray-700">
                           {formatDate(payment.created_at)} · {payment.method}
                         </div>
-                        <div className="text-xs text-gray-500">{payment.order_number}</div>
+                        <div className="text-xs text-gray-500">Nr. {payment.order_number}</div>
                       </div>
                     </div>
                     <div className="font-medium text-gray-900">
@@ -812,7 +812,7 @@ export function ClientTabContent({
                       />
                       <div>
                         <div className="text-sm text-gray-700">
-                          {delivery.order_number} →{' '}
+                          Nr. {delivery.order_number} →{' '}
                           {delivery.method === 'inpost' ? 'InPost' : delivery.method === 'office' ? 'Офіс' : 'Самовивіз'}
                           {delivery.tracking_number && `: ${delivery.tracking_number}`}
                           {delivery.address && `: ${delivery.address}`}

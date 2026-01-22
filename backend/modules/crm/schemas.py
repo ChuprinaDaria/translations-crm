@@ -1,10 +1,11 @@
 from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, List, Any
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, model_serializer, field_serializer
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, model_serializer, field_serializer, computed_field
 from modules.crm.models import (
     OrderStatus, ClientSource, EntityType, TimelineStepType,
-    TranslatorStatus, TranslationRequestStatus
+    TranslatorStatus, TranslationRequestStatus, PaymentMethod, TranslationType
 )
 
 
@@ -103,6 +104,9 @@ class OrderCreate(BaseModel):
     deadline: Optional[datetime] = None
     file_url: Optional[str] = None
     office_id: Optional[int] = None
+    language: Optional[str] = None  # Мова перекладу
+    translation_type: Optional[str] = None  # Тип перекладу
+    payment_method: Optional[str] = None  # Спосіб оплати
 
 
 class OrderUpdate(BaseModel):
@@ -113,6 +117,10 @@ class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     deadline: Optional[datetime] = None
     file_url: Optional[str] = None
+    language: Optional[str] = None  # Мова перекладу
+    translation_type: Optional[str] = None  # Тип перекладу
+    payment_method: Optional[str] = None  # Спосіб оплати (cash = готівка)
+    amount_gross: Optional[float] = None  # Сума оплати клієнта для оновлення транзакції
 
 
 class OrderRead(BaseModel):
@@ -125,6 +133,9 @@ class OrderRead(BaseModel):
     deadline: Optional[datetime] = None
     file_url: Optional[str] = None
     office_id: Optional[int] = None
+    language: Optional[str] = None
+    translation_type: Optional[str] = None
+    payment_method: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     client: Optional["ClientReadSimple"] = None  # Use simple version to avoid recursion
@@ -272,6 +283,7 @@ class TranslationRequestCreate(BaseModel):
 
 class TranslationRequestUpdate(BaseModel):
     status: Optional[TranslationRequestStatus] = None
+    offered_rate: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -372,6 +384,105 @@ class InternalNoteRead(BaseModel):
     author_name: str
     text: str
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ============ LANGUAGES SYSTEM SCHEMAS ============
+
+class LanguageBase(BaseModel):
+    name_pl: str = Field(..., min_length=1, max_length=100)
+    name_en: Optional[str] = Field(None, max_length=100)
+    base_client_price: Decimal = Field(..., ge=0, description="Базова ціна для клієнта")
+
+
+class LanguageCreate(LanguageBase):
+    pass
+
+
+class LanguageUpdate(BaseModel):
+    name_pl: Optional[str] = Field(None, min_length=1, max_length=100)
+    name_en: Optional[str] = Field(None, max_length=100)
+    base_client_price: Optional[Decimal] = Field(None, ge=0)
+    is_active: Optional[bool] = None
+
+
+class Language(LanguageBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ============ SPECIALIZATIONS SCHEMAS ============
+
+class SpecializationBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+
+
+class SpecializationCreate(SpecializationBase):
+    pass
+
+
+class Specialization(SpecializationBase):
+    id: int
+    is_custom: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ============ TRANSLATOR LANGUAGE RATES SCHEMAS ============
+
+class TranslatorLanguageRateBase(BaseModel):
+    language_id: int
+    specialization_id: int
+    translator_rate: Decimal = Field(..., ge=0, description="Ставка перекладача")
+    custom_client_price: Optional[Decimal] = Field(None, ge=0, description="Кастомна ціна для клієнта")
+    notes: Optional[str] = None
+
+
+class TranslatorLanguageRateCreate(TranslatorLanguageRateBase):
+    translator_id: int
+
+
+class TranslatorLanguageRateUpdate(BaseModel):
+    translator_rate: Optional[Decimal] = Field(None, ge=0)
+    custom_client_price: Optional[Decimal] = Field(None, ge=0)
+    notes: Optional[str] = None
+
+
+class TranslatorLanguageRate(TranslatorLanguageRateBase):
+    id: int
+    translator_id: int
+    language: Language
+    specialization: Specialization
+    created_at: datetime
+    
+    @computed_field
+    @property
+    def client_price(self) -> Decimal:
+        """Повертає фінальну ціну для клієнта"""
+        if self.custom_client_price is not None:
+            return self.custom_client_price
+        # Convert float to Decimal
+        if isinstance(self.language.base_client_price, float):
+            return Decimal(str(self.language.base_client_price))
+        return Decimal(self.language.base_client_price)
+    
+    @computed_field
+    @property
+    def profit(self) -> Decimal:
+        """Розрахунок прибутку"""
+        client_price = self.client_price
+        translator_rate = Decimal(str(self.translator_rate)) if isinstance(self.translator_rate, float) else Decimal(self.translator_rate)
+        return client_price - translator_rate
     
     class Config:
         from_attributes = True

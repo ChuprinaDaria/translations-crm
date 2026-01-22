@@ -184,7 +184,7 @@ export function OrdersListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Номер замовлення</TableHead>
+                  <TableHead>Nr. Zlecenia</TableHead>
                   <TableHead>Клієнт</TableHead>
                   <TableHead>Опис</TableHead>
                   <TableHead>Статус</TableHead>
@@ -278,10 +278,10 @@ export function OrdersListPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-orange-500" />
-              Timeline замовлення: {selectedOrder?.order_number}
+              Timeline zlecenia: Nr. {selectedOrder?.order_number}
             </DialogTitle>
             <DialogDescription>
-              Перегляд етапів виконання замовлення
+              Przegląd etapów realizacji zlecenia
             </DialogDescription>
           </DialogHeader>
           

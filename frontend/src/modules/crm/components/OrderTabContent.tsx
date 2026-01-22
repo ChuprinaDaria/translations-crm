@@ -349,7 +349,7 @@ export function OrderTabContent({
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Замовлення {order.order_number}
+                Nr. {order.order_number}
               </h2>
               <div className="flex items-center flex-wrap gap-3 text-sm text-gray-500 mt-2">
                 <Badge

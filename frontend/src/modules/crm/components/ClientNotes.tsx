@@ -141,7 +141,7 @@ export function ClientNotes({ clientId, orders = [], className }: ClientNotesPro
                 <option value="">До клієнта</option>
                 {orders.map((order) => (
                   <option key={order.id} value={order.id}>
-                    Замовлення #{order.order_number}
+                    Zlecenie Nr. {order.order_number}
                   </option>
                 ))}
               </select>
@@ -215,7 +215,7 @@ export function ClientNotes({ clientId, orders = [], className }: ClientNotesPro
             {Object.entries(groupedNotes).map(([orderNumber, notes]) => (
               <div key={orderNumber}>
                 <h4 className="text-xs font-semibold text-gray-700 mb-2">
-                  Замовлення #{orderNumber}:
+                  Zlecenie Nr. {orderNumber}:
                 </h4>
                 <div className="space-y-2">
                   {notes.map((note) => (

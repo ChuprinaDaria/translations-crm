@@ -379,11 +379,11 @@ export function MessageBubble({
                             )}
                           >
                             {isFileAdded ? (
-                              <span>✓ Додано до замовлення</span>
+                              <span>✓ Dodano do zlecenia</span>
                             ) : (
                               <>
                                 <Plus className="w-4 h-4" />
-                                <span>Додати до замовлення</span>
+                                <span>Dodaj do zlecenia</span>
                               </>
                             )}
                           </button>
@@ -405,11 +405,11 @@ export function MessageBubble({
                             )}
                           >
                             {isFileAdded ? (
-                              <span>✓ Замовлення створено, файл додано</span>
+                              <span>✓ Zlecenie utworzone, plik dodano</span>
                             ) : (
                               <>
                                 <Plus className="w-4 h-4" />
-                                <span>Створити замовлення + додати файл</span>
+                                <span>Utwórz zlecenie + dodaj plik</span>
                               </>
                             )}
                           </button>

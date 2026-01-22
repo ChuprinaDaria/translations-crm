@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 from datetime import datetime
 from typing import TYPE_CHECKING, List
-from sqlalchemy import String, DateTime, ForeignKey, Integer, Text, Float, Boolean, ARRAY
+from sqlalchemy import String, DateTime, ForeignKey, Integer, Text, Float, Boolean, ARRAY, Numeric, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,10 +16,27 @@ if TYPE_CHECKING:
 
 class OrderStatus(str, Enum):
     DO_WYKONANIA = "do_wykonania"
+    OPLACONE = "oplacone"  # Оплачено (готівка або ручне встановлення)
     DO_POSWIADCZENIA = "do_poswiadczenia"
     DO_WYDANIA = "do_wydania"
     USTNE = "ustne"
     CLOSED = "closed"
+
+
+class PaymentMethod(str, Enum):
+    """Спосіб оплати"""
+    CASH = "cash"  # Готівка
+    CARD = "card"  # Картка
+    TRANSFER = "transfer"  # Переказ
+    NONE = "none"  # Не оплачено
+
+
+class TranslationType(str, Enum):
+    """Тип перекладу"""
+    ZWYKLE = "zwykle"  # Звичайний
+    PRZYSIEGLE = "przysiegle"  # Присяжний
+    USTNE = "ustne"  # Усний
+    EKSPRESOWE = "ekspresowe"  # Терміновий
 
 
 class ClientSource(str, Enum):
@@ -95,6 +112,10 @@ class Order(Base):
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     file_url: Mapped[str | None] = mapped_column(String, nullable=True)
     office_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("offices.id"), nullable=True, index=True)
+    # Нові поля
+    language: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Мова перекладу (uk, pl, en, de, etc.)
+    translation_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Тип перекладу
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Спосіб оплати
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -206,4 +227,60 @@ class TranslationRequest(Base):
     
     order: Mapped["Order"] = relationship("Order", back_populates="translation_requests", lazy="selectin")
     translator: Mapped["Translator"] = relationship("Translator", back_populates="translation_requests", lazy="selectin")
+
+
+# ============ LANGUAGES SYSTEM ============
+
+class Language(Base):
+    """Централізована таблиця мов з базовими цінами"""
+    __tablename__ = "languages"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name_pl: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    name_en: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    base_client_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    translator_rates: Mapped[list["TranslatorLanguageRate"]] = relationship("TranslatorLanguageRate", back_populates="language", lazy="noload", cascade="all, delete-orphan")
+
+
+class Specialization(Base):
+    """Типи спеціалізацій перекладів"""
+    __tablename__ = "specializations"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    translator_rates: Mapped[list["TranslatorLanguageRate"]] = relationship("TranslatorLanguageRate", back_populates="specialization", lazy="noload", cascade="all, delete-orphan")
+
+
+class TranslatorLanguageRate(Base):
+    """Зв'язок перекладач-мова-спеціалізація з індивідуальними ставками"""
+    __tablename__ = "translator_language_rates"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    translator_id: Mapped[int] = mapped_column(Integer, ForeignKey("translators.id", ondelete="CASCADE"), nullable=False, index=True)
+    language_id: Mapped[int] = mapped_column(Integer, ForeignKey("languages.id", ondelete="CASCADE"), nullable=False, index=True)
+    specialization_id: Mapped[int] = mapped_column(Integer, ForeignKey("specializations.id", ondelete="CASCADE"), nullable=False, index=True)
+    translator_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    custom_client_price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    translator: Mapped["Translator"] = relationship("Translator", lazy="joined")
+    language: Mapped["Language"] = relationship("Language", back_populates="translator_rates", lazy="joined")
+    specialization: Mapped["Specialization"] = relationship("Specialization", back_populates="translator_rates", lazy="joined")
+    
+    # Unique constraint
+    __table_args__ = (
+        UniqueConstraint('translator_id', 'language_id', 'specialization_id', name='_translator_lang_spec_uc'),
+    )
 

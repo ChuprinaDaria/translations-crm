@@ -8,7 +8,7 @@ from core.config import settings
 from modules.auth.router import router as auth_router
 from modules.auth.models import User
 from modules.crm.router import router as crm_router
-from modules.crm.models import Client, Order, InternalNote, TimelineStep, Translator, TranslatorLanguage, TranslationRequest, Office
+from modules.crm.models import Client, Order, InternalNote, TimelineStep, Translator, TranslatorLanguage, TranslationRequest, Office, Language, Specialization, TranslatorLanguageRate
 from modules.finance.router import router as finance_router
 from modules.finance.models import Transaction
 from modules.communications.router import router as communications_router, messages_manager

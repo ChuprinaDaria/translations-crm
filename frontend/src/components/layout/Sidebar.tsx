@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Package,
   Languages,
+  Globe,
 } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { cn } from "../ui/utils";
@@ -53,9 +54,9 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
         },
         {
           id: "crm",
-          label: "Замовлення",
+          label: "Zlecenia",
           icon: <Kanban className="w-5 h-5" />,
-          tooltip: "Управління замовленнями та Kanban дошка",
+          tooltip: "Zarządzanie zleceniami i tablica Kanban",
         },
         {
           id: "finance",
@@ -74,6 +75,12 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           label: "Translators",
           icon: <Languages className="w-5 h-5" />,
           tooltip: "Перекладачі: додати, редагувати, деактивувати",
+        },
+        {
+          id: "languages",
+          label: "Мови",
+          icon: <Globe className="w-5 h-5" />,
+          tooltip: "Управління мовами та базовими цінами",
         },
         {
           id: "analytics",

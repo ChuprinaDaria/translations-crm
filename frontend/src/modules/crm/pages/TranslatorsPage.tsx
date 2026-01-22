@@ -44,6 +44,14 @@ import { Label } from "../../../components/ui/label";
 import { Textarea } from "../../../components/ui/textarea";
 import { toast } from "sonner";
 import { translatorsApi, type Translator, type TranslatorCreate } from "../api/translators";
+import { 
+  languagesApi, 
+  specializationsApi, 
+  translatorRatesApi,
+  type Language,
+  type Specialization,
+  type TranslatorLanguageRate 
+} from "../api/languages";
 
 interface TranslatorLanguageForm {
   language: string;
@@ -61,15 +69,7 @@ interface TranslatorForm {
   languages: TranslatorLanguageForm[];
 }
 
-const LANGUAGES = [
-  "Angielski", "Niemiecki", "Francuski", "Włoski", "Hiszpański", 
-  "Rosyjski", "Ukraiński", "Duński", "Szwedzki", "Norweski",
-  "Holenderski", "Portugalski", "Czeski", "Słowacki", "Węgierski",
-  "Rumuński", "Bułgarski", "Chorwacki", "Serbski", "Słoweński",
-  "Grecki", "Turecki", "Arabski", "Chiński", "Japoński", "Koreański",
-];
-
-const SPECIALIZATIONS = ["TRC", "Umowy", "Szkolne", "Dyplomy", "Medyczne", "Prawne", "Biznesowe", "Techniczne"];
+// LANGUAGES та SPECIALIZATIONS тепер завантажуються з API
 
 const STATUS_LABELS = {
   active: { label: "Активний", color: "bg-green-100 text-green-700" },
@@ -100,12 +100,39 @@ export function TranslatorsPage() {
     telegram_id: "",
     whatsapp: "",
     status: "active",
-    languages: [{ language: "", rate_per_page: 0, specializations: [] }],
+    languages: [], // Стара система мов більше не використовується
   });
+
+  // New API-based state for languages and rates
+  const [apiLanguages, setApiLanguages] = useState<Language[]>([]);
+  const [apiSpecializations, setApiSpecializations] = useState<Specialization[]>([]);
+  const [translatorRates, setTranslatorRates] = useState<TranslatorLanguageRate[]>([]);
+  const [showSpecModal, setShowSpecModal] = useState(false);
+  const [newSpecName, setNewSpecName] = useState('');
 
   useEffect(() => {
     loadTranslators();
+    loadLanguages();
+    loadSpecializations();
   }, []);
+
+  const loadLanguages = async () => {
+    try {
+      const data = await languagesApi.getLanguages();
+      setApiLanguages(data);
+    } catch (error: any) {
+      console.error('Error loading languages:', error);
+    }
+  };
+
+  const loadSpecializations = async () => {
+    try {
+      const data = await specializationsApi.getSpecializations();
+      setApiSpecializations(data);
+    } catch (error: any) {
+      console.error('Error loading specializations:', error);
+    }
+  };
 
   const loadTranslators = async () => {
     setIsLoading(true);
@@ -128,12 +155,13 @@ export function TranslatorsPage() {
       telegram_id: "",
       whatsapp: "",
       status: "active",
-      languages: [{ language: "", rate_per_page: 0, specializations: [] }],
+      languages: [],
     });
+    setTranslatorRates([]);
     setIsDialogOpen(true);
   };
 
-  const handleOpenEdit = (translator: Translator) => {
+  const handleOpenEdit = async (translator: Translator) => {
     setEditingTranslator(translator);
     setForm({
       name: translator.name,
@@ -142,14 +170,18 @@ export function TranslatorsPage() {
       telegram_id: translator.telegram_id || "",
       whatsapp: translator.whatsapp || "",
       status: translator.status,
-      languages: translator.languages.length > 0 
-        ? translator.languages.map(lang => ({
-            language: lang.language,
-            rate_per_page: lang.rate_per_page,
-            specializations: lang.specializations || [],
-          }))
-        : [{ language: "", rate_per_page: 0, specializations: [] }],
+      languages: [], // Стара система мов більше не використовується
     });
+    
+    // Load translator rates if editing
+    try {
+      const rates = await translatorRatesApi.getTranslatorRates(translator.id);
+      setTranslatorRates(rates);
+    } catch (error: any) {
+      console.error('Error loading translator rates:', error);
+      setTranslatorRates([]);
+    }
+    
     setIsDialogOpen(true);
   };
 
@@ -167,8 +199,8 @@ export function TranslatorsPage() {
       toast.error("Введіть телефон перекладача");
       return;
     }
-    if (form.languages.every(l => !l.language)) {
-      toast.error("Додайте хоча б одну мову");
+    if (translatorRates.length === 0 || translatorRates.every(r => !r.language_id || r.language_id === 0)) {
+      toast.error("Додайте хоча б одну мову та ставку");
       return;
     }
 
@@ -181,24 +213,53 @@ export function TranslatorsPage() {
         telegram_id: form.telegram_id?.trim() || undefined,
         whatsapp: form.whatsapp?.trim() || undefined,
         status: form.status,
-        languages: form.languages
-          .filter(l => l.language)
-          .map(l => ({
-            language: l.language,
-            rate_per_page: l.rate_per_page,
-            specializations: l.specializations.length > 0 ? l.specializations : undefined,
-          })),
+        languages: [], // Стара система мов більше не використовується
       };
 
+      let savedTranslator: Translator;
       if (editingTranslator) {
-        await translatorsApi.updateTranslator(editingTranslator.id, payload);
+        savedTranslator = await translatorsApi.updateTranslator(editingTranslator.id, payload);
         toast.success("Перекладача оновлено");
       } else {
-        await translatorsApi.createTranslator(payload);
+        savedTranslator = await translatorsApi.createTranslator(payload);
         toast.success("Перекладача додано");
       }
 
+      // Зберегти ставки після створення/оновлення перекладача
+      if (savedTranslator && translatorRates.length > 0) {
+        try {
+          for (const rate of translatorRates) {
+            if (rate.language_id && rate.language_id > 0) {
+              if (rate.id) {
+                // Оновити існуючу ставку
+                await translatorRatesApi.updateTranslatorRate(rate.id, {
+                  language_id: rate.language_id,
+                  specialization_id: rate.specialization_id,
+                  translator_rate: rate.translator_rate,
+                  custom_client_price: rate.custom_client_price,
+                  notes: rate.notes,
+                });
+              } else {
+                // Створити нову ставку
+                await translatorRatesApi.createTranslatorRate(savedTranslator.id, {
+                  language_id: rate.language_id,
+                  specialization_id: rate.specialization_id,
+                  translator_rate: rate.translator_rate,
+                  custom_client_price: rate.custom_client_price,
+                  notes: rate.notes,
+                });
+              }
+            }
+          }
+        } catch (rateError: any) {
+          console.error('Error saving rates:', rateError);
+          // Не блокуємо збереження перекладача, якщо ставки не збереглися
+          toast.warning("Перекладача збережено, але деякі ставки не вдалося зберегти");
+        }
+      }
+
       setIsDialogOpen(false);
+      setTranslatorRates([]);
       loadTranslators();
     } catch (error: any) {
       // Обробка конкретних помилок
@@ -240,27 +301,106 @@ export function TranslatorsPage() {
     }
   };
 
-  const addLanguage = () => {
-    setForm(prev => ({
-      ...prev,
-      languages: [...prev.languages, { language: "", rate_per_page: 0, specializations: [] }],
-    }));
+  // API-based rate functions
+  const addLanguageRate = () => {
+    const newRate: TranslatorLanguageRate = {
+      translator_id: editingTranslator?.id || 0,
+      language_id: 0,
+      specialization_id: undefined,
+      translator_rate: 0,
+      custom_client_price: undefined,
+      notes: '',
+    };
+    setTranslatorRates([...translatorRates, newRate]);
   };
 
-  const removeLanguage = (index: number) => {
-    setForm(prev => ({
-      ...prev,
-      languages: prev.languages.filter((_, i) => i !== index),
-    }));
+  const updateRate = (index: number, field: keyof TranslatorLanguageRate, value: any) => {
+    const updated = [...translatorRates];
+    updated[index] = { 
+      ...updated[index], 
+      [field]: value,
+      translator_id: editingTranslator?.id || updated[index].translator_id || 0
+    };
+    setTranslatorRates(updated);
   };
 
-  const updateLanguage = (index: number, field: keyof TranslatorLanguageForm, value: any) => {
-    setForm(prev => ({
-      ...prev,
-      languages: prev.languages.map((lang, i) => 
-        i === index ? { ...lang, [field]: value } : lang
-      ),
-    }));
+  const saveRate = async (index: number) => {
+    const rate = translatorRates[index];
+    if (!rate.language_id || rate.language_id === 0) {
+      toast.error('Оберіть мову');
+      return;
+    }
+
+    // Якщо перекладач ще не збережений, просто оновлюємо локальний стан
+    if (!editingTranslator || !editingTranslator.id) {
+      // При створенні нового перекладача - просто оновлюємо локальний стан
+      // Ставки будуть збережені після збереження перекладача
+      toast.success('Ставку додано (буде збережено після збереження перекладача)');
+      return;
+    }
+
+    try {
+      if (rate.id) {
+        // Update existing
+        await translatorRatesApi.updateTranslatorRate(rate.id, rate);
+        toast.success('Ставку оновлено');
+      } else {
+        // Create new
+        const res = await translatorRatesApi.createTranslatorRate(editingTranslator.id, rate);
+        const updated = [...translatorRates];
+        updated[index] = res;
+        setTranslatorRates(updated);
+        toast.success('Ставку додано');
+      }
+    } catch (error: any) {
+      toast.error(`Помилка: ${error?.message || 'Невідома помилка'}`);
+    }
+  };
+
+  const deleteRate = async (index: number) => {
+    const rate = translatorRates[index];
+    if (rate.id) {
+      try {
+        await translatorRatesApi.deleteTranslatorRate(rate.id);
+        toast.success('Ставку видалено');
+      } catch (error: any) {
+        toast.error(`Помилка видалення: ${error?.message || 'Невідома помилка'}`);
+        return;
+      }
+    }
+    setTranslatorRates(translatorRates.filter((_, i) => i !== index));
+  };
+
+  const getClientPrice = (rate: TranslatorLanguageRate): number => {
+    if (rate.custom_client_price) {
+      return rate.custom_client_price;
+    }
+    const lang = apiLanguages.find(l => l.id === rate.language_id);
+    return lang ? lang.base_client_price : 0;
+  };
+
+  const getProfit = (rate: TranslatorLanguageRate): number => {
+    return getClientPrice(rate) - (rate.translator_rate || 0);
+  };
+
+  const addCustomSpecialization = async () => {
+    if (!newSpecName.trim()) {
+      toast.error('Введіть назву спеціалізації');
+      return;
+    }
+
+    try {
+      const res = await specializationsApi.createSpecialization({
+        name: newSpecName.trim(),
+        description: 'Кастомна спеціалізація',
+      });
+      setApiSpecializations([...apiSpecializations, res]);
+      setShowSpecModal(false);
+      setNewSpecName('');
+      toast.success('Спеціалізацію додано');
+    } catch (error: any) {
+      toast.error(`Помилка: ${error?.message || 'Невідома помилка'}`);
+    }
   };
 
   // Filter translators
@@ -532,83 +672,146 @@ export function TranslatorsPage() {
               </div>
             </div>
             
-            {/* Languages */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>Мови та ставки *</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addLanguage}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Додати мову
-                </Button>
-              </div>
-              
-              {form.languages.map((lang, index) => (
-                <div key={index} className="p-4 border rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Мова #{index + 1}</span>
-                    {form.languages.length > 1 && (
-                      <Button 
+            {/* Languages and Rates Section */}
+            <div className="space-y-4 pt-6 border-t">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Мови та ставки *</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addLanguageRate}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Додати мову/тип
+                  </Button>
+                </div>
+
+                {translatorRates.map((rate, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-4 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium">Мова #{index + 1}</h4>
+                      <Button
                         type="button"
-                        variant="ghost" 
+                        variant="ghost"
                         size="sm"
-                        onClick={() => removeLanguage(index)}
+                        onClick={() => deleteRate(index)}
                         className="text-red-600 h-8"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Мова</Label>
-                      <Select 
-                        value={lang.language}
-                        onValueChange={(v) => updateLanguage(index, "language", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Оберіть мову" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {LANGUAGES.map((l) => (
-                            <SelectItem key={l} value={l}>{l}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Мова:</Label>
+                        <Select
+                          value={rate.language_id?.toString() || ''}
+                          onValueChange={(v) => updateRate(index, 'language_id', v ? parseInt(v) : 0)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Оберіть мову" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {apiLanguages.map(lang => (
+                              <SelectItem key={lang.id} value={lang.id.toString()}>
+                                {lang.name_pl} ({lang.base_client_price} zł)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Спеціалізація:</Label>
+                        <div className="flex gap-2">
+                          <Select
+                            value={rate.specialization_id?.toString() || ''}
+                            onValueChange={(v) => updateRate(index, 'specialization_id', v ? parseInt(v) : undefined)}
+                            className="flex-1"
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Оберіть тип" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {apiSpecializations.map(spec => (
+                                <SelectItem key={spec.id} value={spec.id.toString()}>
+                                  {spec.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            onClick={() => setShowSpecModal(true)}
+                            className="text-xs"
+                          >
+                            + Додати свою
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ставка перекладача (zł):</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={rate.translator_rate || ''}
+                          onChange={(e) => updateRate(index, 'translator_rate', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Ціна для клієнта (zł):</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder={`Базова: ${getClientPrice(rate)} zł`}
+                          value={rate.custom_client_price || ''}
+                          onChange={(e) => updateRate(index, 'custom_client_price', e.target.value ? parseFloat(e.target.value) : undefined)}
+                        />
+                        <p className="text-xs text-gray-500">Залиште порожнім для базової ціни</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-green-50 border-l-4 border-green-500 p-3 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💰</span>
+                        <span className="font-semibold text-green-700">
+                          Прибуток: {getProfit(rate).toFixed(2)} zł/переклад
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label>Ставка за сторінку (zł)</Label>
-                      <Input
-                        type="number"
-                        value={lang.rate_per_page}
-                        onChange={(e) => updateLanguage(index, "rate_per_page", Number(e.target.value))}
-                        placeholder="60"
+                      <Label>Примітки:</Label>
+                      <Textarea
+                        value={rate.notes || ''}
+                        onChange={(e) => updateRate(index, 'notes', e.target.value)}
+                        placeholder="Наприклад: тільки медичні тексти, мінімум 2 дні"
+                        rows={2}
                       />
                     </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Спеціалізації</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {SPECIALIZATIONS.map((spec) => (
-                        <Badge
-                          key={spec}
-                          variant={lang.specializations.includes(spec) ? "default" : "outline"}
-                          className="cursor-pointer"
-                          onClick={() => {
-                            const newSpecs = lang.specializations.includes(spec)
-                              ? lang.specializations.filter(s => s !== spec)
-                              : [...lang.specializations, spec];
-                            updateLanguage(index, "specializations", newSpecs);
-                          }}
-                        >
-                          {spec}
-                        </Badge>
-                      ))}
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => saveRate(index)}
+                        className="flex-1 bg-orange-500 hover:bg-orange-600"
+                      >
+                        Зберегти
+                      </Button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+
+                {translatorRates.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Немає доданих мов та ставок. Натисніть "Додати мову/тип" щоб додати.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           
@@ -646,6 +849,47 @@ export function TranslatorsPage() {
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? "Видалення..." : "Видалити"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Specialization Modal */}
+      <Dialog open={showSpecModal} onOpenChange={setShowSpecModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Додати спеціалізацію</DialogTitle>
+            <DialogDescription>
+              Створіть нову спеціалізацію для перекладачів
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="spec-name">Назва спеціалізації</Label>
+              <Input
+                id="spec-name"
+                type="text"
+                value={newSpecName}
+                onChange={(e) => setNewSpecName(e.target.value)}
+                placeholder="Наприклад: Медичні тексти"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomSpecialization();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowSpecModal(false);
+              setNewSpecName('');
+            }}>
+              Скасувати
+            </Button>
+            <Button onClick={addCustomSpecialization} className="bg-orange-500 hover:bg-orange-600">
+              Додати
             </Button>
           </DialogFooter>
         </DialogContent>

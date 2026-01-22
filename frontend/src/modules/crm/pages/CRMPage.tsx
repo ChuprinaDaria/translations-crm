@@ -13,7 +13,7 @@ export function CRMPage() {
         <TabsList className="self-start mb-4">
           <TabsTrigger value="orders" className="flex items-center gap-2">
             <Package className="w-4 h-4" />
-            Замовлення
+            Zlecenia
           </TabsTrigger>
           <TabsTrigger value="list" className="flex items-center gap-2">
             <List className="w-4 h-4" />

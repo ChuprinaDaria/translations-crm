@@ -153,7 +153,7 @@ function AddTranslatorForm({
 
 const TIMELINE_STEPS = [
   { type: 'client_created', label: 'Створено клієнта' },
-  { type: 'order_created', label: 'Створено замовлення' },
+  { type: 'order_created', label: 'Zlecenie utworzone' },
   { type: 'payment_link_sent', label: 'Надіслано лінк оплати' },
   { type: 'payment_received', label: 'Оплачено' },
   { type: 'translator_assigned', label: 'Призначено перекладача' },
@@ -354,7 +354,7 @@ export function OrderDetailSheet({
   const handleAddTranslator = async (translatorId: number, fee: number) => {
     if (!order?.id) return;
     if (orderTranslators.length >= 10) {
-      toast.error('Максимум 10 перекладачів на замовлення');
+      toast.error('Maksymalnie 10 tłumaczy na zlecenie');
       return;
     }
     
@@ -438,7 +438,7 @@ export function OrderDetailSheet({
         <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-gray-900 truncate">
-              Деталі замовлення
+              Szczegóły zlecenia
                 </h2>
               <Button
                 variant="ghost"
@@ -970,7 +970,7 @@ export function OrderDetailSheet({
                                     <FileText className="h-5 w-5 text-red-600 flex-shrink-0" />
                                     <div className="min-w-0 flex-1">
                                       <p className="text-sm font-medium truncate">{file.name}</p>
-                                      <p className="text-xs text-gray-500">Файл замовлення</p>
+                                      <p className="text-xs text-gray-500">Plik zlecenia</p>
                               </div>
                             </div>
                                   {fileUrl && (

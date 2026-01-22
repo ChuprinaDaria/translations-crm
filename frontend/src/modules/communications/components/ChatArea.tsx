@@ -147,7 +147,7 @@ export function ChatArea({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onQuickAction?.('create_order')} className="cursor-pointer">
                 <FileText className="w-4 h-4 mr-2" />
-                Створити замовлення
+                Utwórz zlecenie
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onQuickAction?.('mark_important')} className="cursor-pointer">
                 <Star className="w-4 h-4 mr-2" />

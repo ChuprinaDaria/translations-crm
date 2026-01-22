@@ -203,7 +203,7 @@ export function OrderProfitTable({ orders, loading }: OrderProfitTableProps) {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Різниця оплат по замовленнях</CardTitle>
+          <CardTitle>Różnica płatności według zleceń</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -211,7 +211,7 @@ export function OrderProfitTable({ orders, loading }: OrderProfitTableProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>
-                    <SortButton field="order_number">№ Замовлення</SortButton>
+                    <SortButton field="order_number">Nr. Zlecenia</SortButton>
                   </TableHead>
                   <TableHead>
                     <SortButton field="clientName">Клієнт</SortButton>

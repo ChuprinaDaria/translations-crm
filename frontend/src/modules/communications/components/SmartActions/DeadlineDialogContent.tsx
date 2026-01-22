@@ -41,7 +41,7 @@ export function DeadlineDialogContent({ onConfirm, onCancel }: DeadlineDialogCon
           Скасувати
         </Button>
         <Button type="submit">
-          Створити замовлення
+          Utwórz zlecenie
         </Button>
       </div>
     </form>

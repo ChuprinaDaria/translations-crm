@@ -98,11 +98,11 @@ export function AddInternalNoteDialog({
             <div className="space-y-2">
               <Label htmlFor="order-select" className="flex items-center gap-2">
                 <Package className="w-4 h-4" />
-                Прив'язати до замовлення (опціонально)
+                Powiąż ze zleceniem (opcjonalnie)
               </Label>
               <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
                 <SelectTrigger id="order-select">
-                  <SelectValue placeholder="Оберіть замовлення або залиште порожнім" />
+                  <SelectValue placeholder="Wybierz zlecenie lub pozostaw puste" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Не прив'язувати</SelectItem>
@@ -131,7 +131,7 @@ export function AddInternalNoteDialog({
             />
             <p className="text-xs text-gray-500">
               Нотатка буде прив'язана до {clientId ? 'клієнта' : 'діалогу'}
-              {selectedOrderId && ' та замовлення'}
+              {selectedOrderId && ' i zlecenie'}
             </p>
           </div>
 

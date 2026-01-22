@@ -42,7 +42,7 @@ export function SendPaymentLinkDialog({
 
   const handleGenerate = async () => {
     if (!selectedOrderId) {
-      toast.error('Оберіть замовлення');
+      toast.error('Wybierz zlecenie');
       return;
     }
 
@@ -97,10 +97,10 @@ export function SendPaymentLinkDialog({
         <div className="space-y-4">
           {/* Оберіть замовлення */}
           <div className="space-y-2">
-            <Label htmlFor="order-select">Оберіть замовлення</Label>
+            <Label htmlFor="order-select">Wybierz zlecenie</Label>
             <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
               <SelectTrigger id="order-select">
-                <SelectValue placeholder="Оберіть замовлення" />
+                <SelectValue placeholder="Wybierz zlecenie" />
               </SelectTrigger>
               <SelectContent>
                 {orders.length === 0 ? (

@@ -291,7 +291,7 @@ export function ContextPanel({
                   className="w-full justify-start bg-white text-gray-900 border-gray-200 hover:bg-gray-50 [&_svg]:text-gray-700"
                 >
                   <FileText className="w-4 h-4 mr-2" />
-                  📝 Нове замовлення
+                  📝 Nowe zlecenie
                 </Button>
               )}
 

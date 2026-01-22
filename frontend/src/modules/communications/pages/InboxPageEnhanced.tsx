@@ -401,9 +401,9 @@ export function InboxPageEnhanced() {
           break;
         
         case 'create_order':
-          toast.info('Створення замовлення...');
+          toast.info('Tworzenie zlecenia...');
           await inboxApi.quickAction(conversationId, 'create_order', data);
-          toast.success('Замовлення створено');
+          toast.success('Zlecenie utworzone');
           // Reload orders
           const { orders: updatedOrders } = await loadConversationData(conversationId);
           setOrders(updatedOrders);
@@ -625,7 +625,7 @@ export function InboxPageEnhanced() {
     
     try {
       await inboxApi.addFileToOrder(orderId, fileUrl, fileName);
-      toast.success(`Файл ${fileName} додано до замовлення`);
+      toast.success(`Plik ${fileName} dodano do zlecenia`);
     } catch (error) {
       console.error('Error adding file:', error);
       toast.error('Помилка додавання файлу');
@@ -688,12 +688,12 @@ export function InboxPageEnhanced() {
         setOrders(updatedOrders);
       }
       
-      toast.success(`Створено замовлення і додано файл ${fileName}`);
+      toast.success(`Utworzono zlecenie i dodano plik ${fileName}`);
       setDeadlineDialogOpen(false);
       setPendingOrderCreation(null);
     } catch (error) {
       console.error('Error creating order and adding file:', error);
-      toast.error('Помилка створення замовлення');
+      toast.error('Błąd tworzenia zlecenia');
       setDeadlineDialogOpen(false);
       setPendingOrderCreation(null);
     }
@@ -718,9 +718,9 @@ export function InboxPageEnhanced() {
       
       // Show success message with delivery cost if paczkomat
       if (isPaczkomat) {
-        toast.success(`Пачкомат ${paczkomatCode} додано до замовлення. Вартість доставки: 13.99 zł`);
+        toast.success(`Paczkomat ${paczkomatCode} dodano do zlecenia. Koszt dostawy: 13.99 zł`);
       } else {
-        toast.success(`Адресу додано до замовлення`);
+        toast.success(`Adres dodano do zlecenia`);
       }
       
       // Reload orders
@@ -791,7 +791,7 @@ export function InboxPageEnhanced() {
       
       if (tracking.number && tracking.trackingUrl) {
         // Auto-send tracking info in chat
-        await handleSendMessage(conversationId, `📦 Ваше замовлення відправлено!\n\nНомер відстеження: ${tracking.number}\nВідстежити: ${tracking.trackingUrl}`);
+        await handleSendMessage(conversationId, `📦 Twoje zlecenie zostało wysłane!\n\nNumer śledzenia: ${tracking.number}\nŚledź: ${tracking.trackingUrl}`);
         toast.success('Трекінг номер відправлено');
       } else {
         toast.error('Трекінг номер ще не створений');
@@ -814,7 +814,7 @@ export function InboxPageEnhanced() {
   const handleOrderClick = (conversationId: string) => {
     if (orders && orders.length > 0) {
       // TODO: Navigate to order
-      toast.info('Перехід до замовлення');
+      toast.info('Przejście do zlecenia');
     } else if (client?.id) {
       // Відкрити діалог створення замовлення
       setCreateOrderDialogOpen(true);
@@ -1024,7 +1024,7 @@ export function InboxPageEnhanced() {
       <Dialog open={deadlineDialogOpen} onOpenChange={setDeadlineDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Встановити дедлайн для замовлення</DialogTitle>
+            <DialogTitle>Ustaw termin dla zlecenia</DialogTitle>
           </DialogHeader>
           <DeadlineDialogContent 
             onConfirm={handleCreateOrderWithDeadline}

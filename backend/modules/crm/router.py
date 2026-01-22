@@ -12,6 +12,7 @@ from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
 from modules.crm import models, schemas
 from modules.crm.services import timeline as timeline_service
+from modules.crm import crud_languages
 from modules.auth import models as auth_models
 
 router = APIRouter(tags=["crm"])
@@ -344,6 +345,10 @@ def update_order(
 ):
     """Update order (PATCH - partial update)."""
     from uuid import UUID
+    from datetime import date
+    from decimal import Decimal
+    from modules.finance.models import Transaction, PaymentMethod as FinancePaymentMethod
+    
     try:
         order_uuid = UUID(order_id)
     except ValueError:
@@ -352,6 +357,9 @@ def update_order(
     order = db.query(models.Order).filter(models.Order.id == order_uuid).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Зберігаємо старий payment_method для перевірки змін
+    old_payment_method = order.payment_method
     
     # Update fields if provided
     if order_in.client_id:
@@ -368,6 +376,73 @@ def update_order(
         order.deadline = order_in.deadline
     if order_in.file_url is not None:
         order.file_url = order_in.file_url
+    if order_in.language is not None:
+        order.language = order_in.language
+    if order_in.translation_type is not None:
+        order.translation_type = order_in.translation_type
+    if order_in.payment_method is not None:
+        order.payment_method = order_in.payment_method
+    
+    # Оновлюємо або створюємо транзакцію якщо:
+    # 1. Змінився payment_method на щось, крім 'none'
+    # 2. Або передано amount_gross (для мануального оновлення ціни)
+    should_update_transaction = False
+    if order_in.payment_method and order_in.payment_method != 'none' and order_in.payment_method != old_payment_method:
+        should_update_transaction = True
+    elif order_in.amount_gross is not None:
+        should_update_transaction = True
+    
+    if should_update_transaction:
+        # Перевіряємо, чи є вже транзакція для цього замовлення
+        existing_transaction = db.query(Transaction).filter(
+            Transaction.order_id == order_uuid
+        ).first()
+        
+        # Мапінг payment_method з Order на PaymentMethod з Finance
+        payment_method_map = {
+            'cash': FinancePaymentMethod.CASH,
+            'card': FinancePaymentMethod.CARD,
+            'transfer': FinancePaymentMethod.TRANSFER,
+        }
+        
+        # Визначаємо payment_method для транзакції
+        payment_method_to_use = order_in.payment_method if order_in.payment_method and order_in.payment_method != 'none' else (old_payment_method if old_payment_method and old_payment_method != 'none' else 'cash')
+        finance_payment_method = payment_method_map.get(payment_method_to_use) if payment_method_to_use else FinancePaymentMethod.CASH
+        
+        # Визначаємо суму для транзакції
+        amount = Decimal(str(order_in.amount_gross)) if order_in.amount_gross is not None else Decimal('0.00')
+        if amount == Decimal('0.00') and existing_transaction:
+            # Якщо сума не передана, беремо з існуючої транзакції
+            amount = existing_transaction.amount_gross
+        elif amount == Decimal('0.00'):
+            # Якщо транзакції немає і сума не передана, шукаємо в інших транзакціях
+            existing_transactions = db.query(Transaction).filter(
+                Transaction.order_id == order_uuid
+            ).all()
+            if existing_transactions:
+                amount = existing_transactions[0].amount_gross
+        
+        if existing_transaction:
+            # Оновлюємо існуючу транзакцію
+            if finance_payment_method:
+                existing_transaction.payment_method = finance_payment_method
+            if amount > Decimal('0.00'):
+                existing_transaction.amount_gross = amount
+            existing_transaction.payment_date = date.today()
+            existing_transaction.service_date = date.today()
+        else:
+            # Створюємо нову транзакцію тільки якщо payment_method не 'none'
+            if payment_method_to_use and payment_method_to_use != 'none':
+                new_transaction = Transaction(
+                    order_id=order_uuid,
+                    amount_gross=amount if amount > Decimal('0.00') else Decimal('0.00'),
+                    payment_date=date.today(),
+                    service_date=date.today(),
+                    receipt_number=f"AUTO-{order.order_number}",
+                    payment_method=finance_payment_method,
+                    notes=f"Автоматично створено при зміні способу оплати на {payment_method_to_use}" if order_in.payment_method else "Створено вручну",
+                )
+                db.add(new_transaction)
     
     db.commit()
     db.refresh(order)
@@ -928,6 +1003,37 @@ def get_order_translation_requests(
     return order.translation_requests
 
 
+@router.put("/translation-requests/{request_id}", response_model=schemas.TranslationRequestRead)
+def update_translation_request(
+    request_id: int,
+    request_update: schemas.TranslationRequestUpdate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Update translation request (e.g., change offered rate)."""
+    request = db.query(models.TranslationRequest).filter(
+        models.TranslationRequest.id == request_id
+    ).first()
+    
+    if not request:
+        raise HTTPException(status_code=404, detail="Translation request not found")
+    
+    if request_update.offered_rate is not None:
+        request.offered_rate = request_update.offered_rate
+    if request_update.notes is not None:
+        request.notes = request_update.notes
+    if request_update.status is not None:
+        request.status = request_update.status
+        if request_update.status == models.TranslationRequestStatus.ACCEPTED:
+            from datetime import timezone
+            request.response_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(request)
+    
+    return schemas.TranslationRequestRead.model_validate(request)
+
+
 # Offices endpoints
 @router.get("/offices", response_model=List[schemas.OfficeRead])
 def get_offices(
@@ -1065,4 +1171,123 @@ def delete_office(
     office.is_active = False
     db.commit()
     return {"status": "deleted", "id": office_id}
+
+
+# ============ LANGUAGES ENDPOINTS ============
+
+@router.get("/languages", response_model=List[schemas.Language])
+def list_languages(
+    skip: int = 0,
+    limit: int = 100,
+    active_only: bool = True,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Отримати список мов"""
+    return crud_languages.get_languages(db, skip, limit, active_only)
+
+
+@router.post("/languages", response_model=schemas.Language, status_code=201)
+def add_language(
+    language: schemas.LanguageCreate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Додати нову мову"""
+    return crud_languages.create_language(db, language)
+
+
+@router.put("/languages/{language_id}", response_model=schemas.Language)
+def edit_language(
+    language_id: int,
+    language_update: schemas.LanguageUpdate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Редагувати мову"""
+    updated = crud_languages.update_language(db, language_id, language_update)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Мову не знайдено")
+    return updated
+
+
+@router.delete("/languages/{language_id}", status_code=204)
+def remove_language(
+    language_id: int,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Видалити мову"""
+    if not crud_languages.delete_language(db, language_id):
+        raise HTTPException(status_code=404, detail="Мову не знайдено")
+
+
+# ============ SPECIALIZATIONS ENDPOINTS ============
+
+@router.get("/specializations", response_model=List[schemas.Specialization])
+def list_specializations(
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Отримати список спеціалізацій"""
+    return crud_languages.get_specializations(db)
+
+
+@router.post("/specializations", response_model=schemas.Specialization, status_code=201)
+def add_specialization(
+    spec: schemas.SpecializationCreate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Додати кастомну спеціалізацію"""
+    return crud_languages.create_specialization(db, spec)
+
+
+# ============ TRANSLATOR RATES ENDPOINTS ============
+
+@router.get("/translators/{translator_id}/rates", response_model=List[schemas.TranslatorLanguageRate])
+def list_translator_rates(
+    translator_id: int,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Отримати мови та ставки перекладача"""
+    return crud_languages.get_translator_rates(db, translator_id)
+
+
+@router.post("/translators/{translator_id}/rates", response_model=schemas.TranslatorLanguageRate, status_code=201)
+def add_translator_rate(
+    translator_id: int,
+    rate: schemas.TranslatorLanguageRateCreate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Додати мову/ставку перекладачу"""
+    rate.translator_id = translator_id
+    return crud_languages.create_translator_rate(db, rate)
+
+
+@router.put("/translator-rates/{rate_id}", response_model=schemas.TranslatorLanguageRate)
+def edit_translator_rate(
+    rate_id: int,
+    rate_update: schemas.TranslatorLanguageRateUpdate,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Редагувати ставку перекладача"""
+    updated = crud_languages.update_translator_rate(db, rate_id, rate_update)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Ставку не знайдено")
+    return updated
+
+
+@router.delete("/translator-rates/{rate_id}", status_code=204)
+def remove_translator_rate(
+    rate_id: int,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Видалити мову перекладача"""
+    if not crud_languages.delete_translator_rate(db, rate_id):
+        raise HTTPException(status_code=404, detail="Ставку не знайдено")
 

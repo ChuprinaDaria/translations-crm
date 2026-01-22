@@ -69,7 +69,7 @@ export function QuickActionsSidebar({
     {
       id: 'order',
       icon: FileText,
-      tooltip: 'Створити замовлення',
+      tooltip: 'Utwórz zlecenie',
       onClick: onOrderClick,
       requiresClient: true,
     },
@@ -83,7 +83,7 @@ export function QuickActionsSidebar({
 
   const handleClick = (action: typeof actions[0]) => {
     if (action.requiresOrder && !orderId) {
-      toast.info('Спочатку створіть замовлення');
+      toast.info('Najpierw utwórz zlecenie');
       return;
     }
     if (action.requiresClient && !clientId) {
