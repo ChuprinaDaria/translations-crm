@@ -4,6 +4,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  DragOverEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -20,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../../components/ui/utils";
 import { KanbanColumn } from "../components/KanbanColumn";
-import { KanbanCard, Order, Translator } from "../components/KanbanCard";
+import { KanbanCard, Order, Translator, ColumnColorKey } from "../components/KanbanCard";
 import { SendTranslationRequestDialog } from "../components/SendTranslationRequestDialog";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -34,7 +35,7 @@ type ColumnId = "NEW" | "IN_PROGRESS" | "READY" | "PAID" | "ISSUED";
 // Map frontend column to backend status format
 const statusMap: Record<ColumnId, string> = {
   NEW: "do_wykonania",
-  PAID: "oplacone", // Новий статус для оплачених
+  PAID: "oplacone", // Оплачено (можна ставити вручну для готівки)
   IN_PROGRESS: "do_poswiadczenia",
   READY: "do_wydania",
   ISSUED: "closed",
@@ -91,6 +92,7 @@ export function BoardPage() {
   const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [activeOverColumn, setActiveOverColumn] = useState<ColumnColorKey | null>(null);
   const [isUpdating, setIsUpdating] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   
@@ -100,6 +102,38 @@ export function BoardPage() {
   // Load orders and translators on mount
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Listen for order updates to refresh the board
+  // Але не перезавантажуємо, якщо замовлення вже оновлене локально (drag-and-drop)
+  useEffect(() => {
+    const handleOrderUpdate = async (event: CustomEvent) => {
+      const { orderId, skipReload } = event.detail;
+      // Якщо skipReload = true, не перезавантажуємо (це drag-and-drop оновлення)
+      if (skipReload) {
+        return;
+      }
+      // Reload data to get updated order information
+      await loadData();
+    };
+
+    const handleTranslatorsUpdate = async (event: CustomEvent) => {
+      const { orderId, skipReload } = event.detail;
+      // Якщо skipReload = true, не перезавантажуємо
+      if (skipReload) {
+        return;
+      }
+      // Reload data to get updated translator assignments
+      await loadData();
+    };
+
+    window.addEventListener('orderUpdated', handleOrderUpdate as EventListener);
+    window.addEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('orderUpdated', handleOrderUpdate as EventListener);
+      window.removeEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+    };
   }, []);
 
   const loadData = async () => {
@@ -148,8 +182,11 @@ export function BoardPage() {
           managerName: "Менеджер", // TODO: Get from order.manager
           description: order.description,
           file_url: order.file_url,
-          // Тип документа - можна витягти з description або додати окреме поле
-          documentType: order.description?.split(" ")[0] || "Документ",
+          // Тип документа та мова з БД
+          documentType: (order as any).translation_type || order.description?.split(" ")[0] || "Документ",
+          language: (order as any).language,
+          translation_type: (order as any).translation_type,
+          payment_method: (order as any).payment_method,
           // Ціна для клієнта
           price: clientPrice,
           // Перекладач (якщо є прийнятий запит)
@@ -258,31 +295,67 @@ export function BoardPage() {
     const order = orders.find((o) => o.id === event.active.id);
     if (order) {
       setActiveOrder(order);
+      // Встановлюємо початкову колонку
+      const currentColumn = mapStatusToColumn(order.status, order);
+      setActiveOverColumn(currentColumn);
+    }
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (over && columns.some((col) => col.id === over.id)) {
+      setActiveOverColumn(over.id as ColumnColorKey);
     }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveOrder(null);
+    setActiveOverColumn(null);
 
-    if (!over) return;
+    if (!over) {
+      // Якщо не скинули на колонку, просто виходимо
+      return;
+    }
 
     const orderId = active.id as string;
     const newStatus = over.id as ColumnId;
 
     // Check if dropping on a valid column
-    if (!columns.some((col) => col.id === newStatus)) return;
+    const isValidColumn = columns.some((col) => col.id === newStatus);
+    if (!isValidColumn) {
+      console.log('Invalid column:', newStatus, 'Valid columns:', columns.map(c => c.id));
+      return;
+    }
 
     const order = orders.find((o) => o.id === orderId);
-    if (!order) return;
+    if (!order) {
+      console.log('Order not found:', orderId);
+      return;
+    }
 
     // Don't update if status hasn't changed
     const currentColumn = mapStatusToColumn(order.status, order);
-    if (currentColumn === newStatus) return;
+    if (currentColumn === newStatus) {
+      console.log('Status unchanged:', currentColumn);
+      return;
+    }
+
+    const backendStatus = statusMap[newStatus];
+
+    // Якщо перетягнули в колонку PAID, автоматично встановлюємо payment_method = "cash"
+    const updateData: any = { status: backendStatus as any };
+    if (newStatus === "PAID") {
+      updateData.payment_method = "cash";
+    }
 
     // Optimistic UI: Immediately update local state
     const previousOrder = { ...order };
-    const optimisticOrder = { ...order, status: newStatus };
+    const optimisticOrder = { 
+      ...order, 
+      status: newStatus,
+      payment_method: newStatus === "PAID" ? "cash" : order.payment_method
+    };
 
     setOrders((prevOrders) =>
       prevOrders.map((o) => (o.id === orderId ? optimisticOrder : o))
@@ -292,7 +365,39 @@ export function BoardPage() {
 
     try {
       // Send API request in background
-      await ordersApi.updateOrder(orderId, { status: statusMap[newStatus] as any });
+      const updatedOrder = await ordersApi.updateOrder(orderId, updateData);
+      
+      // Оновлюємо локальний стан з даними з API (на випадок, якщо бекенд змінив щось)
+      setOrders((prevOrders) =>
+        prevOrders.map((o) => {
+          if (o.id === orderId) {
+            return {
+              ...o,
+              status: newStatus,
+              payment_method: newStatus === "PAID" ? "cash" : o.payment_method,
+              // Оновлюємо інші поля з API, якщо потрібно
+              ...(updatedOrder as any),
+            };
+          }
+          return o;
+        })
+      );
+      
+      // Якщо змінився payment_method на cash, сповіщаємо FinancePage про необхідність оновлення
+      if (newStatus === "PAID") {
+        window.dispatchEvent(new CustomEvent('orderPaymentMethodChanged', {
+          detail: { orderId, paymentMethod: 'cash' }
+        }));
+      }
+      
+      // Сповіщаємо про оновлення замовлення для синхронізації з карткою клієнта
+      // skipReload = true, щоб не перезавантажувати BoardPage (ми вже оновили локально)
+      const orderClientId = order.clientId || (order as any).client_id;
+      if (orderClientId) {
+        window.dispatchEvent(new CustomEvent('orderUpdated', {
+          detail: { orderId, clientId: orderClientId, skipReload: true }
+        }));
+      }
       
       // Success - state already updated optimistically
       // Optional: Play subtle sound or haptic feedback
@@ -335,52 +440,6 @@ export function BoardPage() {
   const [sendTranslationRequestDialogOpen, setSendTranslationRequestDialogOpen] = useState(false);
   const [selectedOrderForRequest, setSelectedOrderForRequest] = useState<Order | null>(null);
 
-  const handleSendTranslationRequest = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-      setSelectedOrderForRequest(order);
-      setSendTranslationRequestDialogOpen(true);
-    }
-  };
-
-  const handleTranslatorChange = async (orderId: string, translatorId: string) => {
-    try {
-      const translator = translators.find(t => t.id === translatorId);
-      if (!translator) return;
-
-      // TODO: Викликати API для оновлення перекладача
-      // await apiFetch(`/crm/orders/${orderId}`, {
-      //   method: "PATCH",
-      //   body: JSON.stringify({ 
-      //     translator_id: translatorId,
-      //     translator_fee: translator.rate 
-      //   }),
-      // });
-
-      // TODO: Викликати API для автоматизації Timeline (етап 5)
-      // await timelineApi.markTranslatorAssigned(orderId, translatorId);
-
-      // Оновлюємо локальний стан
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.id === orderId
-            ? {
-                ...order,
-                translatorId: translatorId,
-                translatorName: translator.name,
-                translatorRate: translator.rate,
-                translatorFee: translator.rate, // Можна розрахувати на основі обсягу
-              }
-            : order
-        )
-      );
-
-      toast.success(`Перекладача змінено на ${translator.name}`);
-    } catch (error: any) {
-      toast.error(`Помилка оновлення перекладача: ${error?.message || "Невідома помилка"}`);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="h-[calc(100vh-8rem)] flex items-center justify-center">
@@ -405,6 +464,7 @@ export function BoardPage() {
             sensors={sensors}
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
             <div className="flex-1 flex gap-4 overflow-x-auto pb-4 h-full">
@@ -424,9 +484,7 @@ export function BoardPage() {
                       orders={columnOrders}
                       onCardClick={handleCardClick}
                       onClientClick={handleClientClick}
-                      onTranslatorChange={handleTranslatorChange}
-                      onSendTranslationRequest={handleSendTranslationRequest}
-                      translators={translators}
+                      columnColor={column.id}
                     />
                   </motion.div>
                 );
@@ -441,7 +499,12 @@ export function BoardPage() {
                   transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   style={{ cursor: "grabbing" }}
                 >
-                  <KanbanCard order={activeOrder} onClick={() => {}} isOverlay />
+                  <KanbanCard 
+                    order={activeOrder} 
+                    onClick={() => {}} 
+                    isOverlay 
+                    columnColor={activeOverColumn || "NEW"}
+                  />
                 </motion.div>
               ) : null}
             </DragOverlay>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StickyNote, Plus, X, User, FileText, Calendar, DollarSign, Download, Users, Edit, Check, Trash2 } from 'lucide-react';
 import {
   Sheet,
@@ -23,12 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
+import { LanguageCombobox, type LanguageOption } from '../../../components/ui/language-combobox';
 import { useI18n } from '../../../lib/i18n';
 import { formatDistanceToNow, format } from 'date-fns';
 import { pl, uk, enUS, type Locale } from 'date-fns/locale';
 import { notesApi, type InternalNote } from '../api/notes';
 import { translatorsApi, type Translator } from '../api/translators';
 import { ordersApi } from '../api/orders';
+import { languagesApi, type Language } from '../api/languages';
 import { Order } from './KanbanCard';
 import { toast } from 'sonner';
 
@@ -44,6 +46,7 @@ interface OrderTranslator {
   translatorId: number;
   translatorName: string;
   rate: number;
+  requestId?: number; // ID translation request для оновлення
 }
 
 interface OrderNotesSheetProps {
@@ -59,22 +62,78 @@ const localeMap: Record<string, Locale> = {
   en: enUS,
 };
 
-// Типи перекладів
-const TRANSLATION_TYPES = [
-  { value: 'zwykle', label: 'Zwykłe (звичайний)' },
-  { value: 'przysiegle', label: 'Przysięgłe (присяжний)' },
-  { value: 'ustne', label: 'Ustne (усний)' },
-  { value: 'ekspresowe', label: 'Ekspresowe (терміновий)' },
+// Типи документів
+const DOCUMENT_TYPES = [
+  { value: 'trc', label: 'TRC - Присяжний переклад' },
+  { value: 'umowa', label: 'Umowa - Договір' },
+  { value: 'zaswiadczenie', label: 'Zaświadczenie - Довідка' },
+  { value: 'szkolne', label: 'Szkolne - Шкільні документи' },
+  { value: 'samochodowe', label: 'Samochodowe - Автомобільні' },
+  { value: 'inne', label: 'Inne - Інше' },
 ];
 
-// Мови
-const LANGUAGES = [
-  { value: 'uk', label: 'Українська' },
-  { value: 'pl', label: 'Польська' },
-  { value: 'en', label: 'Англійська' },
-  { value: 'de', label: 'Німецька' },
-  { value: 'ru', label: 'Російська' },
-  { value: 'fr', label: 'Французька' },
+// Мапінг польських назв на українські
+const plToUkrainianName: Record<string, string> = {
+  'Ukraiński': 'Українська',
+  'Polski': 'Польська',
+  'Angielski': 'Англійська',
+  'Niemiecki': 'Німецька',
+  'Rosyjski': 'Російська',
+  'Francuski': 'Французька',
+  'Włoski': 'Італійська',
+  'Hiszpański': 'Іспанська',
+  'Czeski': 'Чеська',
+  'Słowacki': 'Словацька',
+  'Węgierski': 'Угорська',
+  'Rumuński': 'Румунська',
+  'Bułgarski': 'Болгарська',
+  'Serbski': 'Сербська',
+  'Chorwacki': 'Хорватська',
+  'Słoweński': 'Словенська',
+  'Grecki': 'Грецька',
+  'Turecki': 'Турецька',
+  'Arabski': 'Арабська',
+  'Chiński': 'Китайська',
+  'Japoński': 'Японська',
+  'Koreański': 'Корейська',
+  'Wietnamski': 'В\'єтнамська',
+  'Tajski': 'Тайська',
+  'Indonezyjski': 'Індонезійська',
+  'Hindi': 'Хінді',
+  'Portugalski': 'Португальська',
+  'Holenderski': 'Голландська',
+  'Szwedzki': 'Шведська',
+  'Norweski': 'Норвезька',
+  'Duński': 'Данська',
+  'Fiński': 'Фінська',
+  'Estoński': 'Естонська',
+  'Łotewski': 'Латвійська',
+  'Litewski': 'Литовська',
+  'Białoruski': 'Білоруська',
+  'Gruziński': 'Грузинська',
+  'Ormiański': 'Вірменська',
+  'Azerski': 'Азербайджанська',
+  'Kazachski': 'Казахська',
+  'Uzbecki': 'Узбецька',
+  'Hebrajski': 'Іврит',
+  'Perski': 'Перська',
+};
+
+// Функція для конвертації мов API у формат для Combobox
+const convertLanguagesToOptions = (languages: Language[]): LanguageOption[] => {
+  return languages.map(lang => ({
+    value: lang.name_pl,
+    label: plToUkrainianName[lang.name_pl] || lang.name_pl,
+    labelPl: lang.name_pl,
+  }));
+};
+
+// Способи оплати
+const PAYMENT_METHODS = [
+  { value: 'none', label: 'Не оплачено' },
+  { value: 'cash', label: 'Готівка' },
+  { value: 'card', label: 'Картка' },
+  { value: 'transfer', label: 'Переказ' },
 ];
 
 export function OrderNotesSheet({
@@ -90,15 +149,22 @@ export function OrderNotesSheet({
   const [newNote, setNewNote] = useState<string>('');
   const [notesList, setNotesList] = useState<Note[]>([]);
   
-  // Editable fields
-  const [isEditing, setIsEditing] = useState(false);
+  // Editable fields (завжди редагувані)
   const [editDeadline, setEditDeadline] = useState('');
   const [editTranslationType, setEditTranslationType] = useState('');
   const [editLanguage, setEditLanguage] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'unpaid'>('unpaid');
+  const [editPaymentMethod, setEditPaymentMethod] = useState('none');
+  const [editClientPrice, setEditClientPrice] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  
+  // Languages
+  const [availableLanguages, setAvailableLanguages] = useState<LanguageOption[]>([]);
+  const [isLoadingLanguages, setIsLoadingLanguages] = useState(false);
   
   // Translators
   const [availableTranslators, setAvailableTranslators] = useState<Translator[]>([]);
+  const [filteredTranslators, setFilteredTranslators] = useState<Translator[]>([]);
   const [orderTranslators, setOrderTranslators] = useState<OrderTranslator[]>([]);
   const [selectedTranslatorId, setSelectedTranslatorId] = useState<string>('');
   const [translatorRate, setTranslatorRate] = useState<number>(0);
@@ -162,12 +228,37 @@ export function OrderNotesSheet({
     }
   };
 
-  // Load translators
-  const loadTranslators = async () => {
+  // Load languages
+  const loadLanguages = async () => {
+    setIsLoadingLanguages(true);
+    try {
+      const languages = await languagesApi.getLanguages();
+      const options = convertLanguagesToOptions(languages);
+      setAvailableLanguages(options);
+    } catch (error) {
+      console.error('Error loading languages:', error);
+      toast.error('Помилка завантаження мов');
+      setAvailableLanguages([]);
+    } finally {
+      setIsLoadingLanguages(false);
+    }
+  };
+
+  // Load translators - filtered by selected language if available
+  const loadTranslators = async (languageName?: string) => {
     setIsLoadingTranslators(true);
     try {
-      const translators = await translatorsApi.getTranslators({ status: 'active' });
+      const params: { status?: string; language?: string } = { status: 'active' };
+      
+      // If language is selected, filter translators by that language
+      // languageName is Polish name (e.g., "Angielski") from LanguageCombobox
+      if (languageName) {
+        params.language = languageName;
+      }
+      
+      const translators = await translatorsApi.getTranslators(params);
       setAvailableTranslators(translators);
+      setFilteredTranslators(translators);
       
       // Load order translators from translation requests
       const requests = await translatorsApi.getOrderTranslationRequests(order.id);
@@ -178,27 +269,125 @@ export function OrderNotesSheet({
           translatorId: req.translator_id,
           translatorName: req.translator?.name || `ID: ${req.translator_id}`,
           rate: req.offered_rate,
+          requestId: req.id,
         }));
       setOrderTranslators(acceptedTranslators);
     } catch (error) {
       console.error('Error loading translators:', error);
+      toast.error('Помилка завантаження перекладачів');
     } finally {
       setIsLoadingTranslators(false);
     }
   };
 
+  // Auto-filter translators when language changes
+  useEffect(() => {
+    if (open && order.id) {
+      if (editLanguage) {
+        loadTranslators(editLanguage);
+      } else {
+        // If no language selected, show all active translators
+        loadTranslators();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLanguage, open, order.id]);
+
   useEffect(() => {
     if (open && order.id) {
       loadNotes();
+      loadLanguages();
+      // Завжди завантажуємо актуальні дані перекладачів з API
       loadTranslators();
       setNewNote('');
-      setEditDeadline(order.deadline ? format(new Date(order.deadline), 'yyyy-MM-dd') : '');
-      setEditLanguage(order.language || '');
-      // Determine payment status from transactions
-      const hasPaid = order.transactions?.some(t => t.type === 'income');
-      setPaymentStatus(hasPaid ? 'paid' : 'unpaid');
+      setHasChanges(false);
+      
+      // Завантажуємо актуальні дані замовлення з API для отримання правильних значень
+      const loadOrderData = async () => {
+        try {
+          const updatedOrder = await ordersApi.getOrder(order.id);
+          setEditDeadline(updatedOrder.deadline ? format(new Date(updatedOrder.deadline), 'yyyy-MM-dd') : '');
+          
+          // Convert language code to Polish name if needed
+          let orderLanguage = (updatedOrder as any).language || '';
+          if (orderLanguage) {
+            // Check if it's a code (uk, pl, en) or already a Polish name
+            const codeToPolish: Record<string, string> = {
+              'uk': 'Ukraiński',
+              'pl': 'Polski',
+              'en': 'Angielski',
+              'de': 'Niemiecki',
+              'ru': 'Rosyjski',
+              'fr': 'Francuski',
+              'it': 'Włoski',
+              'es': 'Hiszpański',
+            };
+            // If it's a code, convert to Polish name; otherwise use as is
+            orderLanguage = codeToPolish[orderLanguage.toLowerCase()] || orderLanguage;
+          }
+          setEditLanguage(orderLanguage);
+          setEditTranslationType((updatedOrder as any).translation_type || updatedOrder.description || '');
+          
+          // Payment method from order or determine from transactions
+          const orderPaymentMethod = (updatedOrder as any).payment_method;
+          if (orderPaymentMethod) {
+            setEditPaymentMethod(orderPaymentMethod);
+          } else {
+            const hasPaid = updatedOrder.transactions?.some((t: any) => t.type === 'income');
+            setEditPaymentMethod(hasPaid ? 'transfer' : 'none');
+          }
+          
+          // Client price from transactions
+          const clientPayment = updatedOrder.transactions
+            ?.filter((t: any) => t.type === 'income')
+            .reduce((sum: number, t: any) => sum + t.amount, 0) || 0;
+          setEditClientPrice(clientPayment > 0 ? clientPayment.toString() : '');
+        } catch (error) {
+          console.error('Error loading order data:', error);
+          // Fallback to order prop data
+          setEditDeadline(order.deadline ? format(new Date(order.deadline), 'yyyy-MM-dd') : '');
+          
+          // Convert language code to Polish name if needed
+          let orderLanguage = (order as any).language || '';
+          if (orderLanguage) {
+            const codeToPolish: Record<string, string> = {
+              'uk': 'Ukraiński',
+              'pl': 'Polski',
+              'en': 'Angielski',
+              'de': 'Niemiecki',
+              'ru': 'Rosyjski',
+              'fr': 'Francuski',
+              'it': 'Włoski',
+              'es': 'Hiszpański',
+            };
+            orderLanguage = codeToPolish[orderLanguage.toLowerCase()] || orderLanguage;
+          }
+          setEditLanguage(orderLanguage);
+          setEditTranslationType((order as any).translation_type || (order as any).documentType || '');
+          const orderPaymentMethod = (order as any).payment_method;
+          if (orderPaymentMethod) {
+            setEditPaymentMethod(orderPaymentMethod);
+          } else {
+            const hasPaid = order.transactions?.some(t => t.type === 'income');
+            setEditPaymentMethod(hasPaid ? 'transfer' : 'none');
+          }
+          const clientPayment = order.transactions
+            ?.filter(t => t.type === 'income')
+            .reduce((sum, t) => sum + t.amount, 0) || 0;
+          setEditClientPrice(clientPayment > 0 ? clientPayment.toString() : '');
+        }
+      };
+      
+      loadOrderData();
     }
   }, [open, order.id]);
+
+  // Синхронізуємо термін виконання при зміні order.deadline
+  useEffect(() => {
+    if (order.deadline) {
+      setEditDeadline(format(new Date(order.deadline), 'yyyy-MM-dd'));
+    }
+  }, [order.deadline]);
 
   const getCurrentUserInfo = () => {
     try {
@@ -271,40 +460,127 @@ export function OrderNotesSheet({
         translatorId: translator.id,
         translatorName: translator.name,
         rate: translatorRate,
+        requestId: request.id,
       }]);
       
       setSelectedTranslatorId('');
       setTranslatorRate(0);
       toast.success(`Перекладач ${translator.name} призначений`);
+      
+      // Сповіщаємо про оновлення перекладачів для синхронізації з карткою клієнта
+      window.dispatchEvent(new CustomEvent('orderTranslatorsUpdated', {
+        detail: { orderId: order.id, clientId: order.clientId }
+      }));
     } catch (error) {
       console.error('Error adding translator:', error);
       toast.error('Помилка призначення перекладача');
     }
   };
 
-  const handleRemoveTranslator = (id: string) => {
+  const handleRemoveTranslator = async (id: string) => {
+    const translator = orderTranslators.find(t => t.id === id);
+    if (translator?.requestId) {
+      try {
+        // Відхиляємо запит на бекенді
+        await translatorsApi.declineTranslationRequest(translator.requestId, 'Видалено вручну');
+      } catch (error) {
+        console.error('Error removing translator:', error);
+        toast.error('Помилка видалення перекладача');
+        return;
+      }
+    }
     setOrderTranslators(prev => prev.filter(t => t.id !== id));
   };
 
   const handleSaveChanges = async () => {
+    setIsSaving(true);
     try {
-      await ordersApi.updateOrder(order.id, {
-        deadline: editDeadline ? `${editDeadline}T23:59:59.000Z` : undefined,
-      });
+      // Підготовка даних для оновлення
+      const updateData: any = {};
+      
+      if (editDeadline) {
+        updateData.deadline = `${editDeadline}T23:59:59.000Z`;
+      }
+      if (editLanguage) {
+        updateData.language = editLanguage;
+      }
+      if (editTranslationType) {
+        updateData.translation_type = editTranslationType;
+      }
+      if (editPaymentMethod) {
+        updateData.payment_method = editPaymentMethod;
+        // Якщо оплачено (не 'none'), автоматично змінюємо статус на oplacone
+        if (editPaymentMethod !== 'none') {
+          updateData.status = 'oplacone';
+        }
+      }
+      
+      // Якщо введено ціну клієнта, додаємо її до оновлення
+      if (editClientPrice && parseFloat(editClientPrice) > 0) {
+        updateData.amount_gross = parseFloat(editClientPrice);
+      }
+
+      const updatedOrder = await ordersApi.updateOrder(order.id, updateData);
+      
+      // Оновлюємо ціни перекладачів, якщо вони змінилися
+      for (const translator of orderTranslators) {
+        if (translator.requestId && translator.rate > 0) {
+          try {
+            await translatorsApi.updateTranslationRequest(translator.requestId, {
+              offered_rate: translator.rate,
+            });
+          } catch (error) {
+            console.error('Error updating translator rate:', error);
+            // Не показуємо помилку, щоб не переривати процес збереження
+          }
+        }
+      }
+      
+      // Перезавантажуємо перекладачів для отримання актуальних даних
+      await loadTranslators();
       
       toast.success('Зміни збережено');
-      setIsEditing(false);
+      setHasChanges(false);
+      
+      // Оновлюємо локальний стан з актуальними даними
+      if (updatedOrder.deadline) {
+        setEditDeadline(format(new Date(updatedOrder.deadline), 'yyyy-MM-dd'));
+      }
+      
+      // Перезавантажуємо дані з API для отримання актуальних даних перекладачів
+      await loadTranslators();
+      
+      // Якщо змінився payment_method, сповіщаємо FinancePage про необхідність оновлення
+      if (editPaymentMethod && editPaymentMethod !== 'none') {
+        window.dispatchEvent(new CustomEvent('orderPaymentMethodChanged', {
+          detail: { orderId: order.id, paymentMethod: editPaymentMethod }
+        }));
+      }
+      
+      // Сповіщаємо про оновлення замовлення для синхронізації з карткою клієнта
+      window.dispatchEvent(new CustomEvent('orderUpdated', {
+        detail: { orderId: order.id, clientId: order.clientId }
+      }));
+      
+      // Сповіщаємо про оновлення перекладачів
+      window.dispatchEvent(new CustomEvent('orderTranslatorsUpdated', {
+        detail: { orderId: order.id, clientId: order.clientId }
+      }));
       
       if (onOrderUpdate) {
         onOrderUpdate({
           ...order,
-          deadline: editDeadline ? new Date(editDeadline) : order.deadline,
-          language: editLanguage || order.language,
-        });
+          deadline: updatedOrder.deadline ? new Date(updatedOrder.deadline) : order.deadline,
+          language: (updatedOrder as any).language || order.language,
+          documentType: (updatedOrder as any).translation_type || updatedOrder.description || order.documentType,
+          status: editPaymentMethod !== 'none' ? 'PAID' : order.status,
+        } as Order);
       }
     } catch (error) {
       console.error('Error saving changes:', error);
       toast.error('Помилка збереження');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -326,15 +602,28 @@ export function OrderNotesSheet({
     }
   };
 
-  // Auto-set rate when translator selected
+  // Auto-set rate when translator selected - use rate for selected language if available
   useEffect(() => {
-    if (selectedTranslatorId) {
+    if (selectedTranslatorId && editLanguage) {
+      const translator = filteredTranslators.find(t => String(t.id) === selectedTranslatorId);
+      if (translator) {
+        // Try to find rate for selected language first
+        const langRate = translator.languages.find(l => l.language === editLanguage);
+        if (langRate) {
+          setTranslatorRate(langRate.rate_per_page || 0);
+        } else if (translator.languages.length > 0) {
+          // Fallback to first available rate
+          setTranslatorRate(translator.languages[0].rate_per_page || 0);
+        }
+      }
+    } else if (selectedTranslatorId) {
+      // If no language selected, use first available rate
       const translator = availableTranslators.find(t => String(t.id) === selectedTranslatorId);
       if (translator && translator.languages.length > 0) {
         setTranslatorRate(translator.languages[0].rate_per_page || 0);
       }
     }
-  }, [selectedTranslatorId, availableTranslators]);
+  }, [selectedTranslatorId, editLanguage, filteredTranslators, availableTranslators]);
 
   if (!order.id) {
     return null;
@@ -354,17 +643,24 @@ export function OrderNotesSheet({
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2 text-sm font-medium">
               <FileText className="w-4 h-4" />
-              {order.orderNumber}
+              Nr. {order.orderNumber}
             </SheetTitle>
-            {activeTab === 'details' && (
+            {activeTab === 'details' && hasChanges && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsEditing(!isEditing)}
+                onClick={handleSaveChanges}
+                disabled={isSaving}
                 className="h-7 px-2"
               >
-                <Edit className="w-3 h-3 mr-1" />
-                {isEditing ? 'Скасувати' : 'Редагувати'}
+                {isSaving ? (
+                  <>Збереження...</>
+                ) : (
+                  <>
+                    <Check className="w-3 h-3 mr-1" />
+                    Зберегти
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -396,72 +692,114 @@ export function OrderNotesSheet({
               {/* Deadline */}
               <div className="space-y-1">
                 <Label className="text-xs text-gray-500">Термін виконання</Label>
-                {isEditing ? (
-                  <Input
-                    type="date"
-                    value={editDeadline}
-                    onChange={(e) => setEditDeadline(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">{formatDate(order.deadline)}</span>
-                  </div>
-                )}
+                <Input
+                  type="date"
+                  value={editDeadline}
+                  onChange={(e) => {
+                    setEditDeadline(e.target.value);
+                    setHasChanges(true);
+                  }}
+                  className="h-8 text-sm"
+                />
               </div>
 
-              {/* Translation Type */}
+              {/* Document Type */}
               <div className="space-y-1">
-                <Label className="text-xs text-gray-500">Тип перекладу</Label>
-                {isEditing ? (
-                  <Select value={editTranslationType} onValueChange={setEditTranslationType}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Виберіть тип" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TRANSLATION_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value} className="text-sm">
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm">{order.documentType || '-'}</p>
-                )}
+                <Label className="text-xs text-gray-500">Тип документа</Label>
+                <Select 
+                  value={editTranslationType} 
+                  onValueChange={(value) => {
+                    setEditTranslationType(value);
+                    setHasChanges(true);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Виберіть тип" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value} className="text-sm">
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Language */}
               <div className="space-y-1">
                 <Label className="text-xs text-gray-500">Мова</Label>
-                {isEditing ? (
-                  <Select value={editLanguage} onValueChange={setEditLanguage}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Виберіть мову" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGES.map((lang) => (
-                        <SelectItem key={lang.value} value={lang.value} className="text-sm">
-                          {lang.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {isLoadingLanguages ? (
+                  <div className="h-8 text-xs text-gray-400 flex items-center">
+                    Завантаження...
+                  </div>
                 ) : (
-                  <p className="text-sm">{order.language || '-'}</p>
+                  <LanguageCombobox
+                    value={editLanguage}
+                    onValueChange={(value) => {
+                      const previousLanguage = editLanguage;
+                      setEditLanguage(value);
+                      setHasChanges(true);
+                      
+                      // If language changed, dispatch update event immediately for real-time sync
+                      if (value !== previousLanguage && value) {
+                        // Dispatch event to notify other components about language change
+                        window.dispatchEvent(new CustomEvent('orderLanguageChanged', {
+                          detail: { orderId: order.id, language: value, clientId: order.clientId }
+                        }));
+                      }
+                    }}
+                    languages={availableLanguages}
+                    placeholder="Виберіть мову"
+                    searchPlaceholder="Введіть назву мови..."
+                    emptyText="Мову не знайдено"
+                    triggerClassName="h-8 text-sm"
+                    className="w-[280px]"
+                  />
                 )}
               </div>
 
               {/* Payment Status */}
               <div className="space-y-1">
                 <Label className="text-xs text-gray-500">Статус оплати</Label>
-                <Badge 
-                  variant={paymentStatus === 'paid' ? 'default' : 'destructive'}
-                  className={paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}
+                <Select 
+                  value={editPaymentMethod} 
+                  onValueChange={(value) => {
+                    setEditPaymentMethod(value);
+                    setHasChanges(true);
+                  }}
                 >
-                  {paymentStatus === 'paid' ? 'Оплачено' : 'Не оплачено'}
-                </Badge>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Виберіть спосіб" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value} className="text-sm">
+                        {method.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Client Payment Amount */}
+              <div className="space-y-1">
+                <Label className="text-xs text-gray-500">Ціна для клієнта (сплачено)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editClientPrice}
+                    onChange={(e) => {
+                      setEditClientPrice(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    placeholder="0.00"
+                    className="h-8 text-sm"
+                  />
+                  <span className="text-xs text-gray-500">₴</span>
+                </div>
               </div>
 
               {/* Translators Section */}
@@ -476,16 +814,32 @@ export function OrderNotesSheet({
                   <div className="space-y-1">
                     {orderTranslators.map((translator) => (
                       <div key={translator.id} className="flex items-center justify-between bg-gray-50 rounded p-2">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs font-medium">{translator.translatorName}</span>
-                          <span className="text-xs text-gray-500">{translator.rate} zł</span>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Users className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                          <span className="text-xs font-medium truncate">{translator.translatorName}</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={translator.rate || ''}
+                            onChange={(e) => {
+                              const newRate = parseFloat(e.target.value) || 0;
+                              setOrderTranslators(prev =>
+                                prev.map(t =>
+                                  t.id === translator.id ? { ...t, rate: newRate } : t
+                                )
+                              );
+                              setHasChanges(true);
+                            }}
+                            className="h-6 w-20 text-xs ml-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveTranslator(translator.id)}
-                          className="h-5 w-5 p-0"
+                          className="h-5 w-5 p-0 flex-shrink-0"
                         >
                           <X className="w-3 h-3" />
                         </Button>
@@ -495,37 +849,69 @@ export function OrderNotesSheet({
                 )}
 
                 {/* Add translator */}
-                <div className="flex gap-1">
-                  <Select value={selectedTranslatorId} onValueChange={setSelectedTranslatorId}>
-                    <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder="Перекладач..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableTranslators
-                        .filter(t => !orderTranslators.some(ot => ot.translatorId === t.id))
-                        .map((translator) => (
-                          <SelectItem key={translator.id} value={String(translator.id)} className="text-xs">
-                            {translator.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    value={translatorRate || ''}
-                    onChange={(e) => setTranslatorRate(Number(e.target.value))}
-                    placeholder="zł"
-                    className="w-16 h-7 text-xs"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddTranslator}
-                    disabled={!selectedTranslatorId || translatorRate <= 0}
-                    className="h-7 px-2"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    <Select 
+                      value={selectedTranslatorId} 
+                      onValueChange={(value) => {
+                        setSelectedTranslatorId(value);
+                        setHasChanges(true);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs flex-1">
+                        <SelectValue placeholder="Перекладач..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingTranslators ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            Завантаження...
+                          </div>
+                        ) : filteredTranslators.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            {editLanguage 
+                              ? 'Немає перекладачів для обраної мови' 
+                              : 'Виберіть мову для фільтрації перекладачів'}
+                          </div>
+                        ) : (
+                          filteredTranslators
+                            .filter(t => !orderTranslators.some(ot => ot.translatorId === t.id))
+                            .map((translator) => {
+                              // Find translator's rate for selected language
+                              const langRate = translator.languages.find(
+                                l => l.language === editLanguage
+                              );
+                              return (
+                                <SelectItem key={translator.id} value={String(translator.id)} className="text-xs">
+                                  {translator.name}
+                                  {langRate && ` (${langRate.rate_per_page} zł)`}
+                                </SelectItem>
+                              );
+                            })
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={translatorRate || ''}
+                      onChange={(e) => {
+                        setTranslatorRate(Number(e.target.value));
+                        setHasChanges(true);
+                      }}
+                      placeholder="zł"
+                      className="w-20 h-7 text-xs"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddTranslator}
+                      disabled={!selectedTranslatorId || translatorRate <= 0 || isLoadingTranslators}
+                      className="h-7 px-2"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -558,13 +944,6 @@ export function OrderNotesSheet({
                 )}
               </div>
 
-              {/* Save button when editing */}
-              {isEditing && (
-                <Button onClick={handleSaveChanges} className="w-full mt-3" size="sm">
-                  <Check className="w-3 h-3 mr-1" />
-                  Зберегти зміни
-                </Button>
-              )}
             </TabsContent>
 
             {/* Notes Tab */}

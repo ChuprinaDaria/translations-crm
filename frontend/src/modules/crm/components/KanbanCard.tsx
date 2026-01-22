@@ -1,16 +1,45 @@
 import React, { useState } from "react";
-import { Calendar, User, FileText, DollarSign, MessageSquare, ChevronDown } from "lucide-react";
+import { Clock, Bot, User, FileText, MessageSquare, GripVertical } from "lucide-react";
 import { Card } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
-import { Avatar, AvatarFallback } from "../../../components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
 import { OrderNotesSheet } from "./OrderNotesSheet";
 import { cn } from "../../../components/ui/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
 import { useI18n } from "../../../lib/i18n";
+
+// Кольори статусів колонок
+export const COLUMN_COLORS = {
+  NEW: {
+    bg: "#E8F5E9", // світло-зелений
+    border: "#81C784",
+    text: "#2E7D32",
+  },
+  PAID: {
+    bg: "#FFF3E0", // світло-помаранчевий
+    border: "#FFB74D",
+    text: "#E65100",
+  },
+  IN_PROGRESS: {
+    bg: "#E3F2FD", // світло-синій
+    border: "#64B5F6",
+    text: "#1565C0",
+  },
+  READY: {
+    bg: "#F3E5F5", // світло-фіолетовий
+    border: "#BA68C8",
+    text: "#7B1FA2",
+  },
+  ISSUED: {
+    bg: "#F5F5F5", // світло-сірий
+    border: "#BDBDBD",
+    text: "#616161",
+  },
+} as const;
+
+export type ColumnColorKey = keyof typeof COLUMN_COLORS;
 
 export interface Translator {
   id: string;
@@ -43,6 +72,8 @@ export interface Order {
   // Нові поля
   documentType?: string;
   language?: string;
+  translation_type?: string;
+  payment_method?: string;  // cash, card, transfer, none
   price?: number;
   translatorId?: string;
   translatorName?: string;
@@ -61,9 +92,7 @@ interface KanbanCardProps {
   order: Order;
   onClick: () => void;
   onClientClick?: (clientId: string) => void;
-  onTranslatorChange?: (orderId: string, translatorId: string) => void;
-  onSendTranslationRequest?: (orderId: string) => void;
-  translators?: Translator[];
+  columnColor?: ColumnColorKey; // Колір визначається колонкою
   isDragging?: boolean;
   isOverlay?: boolean;
 }
@@ -72,132 +101,26 @@ export function KanbanCard({
   order, 
   onClick, 
   onClientClick,
-  onTranslatorChange,
-  onSendTranslationRequest,
-  translators = [],
+  columnColor = "NEW",
   isDragging = false, 
   isOverlay = false 
 }: KanbanCardProps) {
   const { t } = useI18n();
-  const [isTranslatorOpen, setIsTranslatorOpen] = useState(false);
   const [mouseDownPosition, setMouseDownPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingCard, setIsDraggingCard] = useState(false);
+  
+  // Обчислення дедлайну
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const deadlineDate = new Date(order.deadline);
   deadlineDate.setHours(0, 0, 0, 0);
-  const isToday = deadlineDate.getTime() === today.getTime();
-  const isOverdue = deadlineDate.getTime() < today.getTime();
+  const diffTime = deadlineDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const isUrgent = diffDays <= 3 && diffDays >= 0; // менше 3 днів
+  const isOverdue = diffDays < 0;
 
-  const getBorderColor = () => {
-    if (isOverdue) return "border-red-500";
-    if (isToday) return "border-red-400";
-    if (order.status === "CLOSED" || order.status === "ISSUED") return "border-green-300";
-    if (order.status === "DO_WYDANIA" || order.status === "READY") return "border-blue-300";
-    if (order.status === "PAID" || order.status === "oplacone") return "border-emerald-300";
-    if (order.status === "DO_POSWIADCZENIA" || order.status === "IN_PROGRESS") return "border-yellow-300";
-    return "border-gray-200";
-  };
-
-  const getBackgroundColor = () => {
-    // Для прострочених або термінових - рожевий
-    if (isOverdue || isToday) {
-      return { backgroundColor: 'var(--color-bg-pink)' };
-    }
-    
-    // Для різних статусів використовуємо універсальні кольори фону
-    switch (order.status) {
-      case "CLOSED":
-      case "ISSUED":
-        return { backgroundColor: 'var(--color-bg-green)' }; // зелений - видано
-      case "DO_WYDANIA":
-      case "READY":
-        return { backgroundColor: 'var(--color-bg-blue)' }; // голубий - готове
-      case "PAID":
-      case "oplacone":
-        return { backgroundColor: 'var(--color-bg-emerald)' }; // смарагдовий - оплачено
-      case "DO_POSWIADCZENIA":
-      case "IN_PROGRESS":
-        return { backgroundColor: 'var(--color-bg-yellow)' }; // жовтий - в роботі
-      case "DO_WYKONANIA":
-      case "NEW":
-        return { backgroundColor: 'var(--color-bg-green-light)' }; // світло-зелений - нове
-      case "USTNE":
-        return { backgroundColor: 'var(--color-bg-purple-light)' }; // світло-фіолетовий
-      default:
-        return undefined;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (order.status) {
-      case "CLOSED":
-      case "ISSUED":
-        return "text-green-600";
-      case "DO_WYDANIA":
-      case "READY":
-      case "PAID":
-        return "text-blue-600";
-      case "DO_POSWIADCZENIA":
-      case "IN_PROGRESS":
-        return "text-yellow-600";
-      case "DO_WYKONANIA":
-      case "NEW":
-        return "text-gray-600";
-      case "USTNE":
-        return "text-purple-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-
-  const getStatusLabel = () => {
-    switch (order.status) {
-      case "DO_WYKONANIA":
-        return t("kanban.status.doWykonania");
-      case "DO_POSWIADCZENIA":
-        return t("kanban.status.doPoswiadczenia");
-      case "DO_WYDANIA":
-        return t("kanban.status.doWydania");
-      case "USTNE":
-        return t("kanban.status.ustne");
-      case "CLOSED":
-        return t("kanban.status.closed");
-      default:
-        return order.status;
-    }
-  };
-
-  const formatDeadline = (date: Date | string) => {
-    const deadline = typeof date === 'string' ? new Date(date) : date;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    deadline.setHours(0, 0, 0, 0);
-    const diffTime = deadline.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      const days = Math.abs(diffDays);
-      const overdueText = days === 1 
-        ? t("kanban.deadline.overdueOne")
-        : t("kanban.deadline.overdue");
-      return overdueText.replace("{{days}}", days.toString());
-    }
-    if (diffDays === 0) return t("kanban.deadline.today");
-    if (diffDays === 1) return t("kanban.deadline.tomorrow");
-    
-    // Format date based on current language
-    const lang = localStorage.getItem("app_language") || "pl";
-    const localeMap: Record<string, string> = {
-      pl: "pl-PL",
-      uk: "uk-UA",
-      en: "en-US",
-    };
-    return deadline.toLocaleDateString(localeMap[lang] || "pl-PL", { 
-      day: "2-digit", 
-      month: "2-digit", 
-      year: "numeric" 
-    });
-  };
+  // Колір визначається колонкою
+  const colors = COLUMN_COLORS[columnColor];
 
   const formatDate = (date: Date | string | undefined) => {
     if (!date) return '';
@@ -220,6 +143,16 @@ export function KanbanCard({
     }
   };
 
+  const getDeadlineText = () => {
+    if (isOverdue) {
+      const days = Math.abs(diffDays);
+      return days === 1 ? t("kanban.deadline.overdueOne") || `Прострочено на ${days} день` : (t("kanban.deadline.overdue") || `Прострочено на ${days} днів`).replace("{{days}}", days.toString());
+    }
+    if (diffDays === 0) return t("kanban.deadline.today") || "Сьогодні";
+    if (diffDays === 1) return t("kanban.deadline.tomorrow") || "Завтра";
+    return formatDate(order.deadline);
+  };
+
   const handleClientClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (order.clientId && onClientClick) {
@@ -227,42 +160,21 @@ export function KanbanCard({
     }
   };
 
-  const handleTranslatorChange = (value: string) => {
-    if (value === 'send-request') {
-      if (onSendTranslationRequest) {
-        onSendTranslationRequest(order.id);
-      }
-      setIsTranslatorOpen(false);
-      return;
-    }
-    
-    if (onTranslatorChange) {
-      onTranslatorChange(order.id, value);
-    }
-    setIsTranslatorOpen(false);
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   const handleCardClick = (e: React.MouseEvent) => {
-    // Якщо клік був на інтерактивному елементі (кнопка, select тощо), не обробляємо
-    const target = e.target as HTMLElement;
-    if (target.closest('button, select, [role="button"], [role="combobox"]')) {
+    // Не викликати onClick якщо був drag
+    if (isDraggingCard) {
+      setIsDraggingCard(false);
       return;
     }
     
-    // Перевіряємо, чи це не був drag (переміщення миші під час натискання)
+    const target = e.target as HTMLElement;
+    if (target.closest('button, select, [role="button"], [role="combobox"], [role="dialog"]')) {
+      return;
+    }
+    
     if (mouseDownPosition) {
       const deltaX = Math.abs(e.clientX - mouseDownPosition.x);
       const deltaY = Math.abs(e.clientY - mouseDownPosition.y);
-      // Якщо миша перемістилася більше ніж на 5px, це drag, а не click
       if (deltaX > 5 || deltaY > 5) {
         return;
       }
@@ -272,199 +184,151 @@ export function KanbanCard({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Зберігаємо позицію миші при натисканні
+    // Не встановлювати позицію якщо клік по кнопці або інтерактивному елементу
+    const target = e.target as HTMLElement;
+    if (target.closest('button, select, [role="button"], [role="combobox"], [role="dialog"]')) {
+      return;
+    }
     setMouseDownPosition({ x: e.clientX, y: e.clientY });
   };
 
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (mouseDownPosition) {
+      const deltaX = Math.abs(e.clientX - mouseDownPosition.x);
+      const deltaY = Math.abs(e.clientY - mouseDownPosition.y);
+      if (deltaX > 5 || deltaY > 5) {
+        setIsDraggingCard(true);
+      }
+    }
+  };
+
   const handleMouseUp = () => {
-    // Очищаємо позицію через невеликий час
-    setTimeout(() => setMouseDownPosition(null), 100);
+    setTimeout(() => {
+      setMouseDownPosition(null);
+      setIsDraggingCard(false);
+    }, 100);
   };
 
   const cardContent = (
     <Card
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onClick={handleCardClick}
       className={cn(
-        "p-4 transition-all duration-200 cursor-pointer",
-        "hover:shadow-lg hover:border-orange-500/50 hover:-translate-y-0.5",
-        getBorderColor(),
+        "p-3 transition-all duration-200 border-2 relative",
+        "hover:shadow-lg hover:-translate-y-0.5",
         isDragging && "opacity-50",
-        isOverlay && "rotate-2 shadow-2xl"
+        isOverlay && "rotate-2 shadow-2xl scale-105"
       )}
-      style={getBackgroundColor()}
+      style={{
+        backgroundColor: colors.bg,
+        borderColor: colors.border,
+      }}
     >
-      <div className="space-y-3">
-        {/* Header: Order Number */}
+      {/* Drag handle - видимий при hover */}
+      <div 
+        className={cn(
+          "absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center",
+          "opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing",
+          "text-gray-400 hover:text-gray-600"
+        )}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      
+      <div className="space-y-2 group">
+        {/* 1. НАЙВАЖЛИВІШЕ: Номер замовлення - великий, жирний */}
         <div className="flex items-start justify-between gap-2">
-          <h3 
-            className="font-semibold text-gray-900 text-sm truncate hover:text-[#FF5A00] transition-colors"
-          >
-            {order.orderNumber}
+          <h3 className="font-bold text-base text-gray-900 leading-tight">
+            Nr. {order.orderNumber}
           </h3>
           {order.priority === "high" && (
-            <Badge className="bg-red-100 text-red-700 border-none text-xs px-1.5 py-0.5 shadow-none">
-              {t("kanban.priority.high")}
+            <Badge className="bg-red-100 text-red-700 border-none text-xs px-1.5 py-0.5 shadow-none shrink-0">
+              !
             </Badge>
           )}
         </div>
 
-        <div className="border-t border-gray-200 pt-2 space-y-2.5">
-          {/* 1. Що це (Тип документа / Опис) */}
-          {order.documentType && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-700">
-              <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-              <span className="font-medium">
-                {order.documentType}
-                {order.language && ` (${order.language})`}
-              </span>
-            </div>
+        {/* 2. ДУЖЕ ВАЖЛИВЕ: Дедлайн - виділений, з іконкою */}
+        <div 
+          className={cn(
+            "flex items-center gap-1.5 text-sm font-medium rounded px-2 py-1 -mx-1",
+            (isOverdue || isUrgent) 
+              ? "bg-red-100 text-red-700" 
+              : "text-gray-700"
           )}
+        >
+          <Clock className={cn(
+            "w-4 h-4 shrink-0",
+            (isOverdue || isUrgent) ? "text-red-600" : "text-gray-500"
+          )} />
+          <span>На коли: {getDeadlineText()}</span>
+        </div>
 
-          {/* 2. На коли це (Дедлайн для клієнта) */}
-          <div className="flex items-center gap-1.5 text-xs">
-            <Calendar className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-            <span className={cn(
-              "font-medium",
-              isToday || isOverdue ? "text-red-600" : "text-gray-700"
-            )}>
-              На коли: {formatDate(order.deadline)}
-            </span>
+        {/* 3. ВАЖЛИВЕ: Статус створення та виконавець */}
+        <div className="space-y-1 text-xs text-gray-500">
+          {/* Автоматично/Вручну */}
+          <div className="flex items-center gap-1.5">
+            <Bot className="w-3.5 h-3.5 shrink-0" />
+            <span>Автоматично</span>
           </div>
-
-          {/* 3. Скільки коштує (Ціна для клієнта) */}
-          {order.price !== undefined && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-700">
-              <DollarSign className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-              <span className="font-medium">Ціна: {order.price} zł</span>
+          
+          {/* Менеджер */}
+          {order.managerName && (
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 shrink-0" />
+              <span>@{order.managerName.replace(/\s+/g, '_')}</span>
             </div>
           )}
+        </div>
 
-          {/* 4. Хто зробить (Перекладач) */}
-          <div className="space-y-1.5 pt-1 border-t border-gray-100">
-            <div className="flex items-center justify-between text-xs text-gray-700">
-              <div className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-                <span className="font-medium">Хто зробить:</span>
-              </div>
-              {!order.translatorId && onSendTranslationRequest && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 text-xs px-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSendTranslationRequest(order.id);
-                  }}
-                >
-                  Запит
-                </Button>
-              )}
-            </div>
-            {order.translatorId ? (
-              <div className="pl-5 space-y-1 text-xs">
-                <div className="flex items-center gap-1 text-gray-700">
-                  <span className="font-medium">{order.translatorName}</span>
-                </div>
-                {/* 5. На коли зробить (Дедлайн перекладача) */}
-                {order.translatorDeadline && (
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <Calendar className="w-3 h-3 text-gray-400" />
-                    <span>На коли: {formatDate(order.translatorDeadline)}</span>
-                  </div>
-                )}
-                {/* 6. Скільки ми заплатимо перекладачу (Гонорар) */}
-                {order.translatorFee !== undefined && (
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <DollarSign className="w-3 h-3 text-gray-400" />
-                    <span>Гонорар: {order.translatorFee} zł</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Select
-                value=""
-                onValueChange={handleTranslatorChange}
-                onOpenChange={setIsTranslatorOpen}
+        {/* 4. ДРУГОРЯДНЕ: Кнопки Деталі та Нотатки - дрібні, сірі */}
+        <div 
+          className="pt-2 border-t border-gray-200/50 flex gap-2"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <OrderNotesSheet
+            order={order}
+            defaultTab="details"
+            trigger={
+              <Button
+                variant="ghost"
+                size="sm"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors h-6 px-2"
               >
-                <SelectTrigger 
-                  className="h-7 text-xs"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <SelectValue placeholder="Вибрати або відправити запит" />
-                </SelectTrigger>
-                <SelectContent onClick={(e) => e.stopPropagation()}>
-                  {onSendTranslationRequest && (
-                    <SelectItem value="send-request">
-                      Відправити запит перекладачу
-                    </SelectItem>
-                  )}
-                  {translators.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      Немає перекладачів
-                    </SelectItem>
-                  ) : (
-                    translators.map((translator) => (
-                      <SelectItem key={translator.id} value={translator.id}>
-                        {translator.name} ({translator.rate} zł)
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          {/* Client Name (додаткова інформація) */}
-          <div 
-            onClick={handleClientClick}
-            className={cn(
-              "flex items-center gap-1.5 text-xs cursor-pointer hover:text-[#FF5A00] transition-colors pt-1 border-t border-gray-100",
-              order.clientId && onClientClick ? "" : "cursor-default"
-            )}
-          >
-            <User className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-            <span className="truncate">{order.clientName}</span>
-          </div>
-
-          {/* Details and Notes Buttons */}
-          <div className="pt-1 border-t border-gray-200 flex gap-1">
-            <OrderNotesSheet
-              order={order}
-              defaultTab="details"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#FF5A00] transition-colors flex-1 justify-start h-auto py-1 px-0"
-                >
-                  <FileText className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-                  <span>Деталі</span>
-                </Button>
-              }
-            />
-            <OrderNotesSheet
-              order={order}
-              defaultTab="notes"
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#FF5A00] transition-colors flex-1 justify-start h-auto py-1 px-0"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
-                  <span>
-                    {order.notesCount !== undefined && order.notesCount > 0
-                      ? `${order.notesCount}`
-                      : 'Нотатки'}
-                  </span>
-                </Button>
-              }
-            />
-          </div>
+                <FileText className="w-3 h-3" />
+                <span>Деталі</span>
+              </Button>
+            }
+          />
+          <OrderNotesSheet
+            order={order}
+            defaultTab="notes"
+            trigger={
+              <Button
+                variant="ghost"
+                size="sm"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors h-6 px-2"
+              >
+                <MessageSquare className="w-3 h-3" />
+                <span>
+                  {order.notesCount !== undefined && order.notesCount > 0
+                    ? `Нотатки (${order.notesCount})`
+                    : 'Нотатки'}
+                </span>
+              </Button>
+            }
+          />
         </div>
       </div>
     </Card>
@@ -491,18 +355,14 @@ interface SortableKanbanCardProps {
   order: Order;
   onClick: () => void;
   onClientClick?: (clientId: string) => void;
-  onTranslatorChange?: (orderId: string, translatorId: string) => void;
-  onSendTranslationRequest?: (orderId: string) => void;
-  translators?: Translator[];
+  columnColor?: ColumnColorKey;
 }
 
 export function SortableKanbanCard({ 
   order, 
   onClick,
   onClientClick,
-  onTranslatorChange,
-  onSendTranslationRequest,
-  translators,
+  columnColor = "NEW",
 }: SortableKanbanCardProps) {
   const {
     attributes,
@@ -526,6 +386,7 @@ export function SortableKanbanCard({
       style={style}
       {...attributes}
       {...listeners}
+      className="cursor-grab active:cursor-grabbing"
     >
       <motion.div
         layout
@@ -544,9 +405,7 @@ export function SortableKanbanCard({
           order={order} 
           onClick={onClick}
           onClientClick={onClientClick}
-          onTranslatorChange={onTranslatorChange}
-          onSendTranslationRequest={onSendTranslationRequest}
-          translators={translators}
+          columnColor={columnColor}
           isDragging={isDragging} 
         />
       </motion.div>

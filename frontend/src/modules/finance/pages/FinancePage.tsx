@@ -22,6 +22,33 @@ export function FinancePage() {
   useEffect(() => {
     loadPayments();
     loadOrderProfits();
+    
+    // Слухаємо події зміни payment_method для оновлення даних
+    const handlePaymentMethodChange = () => {
+      loadPayments();
+      loadOrderProfits();
+    };
+    
+    // Слухаємо загальні оновлення замовлень (зміна мови, перекладачів, цін тощо)
+    const handleOrderUpdate = () => {
+      loadPayments();
+      loadOrderProfits();
+    };
+    
+    // Слухаємо оновлення перекладачів (зміна ставок, призначення тощо)
+    const handleTranslatorsUpdate = () => {
+      loadOrderProfits(); // Оновлюємо тільки прибуток, бо перекладачі впливають на розрахунок
+    };
+    
+    window.addEventListener('orderPaymentMethodChanged', handlePaymentMethodChange);
+    window.addEventListener('orderUpdated', handleOrderUpdate);
+    window.addEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate);
+    
+    return () => {
+      window.removeEventListener('orderPaymentMethodChanged', handlePaymentMethodChange);
+      window.removeEventListener('orderUpdated', handleOrderUpdate);
+      window.removeEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate);
+    };
   }, []);
 
   const loadPayments = async () => {
