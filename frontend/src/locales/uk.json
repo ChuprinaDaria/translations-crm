@@ -204,22 +204,22 @@
       "noPayments": "Немає платежів для відображення",
       "loadError": "Не вдалося завантажити платежі",
       "columns": {
-        "lp": "LP",
-        "orderNumber": "Numer zlecenia",
-        "serviceDate": "Data wykonania usługi",
-        "buyerName": "Nabywca (Imię i nazwisko)",
-        "amountGross": "Kwota płatności brutto",
-        "paymentDate": "Data płatności",
-        "postingDate": "Data nabicia na KF",
-        "paymentMethod": "Sposób płatności",
-        "receiptNumber": "Numer dowodu sprzedaży",
-        "notes": "Uwagi"
+        "lp": "ЛП",
+        "orderNumber": "Номер замовлення",
+        "serviceDate": "Дата виконання послуги",
+        "buyerName": "Покупець (Ім'я та прізвище)",
+        "amountGross": "Сума платежу брутто",
+        "paymentDate": "Дата платежу",
+        "postingDate": "Дата нарахування на КФ",
+        "paymentMethod": "Спосіб оплати",
+        "receiptNumber": "Номер документа продажу",
+        "notes": "Примітки"
       },
       "paymentMethods": {
-        "transfer": "Przelew",
-        "card": "Karta",
+        "transfer": "Переказ",
+        "card": "Картка",
         "blik": "BLIK",
-        "cash": "Gotówka"
+        "cash": "Готівка"
       },
       "editPayment": "Редагувати платіж",
       "rowColor": "Колір рядка",
