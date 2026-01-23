@@ -177,22 +177,10 @@ jobs:
             
             # Pull latest code
             if [ -d ".git" ]; then
-              echo "Git repository found, pulling latest changes..."
               git fetch origin
               git reset --hard origin/main
             else
-              echo "Git repository not found, cloning..."
-              # Якщо директорія не порожня, клонуємо в тимчасову директорію
-              if [ "$(ls -A $DEPLOY_DIR 2>/dev/null)" ]; then
-                echo "Directory is not empty, cloning to temp directory..."
-                TEMP_DIR=$(mktemp -d)
-                git clone ${{ secrets.REPO_URL }} "$TEMP_DIR"
-                # Переміщуємо файли (крім важливих як .env, backups)
-                rsync -av --exclude='.env' --exclude='backups' --exclude='.env.backup' "$TEMP_DIR/" "$DEPLOY_DIR/"
-                rm -rf "$TEMP_DIR"
-              else
-                git clone ${{ secrets.REPO_URL }} .
-              fi
+              git clone ${{ secrets.REPO_URL }} .
             fi
             
             # Ensure .env exists (created in previous step)
