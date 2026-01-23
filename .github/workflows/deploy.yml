@@ -96,16 +96,20 @@ jobs:
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'ENV_SCRIPT'
             set -e
-            DEPLOY_DIR="/opt/translations/translations-crm"
-            # Створюємо директорію якщо не існує
+            DEPLOY_DIR="/opt/translations"
+            # Перевіряємо чи директорія існує
             if [ ! -d "$DEPLOY_DIR" ]; then
-              mkdir -p "$DEPLOY_DIR" 2>/dev/null || {
-                echo "Warning: Cannot create $DEPLOY_DIR, trying with parent directory..."
-                mkdir -p "/opt/translations" 2>/dev/null || true
-                mkdir -p "$DEPLOY_DIR" || {
-                  echo "Error: Cannot create directory $DEPLOY_DIR"
-                  exit 1
-                }
+              echo "Error: Directory $DEPLOY_DIR does not exist!"
+              echo "Please create it on the server with:"
+              echo "  sudo mkdir -p $DEPLOY_DIR"
+              echo "  sudo chown -R $USER:$USER $DEPLOY_DIR"
+              exit 1
+            fi
+            # Перевіряємо права доступу
+            if [ ! -w "$DEPLOY_DIR" ]; then
+              echo "Warning: Directory $DEPLOY_DIR is not writable, fixing permissions..."
+              sudo chown -R $USER:$USER "$DEPLOY_DIR" 2>/dev/null || {
+                echo "Warning: Cannot fix permissions, but continuing..."
               }
             fi
             cd "$DEPLOY_DIR" || {

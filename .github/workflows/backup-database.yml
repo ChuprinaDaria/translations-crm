@@ -38,7 +38,7 @@ jobs:
             BACKUP_FILE="$BACKUP_DIR/crm_db_backup_$TIMESTAMP.sql"
             
             # Отримуємо дані з .env файлу
-            DEPLOY_DIR="/opt/translations/translations-crm"
+            DEPLOY_DIR="/opt/translations"
             if [ ! -f "$DEPLOY_DIR/.env" ]; then
               echo "Error: .env file not found at $DEPLOY_DIR/.env"
               exit 1
