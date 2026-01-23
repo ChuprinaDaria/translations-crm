@@ -149,6 +149,10 @@ jobs:
             fi
           ENV_SCRIPT
 
+      - name: Copy frontend build to server
+        run: |
+          scp -r deployment-artifacts/frontend-build/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/translations/translations-crm/frontend/build/
+
       - name: Deploy to server
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'DEPLOY_SCRIPT'
@@ -192,21 +196,14 @@ jobs:
               exit 1
             fi
             
+            # Створюємо директорію для frontend build якщо не існує
+            mkdir -p frontend/build
+            
             # Ensure .env exists (created in previous step)
             if [ ! -f .env ]; then
               echo "Error: .env file not found!"
               exit 1
             fi
-            
-            # Build frontend
-            cd frontend
-            if [ ! -d "node_modules" ]; then
-              npm ci
-            else
-              npm ci
-            fi
-            npm run build
-            cd ..
             
             # Stop existing containers (без видалення volumes - база даних зберігається)
             docker-compose -f docker-compose.production.yml down || true
