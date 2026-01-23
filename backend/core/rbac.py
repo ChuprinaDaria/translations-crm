@@ -107,17 +107,14 @@ def require_scope(*required_scopes: Scope):
     def scope_checker(
         user_payload: dict = Depends(get_current_user_payload),
         db: Session = Depends(get_db),
-    ) -> models.User:
-        from uuid import UUID
+        ) -> models.User:
         user_id_str = user_payload.get("sub")
         if not user_id_str:
             raise HTTPException(status_code=401, detail="Invalid token")
-        try:
-            user_id = UUID(user_id_str)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=401, detail="Invalid user ID in token")
         
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        # Use crud_user.get_user_by_id which supports UUID, int, or string
+        import crud_user
+        user = crud_user.get_user_by_id(db, user_id_str)
         
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
