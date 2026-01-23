@@ -64,10 +64,17 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
-      - name: Run frontend linting
+      - name: Build frontend
         working-directory: ./frontend
         run: |
           npm run build || (echo "Build failed" && exit 1)
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
+          retention-days: 1
 
       - name: Build Docker images
         working-directory: .
