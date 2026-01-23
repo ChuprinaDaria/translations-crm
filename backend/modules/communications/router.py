@@ -1,7 +1,7 @@
 """
 Communications routes - unified inbox endpoints for Telegram, Email, etc.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, distinct
@@ -25,6 +25,14 @@ from modules.communications.models import (
     MessageStatus
 )
 from modules.communications import schemas
+from modules.communications.webhooks import (
+    handle_whatsapp_webhook,
+    handle_instagram_webhook,
+    handle_facebook_webhook,
+)
+from modules.communications.services.whatsapp import WhatsAppService
+from modules.communications.services.instagram import InstagramService
+from modules.communications.services.facebook import FacebookService
 from modules.crm.models import Client, ClientSource
 import models
 import crud
@@ -847,3 +855,190 @@ async def notify_new_message(message: Message, conversation: Conversation):
             "client_name": conversation.client.name if conversation.client else None,
         }
     })
+
+
+# ============================================================================
+# Webhook endpoints for receiving messages from platforms
+# ============================================================================
+
+@router.get("/webhooks/whatsapp")
+async def whatsapp_webhook_verify(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    db: Session = Depends(get_db),
+):
+    """
+    WhatsApp webhook verification endpoint (GET).
+    Meta requires this for webhook setup.
+    """
+    logger.info(f"WhatsApp webhook verification: mode={hub_mode}, token={hub_verify_token}")
+    
+    if hub_mode == "subscribe" and hub_verify_token:
+        service = WhatsAppService(db)
+        verify_token = service.config.get("verify_token", "")
+        
+        if hub_verify_token == verify_token:
+            logger.info("WhatsApp webhook verified successfully")
+            return int(hub_challenge) if hub_challenge else 200
+        else:
+            logger.warning(f"WhatsApp webhook verification failed: token mismatch")
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
+    
+    raise HTTPException(status_code=400, detail="Invalid verification request")
+
+
+@router.post("/webhooks/whatsapp")
+async def whatsapp_webhook_receive(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    WhatsApp webhook endpoint (POST) - receives messages from Meta.
+    """
+    try:
+        # Get signature from headers
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        
+        # Read raw body for signature verification
+        body_bytes = await request.body()
+        
+        # Verify webhook signature
+        service = WhatsAppService(db)
+        if signature and not service.verify_webhook(signature, body_bytes):
+            logger.warning("WhatsApp webhook signature verification failed")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+        
+        # Parse JSON payload
+        webhook_data = await request.json()
+        logger.info(f"WhatsApp webhook received: {webhook_data.get('object', 'unknown')}")
+        
+        # Process webhook
+        result = await handle_whatsapp_webhook(db, webhook_data)
+        
+        return result
+    except Exception as e:
+        logger.error(f"WhatsApp webhook error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/webhooks/instagram")
+async def instagram_webhook_verify(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    db: Session = Depends(get_db),
+):
+    """
+    Instagram webhook verification endpoint (GET).
+    Meta requires this for webhook setup.
+    """
+    logger.info(f"Instagram webhook verification: mode={hub_mode}, token={hub_verify_token}")
+    
+    if hub_mode == "subscribe" and hub_verify_token:
+        service = InstagramService(db)
+        verify_token = service.config.get("verify_token", "")
+        
+        if hub_verify_token == verify_token:
+            logger.info("Instagram webhook verified successfully")
+            return int(hub_challenge) if hub_challenge else 200
+        else:
+            logger.warning(f"Instagram webhook verification failed: token mismatch")
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
+    
+    raise HTTPException(status_code=400, detail="Invalid verification request")
+
+
+@router.post("/webhooks/instagram")
+async def instagram_webhook_receive(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Instagram webhook endpoint (POST) - receives messages from Meta.
+    """
+    try:
+        # Get signature from headers
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        
+        # Read raw body for signature verification
+        body_bytes = await request.body()
+        
+        # Verify webhook signature
+        service = InstagramService(db)
+        if signature and not service.verify_webhook(signature, body_bytes):
+            logger.warning("Instagram webhook signature verification failed")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+        
+        # Parse JSON payload
+        webhook_data = await request.json()
+        logger.info(f"Instagram webhook received: {webhook_data.get('object', 'unknown')}")
+        
+        # Process webhook
+        result = await handle_instagram_webhook(db, webhook_data)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Instagram webhook error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/webhooks/facebook")
+async def facebook_webhook_verify(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    db: Session = Depends(get_db),
+):
+    """
+    Facebook webhook verification endpoint (GET).
+    Meta requires this for webhook setup.
+    """
+    logger.info(f"Facebook webhook verification: mode={hub_mode}, token={hub_verify_token}")
+    
+    if hub_mode == "subscribe" and hub_verify_token:
+        service = FacebookService(db)
+        verify_token = service.config.get("verify_token", "")
+        
+        if hub_verify_token == verify_token:
+            logger.info("Facebook webhook verified successfully")
+            return int(hub_challenge) if hub_challenge else 200
+        else:
+            logger.warning(f"Facebook webhook verification failed: token mismatch")
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
+    
+    raise HTTPException(status_code=400, detail="Invalid verification request")
+
+
+@router.post("/webhooks/facebook")
+async def facebook_webhook_receive(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Facebook webhook endpoint (POST) - receives messages from Meta.
+    """
+    try:
+        # Get signature from headers
+        signature = request.headers.get("X-Hub-Signature-256", "")
+        
+        # Read raw body for signature verification
+        body_bytes = await request.body()
+        
+        # Verify webhook signature
+        service = FacebookService(db)
+        if signature and not service.verify_webhook(signature, body_bytes):
+            logger.warning("Facebook webhook signature verification failed")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+        
+        # Parse JSON payload
+        webhook_data = await request.json()
+        logger.info(f"Facebook webhook received: {webhook_data.get('object', 'unknown')}")
+        
+        # Process webhook
+        result = await handle_facebook_webhook(db, webhook_data)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Facebook webhook error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

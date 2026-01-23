@@ -192,6 +192,15 @@ class WhatsAppService(MessengerService):
             metadata=metadata,
         )
         
+        # Notify via WebSocket
+        try:
+            from modules.communications.router import notify_new_message
+            await notify_new_message(message, conversation)
+        except Exception as e:
+            # Don't fail if WebSocket notification fails
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to send WebSocket notification: {e}")
+        
         return message
     
     async def get_or_create_conversation(

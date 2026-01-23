@@ -7,21 +7,22 @@
 ## Структура директорій
 
 ```
-/opt/translations/             # Корінь проєкту
-├── .env                      # Файл з налаштуваннями
-├── .git/                     # Git репозиторій
-├── backend/                  # Backend код
-├── frontend/                 # Frontend код
-├── docker-compose.production.yml
-├── ...
+/opt/translations/             # Базова директорія
+├── translations-crm/         # Код проєкту (git репозиторій)
+│   ├── .env                  # Файл з налаштуваннями
+│   ├── .git/                 # Git репозиторій
+│   ├── backend/              # Backend код
+│   ├── frontend/             # Frontend код
+│   ├── docker-compose.production.yml
+│   └── ...
 └── backups/                  # Бекапи бази даних
     └── crm_db_backup_*.sql.gz
 ```
 
 ## Важливі шляхи
 
-- **Код проєкту:** `/opt/translations/`
-- **.env файл:** `/opt/translations/.env`
+- **Код проєкту:** `/opt/translations/translations-crm/`
+- **.env файл:** `/opt/translations/translations-crm/.env`
 - **Бекапи БД:** `/opt/translations/backups/`
 - **Docker volumes:** Зберігаються в Docker (не видаляються при cleanup)
 
@@ -50,6 +51,7 @@ sudo chmod -R 755 /opt/translations
 ```bash
 # Перевірити структуру
 ls -la /opt/translations/
+ls -la /opt/translations/translations-crm/
 ls -la /opt/translations/backups/
 ```
 

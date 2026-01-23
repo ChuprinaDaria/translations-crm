@@ -269,10 +269,42 @@ jobs:
 
       - name: Health check
         run: |
-          sleep 15
           BACKEND_PORT="${{ secrets.BACKEND_PORT }}"
           if [ -z "$BACKEND_PORT" ]; then
             BACKEND_PORT="8002"  # Оновлено з 8001 на 8002 (8001 зайнятий atbalance)
           fi
-          curl -f http://${{ secrets.SERVER_HOST }}:$BACKEND_PORT/docs || (echo "Health check failed" && exit 1)
-          echo "Health check passed"
+          
+          SERVER_URL="http://${{ secrets.SERVER_HOST }}:$BACKEND_PORT"
+          MAX_RETRIES=10
+          RETRY_DELAY=5
+          
+          echo "Waiting for backend to be ready..."
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i/$MAX_RETRIES..."
+            
+            # Try /health endpoint first (simpler, faster)
+            if curl -f -s --max-time 5 "$SERVER_URL/health" > /dev/null 2>&1; then
+              echo "✅ Health check passed (using /health endpoint)"
+              curl -s "$SERVER_URL/health" | head -20
+              exit 0
+            fi
+            
+            # Fallback to / endpoint
+            if curl -f -s --max-time 5 "$SERVER_URL/" > /dev/null 2>&1; then
+              echo "✅ Health check passed (using / endpoint)"
+              curl -s "$SERVER_URL/" | head -20
+              exit 0
+            fi
+            
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "⏳ Backend not ready yet, waiting ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          echo "Checking container status..."
+          docker ps -a --filter "name=crm_translations_backend" || true
+          echo "Checking logs..."
+          docker logs crm_translations_backend --tail 50 || true
+          exit 1

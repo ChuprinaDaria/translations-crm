@@ -75,6 +75,29 @@ app.include_router(audio_notes_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
 
 
+@app.get("/")
+def root():
+    """Root endpoint - simple health check."""
+    return {"status": "ok", "service": "CRM System"}
+
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for deployment monitoring."""
+    try:
+        # Simple database connectivity check
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "error": str(e)}
+        )
+
+
 # WebSocket endpoint for real-time messages (defined at app level to avoid middleware issues)
 @app.websocket("/api/v1/communications/ws/{user_id}")
 async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
