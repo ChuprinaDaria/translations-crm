@@ -238,11 +238,25 @@ jobs:
               exit 1
             }
             
-            # Stop existing containers (без видалення volumes - база даних зберігається)
-            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml down || true
+            # Зупиняємо та видаляємо тільки контейнери translations-crm (без видалення volumes - база даних зберігається)
+            echo "Stopping existing crm_translations containers..."
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml down --remove-orphans || true
+            
+            # Додатково перевіряємо та видаляємо тільки контейнери translations-crm які можуть займати порти
+            echo "Checking for crm_translations containers..."
+            docker ps -a --filter "name=crm_translations" --format "{{.Names}}" | while read container; do
+              if [ -n "$container" ]; then
+                echo "Removing container: $container"
+                docker rm -f "$container" || true
+              fi
+            done
+            
+            # Невелика затримка для звільнення портів
+            sleep 2
             
             # Build and start new containers (volumes зберігаються автоматично)
-            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build
+            echo "Building and starting new containers..."
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans
             
             # Wait for services to be healthy
             sleep 15
@@ -258,7 +272,7 @@ jobs:
           sleep 15
           BACKEND_PORT="${{ secrets.BACKEND_PORT }}"
           if [ -z "$BACKEND_PORT" ]; then
-            BACKEND_PORT="8001"
+            BACKEND_PORT="8002"  # Оновлено з 8001 на 8002 (8001 зайнятий atbalance)
           fi
           curl -f http://${{ secrets.SERVER_HOST }}:$BACKEND_PORT/docs || (echo "Health check failed" && exit 1)
           echo "Health check passed"
