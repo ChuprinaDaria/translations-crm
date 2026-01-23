@@ -97,8 +97,21 @@ jobs:
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'ENV_SCRIPT'
             set -e
             DEPLOY_DIR="/opt/translations/translations-crm"
-            mkdir -p $DEPLOY_DIR
-            cd $DEPLOY_DIR
+            # Створюємо директорію якщо не існує
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              mkdir -p "$DEPLOY_DIR" 2>/dev/null || {
+                echo "Warning: Cannot create $DEPLOY_DIR, trying with parent directory..."
+                mkdir -p "/opt/translations" 2>/dev/null || true
+                mkdir -p "$DEPLOY_DIR" || {
+                  echo "Error: Cannot create directory $DEPLOY_DIR"
+                  exit 1
+                }
+              }
+            fi
+            cd "$DEPLOY_DIR" || {
+              echo "Error: Cannot access directory $DEPLOY_DIR"
+              exit 1
+            }
             
             # Якщо .env вже існує, зберігаємо його та оновлюємо тільки потрібні значення
             if [ -f .env ]; then
@@ -137,8 +150,25 @@ jobs:
             set -e
             
             DEPLOY_DIR="/opt/translations"
-            mkdir -p $DEPLOY_DIR
-            cd $DEPLOY_DIR
+            # Перевіряємо чи директорія існує
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "Creating directory $DEPLOY_DIR..."
+              mkdir -p "$DEPLOY_DIR" || {
+                echo "Error: Cannot create directory $DEPLOY_DIR"
+                exit 1
+              }
+            else
+              echo "Directory $DEPLOY_DIR already exists"
+            fi
+            # Перевіряємо права доступу
+            if [ ! -w "$DEPLOY_DIR" ]; then
+              echo "Warning: Directory $DEPLOY_DIR is not writable"
+              ls -ld "$DEPLOY_DIR"
+            fi
+            cd "$DEPLOY_DIR" || {
+              echo "Error: Cannot access directory $DEPLOY_DIR"
+              exit 1
+            }
             
             # Pull latest code
             if [ -d ".git" ]; then
