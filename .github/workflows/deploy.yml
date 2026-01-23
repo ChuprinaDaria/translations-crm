@@ -222,12 +222,21 @@ jobs:
             # Перевіряємо яка версія docker compose доступна
             if command -v docker-compose &> /dev/null; then
               DOCKER_COMPOSE_CMD="docker-compose"
-            elif docker compose version &> /dev/null; then
+              echo "Using docker-compose (standalone)"
+            elif docker compose version &> /dev/null 2>&1; then
               DOCKER_COMPOSE_CMD="docker compose"
+              echo "Using docker compose (plugin)"
             else
               echo "Error: docker-compose not found. Please install docker-compose or use Docker with compose plugin."
-              exit 1
+              echo "Trying docker compose as fallback..."
+              DOCKER_COMPOSE_CMD="docker compose"
             fi
+            
+            # Перевіряємо що команда працює
+            $DOCKER_COMPOSE_CMD --version || {
+              echo "Error: docker-compose command failed. Please check Docker installation."
+              exit 1
+            }
             
             # Stop existing containers (без видалення volumes - база даних зберігається)
             $DOCKER_COMPOSE_CMD -f docker-compose.production.yml down || true
