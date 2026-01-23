@@ -97,7 +97,7 @@ jobs:
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'ENV_SCRIPT'
             set -e
-            DEPLOY_DIR="/opt/translations"
+            DEPLOY_DIR="/opt/translations/translations-crm"
             # Перевіряємо чи директорія існує
             if [ ! -d "$DEPLOY_DIR" ]; then
               echo "Error: Directory $DEPLOY_DIR does not exist!"
@@ -154,22 +154,28 @@ jobs:
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'DEPLOY_SCRIPT'
             set -e
             
-            DEPLOY_DIR="/opt/translations"
-            # Перевіряємо чи директорія існує
-            if [ ! -d "$DEPLOY_DIR" ]; then
-              echo "Creating directory $DEPLOY_DIR..."
-              mkdir -p "$DEPLOY_DIR" || {
-                echo "Error: Cannot create directory $DEPLOY_DIR"
-                exit 1
-              }
-            else
-              echo "Directory $DEPLOY_DIR already exists"
+            BASE_DIR="/opt/translations"
+            DEPLOY_DIR="/opt/translations/translations-crm"
+            
+            # Перевіряємо чи базова директорія існує
+            if [ ! -d "$BASE_DIR" ]; then
+              echo "Error: Base directory $BASE_DIR does not exist!"
+              exit 1
             fi
+            
+            # Перевіряємо чи робоча директорія існує
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "Error: Deploy directory $DEPLOY_DIR does not exist!"
+              echo "Please clone the repository to $DEPLOY_DIR"
+              exit 1
+            fi
+            
             # Перевіряємо права доступу
             if [ ! -w "$DEPLOY_DIR" ]; then
               echo "Warning: Directory $DEPLOY_DIR is not writable"
               ls -ld "$DEPLOY_DIR"
             fi
+            
             cd "$DEPLOY_DIR" || {
               echo "Error: Cannot access directory $DEPLOY_DIR"
               exit 1
@@ -177,10 +183,13 @@ jobs:
             
             # Pull latest code
             if [ -d ".git" ]; then
+              echo "Pulling latest changes from git..."
               git fetch origin
               git reset --hard origin/main
             else
-              git clone ${{ secrets.REPO_URL }} .
+              echo "Error: .git directory not found in $DEPLOY_DIR"
+              echo "Please ensure the repository is cloned correctly"
+              exit 1
             fi
             
             # Ensure .env exists (created in previous step)
@@ -199,10 +208,10 @@ jobs:
             npm run build
             cd ..
             
-            # Stop existing containers
+            # Stop existing containers (без видалення volumes - база даних зберігається)
             docker-compose -f docker-compose.production.yml down || true
             
-            # Build and start new containers
+            # Build and start new containers (volumes зберігаються автоматично)
             docker-compose -f docker-compose.production.yml up -d --build
             
             # Wait for services to be healthy
