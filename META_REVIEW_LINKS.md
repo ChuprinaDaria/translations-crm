@@ -1,5 +1,21 @@
 # Посилання для Meta App Review
 
+## Facebook Webhook URL
+
+### URL обратного вызова (Callback URL)
+🔗 **https://tlumaczeniamt.com.pl/api/v1/communications/webhooks/facebook**
+
+**Опис:** Використовується для налаштування Facebook Webhook в Meta Dashboard.
+- **GET** - верифікація webhook (Meta надсилає `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`)
+- **POST** - отримання повідомлень від Meta
+
+**Як налаштувати:**
+1. Meta Dashboard → Messenger → Webhooks
+2. Callback URL: `https://tlumaczeniamt.com.pl/api/v1/communications/webhooks/facebook`
+3. Verify Token: той самий, що в Settings → Facebook
+
+---
+
 ## Публічні сторінки (доступні в футері сайту)
 
 ### Умови використання
