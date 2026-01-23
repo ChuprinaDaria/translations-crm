@@ -24,14 +24,14 @@ location ~* ^/api/v1/(communications|notifications)/ws/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_cache_bypass $http_upgrade;
-    proxy_cache_off;  # ← ДОДАНО
+    proxy_buffering off;  # ← ДОДАНО (вимикає буферизацію для WebSocket)
     proxy_read_timeout 86400;
     proxy_send_timeout 86400;  # ← ДОДАНО
 }
 ```
 
 **Важливо:** 
-- `proxy_cache_off` - вимикає кешування для WebSocket
+- `proxy_buffering off` - вимикає буферизацію для WebSocket (правильна директива, не `proxy_cache_off`)
 - `proxy_send_timeout` - дозволяє довгі з'єднання
 
 ### ✅ Крок 2: Frontend URL
@@ -173,7 +173,7 @@ sudo ufw allow 443/tcp
 
 ## Підсумок змін
 
-✅ Nginx: Додано `proxy_cache_off` та `proxy_send_timeout`  
+✅ Nginx: Додано `proxy_buffering off` та `proxy_send_timeout`  
 ✅ Frontend: Виправлено URL (без порту в production)  
 ✅ Frontend: Використовується реальний user_id  
 ✅ Backend: Додано wss:// до allowed_origins  
