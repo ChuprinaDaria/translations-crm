@@ -940,17 +940,22 @@ async def instagram_webhook_verify(
     logger.info(f"Instagram webhook verification: mode={hub_mode}, token={hub_verify_token}")
     
     if hub_mode == "subscribe" and hub_verify_token:
+        # Примусово перечитуємо налаштування з БД (без кешування)
+        db.expire_all()  # Скидаємо кеш SQLAlchemy
         service = InstagramService(db)
         verify_token = service.config.get("verify_token", "")
         
         logger.info(f"Instagram verify_token from config: {verify_token[:10]}..." if verify_token else "Instagram verify_token from config: (empty)")
         logger.info(f"Instagram verify_token from Meta: {hub_verify_token[:10]}..." if hub_verify_token else "Instagram verify_token from Meta: (empty)")
+        print(f"[Instagram Webhook] verify_token from config: {verify_token[:10] if verify_token else '(empty)'}...", flush=True)
+        print(f"[Instagram Webhook] verify_token from Meta: {hub_verify_token[:10] if hub_verify_token else '(empty)'}...", flush=True)
         
         if hub_verify_token == verify_token:
             logger.info("Instagram webhook verified successfully")
             return int(hub_challenge) if hub_challenge else 200
         else:
             logger.warning(f"Instagram webhook verification failed: token mismatch. Expected: {verify_token[:10] if verify_token else '(empty)'}..., Got: {hub_verify_token[:10] if hub_verify_token else '(empty)'}...")
+            print(f"[Instagram Webhook] Token mismatch! Expected: '{verify_token}' (len={len(verify_token)}), Got: '{hub_verify_token}' (len={len(hub_verify_token)})", flush=True)
             raise HTTPException(status_code=403, detail="Verification token mismatch")
     
     logger.warning(f"Instagram webhook verification failed: invalid request. mode={hub_mode}, has_token={bool(hub_verify_token)}")

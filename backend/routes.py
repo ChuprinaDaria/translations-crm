@@ -2215,19 +2215,51 @@ def get_instagram_config(db: Session = Depends(get_db), user = Depends(get_curre
     """Повертає налаштування Instagram API."""
     settings = crud.get_instagram_settings(db)
     return {
+        "app_id": settings.get("instagram_app_id") or "",
+        "access_token": settings.get("instagram_access_token") or "",
         "app_secret": settings.get("instagram_app_secret") or "",
+        "verify_token": settings.get("instagram_verify_token") or "",
     }
 
 
 @router.post("/settings/instagram-config")
 def update_instagram_config(
+    app_id: str = Form(""),
+    access_token: str = Form(""),
     app_secret: str = Form(""),
+    verify_token: str = Form(""),
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
     """Оновлює налаштування Instagram API."""
-    crud.set_setting(db, "instagram_app_secret", app_secret)
-    return {"status": "success"}
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Логування вхідних даних
+    logger.info(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}...")
+    print(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}...", flush=True)
+    
+    # Зберігаємо всі поля
+    try:
+        crud.set_setting(db, "instagram_app_id", app_id)
+        logger.info(f"[Instagram Config] Saved: instagram_app_id")
+        crud.set_setting(db, "instagram_access_token", access_token)
+        logger.info(f"[Instagram Config] Saved: instagram_access_token")
+        crud.set_setting(db, "instagram_app_secret", app_secret)
+        logger.info(f"[Instagram Config] Saved: instagram_app_secret")
+        crud.set_setting(db, "instagram_verify_token", verify_token)
+        logger.info(f"[Instagram Config] Saved: instagram_verify_token")
+        
+        # Перевіряємо що все збережено
+        settings = crud.get_instagram_settings(db)
+        logger.info(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}")
+        print(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}", flush=True)
+        
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"[Instagram Config] Error saving: {e}", exc_info=True)
+        print(f"[Instagram Config] Error saving: {e}", flush=True)
+        raise
 
 
 @router.get("/settings/facebook-config")

@@ -42,27 +42,36 @@ class InstagramService(MessengerService):
         """Завантажити конфігурацію з бази даних або env."""
         import os
         import crud
-        from db import SessionLocal
+        import logging
+        logger = logging.getLogger(__name__)
         
-        # Спробувати завантажити з бази даних
-        db = SessionLocal()
+        # Використовуємо передану сесію БД замість створення нової
+        # Це дозволяє уникнути проблем з кешуванням та забезпечує актуальні дані
         try:
-            settings = crud.get_instagram_settings(db)
-            if settings.get("instagram_app_secret"):
-                return {
+            settings = crud.get_instagram_settings(self.db)
+            logger.info(f"[Instagram Config] Loaded from DB: app_id={bool(settings.get('instagram_app_id'))}, access_token={bool(settings.get('instagram_access_token'))}, app_secret={bool(settings.get('instagram_app_secret'))}, verify_token={bool(settings.get('instagram_verify_token'))}")
+            
+            # Перевіряємо чи є хоча б один ключ (не обов'язково app_secret)
+            if any(settings.values()):
+                config = {
                     "access_token": settings.get("instagram_access_token") or "",
                     "app_secret": settings.get("instagram_app_secret") or "",
                     "verify_token": settings.get("instagram_verify_token") or "",
+                    "app_id": settings.get("instagram_app_id") or "",
                     "page_id": settings.get("instagram_page_id") or "",
                 }
-        finally:
-            db.close()
+                logger.info(f"[Instagram Config] Using DB config, verify_token length: {len(config.get('verify_token', ''))}")
+                return config
+        except Exception as e:
+            logger.warning(f"[Instagram Config] Error loading from DB: {e}")
         
         # Fallback до env
+        logger.info("[Instagram Config] Using env fallback")
         return {
             "access_token": os.getenv("INSTAGRAM_ACCESS_TOKEN", ""),
             "app_secret": os.getenv("INSTAGRAM_APP_SECRET", ""),
             "verify_token": os.getenv("INSTAGRAM_VERIFY_TOKEN", ""),
+            "app_id": os.getenv("INSTAGRAM_APP_ID", ""),
             "page_id": os.getenv("INSTAGRAM_PAGE_ID", ""),
         }
     
