@@ -72,6 +72,7 @@ export function Settings() {
 
   // Facebook state
   const [facebook, setFacebook] = useState<FacebookConfig>({
+    app_id: "",
     access_token: "",
     app_secret: "",
     verify_token: "",
@@ -171,7 +172,7 @@ export function Settings() {
           settingsApi.getSmtpSettings(),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
           settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "" })),
-          settingsApi.getFacebookConfig().catch(() => ({ access_token: "", app_secret: "", verify_token: "", page_id: "" })),
+          settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
         ]);
@@ -1085,6 +1086,14 @@ export function Settings() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label htmlFor="facebook-app-id">App ID</Label>
+                  <Input
+                    id="facebook-app-id"
+                    value={facebook.app_id}
+                    onChange={(e) => setFacebook({ ...facebook, app_id: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="facebook-access-token">Access Token</Label>
                   <Input
                     id="facebook-access-token"
@@ -1119,7 +1128,18 @@ export function Settings() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={!facebook.app_id || !facebook.app_secret}
+                  onClick={() => {
+                    window.location.href = `${API_BASE_URL}/communications/facebook/auth`;
+                  }}
+                >
+                  Підключити Facebook
+                </Button>
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
@@ -1140,6 +1160,11 @@ export function Settings() {
                   {isSavingFacebook ? "Збереження..." : "Зберегти Facebook"}
                 </Button>
               </div>
+              {!facebook.app_id && (
+                <p className="text-sm text-muted-foreground">
+                  💡 Введіть Facebook App ID та App Secret, потім натисніть "Підключити Facebook" для автоматичного отримання Access Token через OAuth.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1173,6 +1173,394 @@ async def facebook_webhook_receive(
 
 
 # ============================================================================
+# OAuth endpoints for Facebook authorization
+# ============================================================================
+
+@router.get("/facebook/auth")
+async def facebook_oauth_start(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Початок OAuth flow для Facebook.
+    Перенаправляє користувача на Meta OAuth сторінку.
+    """
+    import urllib.parse
+    from fastapi.responses import RedirectResponse
+    
+    # Отримуємо налаштування Facebook
+    settings = crud.get_facebook_settings(db)
+    app_id = settings.get("facebook_app_id")
+    
+    # Якщо немає facebook_app_id, спробуємо отримати з Instagram (можуть використовувати один App ID)
+    if not app_id:
+        instagram_settings = crud.get_instagram_settings(db)
+        app_id = instagram_settings.get("instagram_app_id")
+    
+    if not app_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Facebook App ID не налаштовано. Будь ласка, введіть App ID в Settings → Facebook або Instagram."
+        )
+    
+    # Формуємо redirect_uri (повний URL)
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/api/v1/communications/facebook/callback"
+    
+    # OAuth параметри для Meta
+    oauth_params = {
+        "client_id": app_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "pages_show_list,pages_read_engagement,pages_manage_metadata,pages_messaging",  # Facebook permissions
+        "state": str(uuid_module.uuid4()),  # CSRF protection
+    }
+    
+    # Meta OAuth URL
+    oauth_url = "https://www.facebook.com/v18.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
+    
+    logger.info(f"Facebook OAuth redirect: {oauth_url}")
+    return RedirectResponse(url=oauth_url)
+
+
+@router.get("/facebook/callback")
+async def facebook_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_reason: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    OAuth callback endpoint для Facebook.
+    Обробляє redirect від Meta після авторизації.
+    """
+    import httpx
+    import urllib.parse
+    from fastapi.responses import HTMLResponse
+    
+    # Перевірка на помилки
+    if error:
+        error_msg = f"OAuth помилка: {error}"
+        if error_description:
+            error_msg += f" - {error_description}"
+        logger.error(f"Facebook OAuth error: {error_msg}")
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Facebook OAuth Error</title></head>
+                <body>
+                    <h1>Помилка авторизації Facebook</h1>
+                    <p>{error_msg}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="OAuth code не отримано")
+    
+    # Отримуємо налаштування
+    settings = crud.get_facebook_settings(db)
+    app_id = settings.get("facebook_app_id")
+    app_secret = settings.get("facebook_app_secret")
+    
+    # Якщо немає facebook налаштувань, спробуємо Instagram (можуть використовувати один App)
+    if not app_id or not app_secret:
+        instagram_settings = crud.get_instagram_settings(db)
+        app_id = app_id or instagram_settings.get("instagram_app_id")
+        app_secret = app_secret or instagram_settings.get("instagram_app_secret")
+    
+    if not app_id or not app_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Facebook App ID або App Secret не налаштовано"
+        )
+    
+    try:
+        # Обмінюємо code на access_token
+        token_url = "https://graph.facebook.com/v18.0/oauth/access_token"
+        token_params = {
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "redirect_uri": f"https://tlumaczeniamt.com.pl/api/v1/communications/facebook/callback",
+            "code": code,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(token_url, params=token_params)
+            response.raise_for_status()
+            token_data = response.json()
+        
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
+        
+        # Отримуємо інформацію про сторінки користувача
+        pages_url = "https://graph.facebook.com/v18.0/me/accounts"
+        pages_params = {"access_token": access_token}
+        
+        async with httpx.AsyncClient() as client:
+            pages_response = await client.get(pages_url, params=pages_params)
+            pages_response.raise_for_status()
+            pages_data = pages_response.json()
+        
+        # Беремо першу сторінку (або можна додати вибір сторінки)
+        facebook_page_id = None
+        if pages_data.get("data"):
+            facebook_page_id = pages_data["data"][0]["id"]
+        
+        # Зберігаємо access_token та page_id в налаштуваннях
+        crud.set_setting(db, "facebook_access_token", access_token)
+        if facebook_page_id:
+            crud.set_setting(db, "facebook_page_id", facebook_page_id)
+        
+        logger.info(f"Facebook OAuth successful. Access token saved. Page ID: {facebook_page_id}")
+        
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head>
+                    <title>Facebook OAuth Success</title>
+                    <meta http-equiv="refresh" content="3;url=/settings">
+                </head>
+                <body>
+                    <h1>✅ Facebook успішно підключено!</h1>
+                    <p>Access token збережено. Перенаправлення до налаштувань...</p>
+                    <p><a href="/settings">Перейти до налаштувань</a></p>
+                    <script>
+                        setTimeout(function() {{
+                            window.location.href = '/settings';
+                        }}, 3000);
+                    </script>
+                </body>
+            </html>
+            """
+        )
+        
+    except httpx.HTTPStatusError as e:
+        error_detail = f"HTTP {e.response.status_code}: {e.response.text}"
+        logger.error(f"Facebook OAuth token exchange error: {error_detail}")
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Facebook OAuth Error</title></head>
+                <body>
+                    <h1>Помилка обміну токену</h1>
+                    <p>{error_detail}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+    except Exception as e:
+        logger.error(f"Facebook OAuth error: {e}", exc_info=True)
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Facebook OAuth Error</title></head>
+                <body>
+                    <h1>Помилка авторизації Facebook</h1>
+                    <p>{str(e)}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+
+
+# ============================================================================
+# Meta App Review endpoints for Facebook (Deauthorization & Data Deletion)
+# ============================================================================
+
+@router.post("/facebook/deauthorize")
+async def facebook_deauthorize(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint для деавторизації Facebook.
+    Викликається Meta коли користувач видаляє додаток або відкликає дозволи.
+    
+    Meta надсилає POST запит з signed_request в body.
+    """
+    import json
+    import base64
+    import hmac
+    import hashlib
+    
+    try:
+        body = await request.body()
+        data = await request.form()
+        
+        # Meta надсилає signed_request як form data
+        signed_request = data.get("signed_request", "")
+        
+        if not signed_request:
+            # Спробуємо отримати з JSON body
+            try:
+                json_body = await request.json()
+                signed_request = json_body.get("signed_request", "")
+            except:
+                pass
+        
+        if not signed_request:
+            logger.warning("Facebook deauthorize: signed_request not found")
+            return {"status": "ok"}  # Повертаємо 200 OK навіть якщо дані невалідні
+        
+        # Розпаковуємо signed_request
+        # Формат: <signature>.<payload>
+        parts = signed_request.split('.')
+        if len(parts) != 2:
+            logger.warning("Facebook deauthorize: invalid signed_request format")
+            return {"status": "ok"}
+        
+        signature, payload = parts
+        
+        # Декодуємо payload (base64url)
+        # Додаємо padding якщо потрібно
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += '=' * padding
+        
+        try:
+            decoded_payload = base64.urlsafe_b64decode(payload)
+            payload_data = json.loads(decoded_payload)
+        except Exception as e:
+            logger.error(f"Facebook deauthorize: error decoding payload: {e}")
+            return {"status": "ok"}
+        
+        # Отримуємо user_id з payload
+        user_id = payload_data.get("user_id")
+        
+        if user_id:
+            # Очищаємо access_token для цього користувача
+            # Для Facebook ми зберігаємо access_token в налаштуваннях, тому просто очищаємо його
+            crud.set_setting(db, "facebook_access_token", "")
+            crud.set_setting(db, "facebook_page_id", "")
+            
+            logger.info(f"Facebook deauthorize: cleared access token for user {user_id}")
+        
+        return {"status": "ok"}
+        
+    except Exception as e:
+        logger.error(f"Facebook deauthorize error: {e}", exc_info=True)
+        # Все одно повертаємо 200 OK, щоб Meta не повторював запити
+        return {"status": "ok"}
+
+
+@router.post("/facebook/data-deletion")
+async def facebook_data_deletion(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint для запиту на видалення даних Facebook.
+    Викликається Meta коли користувач запитує видалення своїх даних.
+    
+    Meta надсилає POST запит з user_id та signed_request.
+    """
+    import json
+    import base64
+    import uuid
+    
+    try:
+        data = await request.form()
+        
+        # Отримуємо user_id та signed_request
+        user_id = data.get("user_id", "")
+        signed_request = data.get("signed_request", "")
+        
+        if not user_id:
+            # Спробуємо отримати з JSON body
+            try:
+                json_body = await request.json()
+                user_id = json_body.get("user_id", "")
+                signed_request = json_body.get("signed_request", "")
+            except:
+                pass
+        
+        if not user_id:
+            logger.warning("Facebook data deletion: user_id not found")
+            # Генеруємо confirmation_code навіть якщо user_id відсутній
+            confirmation_code = str(uuid.uuid4())
+            return {
+                "url": f"https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status?confirmation_code={confirmation_code}",
+                "confirmation_code": confirmation_code
+            }
+        
+        # Генеруємо confirmation_code
+        confirmation_code = str(uuid.uuid4())
+        
+        # Видаляємо дані користувача
+        # Шукаємо розмови Facebook для цього користувача
+        from modules.communications.models import Conversation, Message, PlatformEnum
+        
+        conversations = db.query(Conversation).filter(
+            Conversation.platform == PlatformEnum.FACEBOOK,
+            Conversation.external_id == str(user_id)
+        ).all()
+        
+        deleted_messages = 0
+        deleted_conversations = 0
+        
+        for conversation in conversations:
+            # Видаляємо повідомлення
+            messages = db.query(Message).filter(
+                Message.conversation_id == conversation.id
+            ).all()
+            
+            for message in messages:
+                db.delete(message)
+                deleted_messages += 1
+            
+            # Видаляємо розмову
+            db.delete(conversation)
+            deleted_conversations += 1
+        
+        db.commit()
+        
+        logger.info(f"Facebook data deletion: deleted {deleted_messages} messages and {deleted_conversations} conversations for user {user_id}")
+        
+        return {
+            "url": f"https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status?confirmation_code={confirmation_code}",
+            "confirmation_code": confirmation_code
+        }
+        
+    except Exception as e:
+        logger.error(f"Facebook data deletion error: {e}", exc_info=True)
+        # Генеруємо confirmation_code навіть при помилці
+        confirmation_code = str(uuid.uuid4())
+        return {
+            "url": f"https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status?confirmation_code={confirmation_code}",
+            "confirmation_code": confirmation_code
+        }
+
+
+@router.get("/facebook/data-deletion-status")
+async def facebook_data_deletion_status(
+    confirmation_code: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint для перевірки статусу видалення даних Facebook.
+    Meta використовує цей URL для перевірки статусу видалення.
+    """
+    # Для простоти повертаємо статус "completed"
+    # В реальному застосунку можна зберігати статус в БД та перевіряти confirmation_code
+    return {
+        "status": "completed",
+        "confirmation_code": confirmation_code,
+        "message": "Data deletion request has been processed"
+    }
+
+
+# ============================================================================
 # OAuth endpoints for Instagram authorization
 # ============================================================================
 

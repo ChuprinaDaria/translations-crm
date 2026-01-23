@@ -2,7 +2,9 @@
 
 ## Обов'язкові URLs для Meta App Review
 
-### 1. URL обратного вызова на деавторизацию (Deauthorization Callback URL)
+### Instagram URLs
+
+#### 1. URL обратного вызова на деавторизацию (Instagram)
 
 ```
 https://tlumaczeniamt.com.pl/api/v1/communications/instagram/deauthorize
@@ -13,7 +15,7 @@ https://tlumaczeniamt.com.pl/api/v1/communications/instagram/deauthorize
 
 ---
 
-### 2. URL запроса на удаление данных (Data Deletion Request URL)
+#### 2. URL запроса на удаление данных (Instagram)
 
 ```
 https://tlumaczeniamt.com.pl/api/v1/communications/instagram/data-deletion
@@ -32,7 +34,7 @@ https://tlumaczeniamt.com.pl/api/v1/communications/instagram/data-deletion
 
 ---
 
-### 3. URL для перевірки статусу видалення даних
+#### 3. URL для перевірки статусу видалення даних (Instagram)
 
 ```
 https://tlumaczeniamt.com.pl/api/v1/communications/instagram/data-deletion-status?confirmation_code=XXX
@@ -40,6 +42,56 @@ https://tlumaczeniamt.com.pl/api/v1/communications/instagram/data-deletion-statu
 
 **Метод:** GET  
 **Опис:** Meta використовує цей URL для перевірки статусу видалення даних користувача.
+
+---
+
+### Facebook URLs
+
+#### 4. URL обратного вызова на деавторизацию (Facebook)
+
+```
+https://tlumaczeniamt.com.pl/api/v1/communications/facebook/deauthorize
+```
+
+**Метод:** POST  
+**Опис:** Викликається Meta коли користувач видаляє додаток або відкликає дозволи Facebook. Очищає access_token та page_id.
+
+**Параметри:**
+- `signed_request` - підписаний запит від Meta з інформацією про користувача
+
+---
+
+#### 5. URL запроса на удаление данных (Facebook)
+
+```
+https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion
+```
+
+**Метод:** POST  
+**Опис:** Викликається Meta коли користувач запитує видалення своїх даних Facebook. Видаляє всі розмови та повідомлення Facebook для користувача.
+
+**Параметри:**
+- `user_id` - ID користувача Facebook
+- `signed_request` - підписаний запит від Meta
+
+**Відповідь:** Повертає `confirmation_code` та URL для перевірки статусу:
+```json
+{
+  "url": "https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status?confirmation_code=XXX",
+  "confirmation_code": "XXX"
+}
+```
+
+---
+
+#### 6. URL для перевірки статусу видалення даних (Facebook)
+
+```
+https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status?confirmation_code=XXX
+```
+
+**Метод:** GET  
+**Опис:** Meta використовує цей URL для перевірки статусу видалення даних Facebook користувача.
 
 ---
 
@@ -67,6 +119,8 @@ https://tlumaczeniamt.com.pl/gdpr
 
 ## Як налаштувати в Meta App Dashboard
 
+### Instagram налаштування
+
 1. Перейдіть в [Meta for Developers](https://developers.facebook.com/)
 2. Виберіть ваш додаток
 3. Перейдіть в **Instagram** → **Basic Settings**
@@ -75,6 +129,20 @@ https://tlumaczeniamt.com.pl/gdpr
    - **Data Deletion Status URL**: `https://tlumaczeniamt.com.pl/api/v1/communications/instagram/data-deletion-status`
 5. В розділі **"Deauthorization"** введіть:
    - **Deauthorization Callback URL**: `https://tlumaczeniamt.com.pl/api/v1/communications/instagram/deauthorize`
+6. В розділі **"App Review"** вкажіть:
+   - **Privacy Policy URL**: `https://tlumaczeniamt.com.pl/gdpr`
+   - **Terms of Service URL**: `https://tlumaczeniamt.com.pl/terms`
+
+### Facebook налаштування
+
+1. Перейдіть в [Meta for Developers](https://developers.facebook.com/)
+2. Виберіть ваш додаток
+3. Перейдіть в **Facebook** → **Settings** → **Basic**
+4. В розділі **"Data Deletion"** введіть:
+   - **Data Deletion Request URL**: `https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion`
+   - **Data Deletion Status URL**: `https://tlumaczeniamt.com.pl/api/v1/communications/facebook/data-deletion-status`
+5. В розділі **"Deauthorization"** введіть:
+   - **Deauthorization Callback URL**: `https://tlumaczeniamt.com.pl/api/v1/communications/facebook/deauthorize`
 6. В розділі **"App Review"** вкажіть:
    - **Privacy Policy URL**: `https://tlumaczeniamt.com.pl/gdpr`
    - **Terms of Service URL**: `https://tlumaczeniamt.com.pl/terms`

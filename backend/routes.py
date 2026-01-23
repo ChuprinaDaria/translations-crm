@@ -2267,6 +2267,7 @@ def get_facebook_config(db: Session = Depends(get_db), user = Depends(get_curren
     """Повертає налаштування Facebook API."""
     settings = crud.get_facebook_settings(db)
     return {
+        "app_id": settings.get("facebook_app_id") or "",
         "access_token": settings.get("facebook_access_token") or "",
         "app_secret": settings.get("facebook_app_secret") or "",
         "verify_token": settings.get("facebook_verify_token") or "",
@@ -2276,6 +2277,7 @@ def get_facebook_config(db: Session = Depends(get_db), user = Depends(get_curren
 
 @router.post("/settings/facebook-config")
 def update_facebook_config(
+    app_id: str = Form(""),
     access_token: str = Form(""),
     app_secret: str = Form(""),
     verify_token: str = Form(""),
@@ -2284,6 +2286,7 @@ def update_facebook_config(
     user_payload = Depends(get_current_user),
 ):
     """Оновлює налаштування Facebook API."""
+    crud.set_setting(db, "facebook_app_id", app_id)
     crud.set_setting(db, "facebook_access_token", access_token)
     crud.set_setting(db, "facebook_app_secret", app_secret)
     crud.set_setting(db, "facebook_verify_token", verify_token)

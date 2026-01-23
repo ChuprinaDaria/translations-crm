@@ -1170,6 +1170,7 @@ export interface InstagramConfig {
 }
 
 export interface FacebookConfig {
+  app_id: string;
   access_token: string;
   app_secret: string;
   verify_token: string;
@@ -1493,6 +1494,7 @@ export const settingsApi = {
   },
   async updateFacebookConfig(data: FacebookConfig): Promise<{ status: string }> {
     const formData = new FormData();
+    formData.append("app_id", data.app_id);
     formData.append("access_token", data.access_token);
     formData.append("app_secret", data.app_secret);
     formData.append("verify_token", data.verify_token);

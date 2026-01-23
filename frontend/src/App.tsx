@@ -13,8 +13,9 @@ import { AuthPage } from "./components/auth/AuthPage";
 import { TermsOfService } from "./pages/TermsOfService";
 import { GDPRPolicy } from "./pages/GDPRPolicy";
 import { Toaster } from "./components/ui/sonner";
-import { tokenManager, authApi } from "./lib/api";
+import { tokenManager, authApi, settingsApi } from "./lib/api";
 import { I18nProvider } from "./lib/i18n";
+import { initFacebookSDK, logFacebookPageView } from "./lib/facebook-sdk";
 import {
   Sheet,
   SheetContent,
@@ -188,6 +189,38 @@ function App() {
     return () =>
       window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // Initialize Facebook SDK when authenticated and App ID is available
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const initSDK = async () => {
+      try {
+        const facebookConfig = await settingsApi.getFacebookConfig();
+        if (facebookConfig.app_id) {
+          await initFacebookSDK(facebookConfig.app_id);
+          // Log initial page view after SDK initialization
+          logFacebookPageView();
+        }
+      } catch (error) {
+        // Silently fail - Facebook SDK is optional
+        console.debug('Facebook SDK initialization skipped:', error);
+      }
+    };
+
+    initSDK();
+  }, [isAuthenticated]);
+
+  // Log page view on route changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Small delay to ensure route has changed
+      const timer = setTimeout(() => {
+        logFacebookPageView();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [currentPath, isAuthenticated]);
 
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);

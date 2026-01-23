@@ -957,6 +957,7 @@ def get_instagram_settings(db: Session) -> dict[str, str | None]:
 
 def get_facebook_settings(db: Session) -> dict[str, str | None]:
     keys = [
+        "facebook_app_id",
         "facebook_access_token",
         "facebook_app_secret",
         "facebook_verify_token",
