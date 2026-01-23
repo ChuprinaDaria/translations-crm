@@ -179,13 +179,8 @@ jobs:
               git fetch origin
               git reset --hard origin/main
             else
-              if [ -d "translations-crm" ]; then
-                rm -rf translations-crm
-              fi
               git clone ${{ secrets.REPO_URL }} .
             fi
-            
-            cd $DEPLOY_DIR/translations-crm
             
             # Ensure .env exists (created in previous step)
             if [ ! -f .env ]; then
