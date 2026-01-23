@@ -256,10 +256,47 @@ jobs:
             
             # Build and start new containers (volumes зберігаються автоматично)
             echo "Building and starting new containers..."
-            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans
+            if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans; then
+              echo "❌ Docker compose up failed!"
+              echo "Checking docker-compose logs..."
+              $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs --tail 50 || true
+              exit 1
+            fi
             
-            # Wait for services to be healthy
-            sleep 15
+            # Check if containers started successfully
+            echo "Checking container status..."
+            sleep 10
+            echo "=== All containers ==="
+            docker ps -a --filter "name=crm_translations" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+            echo ""
+            echo "=== Docker Compose Status ==="
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml ps || true
+            echo ""
+            
+            # Check backend container specifically
+            BACKEND_CONTAINER=$(docker ps --filter "name=crm_translations_backend" --format "{{.Names}}" | head -1)
+            if [ -z "$BACKEND_CONTAINER" ]; then
+              echo "❌ Backend container failed to start!"
+              echo ""
+              echo "=== Checking stopped containers ==="
+              docker ps -a --filter "name=crm_translations_backend" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+              echo ""
+              echo "=== Backend Container Logs ==="
+              docker logs crm_translations_backend --tail 100 2>&1 || echo "Container doesn't exist"
+              echo ""
+              echo "=== Postgres Container Status ==="
+              docker ps -a --filter "name=crm_translations_postgres" --format "table {{.Names}}\t{{.Status}}" || true
+              echo ""
+              echo "=== Docker Compose Logs ==="
+              $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs backend --tail 50 || true
+              exit 1
+            fi
+            
+            echo "✅ Backend container is running: $BACKEND_CONTAINER"
+            
+            # Wait for services to initialize
+            echo "Waiting for services to initialize..."
+            sleep 25
             
             # Clean up old images
             docker image prune -f
@@ -303,8 +340,22 @@ jobs:
           done
           
           echo "❌ Health check failed after $MAX_RETRIES attempts"
-          echo "Checking container status..."
-          docker ps -a --filter "name=crm_translations_backend" || true
-          echo "Checking logs..."
-          docker logs crm_translations_backend --tail 50 || true
+          echo ""
+          echo "=== Container Status ==="
+          docker ps -a --filter "name=crm_translations" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+          echo ""
+          echo "=== Docker Compose Status ==="
+          $DOCKER_COMPOSE_CMD -f docker-compose.production.yml ps || true
+          echo ""
+          echo "=== Backend Container Logs ==="
+          docker logs crm_translations_backend --tail 100 2>&1 || echo "Container not found"
+          echo ""
+          echo "=== Postgres Container Logs ==="
+          docker logs crm_translations_postgres --tail 50 2>&1 || echo "Postgres container not found"
+          echo ""
+          echo "=== Network Status ==="
+          docker network ls | grep crm_translations || true
+          echo ""
+          echo "=== Port Status ==="
+          netstat -tuln | grep -E ":(8002|5435|8082)" || ss -tuln | grep -E ":(8002|5435|8082)" || true
           exit 1
