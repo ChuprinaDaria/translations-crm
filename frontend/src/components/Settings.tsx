@@ -62,7 +62,10 @@ export function Settings() {
 
   // Instagram state
   const [instagram, setInstagram] = useState<InstagramConfig>({
+    app_id: "",
+    access_token: "",
     app_secret: "",
+    verify_token: "",
   });
   const [isSavingInstagram, setIsSavingInstagram] = useState(false);
 
@@ -166,7 +169,7 @@ export function Settings() {
           settingsApi.getTelegramAccounts(),
           settingsApi.getSmtpSettings(),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
-          settingsApi.getInstagramConfig().catch(() => ({ app_secret: "" })),
+          settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
@@ -989,14 +992,41 @@ export function Settings() {
               <CardTitle>Instagram API налаштування</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="instagram-app-secret">App Secret</Label>
-                <Input
-                  id="instagram-app-secret"
-                  type="password"
-                  value={instagram.app_secret}
-                  onChange={(e) => setInstagram({ ...instagram, app_secret: e.target.value })}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="instagram-app-id">Instagram App ID</Label>
+                  <Input
+                    id="instagram-app-id"
+                    value={instagram.app_id}
+                    onChange={(e) => setInstagram({ ...instagram, app_id: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instagram-access-token">Access Token</Label>
+                  <Input
+                    id="instagram-access-token"
+                    type="password"
+                    value={instagram.access_token}
+                    onChange={(e) => setInstagram({ ...instagram, access_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instagram-app-secret">App Secret</Label>
+                  <Input
+                    id="instagram-app-secret"
+                    type="password"
+                    value={instagram.app_secret}
+                    onChange={(e) => setInstagram({ ...instagram, app_secret: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instagram-verify-token">Verify Token</Label>
+                  <Input
+                    id="instagram-verify-token"
+                    value={instagram.verify_token}
+                    onChange={(e) => setInstagram({ ...instagram, verify_token: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button

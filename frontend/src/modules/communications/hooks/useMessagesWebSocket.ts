@@ -54,9 +54,13 @@ export function useMessagesWebSocket({
 
     // Determine WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.hostname;
-    const port = '8000'; // Backend port
-    const wsUrl = `${protocol}//${host}:${port}/api/v1/communications/ws/${userId}`;
+    // In production, use the same host without port (nginx handles routing)
+    // In development, use port 8000
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const host = isProduction 
+      ? window.location.host  // Production: tlumaczeniamt.com.pl (nginx proxies to backend)
+      : `${window.location.hostname}:8000`;  // Development: localhost:8000
+    const wsUrl = `${protocol}//${host}/api/v1/communications/ws/${userId}`;
 
     console.log('[WebSocket] Connecting to:', wsUrl);
     

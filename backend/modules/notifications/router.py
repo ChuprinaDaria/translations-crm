@@ -164,12 +164,29 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     };
     ```
     """
+    # Перевірка origin для WebSocket (CORS middleware не працює для WS)
+    origin = websocket.headers.get("origin") or websocket.headers.get("Origin")
+    if origin:
+        allowed_hosts = [
+            "https://tlumaczeniamt.com.pl",
+            "http://tlumaczeniamt.com.pl",
+            "https://www.tlumaczeniamt.com.pl",
+            "http://www.tlumaczeniamt.com.pl",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+        if not any(origin.startswith(host) for host in allowed_hosts):
+            logger.warning(f"WebSocket connection rejected: invalid origin {origin}")
+            await websocket.close(code=1008, reason="Origin not allowed")
+            return
+    
     try:
         user_uuid = UUID(user_id)
     except ValueError:
         await websocket.close(code=1003, reason="Invalid user_id format")
         return
     
+    logger.info(f"WebSocket connection attempt from user: {user_id}, origin: {origin}")
     await manager.connect(user_uuid, websocket)
     
     try:

@@ -59,10 +59,15 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 allowed_origins = [
     "http://localhost:5173",
     "ws://localhost:5173",
+    "wss://localhost:5173",
     "https://tlumaczeniamt.com.pl",
     "http://tlumaczeniamt.com.pl",
+    "wss://tlumaczeniamt.com.pl",
+    "ws://tlumaczeniamt.com.pl",
     "https://www.tlumaczeniamt.com.pl",
     "http://www.tlumaczeniamt.com.pl",
+    "wss://www.tlumaczeniamt.com.pl",
+    "ws://www.tlumaczeniamt.com.pl",
     "http://5.78.152.139:8082",
 ]
 # Додаємо FRONTEND_URL якщо він встановлений
@@ -138,7 +143,24 @@ def health_check():
 @app.websocket("/api/v1/communications/ws/{user_id}")
 async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
     """WebSocket endpoint for real-time message updates."""
-    logger.info(f"WebSocket connection attempt from user: {user_id}")
+    # Перевірка origin для WebSocket (CORS middleware не працює для WS)
+    origin = websocket.headers.get("origin") or websocket.headers.get("Origin")
+    if origin:
+        # Дозволяємо тільки з дозволених доменів
+        allowed_hosts = [
+            "https://tlumaczeniamt.com.pl",
+            "http://tlumaczeniamt.com.pl",
+            "https://www.tlumaczeniamt.com.pl",
+            "http://www.tlumaczeniamt.com.pl",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+        if not any(origin.startswith(host) for host in allowed_hosts):
+            logger.warning(f"WebSocket connection rejected: invalid origin {origin}")
+            await websocket.close(code=1008, reason="Origin not allowed")
+            return
+    
+    logger.info(f"WebSocket connection attempt from user: {user_id}, origin: {origin}")
     
     try:
         await websocket.accept()

@@ -125,8 +125,9 @@ export function InboxPageEnhanced() {
   }, [openChats, updateChatMessages, conversations, addNotification]);
 
   // WebSocket for real-time updates
+  const userId = getUserIdFromToken();
   const { isConnected: wsConnected } = useMessagesWebSocket({
-    userId: 'current-user', // TODO: Get actual user ID from auth context
+    userId: userId || 'current-user', // Fallback if no user ID found
     onNewMessage: handleWebSocketNewMessage,
     onConnect: () => {
       console.log('[WebSocket] Connected to real-time messages');
