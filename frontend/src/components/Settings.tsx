@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import {
   settingsApi,
   getImageUrl,
+  API_BASE_URL,
   type BrandingSettings,
   type TelegramAccount,
   type SmtpSettings,
@@ -1028,7 +1029,24 @@ export function Settings() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!instagram.app_id}
+                  onClick={() => {
+                    if (!instagram.app_id) {
+                      toast.error("Спочатку введіть Instagram App ID");
+                      return;
+                    }
+                    // Відкриваємо OAuth URL
+                    const oauthUrl = `${API_BASE_URL}/communications/instagram/auth`;
+                    window.location.href = oauthUrl;
+                  }}
+                >
+                  <ImageIcon className="w-4 h-4 mr-2" />
+                  Підключити Instagram
+                </Button>
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
@@ -1049,6 +1067,11 @@ export function Settings() {
                   {isSavingInstagram ? "Збереження..." : "Зберегти Instagram"}
                 </Button>
               </div>
+              {!instagram.app_id && (
+                <p className="text-sm text-muted-foreground">
+                  💡 Введіть Instagram App ID та App Secret, потім натисніть "Підключити Instagram" для автоматичного отримання Access Token через OAuth.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
