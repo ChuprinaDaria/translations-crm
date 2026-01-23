@@ -23,10 +23,18 @@ def get_user_id_from_payload(user_payload: dict = Depends(get_current_user_paylo
     if not user_id_str:
         raise HTTPException(status_code=401, detail="Invalid token")
     try:
-        # user.id is UUID, stored as string in token
+        # Try UUID first (model uses UUID)
         return UUID(user_id_str)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid user ID in token")
+        # If UUID fails, it might be an int stored as string
+        # For notifications service, we need UUID, so try to convert
+        # If it's a simple int like "1", we can't convert to valid UUID
+        # In this case, we'll need to handle it differently
+        # For now, raise error - the user needs to re-login to get a new token
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid user ID in token. Please log in again."
+        )
 
 
 @router.get("/", response_model=List[schemas.NotificationResponse])

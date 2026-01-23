@@ -22,13 +22,10 @@ def get_current_user_db(
     user_id_str = user_payload.get("sub")
     if not user_id_str:
         raise HTTPException(status_code=401, detail="Invalid token")
-    try:
-        # user.id is UUID, stored as string in token
-        user_id = UUID(user_id_str)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid user ID in token")
     
-    user = crud_user.get_user_by_id(db, user_id)
+    # Try UUID first, then int (for backward compatibility)
+    # crud_user.get_user_by_id supports both UUID and int
+    user = crud_user.get_user_by_id(db, user_id_str)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
