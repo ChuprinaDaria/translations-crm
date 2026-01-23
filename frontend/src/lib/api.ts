@@ -1152,6 +1152,32 @@ export interface TelegramApiConfig {
   sender_name: string;
 }
 
+export interface WhatsAppConfig {
+  access_token: string;
+  phone_number_id: string;
+  app_secret: string;
+  verify_token: string;
+}
+
+export interface InstagramConfig {
+  app_secret: string;
+}
+
+export interface FacebookConfig {
+  access_token: string;
+  app_secret: string;
+  verify_token: string;
+  page_id: string;
+}
+
+export interface StripeConfig {
+  secret_key: string;
+}
+
+export interface InPostConfig {
+  api_key: string;
+}
+
 // Templates API
 export const templatesApi = {
   async getTemplates(): Promise<Template[]> {
@@ -1427,6 +1453,62 @@ export const settingsApi = {
       formData,
       "POST"
     );
+  },
+
+  // WhatsApp API
+  async getWhatsAppConfig(): Promise<WhatsAppConfig> {
+    return apiFetch<WhatsAppConfig>("/settings/whatsapp-config");
+  },
+  async updateWhatsAppConfig(data: WhatsAppConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("access_token", data.access_token);
+    formData.append("phone_number_id", data.phone_number_id);
+    formData.append("app_secret", data.app_secret);
+    formData.append("verify_token", data.verify_token);
+    return apiFetchMultipart<{ status: string }>("/settings/whatsapp-config", formData, "POST");
+  },
+
+  // Instagram API
+  async getInstagramConfig(): Promise<InstagramConfig> {
+    return apiFetch<InstagramConfig>("/settings/instagram-config");
+  },
+  async updateInstagramConfig(data: InstagramConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("app_secret", data.app_secret);
+    return apiFetchMultipart<{ status: string }>("/settings/instagram-config", formData, "POST");
+  },
+
+  // Facebook API
+  async getFacebookConfig(): Promise<FacebookConfig> {
+    return apiFetch<FacebookConfig>("/settings/facebook-config");
+  },
+  async updateFacebookConfig(data: FacebookConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("access_token", data.access_token);
+    formData.append("app_secret", data.app_secret);
+    formData.append("verify_token", data.verify_token);
+    formData.append("page_id", data.page_id);
+    return apiFetchMultipart<{ status: string }>("/settings/facebook-config", formData, "POST");
+  },
+
+  // Stripe API
+  async getStripeConfig(): Promise<StripeConfig> {
+    return apiFetch<StripeConfig>("/settings/stripe-config");
+  },
+  async updateStripeConfig(data: StripeConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("secret_key", data.secret_key);
+    return apiFetchMultipart<{ status: string }>("/settings/stripe-config", formData, "POST");
+  },
+
+  // InPost API
+  async getInPostConfig(): Promise<InPostConfig> {
+    return apiFetch<InPostConfig>("/settings/inpost-config");
+  },
+  async updateInPostConfig(data: InPostConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("api_key", data.api_key);
+    return apiFetchMultipart<{ status: string }>("/settings/inpost-config", formData, "POST");
   },
 };
 

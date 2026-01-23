@@ -1,0 +1,59 @@
+name: Weekly Docker Images Cleanup
+
+on:
+  schedule:
+    # Запускається кожну неділю о 3:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch: # Дозволяє запускати вручну
+
+jobs:
+  cleanup-images:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Clean up old Docker images
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'CLEANUP_SCRIPT'
+            set -e
+            
+            echo "Starting Docker cleanup..."
+            
+            # Видаляємо dangling images (невикористовувані)
+            echo "Removing dangling images..."
+            docker image prune -f
+            
+            # Видаляємо невикористовувані images (старіші за 7 днів)
+            echo "Removing unused images older than 7 days..."
+            docker image prune -a -f --filter "until=168h"
+            
+            # Показуємо залишковий простір
+            echo "Cleanup completed. Remaining images:"
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+            
+            # Показуємо вивільнений простір
+            echo "Disk usage after cleanup:"
+            df -h /var/lib/docker 2>/dev/null || df -h /
+            
+            echo "Cleanup finished successfully"
+          CLEANUP_SCRIPT
+
+      - name: Verify cleanup
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'VERIFY_SCRIPT'
+            echo "Verifying Docker system..."
+            docker system df
+            echo "Verification complete"
+          VERIFY_SCRIPT
+

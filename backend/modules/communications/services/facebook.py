@@ -41,6 +41,24 @@ class FacebookService(MessengerService):
     def _load_config(self) -> Dict[str, Any]:
         """Завантажити конфігурацію з бази даних або env."""
         import os
+        import crud
+        from db import SessionLocal
+        
+        # Спробувати завантажити з бази даних
+        db = SessionLocal()
+        try:
+            settings = crud.get_facebook_settings(db)
+            if settings.get("facebook_access_token"):
+                return {
+                    "access_token": settings.get("facebook_access_token") or "",
+                    "app_secret": settings.get("facebook_app_secret") or "",
+                    "verify_token": settings.get("facebook_verify_token") or "",
+                    "page_id": settings.get("facebook_page_id") or "",
+                }
+        finally:
+            db.close()
+        
+        # Fallback до env
         return {
             "access_token": os.getenv("FACEBOOK_ACCESS_TOKEN", ""),
             "app_secret": os.getenv("FACEBOOK_APP_SECRET", ""),

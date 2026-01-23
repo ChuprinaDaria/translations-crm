@@ -14,6 +14,11 @@ import {
   type BrandingSettings,
   type TelegramAccount,
   type SmtpSettings,
+  type WhatsAppConfig,
+  type InstagramConfig,
+  type FacebookConfig,
+  type StripeConfig,
+  type InPostConfig,
 } from "../lib/api";
 import { officesApi, type Office, type OfficeCreate } from "../modules/crm/api/offices";
 
@@ -45,6 +50,42 @@ export function Settings() {
     from_email: "",
     from_name: "",
   });
+
+  // WhatsApp state
+  const [whatsapp, setWhatsapp] = useState<WhatsAppConfig>({
+    access_token: "",
+    phone_number_id: "",
+    app_secret: "",
+    verify_token: "",
+  });
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+
+  // Instagram state
+  const [instagram, setInstagram] = useState<InstagramConfig>({
+    app_secret: "",
+  });
+  const [isSavingInstagram, setIsSavingInstagram] = useState(false);
+
+  // Facebook state
+  const [facebook, setFacebook] = useState<FacebookConfig>({
+    access_token: "",
+    app_secret: "",
+    verify_token: "",
+    page_id: "",
+  });
+  const [isSavingFacebook, setIsSavingFacebook] = useState(false);
+
+  // Stripe state
+  const [stripe, setStripe] = useState<StripeConfig>({
+    secret_key: "",
+  });
+  const [isSavingStripe, setIsSavingStripe] = useState(false);
+
+  // InPost state
+  const [inpost, setInpost] = useState<InPostConfig>({
+    api_key: "",
+  });
+  const [isSavingInPost, setIsSavingInPost] = useState(false);
 
   // Offices state
   const [offices, setOffices] = useState<Office[]>([]);
@@ -111,14 +152,33 @@ export function Settings() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [brandingData, tgAccounts, smtpSettings] = await Promise.all([
+        const [
+          brandingData,
+          tgAccounts,
+          smtpSettings,
+          whatsappConfig,
+          instagramConfig,
+          facebookConfig,
+          stripeConfig,
+          inpostConfig,
+        ] = await Promise.all([
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
           settingsApi.getSmtpSettings(),
+          settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
+          settingsApi.getInstagramConfig().catch(() => ({ app_secret: "" })),
+          settingsApi.getFacebookConfig().catch(() => ({ access_token: "", app_secret: "", verify_token: "", page_id: "" })),
+          settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
+          settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
         ]);
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
         setSmtp(smtpSettings);
+        setWhatsapp(whatsappConfig);
+        setInstagram(instagramConfig);
+        setFacebook(facebookConfig);
+        setStripe(stripeConfig);
+        setInpost(inpostConfig);
       } catch (error) {
         console.error(error);
       }
@@ -209,6 +269,26 @@ export function Settings() {
           <TabsTrigger value="smtp" className="flex items-center gap-2">
             <Mail className="w-4 h-4" />
             SMTP
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            WhatsApp
+          </TabsTrigger>
+          <TabsTrigger value="instagram" className="flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Instagram
+          </TabsTrigger>
+          <TabsTrigger value="facebook" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            Facebook
+          </TabsTrigger>
+          <TabsTrigger value="stripe" className="flex items-center gap-2">
+            <Star className="w-4 h-4" />
+            Stripe
+          </TabsTrigger>
+          <TabsTrigger value="inpost" className="flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            InPost
           </TabsTrigger>
         </TabsList>
 
@@ -828,6 +908,265 @@ export function Settings() {
                   }}
                 >
                   Зберегти SMTP
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* WhatsApp Tab */}
+        <TabsContent value="whatsapp" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>WhatsApp API налаштування</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-access-token">Access Token</Label>
+                  <Input
+                    id="whatsapp-access-token"
+                    type="password"
+                    value={whatsapp.access_token}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, access_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-phone-number-id">Phone Number ID</Label>
+                  <Input
+                    id="whatsapp-phone-number-id"
+                    value={whatsapp.phone_number_id}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, phone_number_id: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-app-secret">App Secret</Label>
+                  <Input
+                    id="whatsapp-app-secret"
+                    type="password"
+                    value={whatsapp.app_secret}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, app_secret: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-verify-token">Verify Token</Label>
+                  <Input
+                    id="whatsapp-verify-token"
+                    value={whatsapp.verify_token}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, verify_token: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingWhatsApp}
+                  onClick={async () => {
+                    setIsSavingWhatsApp(true);
+                    try {
+                      await settingsApi.updateWhatsAppConfig(whatsapp);
+                      toast.success("WhatsApp налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти WhatsApp налаштування");
+                    } finally {
+                      setIsSavingWhatsApp(false);
+                    }
+                  }}
+                >
+                  {isSavingWhatsApp ? "Збереження..." : "Зберегти WhatsApp"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Instagram Tab */}
+        <TabsContent value="instagram" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Instagram API налаштування</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="instagram-app-secret">App Secret</Label>
+                <Input
+                  id="instagram-app-secret"
+                  type="password"
+                  value={instagram.app_secret}
+                  onChange={(e) => setInstagram({ ...instagram, app_secret: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingInstagram}
+                  onClick={async () => {
+                    setIsSavingInstagram(true);
+                    try {
+                      await settingsApi.updateInstagramConfig(instagram);
+                      toast.success("Instagram налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти Instagram налаштування");
+                    } finally {
+                      setIsSavingInstagram(false);
+                    }
+                  }}
+                >
+                  {isSavingInstagram ? "Збереження..." : "Зберегти Instagram"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Facebook Tab */}
+        <TabsContent value="facebook" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Facebook API налаштування</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="facebook-access-token">Access Token</Label>
+                  <Input
+                    id="facebook-access-token"
+                    type="password"
+                    value={facebook.access_token}
+                    onChange={(e) => setFacebook({ ...facebook, access_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="facebook-app-secret">App Secret</Label>
+                  <Input
+                    id="facebook-app-secret"
+                    type="password"
+                    value={facebook.app_secret}
+                    onChange={(e) => setFacebook({ ...facebook, app_secret: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="facebook-verify-token">Verify Token</Label>
+                  <Input
+                    id="facebook-verify-token"
+                    value={facebook.verify_token}
+                    onChange={(e) => setFacebook({ ...facebook, verify_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="facebook-page-id">Page ID</Label>
+                  <Input
+                    id="facebook-page-id"
+                    value={facebook.page_id}
+                    onChange={(e) => setFacebook({ ...facebook, page_id: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingFacebook}
+                  onClick={async () => {
+                    setIsSavingFacebook(true);
+                    try {
+                      await settingsApi.updateFacebookConfig(facebook);
+                      toast.success("Facebook налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти Facebook налаштування");
+                    } finally {
+                      setIsSavingFacebook(false);
+                    }
+                  }}
+                >
+                  {isSavingFacebook ? "Збереження..." : "Зберегти Facebook"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Stripe Tab */}
+        <TabsContent value="stripe" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stripe API налаштування</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="stripe-secret-key">Secret Key</Label>
+                <Input
+                  id="stripe-secret-key"
+                  type="password"
+                  value={stripe.secret_key}
+                  onChange={(e) => setStripe({ ...stripe, secret_key: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingStripe}
+                  onClick={async () => {
+                    setIsSavingStripe(true);
+                    try {
+                      await settingsApi.updateStripeConfig(stripe);
+                      toast.success("Stripe налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти Stripe налаштування");
+                    } finally {
+                      setIsSavingStripe(false);
+                    }
+                  }}
+                >
+                  {isSavingStripe ? "Збереження..." : "Зберегти Stripe"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* InPost Tab */}
+        <TabsContent value="inpost" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>InPost API налаштування</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="inpost-api-key">API Key</Label>
+                <Input
+                  id="inpost-api-key"
+                  type="password"
+                  value={inpost.api_key}
+                  onChange={(e) => setInpost({ ...inpost, api_key: e.target.value })}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingInPost}
+                  onClick={async () => {
+                    setIsSavingInPost(true);
+                    try {
+                      await settingsApi.updateInPostConfig(inpost);
+                      toast.success("InPost налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти InPost налаштування");
+                    } finally {
+                      setIsSavingInPost(false);
+                    }
+                  }}
+                >
+                  {isSavingInPost ? "Збереження..." : "Зберегти InPost"}
                 </Button>
               </div>
             </CardContent>

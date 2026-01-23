@@ -27,6 +27,7 @@ from modules.communications.models import (
 from modules.communications import schemas
 from modules.crm.models import Client, ClientSource
 import models
+import crud
 
 logger = logging.getLogger(__name__)
 
@@ -571,7 +572,10 @@ async def create_payment_link(
         import stripe
         import os
         
-        stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+        # Завантажити Stripe ключ з бази даних
+        stripe_settings = crud.get_stripe_settings(db)
+        stripe_key = stripe_settings.get("stripe_secret_key") or os.getenv("STRIPE_SECRET_KEY", "")
+        stripe.api_key = stripe_key
         if not stripe.api_key:
             raise HTTPException(status_code=500, detail="Stripe API key not configured")
         
@@ -633,7 +637,9 @@ async def get_tracking(
         import httpx
         import os
         
-        inpost_api_key = os.getenv("INPOST_API_KEY")
+        # Завантажити InPost ключ з бази даних
+        inpost_settings = crud.get_inpost_settings(db)
+        inpost_api_key = inpost_settings.get("inpost_api_key") or os.getenv("INPOST_API_KEY", "")
         if not inpost_api_key:
             raise HTTPException(status_code=500, detail="InPost API key not configured")
         

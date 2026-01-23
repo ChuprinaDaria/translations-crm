@@ -41,6 +41,24 @@ class WhatsAppService(MessengerService):
     def _load_config(self) -> Dict[str, Any]:
         """Завантажити конфігурацію з бази даних або env."""
         import os
+        import crud
+        from db import SessionLocal
+        
+        # Спробувати завантажити з бази даних
+        db = SessionLocal()
+        try:
+            settings = crud.get_whatsapp_settings(db)
+            if settings.get("whatsapp_access_token"):
+                return {
+                    "access_token": settings.get("whatsapp_access_token") or "",
+                    "phone_number_id": settings.get("whatsapp_phone_number_id") or "",
+                    "app_secret": settings.get("whatsapp_app_secret") or "",
+                    "verify_token": settings.get("whatsapp_verify_token") or "",
+                }
+        finally:
+            db.close()
+        
+        # Fallback до env
         return {
             "access_token": os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
             "phone_number_id": os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),

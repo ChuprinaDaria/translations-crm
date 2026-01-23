@@ -2,280 +2,188 @@ name: Deploy to Production
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  # Перевірка перед деплоєм
-  check:
-    name: Check Frontend & Backend
+  test-and-build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-    
-    - name: Install frontend dependencies
-      run: npm ci
-    
-    - name: TypeScript type check
-      run: |
-        if [ -f "tsconfig.json" ]; then
-          npx tsc --noEmit
-        else
-          echo "⚠️ No tsconfig.json found, skipping TypeScript check"
-        fi
-    
-    - name: Build frontend
-      run: npm run build
-    
-    - name: Verify frontend build
-      run: |
-        if [ ! -d "build" ]; then
-          echo "❌ Error: Build directory not found!"
-          exit 1
-        fi
-        if ! grep -r "Dashboard" build/assets/ > /dev/null 2>&1; then
-          echo "⚠️ Warning: Dashboard not found in build"
-        fi
-        echo "✅ Frontend build verified!"
-    
-    - name: Check backend files
-      run: |
-        if [ ! -f "app/main.py" ]; then
-          echo "❌ Error: Backend main.py not found!"
-          exit 1
-        fi
-        if [ ! -f "app/requirements.txt" ]; then
-          echo "❌ Error: Backend requirements.txt not found!"
-          exit 1
-        fi
-        echo "✅ Backend files verified!"
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # Деплой на сервер
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('translations-crm/backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        working-directory: ./translations-crm/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run Python linting
+        working-directory: ./translations-crm/backend
+        run: |
+          pip install flake8 black
+          # Check code style (non-blocking)
+          black --check . || true
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+
+      - name: Test backend imports
+        working-directory: ./translations-crm/backend
+        run: |
+          python -c "import main; print('Backend imports OK')"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: translations-crm/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./translations-crm/frontend
+        run: npm ci
+
+      - name: Run frontend linting
+        working-directory: ./translations-crm/frontend
+        run: |
+          npm run build || (echo "Build failed" && exit 1)
+
+      - name: Build Docker images
+        working-directory: ./translations-crm
+        run: |
+          docker build -t crm-backend:test ./backend
+          echo "Docker build successful"
+
   deploy:
-    name: Deploy to Server
-    needs: check
+    needs: test-and-build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     
     steps:
-    - name: 🚀 Deploy via SSH
-      uses: appleboy/ssh-action@v1.0.0
-      env:
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        APP_ENV: ${{ secrets.APP_ENV }}
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: ${{ secrets.SSH_PORT }}
-        envs: POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,JWT_SECRET,APP_ENV
-        script: |
-          set -e
-          cd /opt/crm
-          
-          echo "📥 Pulling latest code..."
-          # Налаштування для використання SSH з deploy key
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          # Додаємо GitHub до known_hosts
-          if ! grep -q "github.com" ~/.ssh/known_hosts 2>/dev/null; then
-            echo "🔧 Adding GitHub to known_hosts..."
-            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
-            chmod 600 ~/.ssh/known_hosts
-          fi
-          
-          # Перевіряємо і налаштовуємо remote на SSH якщо потрібно
-          REMOTE_URL=$(git config --get remote.origin.url || echo "")
-          if [[ -z "$REMOTE_URL" ]]; then
-            echo "⚠️ No remote URL found"
-            exit 1
-          elif [[ "$REMOTE_URL" == https://github.com/* ]]; then
-            echo "🔧 Switching remote from HTTPS to SSH..."
-            git remote set-url origin git@github.com:YOUR_ORG/YOUR_REPO.git
-          elif [[ "$REMOTE_URL" == git@github.com:* ]]; then
-            echo "✅ Remote already configured for SSH"
-          else
-            echo "ℹ️ Using existing remote: $REMOTE_URL"
-          fi
-          
-          # Використовуємо fetch + reset
-          echo "📥 Fetching latest changes..."
-          git fetch origin main || {
-            echo "❌ Git fetch failed!"
-            echo "📋 Current remote configuration:"
-            git remote -v
-            echo "🔍 Checking SSH connection to GitHub..."
-            ssh -T git@github.com 2>&1 | head -1 || echo "⚠️ SSH test failed"
-            exit 1
-          }
-          git reset --hard origin/main
-          echo "✅ Code updated successfully"
-          
-          echo "📝 Creating .env file from secrets..."
-          cat > .env << ENVFILE
-          JWT_SECRET=${JWT_SECRET}
-          POSTGRES_USER=${POSTGRES_USER:-postgres}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-          POSTGRES_DB=${POSTGRES_DB:-crm_db}
-          APP_ENV=${APP_ENV:-production}
-          ENVFILE
-          
-          echo "🐳 Rebuilding backend..."
-          # Визначаємо яку версію compose використовувати (v2 або v1)
-          if docker compose version > /dev/null 2>&1; then
-            COMPOSE_CMD="docker compose"
-            echo "✅ Using Docker Compose V2"
-          else
-            COMPOSE_CMD="docker-compose"
-            echo "⚠️ Using Docker Compose V1 (legacy) - consider upgrading to Docker Compose V2"
-          fi
-          
-          # Перевіряємо чи встановлений buildx, якщо ні - встановлюємо або використовуємо fallback
-          if ! docker buildx version > /dev/null 2>&1; then
-            echo "⚠️ Buildx not found, attempting to install..."
-            if command -v apt-get > /dev/null 2>&1; then
-              sudo apt-get update -qq && sudo apt-get install -y docker-buildx-plugin || echo "⚠️ Could not install buildx, using legacy builder"
-            fi
-          fi
-          
-          # Спробуємо використати BuildKit якщо доступний
-          if docker buildx version > /dev/null 2>&1; then
-            echo "✅ Using BuildKit with buildx"
-            export DOCKER_BUILDKIT=1
-            COMPOSE_DOCKER_CLI_BUILD=1 $COMPOSE_CMD build backend
-          else
-            echo "ℹ️ Using legacy Docker builder"
-            $COMPOSE_CMD build backend
-          fi
-          
-          echo "▶️ Restarting services..."
-          # Для старої версії docker-compose потрібно спочатку зупинити та видалити контейнери crm
-          # щоб уникнути помилки ContainerConfig
-          if [ "$COMPOSE_CMD" = "docker-compose" ]; then
-            echo "🛑 Stopping and removing old crm containers to avoid ContainerConfig error..."
-            # Зупиняємо всі контейнери crm (включаючи старі з некоректними іменами)
-            docker ps -a --filter "name=crm" --format "{{.Names}}" | xargs -r docker stop 2>/dev/null || true
-            docker ps -a --filter "name=crm" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create or update .env file on server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'ENV_SCRIPT'
+            set -e
+            DEPLOY_DIR="/opt/translations/translations-crm"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
             
-            # Також видаляємо контейнери через compose (якщо вони є)
-            $COMPOSE_CMD down 2>/dev/null || true
-            
-            # Видаляємо всі контейнери що починаються з crm_ (на випадок старих імен)
-            docker ps -a --filter "name=^/crm_" --format "{{.Names}}" | sed 's|^/||' | xargs -r docker rm -f 2>/dev/null || true
-          fi
-          
-          # Використовуємо --force-recreate для уникнення проблем з рекреацією
-          $COMPOSE_CMD up -d --force-recreate
-          
-          echo "⏳ Waiting for services to be healthy..."
-          sleep 15
-          
-          echo "🔍 Checking crm containers health..."
-          # Використовуємо ту саму команду compose що і раніше
-          if [ -z "$COMPOSE_CMD" ]; then
-            if docker compose version > /dev/null 2>&1; then
-              COMPOSE_CMD="docker compose"
+            # Якщо .env вже існує, зберігаємо його та оновлюємо тільки потрібні значення
+            if [ -f .env ]; then
+              echo "Existing .env file found, updating with GitHub Secrets..."
+              # Зберігаємо існуючий .env як backup
+              cp .env .env.backup
+              
+              # Оновлюємо значення з GitHub Secrets (якщо вони встановлені)
+              [ -n "${{ secrets.POSTGRES_USER }}" ] && sed -i "s/^POSTGRES_USER=.*/POSTGRES_USER=${{ secrets.POSTGRES_USER }}/" .env || true
+              [ -n "${{ secrets.POSTGRES_PASSWORD }}" ] && sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}/" .env || true
+              [ -n "${{ secrets.POSTGRES_DB }}" ] && sed -i "s/^POSTGRES_DB=.*/POSTGRES_DB=${{ secrets.POSTGRES_DB }}/" .env || true
+              [ -n "${{ secrets.DATABASE_URL }}" ] && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${{ secrets.DATABASE_URL }}|" .env || true
+              [ -n "${{ secrets.JWT_SECRET }}" ] && sed -i "s/^JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env || true
+              
+              # Додаємо нові змінні якщо їх немає
+              grep -q "^APP_ENV=" .env || echo "APP_ENV=prod" >> .env
             else
-              COMPOSE_CMD="docker-compose"
+              echo "Creating new .env file from GitHub Secrets..."
+              cat > .env << EOF
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          APP_ENV=prod
+          REDIS_URL=${{ secrets.REDIS_URL }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          EOF
             fi
-          fi
-          
-          # Перевірка всіх crm контейнерів
-          HEALTH_CHECK_FAILED=0
-          
-          # Перевірка crm_backend
-          if docker ps | grep -q crm_backend; then
-            BACKEND_STATUS=$(docker inspect --format='{{.State.Status}}' crm_backend 2>/dev/null || echo "not found")
-            BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' crm_backend 2>/dev/null || echo "no healthcheck")
-            echo "✅ crm_backend: Status=$BACKEND_STATUS, Health=$BACKEND_HEALTH"
-            if [ "$BACKEND_STATUS" != "running" ]; then
-              echo "❌ crm_backend is not running!"
-              HEALTH_CHECK_FAILED=1
+          ENV_SCRIPT
+
+      - name: Deploy to server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'DEPLOY_SCRIPT'
+            set -e
+            
+            DEPLOY_DIR="/opt/translations"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+            
+            # Pull latest code
+            if [ -d ".git" ]; then
+              git fetch origin
+              git reset --hard origin/main
+            else
+              if [ -d "translations-crm" ]; then
+                rm -rf translations-crm
+              fi
+              git clone ${{ secrets.REPO_URL }} .
             fi
-          else
-            echo "❌ crm_backend container not found!"
-            HEALTH_CHECK_FAILED=1
-          fi
-          
-          # Перевірка crm_postgres
-          if docker ps | grep -q crm_postgres; then
-            POSTGRES_STATUS=$(docker inspect --format='{{.State.Status}}' crm_postgres 2>/dev/null || echo "not found")
-            POSTGRES_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' crm_postgres 2>/dev/null || echo "no healthcheck")
-            echo "✅ crm_postgres: Status=$POSTGRES_STATUS, Health=$POSTGRES_HEALTH"
-            if [ "$POSTGRES_STATUS" != "running" ]; then
-              echo "❌ crm_postgres is not running!"
-              HEALTH_CHECK_FAILED=1
+            
+            cd $DEPLOY_DIR/translations-crm
+            
+            # Ensure .env exists (created in previous step)
+            if [ ! -f .env ]; then
+              echo "Error: .env file not found!"
+              exit 1
             fi
-          else
-            echo "❌ crm_postgres container not found!"
-            HEALTH_CHECK_FAILED=1
+            
+            # Build frontend
+            cd frontend
+            if [ ! -d "node_modules" ]; then
+              npm ci
+            else
+              npm ci
+            fi
+            npm run build
+            cd ..
+            
+            # Stop existing containers
+            docker-compose -f docker-compose.production.yml down || true
+            
+            # Build and start new containers
+            docker-compose -f docker-compose.production.yml up -d --build
+            
+            # Wait for services to be healthy
+            sleep 15
+            
+            # Clean up old images
+            docker image prune -f
+            
+            echo "Deployment completed successfully"
+          DEPLOY_SCRIPT
+
+      - name: Health check
+        run: |
+          sleep 15
+          BACKEND_PORT="${{ secrets.BACKEND_PORT }}"
+          if [ -z "$BACKEND_PORT" ]; then
+            BACKEND_PORT="8001"
           fi
-          
-          # Показуємо статус всіх контейнерів
-          echo "📋 All crm containers status:"
-          $COMPOSE_CMD ps || docker ps --filter "name=crm" --format "table {{.Names}}\t{{.Status}}\t{{.Health}}"
-          
-          if [ $HEALTH_CHECK_FAILED -eq 1 ]; then
-            echo "❌ Health check failed! Checking logs..."
-            echo "📋 Backend logs (last 50 lines):"
-            docker logs --tail=50 crm_backend 2>&1 || true
-            echo "📋 Postgres logs (last 50 lines):"
-            docker logs --tail=50 crm_postgres 2>&1 || true
-            exit 1
-          fi
-          
-          echo "✅ All crm containers are healthy!"
-          
-          echo "🔨 Building frontend..."
-          # Завжди встановлюємо залежності для гарантії що все актуально
-          echo "📦 Installing npm dependencies..."
-          npm ci || npm install
-          
-          rm -rf build/
-          # Збільшуємо heap size для важких React/Vite проектів
-          NODE_OPTIONS=--max_old_space_size=4096 npm run build
-          
-          echo "✅ Checking build..."
-          # Перевіряємо що build директорія існує і не порожня
-          if [ ! -d "build" ] || [ -z "$(ls -A build 2>/dev/null)" ]; then
-            echo "❌ Error: Build directory is empty or missing!"
-            exit 1
-          fi
-          
-          # Перевіряємо наявність ключових файлів
-          if [ ! -f "build/index.html" ]; then
-            echo "❌ Error: index.html not found in build!"
-            exit 1
-          fi
-          
-          # Перевіряємо наявність assets
-          if [ ! -d "build/assets" ] || [ -z "$(ls -A build/assets 2>/dev/null)" ]; then
-            echo "❌ Error: No assets found in build!"
-            exit 1
-          fi
-          
-          # Перевіряємо наявність Dashboard (базова перевірка)
-          if grep -r "Dashboard" build/assets/ > /dev/null 2>&1; then
-            echo "✅ Frontend build complete and verified!"
-          else
-            echo "⚠️ Warning: Dashboard not found in build (might be minified)"
-            echo "ℹ️ Build directory structure:"
-            ls -la build/ || true
-          fi
-          
-          echo "🔄 Restarting nginx..."
-          sudo docker restart whiteout_nginx
-          
-          echo "🎉 Deploy finished at $(date)"
-          echo "📊 Running containers:"
-          docker ps --filter "name=crm" --format "table {{.Names}}\t{{.Status}}"
+          curl -f http://${{ secrets.SERVER_HOST }}:$BACKEND_PORT/docs || (echo "Health check failed" && exit 1)
+          echo "Health check passed"

@@ -2185,6 +2185,124 @@ def update_telegram_config(
     return {"status": "success"}
 
 
+@router.get("/settings/whatsapp-config")
+def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування WhatsApp API."""
+    settings = crud.get_whatsapp_settings(db)
+    return {
+        "access_token": settings.get("whatsapp_access_token") or "",
+        "phone_number_id": settings.get("whatsapp_phone_number_id") or "",
+        "app_secret": settings.get("whatsapp_app_secret") or "",
+        "verify_token": settings.get("whatsapp_verify_token") or "",
+    }
+
+
+@router.post("/settings/whatsapp-config")
+def update_whatsapp_config(
+    access_token: str = Form(""),
+    phone_number_id: str = Form(""),
+    app_secret: str = Form(""),
+    verify_token: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування WhatsApp API."""
+    crud.set_setting(db, "whatsapp_access_token", access_token)
+    crud.set_setting(db, "whatsapp_phone_number_id", phone_number_id)
+    crud.set_setting(db, "whatsapp_app_secret", app_secret)
+    crud.set_setting(db, "whatsapp_verify_token", verify_token)
+    return {"status": "success"}
+
+
+@router.get("/settings/instagram-config")
+def get_instagram_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування Instagram API."""
+    settings = crud.get_instagram_settings(db)
+    return {
+        "app_secret": settings.get("instagram_app_secret") or "",
+    }
+
+
+@router.post("/settings/instagram-config")
+def update_instagram_config(
+    app_secret: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування Instagram API."""
+    crud.set_setting(db, "instagram_app_secret", app_secret)
+    return {"status": "success"}
+
+
+@router.get("/settings/facebook-config")
+def get_facebook_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування Facebook API."""
+    settings = crud.get_facebook_settings(db)
+    return {
+        "access_token": settings.get("facebook_access_token") or "",
+        "app_secret": settings.get("facebook_app_secret") or "",
+        "verify_token": settings.get("facebook_verify_token") or "",
+        "page_id": settings.get("facebook_page_id") or "",
+    }
+
+
+@router.post("/settings/facebook-config")
+def update_facebook_config(
+    access_token: str = Form(""),
+    app_secret: str = Form(""),
+    verify_token: str = Form(""),
+    page_id: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування Facebook API."""
+    crud.set_setting(db, "facebook_access_token", access_token)
+    crud.set_setting(db, "facebook_app_secret", app_secret)
+    crud.set_setting(db, "facebook_verify_token", verify_token)
+    crud.set_setting(db, "facebook_page_id", page_id)
+    return {"status": "success"}
+
+
+@router.get("/settings/stripe-config")
+def get_stripe_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування Stripe API."""
+    settings = crud.get_stripe_settings(db)
+    return {
+        "secret_key": settings.get("stripe_secret_key") or "",
+    }
+
+
+@router.post("/settings/stripe-config")
+def update_stripe_config(
+    secret_key: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування Stripe API."""
+    crud.set_setting(db, "stripe_secret_key", secret_key)
+    return {"status": "success"}
+
+
+@router.get("/settings/inpost-config")
+def get_inpost_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування InPost API."""
+    settings = crud.get_inpost_settings(db)
+    return {
+        "api_key": settings.get("inpost_api_key") or "",
+    }
+
+
+@router.post("/settings/inpost-config")
+def update_inpost_config(
+    api_key: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування InPost API."""
+    crud.set_setting(db, "inpost_api_key", api_key)
+    return {"status": "success"}
+
+
 @router.post("/settings/import-menu-csv")
 async def import_menu_csv_endpoint(
     file: UploadFile = File(...),

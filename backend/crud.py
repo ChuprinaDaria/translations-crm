@@ -934,6 +934,47 @@ def get_telegram_api_settings(db: Session) -> dict[str, str | None]:
     return get_settings(db, keys)
 
 
+def get_whatsapp_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "whatsapp_access_token",
+        "whatsapp_phone_number_id",
+        "whatsapp_app_secret",
+        "whatsapp_verify_token",
+    ]
+    return get_settings(db, keys)
+
+
+def get_instagram_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "instagram_app_secret",
+    ]
+    return get_settings(db, keys)
+
+
+def get_facebook_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "facebook_access_token",
+        "facebook_app_secret",
+        "facebook_verify_token",
+        "facebook_page_id",
+    ]
+    return get_settings(db, keys)
+
+
+def get_stripe_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "stripe_secret_key",
+    ]
+    return get_settings(db, keys)
+
+
+def get_inpost_settings(db: Session) -> dict[str, str | None]:
+    keys = [
+        "inpost_api_key",
+    ]
+    return get_settings(db, keys)
+
+
 ############################################################
 # Menus CRUD
 ############################################################
