@@ -1059,3 +1059,198 @@ async def facebook_webhook_receive(
     except Exception as e:
         logger.error(f"Facebook webhook error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# OAuth endpoints for Instagram authorization
+# ============================================================================
+
+@router.get("/instagram/auth")
+async def instagram_oauth_start(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Початок OAuth flow для Instagram.
+    Перенаправляє користувача на Meta OAuth сторінку.
+    """
+    import urllib.parse
+    from fastapi.responses import RedirectResponse
+    
+    # Отримуємо налаштування Instagram
+    settings = crud.get_instagram_settings(db)
+    app_id = settings.get("instagram_app_id")
+    
+    if not app_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Instagram App ID не налаштовано. Будь ласка, введіть App ID в Settings → Instagram."
+        )
+    
+    # Формуємо redirect_uri (повний URL)
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/api/v1/communications/instagram/callback"
+    
+    # OAuth параметри для Meta
+    # Instagram використовує Facebook Login OAuth
+    oauth_params = {
+        "client_id": app_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "instagram_basic,instagram_manage_messages,pages_show_list,pages_read_engagement",  # Instagram permissions
+        "state": str(uuid_module.uuid4()),  # CSRF protection
+    }
+    
+    # Meta OAuth URL
+    oauth_url = "https://www.facebook.com/v18.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
+    
+    logger.info(f"Instagram OAuth redirect: {oauth_url}")
+    return RedirectResponse(url=oauth_url)
+
+
+@router.get("/instagram/callback")
+async def instagram_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_reason: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    OAuth callback endpoint для Instagram.
+    Обробляє redirect від Meta після авторизації.
+    """
+    import httpx
+    import urllib.parse
+    from fastapi.responses import HTMLResponse
+    
+    # Перевірка на помилки
+    if error:
+        error_msg = f"OAuth помилка: {error}"
+        if error_description:
+            error_msg += f" - {error_description}"
+        logger.error(f"Instagram OAuth error: {error_msg}")
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Instagram OAuth Error</title></head>
+                <body>
+                    <h1>Помилка авторизації Instagram</h1>
+                    <p>{error_msg}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="OAuth code не отримано")
+    
+    # Отримуємо налаштування
+    settings = crud.get_instagram_settings(db)
+    app_id = settings.get("instagram_app_id")
+    app_secret = settings.get("instagram_app_secret")
+    
+    if not app_id or not app_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Instagram App ID або App Secret не налаштовано"
+        )
+    
+    try:
+        # Обмінюємо code на access_token
+        token_url = "https://graph.facebook.com/v18.0/oauth/access_token"
+        token_params = {
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "redirect_uri": f"https://tlumaczeniamt.com.pl/api/v1/communications/instagram/callback",
+            "code": code,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(token_url, params=token_params)
+            response.raise_for_status()
+            token_data = response.json()
+        
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
+        
+        # Отримуємо інформацію про сторінку Instagram
+        # Спочатку отримуємо список сторінок користувача
+        pages_url = "https://graph.facebook.com/v18.0/me/accounts"
+        pages_params = {"access_token": access_token}
+        
+        async with httpx.AsyncClient() as client:
+            pages_response = await client.get(pages_url, params=pages_params)
+            pages_response.raise_for_status()
+            pages_data = pages_response.json()
+        
+        # Шукаємо Instagram сторінку (має поле instagram_business_account)
+        instagram_page_id = None
+        for page in pages_data.get("data", []):
+            if "instagram_business_account" in page:
+                instagram_page_id = page["id"]
+                break
+        
+        # Зберігаємо access_token в налаштуваннях
+        crud.set_setting(db, "instagram_access_token", access_token)
+        if instagram_page_id:
+            crud.set_setting(db, "instagram_page_id", instagram_page_id)
+        
+        logger.info(f"Instagram OAuth successful. Access token saved. Page ID: {instagram_page_id}")
+        
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head>
+                    <title>Instagram OAuth Success</title>
+                    <meta http-equiv="refresh" content="3;url=/settings">
+                </head>
+                <body>
+                    <h1>✅ Instagram успішно підключено!</h1>
+                    <p>Access token збережено. Перенаправлення до налаштувань...</p>
+                    <p><a href="/settings">Перейти до налаштувань</a></p>
+                    <script>
+                        setTimeout(function() {{
+                            window.location.href = '/settings';
+                        }}, 3000);
+                    </script>
+                </body>
+            </html>
+            """
+        )
+        
+    except httpx.HTTPStatusError as e:
+        error_detail = f"HTTP {e.response.status_code}: {e.response.text}"
+        logger.error(f"Instagram OAuth token exchange error: {error_detail}")
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Instagram OAuth Error</title></head>
+                <body>
+                    <h1>Помилка обміну токену</h1>
+                    <p>{error_detail}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+    except Exception as e:
+        logger.error(f"Instagram OAuth error: {e}", exc_info=True)
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Instagram OAuth Error</title></head>
+                <body>
+                    <h1>Помилка авторизації Instagram</h1>
+                    <p>{str(e)}</p>
+                    <p><a href="/settings">Повернутися до налаштувань</a></p>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
