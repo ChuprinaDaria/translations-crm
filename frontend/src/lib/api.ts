@@ -40,11 +40,14 @@ export interface RegisterRequest {
 
 export interface RegisterResponse {
   email: string;
-  id: number;
+  id: number;  // Integer, не UUID
   is_active: boolean;
   is_admin: boolean;
   created_at: string;
   otpauth_url?: string | null;
+  role?: string;
+  first_name?: string | null;
+  last_name?: string | null;
 }
 
 export interface LoginResponse {

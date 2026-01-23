@@ -140,7 +140,7 @@ class UserUpdate(BaseModel):
 
 
 class UserOut(UserBase):
-    id: UUID
+    id: int  # Змінено з UUID на int, оскільки модель User використовує Integer
     phone: Optional[str] = None
     is_active: bool
     is_admin: bool

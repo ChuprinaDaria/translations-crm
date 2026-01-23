@@ -13,7 +13,7 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: UUID
+    id: int  # Змінено з UUID на int, оскільки модель User використовує Integer
     email: EmailStr
     is_active: bool
     
