@@ -946,7 +946,11 @@ def get_whatsapp_settings(db: Session) -> dict[str, str | None]:
 
 def get_instagram_settings(db: Session) -> dict[str, str | None]:
     keys = [
+        "instagram_app_id",
+        "instagram_access_token",
         "instagram_app_secret",
+        "instagram_verify_token",
+        "instagram_page_id",
     ]
     return get_settings(db, keys)
 
