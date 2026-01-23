@@ -38,9 +38,31 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS налаштування
+import os
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Дозволяємо запити з localhost (dev) та production домену
+allowed_origins = [
+    "http://localhost:5173",
+    "ws://localhost:5173",
+    "https://tlumaczeniamt.com.pl",
+    "http://tlumaczeniamt.com.pl",
+    "https://www.tlumaczeniamt.com.pl",
+    "http://www.tlumaczeniamt.com.pl",
+    "http://5.78.152.139:8082",
+]
+# Додаємо FRONTEND_URL якщо він встановлений
+if FRONTEND_URL and FRONTEND_URL not in allowed_origins:
+    allowed_origins.append(FRONTEND_URL)
+    # Додаємо також ws:// версію для WebSocket
+    if FRONTEND_URL.startswith("http://"):
+        allowed_origins.append(FRONTEND_URL.replace("http://", "ws://"))
+    elif FRONTEND_URL.startswith("https://"):
+        allowed_origins.append(FRONTEND_URL.replace("https://", "wss://"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "ws://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
