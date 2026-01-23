@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notifications"])
 
 
-def get_user_id_from_payload(
+async def get_user_id_from_payload(
     user_payload: dict = Depends(get_current_user_payload),
     db: AsyncSession = Depends(get_db)
 ) -> UUID:
@@ -30,27 +30,30 @@ def get_user_id_from_payload(
         # Try UUID first (model uses UUID)
         return UUID(user_id_str)
     except (ValueError, TypeError):
-        # If UUID fails, try to get user by string/int and return their UUID
-        # This handles backward compatibility with old tokens
+        # If UUID fails, try to find user by email (from token payload)
+        # This handles backward compatibility with old tokens that have int IDs
         from sqlalchemy import select
         from modules.auth import models as auth_models
         
-        # Try to find user by the string/int ID
-        try:
-            user_id_int = int(user_id_str)
-            # Query user by converting int to string and trying to match
-            # Since User.id is UUID, we can't directly match int
-            # But we can try to find user by other means if needed
-            # For now, require re-login for old tokens
+        email = user_payload.get("email")
+        if not email:
             raise HTTPException(
                 status_code=401, 
                 detail="Token format outdated. Please log in again to get a new token."
             )
-        except ValueError:
+        
+        # Try to find user by email and return their UUID
+        result = await db.execute(
+            select(auth_models.User).where(auth_models.User.email == email)
+        )
+        user = result.scalar_one_or_none()
+        if not user:
             raise HTTPException(
                 status_code=401, 
-                detail="Invalid user ID in token. Please log in again."
+                detail="User not found. Please log in again."
             )
+        
+        return user.id
 
 
 @router.get("/", response_model=List[schemas.NotificationResponse])
