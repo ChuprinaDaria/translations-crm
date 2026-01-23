@@ -17,24 +17,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notifications"])
 
 
-def get_user_id_from_payload(user_payload: dict = Depends(get_current_user_payload)) -> UUID:
+def get_user_id_from_payload(
+    user_payload: dict = Depends(get_current_user_payload),
+    db: AsyncSession = Depends(get_db)
+) -> UUID:
     """Extract user_id from JWT payload"""
     user_id_str = user_payload.get("sub")
     if not user_id_str:
         raise HTTPException(status_code=401, detail="Invalid token")
+    
     try:
         # Try UUID first (model uses UUID)
         return UUID(user_id_str)
     except (ValueError, TypeError):
-        # If UUID fails, it might be an int stored as string
-        # For notifications service, we need UUID, so try to convert
-        # If it's a simple int like "1", we can't convert to valid UUID
-        # In this case, we'll need to handle it differently
-        # For now, raise error - the user needs to re-login to get a new token
-        raise HTTPException(
-            status_code=401, 
-            detail="Invalid user ID in token. Please log in again."
-        )
+        # If UUID fails, try to get user by string/int and return their UUID
+        # This handles backward compatibility with old tokens
+        from sqlalchemy import select
+        from modules.auth import models as auth_models
+        
+        # Try to find user by the string/int ID
+        try:
+            user_id_int = int(user_id_str)
+            # Query user by converting int to string and trying to match
+            # Since User.id is UUID, we can't directly match int
+            # But we can try to find user by other means if needed
+            # For now, require re-login for old tokens
+            raise HTTPException(
+                status_code=401, 
+                detail="Token format outdated. Please log in again to get a new token."
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid user ID in token. Please log in again."
+            )
 
 
 @router.get("/", response_model=List[schemas.NotificationResponse])
