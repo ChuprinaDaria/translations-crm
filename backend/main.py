@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 from db import Base, engine
 from core.config import settings
 from modules.auth.router import router as auth_router
@@ -28,8 +29,21 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create all tables using synchronous engine
-    Base.metadata.create_all(bind=engine)
+    """
+    Ініціалізація при старті додатку.
+    Створює тільки нові таблиці (async Base), не чіпає старі таблиці.
+    """
+    # НЕ створюємо старі таблиці (Base.metadata.create_all) - вони вже існують
+    # Створюємо тільки нові таблиці з async моделей
+    try:
+        from core.migrations import create_missing_tables
+        await create_missing_tables()
+        logger.info("✓ Database migration check completed")
+    except Exception as e:
+        logger.error(f"Database migration failed: {e}", exc_info=True)
+        # Не блокуємо старт додатку, якщо міграція не вдалася
+        # Можна запустити міграцію вручну через скрипт
+    
     yield
 
 
