@@ -219,11 +219,21 @@ jobs:
               exit 1
             fi
             
+            # Перевіряємо яка версія docker compose доступна
+            if command -v docker-compose &> /dev/null; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            elif docker compose version &> /dev/null; then
+              DOCKER_COMPOSE_CMD="docker compose"
+            else
+              echo "Error: docker-compose not found. Please install docker-compose or use Docker with compose plugin."
+              exit 1
+            fi
+            
             # Stop existing containers (без видалення volumes - база даних зберігається)
-            docker-compose -f docker-compose.production.yml down || true
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml down || true
             
             # Build and start new containers (volumes зберігаються автоматично)
-            docker-compose -f docker-compose.production.yml up -d --build
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build
             
             # Wait for services to be healthy
             sleep 15
