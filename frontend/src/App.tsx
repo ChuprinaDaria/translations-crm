@@ -10,6 +10,8 @@ import { TranslatorsPage } from "./modules/crm/pages/TranslatorsPage";
 import { LanguagesPage } from "./modules/crm/pages/LanguagesPage";
 import { Settings } from "./components/Settings";
 import { AuthPage } from "./components/auth/AuthPage";
+import { TermsOfService } from "./pages/TermsOfService";
+import { GDPRPolicy } from "./pages/GDPRPolicy";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi } from "./lib/api";
 import { I18nProvider } from "./lib/i18n";
@@ -42,7 +44,17 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [editingKPId, setEditingKPId] = useState<number | null>(null);
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
   // const commandPalette = useCommandPalette();
+
+  // Listen to pathname changes
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
 
   // Load Google Fonts (Inter as Gilroy replacement)
   useEffect(() => {
@@ -256,6 +268,16 @@ function App() {
   };
 
   const renderContent = () => {
+    // Перевірка чи це сторінка з документацією (не потребує sidebar)
+    if (currentPath === "/terms" || currentPath === "/gdpr") {
+      if (currentPath === "/terms") {
+        return <TermsOfService />;
+      }
+      if (currentPath === "/gdpr") {
+        return <GDPRPolicy />;
+      }
+    }
+
     switch (activeItem) {
       case "inbox":
         return <InboxPageEnhanced />;
@@ -284,6 +306,59 @@ function App() {
       setMobileMenuOpen(false);
     }
   };
+
+  // Якщо це сторінка документації - показуємо без sidebar
+  if (isAuthenticated && (currentPath === "/terms" || currentPath === "/gdpr")) {
+    return (
+      <I18nProvider>
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          {renderContent()}
+          <footer className="border-t bg-white mt-auto py-4 px-6">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+              <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+                <a 
+                  href="/terms" 
+                  className="hover:text-[#FF5A00] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/terms");
+                    setCurrentPath("/terms");
+                  }}
+                >
+                  Умови використання
+                </a>
+                <span className="text-gray-300">|</span>
+                <a 
+                  href="/gdpr" 
+                  className="hover:text-[#FF5A00] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/gdpr");
+                    setCurrentPath("/gdpr");
+                  }}
+                >
+                  Політика конфіденційності (GDPR)
+                </a>
+                <span className="text-gray-300">|</span>
+                <a 
+                  href="#" 
+                  className="hover:text-[#FF5A00] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/");
+                    setCurrentPath("/");
+                    setActiveItem("analytics");
+                  }}
+                >
+                  На головну
+                </a>
+              </div>
+            </div>
+          </footer>
+        </div>
+      </I18nProvider>
+    );
+  }
 
   return (
     <I18nProvider>
@@ -322,16 +397,59 @@ function App() {
         </Sheet>
       )}
 
-      <div className="transition-all duration-300 lg:ml-[260px]">
+      <div className="transition-all duration-300 lg:ml-[260px] flex flex-col min-h-screen">
         <Header
           breadcrumbs={getBreadcrumbs()}
           onMobileMenuClick={() => setMobileMenuOpen(true)}
           isMobile={isMobile}
         />
 
-        <main className="pt-16">
+        <main className="pt-16 flex-1">
           <div className={activeItem === 'inbox' ? '' : 'p-4 md:p-6'}>{renderContent()}</div>
         </main>
+
+        {/* Footer with links */}
+        {isAuthenticated && (
+          <footer className="border-t bg-white mt-auto py-4 px-6">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+              <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+                <a 
+                  href="/terms" 
+                  className="hover:text-[#FF5A00] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/terms");
+                    setCurrentPath("/terms");
+                  }}
+                >
+                  Умови використання
+                </a>
+                <span className="text-gray-300">|</span>
+                <a 
+                  href="/gdpr" 
+                  className="hover:text-[#FF5A00] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, "", "/gdpr");
+                    setCurrentPath("/gdpr");
+                  }}
+                >
+                  Політика конфіденційності (GDPR)
+                </a>
+              </div>
+              <div className="text-xs text-gray-500 text-center md:text-right">
+                <p className="mb-1">
+                  <span className="font-semibold">Instagram Data Deletion:</span>{" "}
+                  <code className="bg-gray-100 px-1 rounded text-[10px]">POST /api/v1/communications/instagram/data-deletion</code>
+                </p>
+                <p>
+                  <span className="font-semibold">Instagram Deauthorization:</span>{" "}
+                  <code className="bg-gray-100 px-1 rounded text-[10px]">POST /api/v1/communications/instagram/deauthorize</code>
+                </p>
+              </div>
+            </div>
+          </footer>
+        )}
       </div>
 
       <Toaster position="top-right" />
