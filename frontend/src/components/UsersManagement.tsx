@@ -123,25 +123,17 @@ export function UsersManagement() {
 
   const getRoleLabel = (role: string): string => {
     const roleLabels: Record<string, string> = {
-      "kp-manager": "Менеджер КП",
-      "kp-lead": "Керівник КП",
-      "sales-manager": "Менеджер продажів",
-      "service-manager": "Менеджер сервісу",
-      "sales-lead": "Керівник продажів",
-      "service-lead": "Керівник сервісу",
-      "user": "Користувач",
+      "OWNER": "Адміністратор",
+      "ACCOUNTANT": "Бухгалтер",
+      "MANAGER": "Менеджер",
     };
     return roleLabels[role] || role;
   };
 
   const availableRoles = [
-    { value: "user", label: "Користувач" },
-    { value: "kp-manager", label: "Менеджер КП" },
-    { value: "kp-lead", label: "Керівник КП" },
-    { value: "sales-manager", label: "Менеджер продажів" },
-    { value: "service-manager", label: "Менеджер сервісу" },
-    { value: "sales-lead", label: "Керівник продажів" },
-    { value: "service-lead", label: "Керівник сервісу" },
+    { value: "MANAGER", label: "Менеджер" },
+    { value: "ACCOUNTANT", label: "Бухгалтер" },
+    { value: "OWNER", label: "Адміністратор" },
   ];
 
   const handleNameChange = async (user: User, field: "first_name" | "last_name" | "phone", value: string) => {

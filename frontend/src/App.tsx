@@ -25,13 +25,7 @@ import {
 } from "./components/ui/sheet";
 // import { CommandPalette, useCommandPalette } from "./modules/command-palette";
 
-type UserRole =
-  | "kp-manager"
-  | "kp-lead"
-  | "sales-manager"
-  | "service-manager"
-  | "sales-lead"
-  | "service-lead";
+type UserRole = "OWNER" | "ACCOUNTANT" | "MANAGER";
 
 // Константа для таймауту неактивності (30 хвилин в мілісекундах)
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
@@ -40,7 +34,8 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeItem, setActiveItem] = useState("analytics");
-  const [userRole] = useState<UserRole>("kp-manager");
+  const [userRole, setUserRole] = useState<UserRole>("MANAGER");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] =
     useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -99,6 +94,40 @@ function App() {
         
         const isAuth = tokenManager.isAuthenticated();
         setIsAuthenticated(isAuth);
+        
+        // Отримуємо роль та is_admin з токену
+        if (isAuth) {
+          const token = localStorage.getItem('auth_token');
+          if (token) {
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              const role = payload.role || "MANAGER";
+              // Нормалізуємо роль до правильного формату
+              const normalizedRole = role.toUpperCase();
+              if (normalizedRole === "OWNER" || normalizedRole === "ACCOUNTANT" || normalizedRole === "MANAGER") {
+                setUserRole(normalizedRole as UserRole);
+              } else {
+                setUserRole("MANAGER"); // За замовчуванням
+              }
+              
+              // Перевірка is_admin з різних можливих форматів
+              const isAdminFromPayload =
+                payload.is_admin === true ||
+                payload.is_admin === "true" ||
+                payload.is_admin === 1 ||
+                payload.isAdmin === true ||
+                payload.isAdmin === "true" ||
+                payload.isAdmin === 1 ||
+                payload.admin === true ||
+                payload.admin === "true" ||
+                payload.admin === 1 ||
+                (typeof payload.role === "string" && payload.role.toLowerCase().includes("admin"));
+              setIsAdmin(isAdminFromPayload);
+            } catch (e) {
+              console.error("Помилка декодування токену:", e);
+            }
+          }
+        }
       } catch (error) {
         console.error("Auth check error:", error);
         setIsAuthenticated(false);
@@ -305,14 +334,11 @@ function App() {
 
   const getRoleLabel = (role: UserRole): string => {
     const roleLabels: Record<UserRole, string> = {
-      "kp-manager": "Менеджер КП",
-      "kp-lead": "Керівник КП",
-      "sales-manager": "Менеджер продажів",
-      "service-manager": "Менеджер сервісу",
-      "sales-lead": "Керівник продажів",
-      "service-lead": "Керівник сервісу",
+      "OWNER": "Адміністратор",
+      "ACCOUNTANT": "Бухгалтер",
+      "MANAGER": "Менеджер",
     };
-    return roleLabels[role];
+    return roleLabels[role] || role;
   };
 
   const getBreadcrumbs = () => {
@@ -440,6 +466,7 @@ function App() {
           activeItem={activeItem}
           onItemClick={handleMenuItemClick}
           userRole={userRole}
+          isAdmin={isAdmin}
           onLogout={handleLogout}
         />
       )}
@@ -461,6 +488,7 @@ function App() {
               activeItem={activeItem}
               onItemClick={handleMenuItemClick}
               userRole={userRole}
+              isAdmin={isAdmin}
               isMobile={true}
               onLogout={handleLogout}
             />

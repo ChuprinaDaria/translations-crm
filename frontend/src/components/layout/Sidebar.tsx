@@ -21,7 +21,8 @@ import { Button } from "../ui/button";
 interface SidebarProps {
   activeItem: string;
   onItemClick: (item: string) => void;
-  userRole: "kp-manager" | "kp-lead" | "sales-manager" | "service-manager" | "sales-lead" | "service-lead";
+  userRole: "OWNER" | "ACCOUNTANT" | "MANAGER";
+  isAdmin?: boolean;
   isMobile?: boolean;
   onLogout: () => void;
 }
@@ -40,7 +41,7 @@ interface MenuSection {
   roles?: string[];
 }
 
-export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, onLogout }: SidebarProps) {
+export function Sidebar({ activeItem, onItemClick, userRole, isAdmin = false, isMobile = false, onLogout }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const menuSections: MenuSection[] = [
@@ -94,7 +95,7 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           label: "Users",
           icon: <UserCog className="w-5 h-5" />,
           tooltip: "Управління користувачами та ролями",
-          roles: ["kp-lead", "sales-lead", "service-lead"], // Тільки для власників/лідів
+          roles: ["OWNER"], // Тільки для адміністраторів (OWNER)
         },
         {
           id: "settings",
@@ -108,6 +109,8 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
 
   const hasAccess = (roles?: string[]) => {
     if (!roles) return true;
+    // Адміністратори (is_admin === true або role === "OWNER") мають доступ до всього
+    if (isAdmin || userRole === "OWNER") return true;
     return roles.includes(userRole);
   };
 

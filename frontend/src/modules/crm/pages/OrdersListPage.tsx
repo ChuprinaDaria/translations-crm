@@ -3,7 +3,6 @@ import {
   Package,
   Search,
   FileText,
-  Clock,
   MoreVertical,
   Eye,
   Loader2,
@@ -36,13 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
+import { OrderDetailsDialog } from "../components/OrderDetailsDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +46,6 @@ import { toast } from "sonner";
 import { ordersApi } from "../api/orders";
 import { type Order } from "../api/clients";
 import { timelineApi, type TimelineStep } from "../api/timeline";
-import { TimelineVisualization } from "../components/TimelineVisualization";
 import { cn } from "../../../components/ui/utils";
 
 // Soft UI статуси з напівпрозорими фонами
@@ -471,141 +463,14 @@ export function OrdersListPage() {
           </div>
         </div>
 
-      {/* Timeline Dialog */}
-      <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-orange-500" />
-              Timeline zlecenia: Nr. {selectedOrder?.order_number}
-            </DialogTitle>
-            <DialogDescription>
-              Przegląd etapów realizacji zlecenia
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4">
-            {/* Order Info - Структурована сітка */}
-            {selectedOrder && (() => {
-              const { price, languages, type, delivery, address, email, phone } = parseOrderDetails(selectedOrder.description);
-              const deadline = formatDeadline(selectedOrder.deadline);
-              
-              return (
-                <div className="mb-6 space-y-4">
-                  
-                  {/* Ряд 1: Клієнт | Номер замовлення | Статус */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Клієнт</span>
-                      <p className="text-[11px] font-semibold text-slate-900 truncate" title={selectedOrder.client?.full_name || "—"}>
-                        {selectedOrder.client?.full_name || "—"}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Номер</span>
-                      <p className="text-[11px] font-mono font-medium text-slate-700 truncate" title={selectedOrder.order_number}>
-                        {selectedOrder.order_number}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Статус</span>
-                      <div>
-                        <OrderStatusBadge status={selectedOrder.status} size="sm" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Ряд 2: Тип/Мова | Дедлайн | Ціна */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Тип / Мова</span>
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        {type && (
-                          <span className="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded border border-indigo-100 font-bold uppercase whitespace-nowrap">
-                            {type}
-                          </span>
-                        )}
-                        {languages && (
-                          <span className="bg-blue-50 text-blue-700 text-[9px] px-1.5 py-0.5 rounded border border-blue-100 font-semibold whitespace-nowrap">
-                            {languages}
-                          </span>
-                        )}
-                        {!type && !languages && (
-                          <span className="text-[10px] text-slate-400">—</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Дедлайн</span>
-                      {deadline ? (
-                        <p className={cn(
-                          "text-[11px] font-medium",
-                          deadline.text.includes('Прострочено') ? "text-red-600" : deadline.color
-                        )}>
-                          {deadline.text}
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-slate-400">—</p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Ціна</span>
-                      <p className="text-[11px] font-mono font-bold text-emerald-700">
-                        {price || '—'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Додаткова інформація (якщо є) */}
-                  {(delivery || address || email || phone) && (
-                    <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3">
-                      {delivery && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Доставка</span>
-                          <p className="text-[11px] text-slate-600">{delivery}</p>
-                        </div>
-                      )}
-                      {address && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Адреса</span>
-                          <p className="text-[11px] text-slate-600 truncate" title={address}>{address}</p>
-                        </div>
-                      )}
-                      {email && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Email</span>
-                          <p className="text-[11px] text-slate-600 truncate" title={email}>{email}</p>
-                        </div>
-                      )}
-                      {phone && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Телефон</span>
-                          <p className="text-[11px] font-mono text-slate-600">{phone}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            
-            {/* Timeline */}
-            {isLoadingTimeline ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-              </div>
-            ) : timelineSteps.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Clock className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>Немає етапів timeline</p>
-                <p className="text-sm mt-1">Етапи будуть додаватися автоматично</p>
-              </div>
-            ) : (
-              <TimelineVisualization steps={timelineSteps} />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Order Details Dialog */}
+      <OrderDetailsDialog
+        order={selectedOrder}
+        isOpen={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        timelineSteps={timelineSteps}
+        isLoading={isLoadingTimeline}
+      />
 
       </main>
 

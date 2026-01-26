@@ -62,7 +62,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister, onSwitchToForgotPassw
     const payload = btoa(JSON.stringify({
       sub: "1",
       email: "dev@test.com",
-      role: "kp-manager",
+      role: "MANAGER",
       is_admin: false,
       exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 години
     }));
