@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Package,
   Search,
-  Filter,
-  Calendar,
-  User,
   FileText,
   Clock,
   MoreVertical,
   Eye,
-  ChevronRight,
   Loader2,
   StickyNote,
   Settings,
@@ -317,25 +313,23 @@ export function OrdersListPage() {
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin">
           <Table className="table-fixed w-full min-w-[1200px] border-separate border-spacing-0">
-            <TableHeader className="bg-slate-50/50 sticky top-0 z-10">
-              <TableRow className="h-10 hover:bg-transparent border-b border-slate-200">
-                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Nr. Zlecenia</TableHead>
-                <TableHead className="w-[130px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Клієнт</TableHead>
-                <TableHead className="min-w-[200px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Опис (Тип/Мова)</TableHead>
-                <TableHead className="w-[80px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-right">Ціна</TableHead>
-                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-center">Доставка</TableHead>
-                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Адреса</TableHead>
-                <TableHead className="w-[110px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Контакт</TableHead>
-                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-center">Статус</TableHead>
-                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Дедлайн</TableHead>
-                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">Створено</TableHead>
-                <TableHead className="w-[40px] px-0 border-b border-slate-200"></TableHead>
+            <TableHeader className="bg-slate-50/50 sticky top-0 z-10 backdrop-blur-sm">
+              <TableRow className="h-10 hover:bg-transparent">
+                <TableHead className="w-[110px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100">Nr. Zlecenia</TableHead>
+                <TableHead className="w-[140px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100">Клієнт</TableHead>
+                <TableHead className="min-w-[250px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100 text-center">Деталі (Тип / Мова / Опис)</TableHead>
+                <TableHead className="w-[85px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100 text-right">Ціна</TableHead>
+                <TableHead className="w-[90px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100 text-center">Доставка</TableHead>
+                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100">Адреса / Контакт</TableHead>
+                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100 text-center">Статус</TableHead>
+                <TableHead className="w-[110px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-r border-b border-slate-100">Дедлайн</TableHead>
+                <TableHead className="w-[40px] px-0 border-b border-slate-100"></TableHead>
               </TableRow>
             </TableHeader>
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-12">
+                    <TableCell colSpan={9} className="text-center py-12">
                       <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                       <p className="text-gray-500">Немає замовлень</p>
                     </TableCell>
@@ -349,75 +343,91 @@ export function OrdersListPage() {
                     return (
                       <TableRow 
                         key={order.id} 
-                        className="h-11 cursor-pointer hover:bg-slate-50/80 transition-colors group border-b border-slate-100"
+                        className="h-12 cursor-pointer hover:bg-slate-50/80 transition-all group border-b border-slate-50"
                         onClick={() => handleViewTimeline(order)}
                       >
-                        <TableCell className="px-3 text-[11px] font-mono font-medium border-r border-slate-100 text-slate-900">
+                        {/* Номер: моноширинний шрифт і світло-сірий текст */}
+                        <TableCell className="px-3 border-r border-slate-100 font-mono text-[11px] text-slate-500 tracking-tighter min-w-0">
                           {order.order_number}
                         </TableCell>
-                        <TableCell className="px-3 text-[11px] border-r border-slate-100">
+                        
+                        {/* Клієнт: чіткий заголовок + ID */}
+                        <TableCell className="px-3 border-r border-slate-100 min-w-0">
                           <div className="flex flex-col truncate">
-                            <span className="font-semibold text-slate-900 truncate" title={order.client?.full_name || "—"}>
+                            <span className="font-semibold text-slate-900 truncate leading-tight" title={order.client?.full_name || "—"}>
                               {order.client?.full_name || "—"}
                             </span>
                             {order.client?.id && (
-                              <span className="text-[9px] text-slate-400">ID: {order.client.id.slice(0, 8)}</span>
+                              <span className="text-[9px] text-slate-400 font-mono">#{order.client.id.slice(-6)}</span>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="px-3 border-r border-slate-100">
-                          <div className="flex flex-wrap gap-1.5 items-center">
-                            {type && (
-                              <span className="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded border border-indigo-100 font-bold uppercase whitespace-nowrap shrink-0">
-                                {type}
-                              </span>
-                            )}
-                            {languages && (
-                              <>
-                                <span className="text-slate-400 text-[10px]">|</span>
-                                <span className="bg-blue-50 text-blue-700 text-[9px] px-1.5 py-0.5 rounded border border-blue-100 font-semibold whitespace-nowrap shrink-0">
+                        
+                        {/* Опис: Теги та текст з обмеженням */}
+                        <TableCell className="px-2 border-r border-slate-100 min-w-0">
+                          <div className="flex flex-col gap-1">
+                            {/* Перший ряд: Тип та Мова (Акценти) */}
+                            <div className="flex gap-1 items-center flex-wrap">
+                              {type && (
+                                <Badge variant="secondary" className="text-[8px] bg-blue-50 text-blue-700 border-blue-100 rounded-md px-1.5 py-0.5 font-bold uppercase whitespace-nowrap">
+                                  {type}
+                                </Badge>
+                              )}
+                              {languages && (
+                                <Badge variant="outline" className="text-[8px] border-slate-200 rounded-md px-1.5 py-0.5 font-semibold whitespace-nowrap">
                                   {languages}
-                                </span>
-                              </>
-                            )}
+                                </Badge>
+                              )}
+                            </div>
+                            {/* Другий ряд: Обрізаний опис */}
                             {cleanDescription && (
-                              <>
-                                <span className="text-slate-400 text-[10px]">|</span>
-                                <span className="text-[10px] text-slate-600 truncate max-w-[200px]" title={order.description || "—"}>
-                                  {cleanDescription}
-                                </span>
-                              </>
+                              <p className="text-[10px] text-slate-500 truncate" title={order.description || "—"}>
+                                {cleanDescription}
+                              </p>
                             )}
                           </div>
                         </TableCell>
+                        
+                        {/* Ціна */}
                         <TableCell className="px-3 text-[11px] text-right font-bold text-emerald-700 border-r border-slate-100">
                           {price || '—'}
                         </TableCell>
+                        
+                        {/* Доставка */}
                         <TableCell className="px-3 text-center border-r border-slate-100">
                           {delivery ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                               {delivery}
                             </span>
                           ) : (
                             <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-3 text-[10px] border-r border-slate-100 truncate text-slate-500" title={address || "—"}>
-                          {address || '—'}
+                        
+                        {/* Адреса / Контакт */}
+                        <TableCell className="px-3 text-[10px] border-r border-slate-100 min-w-0">
+                          <div className="flex flex-col gap-0.5 truncate">
+                            {address && (
+                              <span className="truncate text-slate-500" title={address}>{address}</span>
+                            )}
+                            {(email || phone) && (
+                              <div className="flex flex-col leading-tight gap-0.5">
+                                {email && <span className="truncate text-[9px] text-slate-600" title={email}>{email}</span>}
+                                {phone && <span className="font-mono text-slate-400 text-[9px]">{phone}</span>}
+                              </div>
+                            )}
+                            {!address && !email && !phone && (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell className="px-3 text-[10px] border-r border-slate-100">
-                          {(email || phone) ? (
-                            <div className="flex flex-col leading-tight gap-0.5">
-                              {email && <span className="truncate text-[9px] text-slate-600" title={email}>{email}</span>}
-                              {phone && <span className="font-mono text-slate-400 text-[9px]">{phone}</span>}
-                            </div>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </TableCell>
+                        
+                        {/* Статус */}
                         <TableCell className="px-3 border-r border-slate-100 text-center">
                           <OrderStatusBadge status={order.status} size="sm" />
                         </TableCell>
+                        
+                        {/* Дедлайн */}
                         <TableCell className="px-3 border-r border-slate-100">
                           {deadline ? (
                             <div className="flex flex-col leading-tight">
@@ -435,9 +445,8 @@ export function OrdersListPage() {
                             <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-3 text-[10px] text-slate-400 font-mono border-slate-100">
-                          {formatDate(order.created_at)}
-                        </TableCell>
+                        
+                        {/* Actions */}
                         <TableCell className="px-1 text-center" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -483,25 +492,6 @@ export function OrdersListPage() {
               
               return (
                 <div className="mb-6 space-y-4">
-                  {/* Прогрес-бар */}
-                  {timelineSteps.length > 0 && (() => {
-                    const completedCount = timelineSteps.filter(s => s.completed).length;
-                    const progressPercent = Math.round((completedCount / 7) * 100);
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-slate-700">Прогрес: {completedCount} / 7</span>
-                          <span className="font-semibold text-green-600">{progressPercent}%</span>
-                        </div>
-                        <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
-                          <div 
-                            className="absolute top-0 left-0 h-full bg-green-500 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
                   
                   {/* Ряд 1: Клієнт | Номер замовлення | Статус */}
                   <div className="grid grid-cols-3 gap-3">

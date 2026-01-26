@@ -1,6 +1,6 @@
-import React from "react";
-import { Check, Circle, AlertCircle } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "../../../components/ui/utils";
+import { Progress } from "../../../components/ui/progress";
 import type { TimelineStep } from "../api/timeline";
 
 interface TimelineVisualizationProps {
@@ -27,20 +27,35 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
     }
   });
 
-  // Рахуємо прогрес
-  const completedCount = steps.filter(s => s.completed).length;
+  // Рахуємо прогрес - тільки послідовно завершені етапи
+  let completedCount = 0;
+  for (const def of TIMELINE_DEFINITIONS) {
+    if (completedStepsMap.has(def.step)) {
+      completedCount++;
+    } else {
+      break; // Зупиняємося на першому незавершеному
+    }
+  }
+  
   const progressPercent = Math.round((completedCount / TIMELINE_DEFINITIONS.length) * 100);
+  
+  // Знаходимо активний крок (перший незавершений після послідовно завершених)
+  const activeStepIndex = TIMELINE_DEFINITIONS.findIndex(
+    (def) => !completedStepsMap.has(def.step)
+  );
 
   return (
     <div className={cn("space-y-6", className)}>
-      {/* Заголовок з прогресом */}
-        <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">
-          Прогрес: {completedCount} / {TIMELINE_DEFINITIONS.length}
-        </span>
-        <span className="text-sm font-semibold text-green-600">
-          {progressPercent}%
-        </span>
+      {/* Прогрес-бар зверху */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="font-medium text-slate-700">Прогрес: {completedCount} / {TIMELINE_DEFINITIONS.length}</span>
+          <span className="font-semibold text-emerald-600">{progressPercent}%</span>
+        </div>
+        <Progress 
+          value={progressPercent} 
+          className="h-2 [&>div]:bg-emerald-500" 
+        />
       </div>
 
       {/* Візуальна лінія прогресу - горизонтальна */}
@@ -56,8 +71,8 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
 
         <div className="relative flex items-start justify-between">
           {TIMELINE_DEFINITIONS.map((def, index) => {
-            const isCompleted = completedStepsMap.has(def.step);
-            const isCurrent = !isCompleted && (index === 0 || completedStepsMap.has(TIMELINE_DEFINITIONS[index - 1].step));
+            const isCompleted = completedStepsMap.has(def.step) && index < completedCount;
+            const isCurrent = index === activeStepIndex && activeStepIndex !== -1;
             
             return (
               <div 
@@ -70,24 +85,26 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
                     className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm relative z-10",
                       isCompleted
-                      ? "bg-green-500 text-white ring-2 ring-green-200"
+                      ? "bg-emerald-500 text-white ring-2 ring-emerald-200"
                       : isCurrent
-                      ? "bg-white border-2 border-blue-500 text-blue-600 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse"
+                      ? "bg-white border-2 border-blue-500 text-blue-600 shadow-[0_0_8px_rgba(59,130,246,0.3)] animate-pulse"
                       : "bg-white border-2 border-slate-200 text-slate-400"
                     )}
                     title={def.label}
                   >
                     {isCompleted ? (
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 stroke-[3px]" />
+                    ) : isCurrent ? (
+                      <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
                     ) : (
-                    <span className="text-xs font-bold">{def.order}</span>
+                      <span className="text-xs font-bold">{def.order}</span>
                     )}
                 </div>
 
                 {/* Мітка під кружком */}
                 <span className={cn(
                   "text-[10px] mt-2 text-center leading-tight font-medium",
-                  isCompleted ? "text-green-700" : isCurrent ? "text-blue-600" : "text-slate-400"
+                  isCompleted ? "text-emerald-700" : isCurrent ? "text-blue-600" : "text-slate-400"
                 )}>
                   {def.shortLabel}
                 </span>
@@ -98,68 +115,59 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
       </div>
 
       {/* Опис етапів - вертикальний список з лінією */}
-      <div className="space-y-0 mt-6">
+      <div className="space-y-0 mt-6 relative before:absolute before:inset-0 before:left-[11px] before:w-[2px] before:bg-slate-100">
         {TIMELINE_DEFINITIONS.map((def, index) => {
-          const isCompleted = completedStepsMap.has(def.step);
+          const isCompleted = completedStepsMap.has(def.step) && index < completedCount;
           const completedStep = completedStepsMap.get(def.step);
           const isLast = index === TIMELINE_DEFINITIONS.length - 1;
-          
-          // Визначаємо активний крок (перший невиконаний після останнього виконаного)
-          const previousCompleted = index === 0 || completedStepsMap.has(TIMELINE_DEFINITIONS[index - 1].step);
-          const isActive = !isCompleted && previousCompleted;
+          const isActive = index === activeStepIndex && activeStepIndex !== -1;
 
           return (
-            <div key={def.step} className="relative flex gap-4 pb-6 last:pb-0">
-              {/* Вертикальна лінія-з'єднувач */}
-              {!isLast && (
-                <span 
-                  className={cn(
-                    "absolute left-[11px] top-6 h-full w-[2px] transition-colors duration-300",
-                    isCompleted ? "bg-green-500" : "bg-slate-200"
-                  )} 
-                />
+            <div key={def.step} className="relative flex items-start gap-4 pb-8 last:pb-0 group">
+              {/* Лінія-з'єднувач кольору успіху */}
+              {isCompleted && !isLast && (
+                <div className="absolute left-[11px] top-6 w-[2px] h-full bg-emerald-500 z-10" />
               )}
 
-              {/* Коло етапу */}
+              {/* Іконка стану */}
               <div className={cn(
-                "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
+                "relative z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
                 isCompleted 
-                  ? "border-green-500 bg-green-500 text-white shadow-sm" 
+                  ? "bg-emerald-500 border-emerald-500 shadow-sm" 
                   : isActive 
-                  ? "border-blue-500 bg-white text-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse" 
-                  : "border-slate-200 bg-white text-slate-400"
+                  ? "bg-white border-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]" 
+                  : "bg-white border-slate-200"
               )}>
                 {isCompleted ? (
-                  <Check className="h-3.5 w-3.5 stroke-[3px]" />
+                  <Check className="h-3.5 w-3.5 text-white stroke-[3px]" />
+                ) : isActive ? (
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
                 ) : (
-                  <span className="text-[10px] font-bold">{def.order}</span>
+                  <div className="h-1.5 w-1.5 rounded-full bg-slate-200" />
                 )}
               </div>
 
-              {/* Текст етапу */}
-              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-3">
-                  <p className={cn(
-                    "text-[12px] font-semibold leading-none",
-                    isCompleted ? "text-slate-900" : isActive ? "text-blue-600" : "text-slate-400"
-                  )}>
-                    {def.label}
-                  </p>
-                  {isCompleted && completedStep && (
-                    <span className="text-[10px] text-green-700 font-mono whitespace-nowrap">
-                      {new Date(completedStep.completed_at).toLocaleDateString("uk-UA", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  )}
-                </div>
-                
+              {/* Контент етапу */}
+              <div className="flex flex-col gap-1 pt-0.5">
+                <h4 className={cn(
+                  "text-[12px] font-semibold leading-none",
+                  isCompleted ? "text-slate-900" : isActive ? "text-blue-600" : "text-slate-400"
+                )}>
+                  {def.label}
+                </h4>
+                {isCompleted && completedStep && (
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {new Date(completedStep.completed_at).toLocaleString('uk-UA', { 
+                      day: '2-digit', 
+                      month: '2-digit', 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                )}
                 {/* Метадані (якщо є) */}
                 {isCompleted && completedStep?.metadata && (
-                  <div className="text-[10px] text-slate-500 mt-1 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                  <div className="text-[10px] text-slate-500 mt-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
                     {completedStep.metadata}
                   </div>
                 )}
