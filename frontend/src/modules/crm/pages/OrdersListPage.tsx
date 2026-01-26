@@ -59,6 +59,7 @@ import { ordersApi } from "../api/orders";
 import { type Order } from "../api/clients";
 import { timelineApi, type TimelineStep } from "../api/timeline";
 import { TimelineVisualization } from "../components/TimelineVisualization";
+import { cn } from "../../../components/ui/utils";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   do_wykonania: { label: "Нове", color: "bg-blue-100 text-blue-700" },
@@ -66,6 +67,49 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   do_wydania: { label: "Готово", color: "bg-green-100 text-green-700" },
   ustne: { label: "Усний переклад", color: "bg-purple-100 text-purple-700" },
   closed: { label: "Видано", color: "bg-gray-100 text-gray-700" },
+};
+
+// Парсер для витягування структурованих даних з опису
+const parseOrderDetails = (text: string | null | undefined) => {
+  if (!text) {
+    return {
+      price: null,
+      languages: null,
+      type: null,
+      cleanDescription: "",
+    };
+  }
+
+  // Витягуємо ціну (наприклад: "200 zł", "150₴", "$50", "100€", "Ціна: 200 zł")
+  const priceMatch = text.match(/(?:Ціна|Price|Cena):\s*(\d+\s?(?:zł|₴|\$|€|EUR|USD|PLN))|(\d+\s?(?:zł|₴|\$|€|EUR|USD|PLN))/i);
+  const price = priceMatch ? (priceMatch[1] || priceMatch[2]) : null;
+  
+  // Витягуємо мовну пару (наприклад: "UKR → ENG", "Польська → Українська", "Мова: UKR → ENG")
+  const langMatch = text.match(/(?:Мова|Language|Język):\s*([А-Яа-яA-Za-z]+\s?→\s?[А-Яа-яA-Za-z]+)|([А-Яа-яA-Za-z]+\s?→\s?[А-Яа-яA-Za-z]+)/i);
+  const languages = langMatch ? (langMatch[1] || langMatch[2]) : null;
+  
+  // Витягуємо тип документа
+  const typeMatch = text.match(/(?:Тип документа|Тип|Document type|Rodzaj):\s*([^|,\n]+)/i);
+
+  // Очищаємо опис від витягнутих даних
+  let cleanDescription = text;
+  if (priceMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(priceMatch[0], '');
+  }
+  if (langMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(langMatch[0], '');
+  }
+  if (typeMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(typeMatch[0], '');
+  }
+  cleanDescription = cleanDescription.replace(/\s{2,}/g, ' ').trim();
+
+  return {
+    price,
+    languages,
+    type: typeMatch ? typeMatch[1].trim() : null,
+    cleanDescription: cleanDescription || text,
+  };
 };
 
 export function OrdersListPage() {
@@ -162,15 +206,15 @@ export function OrdersListPage() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-6 shrink-0">
           <Package className="w-8 h-8 text-[#FF5A00]" />
           <h1 className="text-2xl font-semibold text-gray-900">Список замовлень</h1>
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row gap-4 mb-4 shrink-0">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
@@ -197,25 +241,26 @@ export function OrdersListPage() {
       </div>
 
       {/* Table */}
-      <Card className="flex-1 overflow-hidden">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nr. Zlecenia</TableHead>
-                  <TableHead>Клієнт</TableHead>
-                  <TableHead>Опис</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Дедлайн</TableHead>
-                  <TableHead>Створено</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
+      <Card className="flex-1 overflow-hidden flex flex-col min-h-0">
+        <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+          <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin">
+            <Table className="table-fixed w-full min-w-[900px] border-collapse">
+              <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                <TableRow className="h-8">
+                  <TableHead className="w-[120px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Nr. Zlecenia</TableHead>
+                  <TableHead className="w-[100px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Клієнт</TableHead>
+                  <TableHead className="px-1 py-0.5 text-[9px] font-bold border-r uppercase">Опис (Тип, Мова, Доставка...)</TableHead>
+                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Ціна</TableHead>
+                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Статус</TableHead>
+                  <TableHead className="w-[110px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Дедлайн</TableHead>
+                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold uppercase">Створено</TableHead>
+                  <TableHead className="w-[40px] px-1 py-0.5"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={8} className="text-center py-12">
                       <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                       <p className="text-gray-500">Немає замовлень</p>
                     </TableCell>
@@ -224,53 +269,67 @@ export function OrdersListPage() {
                   filteredOrders.map((order) => {
                     const deadline = formatDeadline(order.deadline);
                     const status = STATUS_LABELS[order.status] || STATUS_LABELS.do_wykonania;
+                    const { price, languages, type, cleanDescription } = parseOrderDetails(order.description);
+                    const isOverdue = deadline && deadline.text.includes('Прострочено');
                     
                     return (
                       <TableRow 
                         key={order.id} 
-                        className="cursor-pointer hover:bg-gray-50"
+                        className="h-8 cursor-pointer hover:bg-slate-50/50 transition-colors border-b group"
                         onClick={() => handleViewTimeline(order)}
                       >
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">{order.order_number}</span>
+                        <TableCell className="px-1 py-0.5 text-[10px] font-mono border-r tracking-tighter">
+                          {order.order_number}
+                        </TableCell>
+                        <TableCell className="px-1 py-0.5 text-[10px] border-r truncate font-medium" title={order.client?.full_name || "—"}>
+                          {order.client?.full_name || "—"}
+                        </TableCell>
+                        <TableCell 
+                          className="px-1 py-0.5 text-[9px] border-r truncate text-slate-500 cursor-help" 
+                          title={order.description || "—"}
+                        >
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {type && (
+                              <span className="bg-slate-100 text-[8px] px-1 rounded uppercase font-bold text-slate-600 shrink-0">
+                                {type}
+                              </span>
+                            )}
+                            {languages && (
+                              <span className="bg-blue-50 text-[8px] px-1 rounded font-semibold text-blue-700 border border-blue-100 shrink-0">
+                                {languages}
+                              </span>
+                            )}
+                            <span className="truncate">{cleanDescription || "—"}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <span>{order.client?.full_name || "—"}</span>
-                          </div>
+                        <TableCell className="px-1 py-0.5 text-right border-r font-mono font-bold text-green-700 text-[10px]">
+                          {price || '—'}
                         </TableCell>
-                        <TableCell>
-                          <span className="text-gray-600 truncate max-w-[200px] inline-block">
-                            {order.description || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={status.color}>
+                        <TableCell className="px-1 py-0.5 border-r text-center">
+                          <Badge className={cn("text-[8px] h-3.5 px-1 uppercase font-bold border-none", status.color)}>
                             {status.label}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
                           {deadline ? (
-                            <div className="flex items-center gap-1">
-                              <Clock className={`w-4 h-4 ${deadline.color}`} />
-                              <span className={deadline.color}>{deadline.text}</span>
+                            <div className="flex flex-col leading-none">
+                              <span className={cn(isOverdue ? "text-red-500 font-bold" : deadline.color)}>
+                                {deadline.text}
+                              </span>
+                              {isOverdue && <span className="text-[7px] text-red-400 uppercase">Overdue</span>}
                             </div>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <span className="text-gray-500">{formatDate(order.created_at)}</span>
+                        <TableCell className="px-1 py-0.5 text-[9px] text-slate-400 font-mono">
+                          {formatDate(order.created_at)}
                         </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="w-4 h-4" />
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <MoreVertical className="w-3 h-3" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

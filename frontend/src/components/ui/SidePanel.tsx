@@ -54,11 +54,11 @@ export function SidePanel({
           className
         )}
         style={{ 
-          marginRight: '56px', 
+          marginRight: '64px', 
           top: '64px',
           bottom: '0',
           height: 'calc(100vh - 64px)'
-        }} // Відступ для табів (w-14 = 56px) та header (64px)
+        }} // Відступ для табів (w-[64px] = 64px) та header (64px)
       >
         {/* Header */}
         {title && (

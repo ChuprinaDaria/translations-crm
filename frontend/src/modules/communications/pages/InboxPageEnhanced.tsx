@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
-import { Menu, CreditCard, Package, UserPlus, User, FileText, FolderOpen } from 'lucide-react';
-import { type QuickAction } from '../../../components/ui';
+import { Menu, CreditCard, Package, UserPlus, User, StickyNote, FolderOpen, ClipboardList } from 'lucide-react';
+import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
 import { ConversationsSidebar, type FilterState, type Conversation } from '../components/ConversationsSidebar';
 import { ChatTabsArea } from '../components/ChatTabsArea';
 import { type Message } from '../components/ChatArea';
@@ -24,6 +24,20 @@ import { NotificationToast, type NotificationData } from '../components/Notifica
 import { useNotifications } from '../hooks/useNotifications';
 import { toast } from 'sonner';
 import '../styles/animations.css';
+import { InternalNotes } from '../../crm/components/InternalNotes';
+import { AttachmentPreview } from '../components/AttachmentPreview';
+
+// Конфігурація табів для Inbox
+const INBOX_SIDE_TABS: SideTab[] = [
+  { id: 'sidebar', icon: Menu, label: 'Відкрити список діалогів', color: 'gray' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'gray' },
+  { id: 'files', icon: FolderOpen, label: 'Файли', color: 'gray' },
+  { id: 'create-client', icon: UserPlus, label: 'Створити клієнта', color: 'gray' },
+  { id: 'view-client', icon: User, label: 'Переглянути клієнта', color: 'gray' },
+  { id: 'order', icon: ClipboardList, label: 'Utwórz zlecenie', color: 'gray' },
+  { id: 'tracking', icon: Package, label: 'Трекінг', color: 'gray' },
+  { id: 'payment', icon: CreditCard, label: 'Відправити посилання на оплату', color: 'gray' },
+];
 
 /**
  * Enhanced Inbox Page з новим UI
@@ -61,6 +75,8 @@ export function InboxPageEnhanced() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   // Smart Actions dialogs state
   const [createClientDialogOpen, setCreateClientDialogOpen] = useState(false);
@@ -138,6 +154,17 @@ export function InboxPageEnhanced() {
       console.log('[WebSocket] Disconnected from real-time messages');
     },
   });
+
+  // Responsive detection
+  useEffect(() => {
+    const checkBreakpoint = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+
+    checkBreakpoint();
+    window.addEventListener('resize', checkBreakpoint);
+    return () => window.removeEventListener('resize', checkBreakpoint);
+  }, []);
 
   // Load conversations
   useEffect(() => {
@@ -839,79 +866,121 @@ export function InboxPageEnhanced() {
     handleDownloadAllFiles();
   };
 
-  // Quick Actions для бокових табів - завжди видимі (після всіх handler функцій)
-  const quickActions = useMemo<QuickAction[]>(() => {
+  // Формуємо динамічні таби з disabled станом
+  const inboxTabs = useMemo<SideTab[]>(() => {
     const conversationId = activeTabId || '';
     const hasClient = !!client;
     const hasOrders = orders.length > 0;
 
-    const actions: QuickAction[] = [];
+    return INBOX_SIDE_TABS.map(tab => {
+      let disabled = false;
 
-    // Створити клієнта (якщо немає клієнта)
-    if (!hasClient) {
-      actions.push({
-        id: 'create-client',
-        icon: UserPlus,
-        label: 'Створити клієнта',
-        onClick: () => {
-          if (conversationId) {
-            handleClientClick(conversationId);
-          } else {
-            handleCreateClient();
-          }
-        },
-        disabled: !activeTabId,
-      });
-    } else {
-      // Переглянути клієнта (якщо є клієнт)
-      actions.push({
-        id: 'view-client',
-        icon: User,
-        label: 'Переглянути клієнта',
-        onClick: () => {
-          if (client?.id) {
-            handleViewClientProfile(client.id);
-          }
-        },
-        disabled: !client?.id,
-      });
+      switch (tab.id) {
+        case 'create-client':
+          disabled = !activeTabId;
+          break;
+        case 'view-client':
+          disabled = !client?.id;
+          break;
+        case 'order':
+          disabled = !activeTabId || !hasClient;
+          break;
+        case 'tracking':
+        case 'payment':
+          disabled = !activeTabId || !hasOrders;
+          break;
+        case 'notes':
+        case 'files':
+          disabled = !activeTabId;
+          break;
+      }
+
+      // Приховуємо create-client або view-client залежно від наявності клієнта
+      if (tab.id === 'create-client' && hasClient) {
+        return null;
+      }
+      if (tab.id === 'view-client' && !hasClient) {
+        return null;
+      }
+
+      return { ...tab, disabled };
+    }).filter((tab): tab is SideTab => tab !== null);
+  }, [activeTabId, client, orders]);
+
+  // Обробник кліку на таб
+  const handleTabChange = (tabId: string | null) => {
+    if (!tabId) {
+      setSidePanelTab(null);
+      return;
     }
 
-    // Utworz zlecenie
-    actions.push({
-      id: 'order',
-      icon: FileText,
-      label: 'Utwórz zlecenie',
-      onClick: () => {
-        if (conversationId) {
-          handleOrderClick(conversationId);
-        } else {
-          handleCreateOrder();
-        }
-      },
-      disabled: !activeTabId || !hasClient,
-    });
+    const conversationId = activeTabId || '';
 
-    // Трекінг
-    actions.push({
-      id: 'tracking',
-      icon: Package,
-      label: 'Трекінг',
-      onClick: () => conversationId && handleTrackingClick(conversationId),
-      disabled: !activeTabId || !hasOrders,
-    });
+    // Обробка кліку на таб "sidebar"
+    if (tabId === 'sidebar') {
+      handleToggleSidebar();
+      setSidePanelTab(null);
+      return;
+    }
 
-    // Відправити посилання на оплату
-    actions.push({
-      id: 'payment',
-      icon: CreditCard,
-      label: 'Відправити посилання на оплату',
-      onClick: () => conversationId && handlePaymentClick(conversationId),
-      disabled: !activeTabId || !hasOrders,
-    });
+    // Quick actions - виконують дію і закриваються
+    if (tabId === 'create-client') {
+      // Якщо клієнт вже існує - показуємо повідомлення
+      if (client) {
+        toast.info('Клієнт вже існує');
+        setSidePanelTab(null);
+        return;
+      }
+      if (conversationId) {
+        handleClientClick(conversationId);
+      } else {
+        handleCreateClient();
+      }
+      setSidePanelTab(null);
+      return;
+    }
 
-    return actions;
-  }, [activeTabId, client, orders, handleToggleSidebar, handleCreateClient, handleCreateOrder, handleClientClick, handleOrderClick, handlePaymentClick, handleTrackingClick, handleViewClientProfile]);
+    if (tabId === 'view-client') {
+      if (client?.id) {
+        handleViewClientProfile(client.id);
+      }
+      setSidePanelTab(null);
+      return;
+    }
+
+    if (tabId === 'order') {
+      if (conversationId) {
+        handleOrderClick(conversationId);
+      } else {
+        handleCreateOrder();
+      }
+      setSidePanelTab(null);
+      return;
+    }
+
+    if (tabId === 'tracking') {
+      if (conversationId) {
+        handleTrackingClick(conversationId);
+      }
+      setSidePanelTab(null);
+      return;
+    }
+
+    if (tabId === 'payment') {
+      if (conversationId) {
+        handlePaymentClick(conversationId);
+      }
+      setSidePanelTab(null);
+      return;
+    }
+
+    // Для звичайних табів (notes, files) - переключаємо
+    if (tabId === sidePanelTab) {
+      setSidePanelTab(null);
+    } else {
+      setSidePanelTab(tabId);
+    }
+  };
 
   // Helper functions to get client/order IDs for active conversation
   const getClientIdForConversation = (conversationId: string): string | undefined => {
@@ -977,9 +1046,6 @@ export function InboxPageEnhanced() {
         }
         contextPanel={undefined}
         onSearch={handleSearch}
-        quickActions={quickActions}
-        activeConversationId={activeTabId}
-        activeMessages={activeChat?.messages || []}
       >
         <ChatTabsArea
           openChats={openChats}
@@ -1007,6 +1073,59 @@ export function InboxPageEnhanced() {
           onToggleSidebar={handleToggleSidebar}
         />
       </CommunicationsLayout>
+
+      {/* Права частина: Бокова панель з табами */}
+      {!isMobile && (
+        <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0 relative z-50">
+          <SideTabs
+            tabs={inboxTabs}
+            activeTab={sidePanelTab}
+            onTabChange={handleTabChange}
+            position="right"
+          />
+        </aside>
+      )}
+
+      {/* SidePanel - Бокова панель з контентом */}
+      {!isMobile && activeTabId && sidePanelTab && (sidePanelTab === 'notes' || sidePanelTab === 'files') && (
+        <SidePanel
+          open={sidePanelTab !== null}
+          onClose={() => setSidePanelTab(null)}
+          title={INBOX_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+          width="md"
+        >
+          {sidePanelTab === 'notes' && activeTabId && (
+            <InternalNotes
+              entityType="chat"
+              entityId={activeTabId}
+            />
+          )}
+          {sidePanelTab === 'files' && activeChat?.messages && (
+            <div className="grid grid-cols-2 gap-3">
+              {activeChat.messages
+                .flatMap((msg) => msg.attachments || [])
+                .filter((att) => att && att.url)
+                .map((attachment, idx) => (
+                  <AttachmentPreview
+                    key={attachment.id || idx}
+                    attachment={attachment}
+                    onDownload={() => {
+                      if (attachment.url) {
+                        window.open(attachment.url, '_blank');
+                      }
+                    }}
+                  />
+                ))}
+              {activeChat.messages.flatMap((msg) => msg.attachments || []).filter((att) => att && att.url).length === 0 && (
+                <div className="col-span-2 text-center text-gray-500 py-8">
+                  <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">Немає файлів</p>
+                </div>
+              )}
+            </div>
+          )}
+        </SidePanel>
+      )}
 
       {/* Smart Actions Dialogs */}
       {chatConversation && (
