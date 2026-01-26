@@ -13,7 +13,18 @@ import {
   Check,
   X,
   Loader2,
+  FileText,
+  StickyNote,
+  Settings,
 } from "lucide-react";
+import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+
+// Конфігурація табів для Translators
+const TRANSLATORS_SIDE_TABS: SideTab[] = [
+  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+];
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -82,6 +93,7 @@ export function TranslatorsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -894,6 +906,54 @@ export function TranslatorsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      <SideTabs
+        tabs={TRANSLATORS_SIDE_TABS}
+        activeTab={sidePanelTab}
+        onTabChange={setSidePanelTab}
+        position="right"
+      />
+
+      {/* SidePanel - Бокова панель з контентом */}
+      <SidePanel
+        open={sidePanelTab !== null}
+        onClose={() => setSidePanelTab(null)}
+        title={TRANSLATORS_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        width="md"
+      >
+        {sidePanelTab === 'info' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Інформація про перекладачів</h4>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Всього перекладачів:</span>
+                <span className="ml-2 font-medium text-gray-900">{translators.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Активних:</span>
+                <span className="ml-2 font-medium text-gray-900">
+                  {translators.filter(t => t.status === 'active').length}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {sidePanelTab === 'notes' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Нотатки</h4>
+            <p className="text-sm text-gray-500">Функціонал нотаток буде додано пізніше</p>
+          </div>
+        )}
+        
+        {sidePanelTab === 'settings' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Налаштування</h4>
+            <p className="text-sm text-gray-500">Налаштування перекладачів</p>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }

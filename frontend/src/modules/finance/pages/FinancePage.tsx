@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Wallet } from "lucide-react";
+import { Wallet, FileText, StickyNote, Settings } from "lucide-react";
 import { FinancePaymentsTable } from "../components/FinancePaymentsTable";
 import { OrderProfitTable, type OrderProfit } from "../components/OrderProfitTable";
 import { financeApi, Payment } from "../api/transactions";
@@ -8,6 +8,14 @@ import { ordersApi } from "../../crm/api/orders";
 import { toast } from "sonner";
 import { useI18n } from "../../../lib/i18n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs";
+import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+
+// Конфігурація табів для Finance
+const FINANCE_SIDE_TABS: SideTab[] = [
+  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+];
 
 // Використовувати мокові дані для тестування (встановіть в true для розробки)
 const USE_MOCK_DATA = false;
@@ -18,6 +26,7 @@ export function FinancePage() {
   const [orderProfits, setOrderProfits] = useState<OrderProfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingProfits, setLoadingProfits] = useState(true);
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
 
   useEffect(() => {
     loadPayments();
@@ -154,6 +163,52 @@ export function FinancePage() {
           <OrderProfitTable orders={orderProfits || []} loading={loadingProfits} />
         </TabsContent>
       </Tabs>
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      <SideTabs
+        tabs={FINANCE_SIDE_TABS}
+        activeTab={sidePanelTab}
+        onTabChange={setSidePanelTab}
+        position="right"
+      />
+
+      {/* SidePanel - Бокова панель з контентом */}
+      <SidePanel
+        open={sidePanelTab !== null}
+        onClose={() => setSidePanelTab(null)}
+        title={FINANCE_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        width="md"
+      >
+        {sidePanelTab === 'info' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Інформація про фінанси</h4>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Всього платежів:</span>
+                <span className="ml-2 font-medium text-gray-900">{payments.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Замовлень з прибутком:</span>
+                <span className="ml-2 font-medium text-gray-900">{orderProfits.length}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {sidePanelTab === 'notes' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Нотатки</h4>
+            <p className="text-sm text-gray-500">Функціонал нотаток буде додано пізніше</p>
+          </div>
+        )}
+        
+        {sidePanelTab === 'settings' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Налаштування</h4>
+            <p className="text-sm text-gray-500">Налаштування фінансів</p>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }

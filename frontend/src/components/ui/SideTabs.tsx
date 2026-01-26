@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn } from './utils';
 import { LucideIcon } from 'lucide-react';
 
@@ -28,6 +28,17 @@ export function SideTabs({
   position = 'right',
   className,
 }: SideTabsProps) {
+  const [maxHeight, setMaxHeight] = useState(600);
+  
+  useEffect(() => {
+    const updateMaxHeight = () => {
+      setMaxHeight(window.innerHeight - 100);
+    };
+    
+    updateMaxHeight();
+    window.addEventListener('resize', updateMaxHeight);
+    return () => window.removeEventListener('resize', updateMaxHeight);
+  }, []);
   
   const handleTabClick = (tabId: string) => {
     // Якщо клік на активний таб — закриваємо
@@ -81,13 +92,26 @@ export function SideTabs({
     return colors[color] || colors.gray;
   };
 
+  // Розраховуємо максимальну висоту табів та центруємо їх
+  const totalHeight = tabs.length * 48 + (tabs.length - 1) * 4; // 48px на таб + 4px gap
+  const fitsInScreen = totalHeight <= maxHeight;
+  
   return (
     <div
       className={cn(
-        'fixed top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1',
+        'fixed z-30 flex flex-col gap-1',
         position === 'right' ? 'right-0' : 'left-0',
+        // Центруємо тільки якщо таби вміщаються, інакше вирівнюємо по верху з відступом
+        fitsInScreen 
+          ? 'top-1/2 -translate-y-1/2' 
+          : 'top-20',
         className
       )}
+      style={{
+        // Обмежуємо висоту якщо таби не вміщаються
+        maxHeight: fitsInScreen ? 'none' : `${maxHeight}px`,
+        overflowY: fitsInScreen ? 'visible' : 'auto',
+      }}
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;

@@ -17,11 +17,9 @@ import {
 import { cn } from '../../../components/ui/utils';
 import { SideTabs, type SideTab } from '../../../components/ui';
 
-// Конфігурація табів для Inbox
+// Конфігурація табів для Inbox (скорочено до 3 основних)
 const INBOX_SIDE_TABS: SideTab[] = [
   { id: 'context', icon: FileText, label: 'Контекст', color: 'blue' },
-  { id: 'suggestions', icon: Lightbulb, label: 'Підказки', color: 'amber' },
-  { id: 'client', icon: User, label: 'Клієнт', color: 'green' },
   { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'purple' },
   { id: 'files', icon: FolderOpen, label: 'Файли', color: 'orange' },
 ];
@@ -128,13 +126,11 @@ export function CommunicationsLayout({
         </main>
 
         {/* Right Sidebar - Context Panel (Desktop/Tablet) */}
-        {contextPanel && !isMobile && (
+        {contextPanel && !isMobile && isContextPanelOpen && (
           <aside
             className={cn(
               'w-80 h-full border-l border-gray-200 bg-white flex flex-col shrink-0 overflow-hidden',
-              'hidden lg:flex',
-              isContextPanelOpen && 'lg:flex',
-              'transition-sidebar'
+              'transition-all duration-300 ease-out'
             )}
             aria-label="Context panel"
           >
@@ -184,8 +180,15 @@ export function CommunicationsLayout({
           tabs={INBOX_SIDE_TABS}
           activeTab={activeSideTab}
           onTabChange={(tabId) => {
-            setActiveSideTab(tabId);
-            setIsContextPanelOpen(tabId !== null);
+            if (tabId === activeSideTab) {
+              // Закриваємо панель якщо клікнули на активний таб
+              setActiveSideTab(null);
+              setIsContextPanelOpen(false);
+            } else {
+              // Відкриваємо панель з новим табом
+              setActiveSideTab(tabId);
+              setIsContextPanelOpen(true);
+            }
           }}
           position="right"
         />

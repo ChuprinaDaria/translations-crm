@@ -11,7 +11,17 @@ import {
   Eye,
   ChevronRight,
   Loader2,
+  StickyNote,
+  Settings,
 } from "lucide-react";
+import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+
+// Конфігурація табів для Orders List
+const ORDERS_LIST_SIDE_TABS: SideTab[] = [
+  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+];
 import { Card, CardContent } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -63,6 +73,7 @@ export function OrdersListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   
   // Timeline dialog
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -329,6 +340,52 @@ export function OrdersListPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      <SideTabs
+        tabs={ORDERS_LIST_SIDE_TABS}
+        activeTab={sidePanelTab}
+        onTabChange={setSidePanelTab}
+        position="right"
+      />
+
+      {/* SidePanel - Бокова панель з контентом */}
+      <SidePanel
+        open={sidePanelTab !== null}
+        onClose={() => setSidePanelTab(null)}
+        title={ORDERS_LIST_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        width="md"
+      >
+        {sidePanelTab === 'info' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Інформація про замовлення</h4>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Всього замовлень:</span>
+                <span className="ml-2 font-medium text-gray-900">{orders.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Відфільтровано:</span>
+                <span className="ml-2 font-medium text-gray-900">{filteredOrders.length}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {sidePanelTab === 'notes' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Нотатки</h4>
+            <p className="text-sm text-gray-500">Функціонал нотаток буде додано пізніше</p>
+          </div>
+        )}
+        
+        {sidePanelTab === 'settings' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Налаштування</h4>
+            <p className="text-sm text-gray-500">Налаштування списку замовлень</p>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }

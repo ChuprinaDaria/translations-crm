@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { Globe, Plus, Edit, Trash2, Loader2, FileText, StickyNote, Settings } from 'lucide-react';
+import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
+
+// Конфігурація табів для Languages
+const LANGUAGES_SIDE_TABS: SideTab[] = [
+  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+];
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -21,6 +29,7 @@ export function LanguagesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState<Language | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [formData, setFormData] = useState<LanguageCreate>({
     name_pl: '',
     name_en: '',
@@ -283,6 +292,48 @@ export function LanguagesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      <SideTabs
+        tabs={LANGUAGES_SIDE_TABS}
+        activeTab={sidePanelTab}
+        onTabChange={setSidePanelTab}
+        position="right"
+      />
+
+      {/* SidePanel - Бокова панель з контентом */}
+      <SidePanel
+        open={sidePanelTab !== null}
+        onClose={() => setSidePanelTab(null)}
+        title={LANGUAGES_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        width="md"
+      >
+        {sidePanelTab === 'info' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Інформація про мови</h4>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Всього мов:</span>
+                <span className="ml-2 font-medium text-gray-900">{languages.length}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {sidePanelTab === 'notes' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Нотатки</h4>
+            <p className="text-sm text-gray-500">Функціонал нотаток буде додано пізніше</p>
+          </div>
+        )}
+        
+        {sidePanelTab === 'settings' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Налаштування</h4>
+            <p className="text-sm text-gray-500">Налаштування мов</p>
+          </div>
+        )}
+      </SidePanel>
     </div>
   );
 }
