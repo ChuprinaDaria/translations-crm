@@ -470,7 +470,7 @@ export function BoardPage() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto pr-[64px]">
         <div className="flex items-center gap-3 mb-6">
           <Kanban className="w-8 h-8 text-[#FF5A00]" />
           <h1 className="text-2xl font-semibold text-gray-900">{t("kanban.title")}</h1>
@@ -556,7 +556,7 @@ export function BoardPage() {
 
       {/* Права частина: Бокова панель (тепер вона в потоці!) */}
       {selectedOrder && (
-        <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-30">
           <SideTabs
             tabs={ORDER_SIDE_TABS}
             activeTab={sidePanelTab}

@@ -100,7 +100,7 @@ export function CommunicationsLayout({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Chat Area - fills available space */}
         <main 
-          className="flex-1 min-w-0 bg-white h-full"
+          className="flex-1 min-w-0 bg-white h-full pr-[64px]"
           role="main"
           aria-label="Chat area"
         >

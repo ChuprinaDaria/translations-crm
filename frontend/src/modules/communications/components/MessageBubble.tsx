@@ -240,6 +240,22 @@ export function MessageBubble({
 
   const timeStr = formatTime(message.sent_at || message.created_at);
 
+  // Стилі для повідомлень менеджера залежно від платформи
+  const getManagerMessageStyles = () => {
+    if (!isOutbound) return '';
+    
+    switch (platform) {
+      case 'whatsapp':
+        return 'bg-green-50/50 border-2 border-green-500 text-black';
+      case 'telegram':
+        return 'bg-blue-50/50 border-2 border-blue-500 text-black';
+      case 'email':
+        return 'bg-orange-50/50 border-2 border-orange-500 text-black';
+      default:
+        return 'bg-blue-50/50 border-2 border-blue-500 text-black';
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -251,7 +267,7 @@ export function MessageBubble({
         className={cn(
           'max-w-[70%] rounded-lg px-3 py-2 relative',
           isOutbound
-            ? 'bg-blue-500 text-white'
+            ? getManagerMessageStyles()
             : 'bg-white border border-gray-200',
           !isOutbound && 'pt-4'
         )}
@@ -264,7 +280,7 @@ export function MessageBubble({
         )}
 
         {/* Message content */}
-        <div className={cn('space-y-2', isOutbound && 'text-white', !isOutbound && 'pl-8')}>
+        <div className={cn('space-y-2', isOutbound ? 'text-black' : '', !isOutbound && 'pl-8')}>
           {/* Text content - hide placeholder text for media messages */}
           {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
             <p className="text-sm whitespace-pre-wrap break-words">

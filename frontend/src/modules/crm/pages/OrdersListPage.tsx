@@ -76,6 +76,10 @@ const parseOrderDetails = (text: string | null | undefined) => {
       price: null,
       languages: null,
       type: null,
+      delivery: null,
+      address: null,
+      email: null,
+      phone: null,
       cleanDescription: "",
     };
   }
@@ -90,6 +94,22 @@ const parseOrderDetails = (text: string | null | undefined) => {
   
   // Витягуємо тип документа
   const typeMatch = text.match(/(?:Тип документа|Тип|Document type|Rodzaj):\s*([^|,\n]+)/i);
+  
+  // Витягуємо доставку
+  const deliveryMatch = text.match(/(?:Доставка|Delivery|Dostawa):\s?([^|,\n]+)/i);
+  const delivery = deliveryMatch ? deliveryMatch[1].trim() : null;
+  
+  // Витягуємо адресу
+  const addressMatch = text.match(/(?:Адреса|Address|Adres):\s?([^|,\n]+)/i);
+  const address = addressMatch ? addressMatch[1].trim() : null;
+  
+  // Витягуємо email
+  const emailMatch = text.match(/(?:Email|E-mail):\s?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+  const email = emailMatch ? emailMatch[1] : null;
+  
+  // Витягуємо телефон
+  const phoneMatch = text.match(/(?:Телефон|Phone|Telefon):\s?([+\d\s\-()]{7,15})/i);
+  const phone = phoneMatch ? phoneMatch[1].trim() : null;
 
   // Очищаємо опис від витягнутих даних
   let cleanDescription = text;
@@ -102,12 +122,28 @@ const parseOrderDetails = (text: string | null | undefined) => {
   if (typeMatch?.[0]) {
     cleanDescription = cleanDescription.replace(typeMatch[0], '');
   }
+  if (deliveryMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(deliveryMatch[0], '');
+  }
+  if (addressMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(addressMatch[0], '');
+  }
+  if (emailMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(emailMatch[0], '');
+  }
+  if (phoneMatch?.[0]) {
+    cleanDescription = cleanDescription.replace(phoneMatch[0], '');
+  }
   cleanDescription = cleanDescription.replace(/\s{2,}/g, ' ').trim();
 
   return {
     price,
     languages,
     type: typeMatch ? typeMatch[1].trim() : null,
+    delivery,
+    address,
+    email,
+    phone,
     cleanDescription: cleanDescription || text,
   };
 };
@@ -206,7 +242,7 @@ export function OrdersListPage() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden pr-[64px]">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6 shrink-0">
           <Package className="w-8 h-8 text-[#FF5A00]" />
@@ -244,13 +280,16 @@ export function OrdersListPage() {
       <Card className="flex-1 overflow-hidden flex flex-col min-h-0">
         <CardContent className="p-0 flex-1 flex flex-col min-h-0">
           <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin">
-            <Table className="table-fixed w-full min-w-[900px] border-collapse">
+            <Table className="table-fixed w-full min-w-[1100px] border-collapse">
               <TableHeader className="bg-slate-50 sticky top-0 z-10">
                 <TableRow className="h-8">
                   <TableHead className="w-[120px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Nr. Zlecenia</TableHead>
                   <TableHead className="w-[100px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Клієнт</TableHead>
-                  <TableHead className="px-1 py-0.5 text-[9px] font-bold border-r uppercase">Опис (Тип, Мова, Доставка...)</TableHead>
+                  <TableHead className="px-1 py-0.5 text-[9px] font-bold border-r uppercase">Опис (Тип, Мова)</TableHead>
                   <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Ціна</TableHead>
+                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Доставка</TableHead>
+                  <TableHead className="w-[120px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Адреса</TableHead>
+                  <TableHead className="w-[100px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Контакт</TableHead>
                   <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Статус</TableHead>
                   <TableHead className="w-[110px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Дедлайн</TableHead>
                   <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold uppercase">Створено</TableHead>
@@ -260,7 +299,7 @@ export function OrdersListPage() {
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
+                    <TableCell colSpan={11} className="text-center py-12">
                       <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                       <p className="text-gray-500">Немає замовлень</p>
                     </TableCell>
@@ -269,7 +308,7 @@ export function OrdersListPage() {
                   filteredOrders.map((order) => {
                     const deadline = formatDeadline(order.deadline);
                     const status = STATUS_LABELS[order.status] || STATUS_LABELS.do_wykonania;
-                    const { price, languages, type, cleanDescription } = parseOrderDetails(order.description);
+                    const { price, languages, type, delivery, address, email, phone, cleanDescription } = parseOrderDetails(order.description);
                     const isOverdue = deadline && deadline.text.includes('Прострочено');
                     
                     return (
@@ -304,6 +343,28 @@ export function OrdersListPage() {
                         </TableCell>
                         <TableCell className="px-1 py-0.5 text-right border-r font-mono font-bold text-green-700 text-[10px]">
                           {price || '—'}
+                        </TableCell>
+                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
+                          {delivery ? (
+                            <span className="bg-slate-100 px-1 rounded text-slate-600 font-medium">
+                              {delivery}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-1 py-0.5 text-[9px] border-r truncate text-slate-500" title={address || "—"}>
+                          {address || '—'}
+                        </TableCell>
+                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
+                          {(email || phone) ? (
+                            <div className="flex flex-col leading-none gap-0.5">
+                              {email && <span className="truncate text-[8px]">{email}</span>}
+                              {phone && <span className="font-mono text-slate-400 text-[8px]">{phone}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="px-1 py-0.5 border-r text-center">
                           <Badge className={cn("text-[8px] h-3.5 px-1 uppercase font-bold border-none", status.color)}>
@@ -411,7 +472,7 @@ export function OrdersListPage() {
       </main>
 
       {/* Права частина: Бокова панель (тепер вона в потоці!) */}
-      <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+      <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-30">
         <SideTabs
           tabs={ORDERS_LIST_SIDE_TABS}
           activeTab={sidePanelTab}
