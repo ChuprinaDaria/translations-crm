@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard } from 'lucide-react';
+import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard, UserPlus } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
 import {
@@ -42,10 +42,12 @@ import { CreateOrderDialog } from '../../communications/components/SmartActions/
 
 // Конфігурація табів для сторінки Клієнтів
 const CLIENT_SIDE_TABS: SideTab[] = [
-  { id: 'details', icon: FileText, label: 'Дані клієнта', color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
-  { id: 'payments', icon: CreditCard, label: 'Оплати', color: 'purple' },
-  { id: 'translators', icon: Users, label: 'Перекладачі', color: 'amber' },
+  { id: 'sidebar', icon: List, label: 'Список клієнтів', color: 'gray' },
+  { id: 'new', icon: UserPlus, label: 'Новий клієнт', color: 'gray' },
+  { id: 'details', icon: FileText, label: 'Дані клієнта', color: 'gray' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'gray' },
+  { id: 'payments', icon: CreditCard, label: 'Оплати', color: 'gray' },
+  { id: 'translators', icon: Users, label: 'Перекладачі', color: 'gray' },
 ];
 
 /**
@@ -593,24 +595,7 @@ export function ClientsPageEnhanced() {
           <Users className="w-8 h-8 text-[#FF5A00]" />
           <h1 className="text-2xl font-semibold text-gray-900">Клієнти</h1>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Mobile menu button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden"
-            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          >
-            {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <List className="w-5 h-5" />}
-          </Button>
-          <Button
-            onClick={handleNewClient}
-            className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Новий клієнт
-          </Button>
-        </div>
+        {/* Кнопки прибрано - тепер вони в бокових табах */}
       </div>
 
       {/* Main content */}
@@ -644,7 +629,7 @@ export function ClientsPageEnhanced() {
 
       {/* Mobile Sidebar Drawer - Opens from RIGHT */}
       <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent side="right" className="w-[300px] p-0">
+        <SheetContent side="right" className="w-[360px] p-0 mr-14">
           <SheetHeader className="p-4 border-b">
             <SheetTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
@@ -658,18 +643,44 @@ export function ClientsPageEnhanced() {
       </Sheet>
 
       {/* SideTabs - Vertical colored tabs on the right (Desktop only) */}
-      {/* Показуємо таби тільки коли є активний клієнт */}
-      {!isMobile && activeClient && (
+      {!isMobile && (
         <SideTabs
           tabs={CLIENT_SIDE_TABS}
-          activeTab={sidePanelTab}
-          onTabChange={setSidePanelTab}
+          activeTab={
+            sidePanelTab 
+              ? sidePanelTab 
+              : (isDesktopSidebarOpen ? 'sidebar' : null)
+          }
+          onTabChange={(tabId) => {
+            if (tabId === 'sidebar') {
+              // Перемикаємо сайдбар
+              if (isDesktopSidebarOpen && sidePanelTab === null) {
+                // Якщо сайдбар відкритий і це клік на активний таб - закриваємо
+                setIsDesktopSidebarOpen(false);
+              } else {
+                // Відкриваємо сайдбар
+                setIsDesktopSidebarOpen(true);
+                setSidePanelTab(null);
+              }
+            } else if (tabId === 'new') {
+              handleNewClient();
+              setSidePanelTab(null);
+            } else {
+              // Для інших табів потрібен активний клієнт
+              if (activeClient) {
+                setSidePanelTab(tabId);
+                setIsDesktopSidebarOpen(false); // Закриваємо сайдбар коли відкриваємо панель
+              } else {
+                setSidePanelTab(null);
+              }
+            }
+          }}
           position="right"
         />
       )}
 
       {/* SidePanel - Бокова панель з контентом */}
-      {!isMobile && activeClient && (
+      {!isMobile && activeClient && sidePanelTab && sidePanelTab !== 'sidebar' && sidePanelTab !== 'new' && (
         <SidePanel
           open={sidePanelTab !== null}
           onClose={() => setSidePanelTab(null)}

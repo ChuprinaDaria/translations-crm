@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { cn } from './utils';
 import { LucideIcon } from 'lucide-react';
 
@@ -9,12 +8,21 @@ export interface SideTab {
   color: string; // Tailwind колір, наприклад 'blue', 'green', 'amber'
 }
 
+export interface QuickAction {
+  id: string;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
 interface SideTabsProps {
   tabs: SideTab[];
   activeTab: string | null;
   onTabChange: (tabId: string | null) => void;
   position?: 'right' | 'left';
   className?: string;
+  quickActions?: QuickAction[];
 }
 
 /**
@@ -27,19 +35,8 @@ export function SideTabs({
   onTabChange,
   position = 'right',
   className,
+  quickActions = [],
 }: SideTabsProps) {
-  const [maxHeight, setMaxHeight] = useState(600);
-  
-  useEffect(() => {
-    const updateMaxHeight = () => {
-      setMaxHeight(window.innerHeight - 100);
-    };
-    
-    updateMaxHeight();
-    window.addEventListener('resize', updateMaxHeight);
-    return () => window.removeEventListener('resize', updateMaxHeight);
-  }, []);
-  
   const handleTabClick = (tabId: string) => {
     // Якщо клік на активний таб — закриваємо
     if (activeTab === tabId) {
@@ -49,102 +46,99 @@ export function SideTabs({
     }
   };
 
-  // Кольори для табів
+  // Кольори для табів - сірий стиль для всіх
   const getTabColors = (color: string, isActive: boolean) => {
-    const colors: Record<string, { bg: string; bgActive: string; text: string; border: string }> = {
-      blue: {
-        bg: 'bg-blue-50 hover:bg-blue-100',
-        bgActive: 'bg-blue-500',
-        text: isActive ? 'text-white' : 'text-blue-600',
-        border: 'border-blue-500',
-      },
-      green: {
-        bg: 'bg-green-50 hover:bg-green-100',
-        bgActive: 'bg-green-500',
-        text: isActive ? 'text-white' : 'text-green-600',
-        border: 'border-green-500',
-      },
-      amber: {
-        bg: 'bg-amber-50 hover:bg-amber-100',
-        bgActive: 'bg-amber-500',
-        text: isActive ? 'text-white' : 'text-amber-600',
-        border: 'border-amber-500',
-      },
-      purple: {
-        bg: 'bg-purple-50 hover:bg-purple-100',
-        bgActive: 'bg-purple-500',
-        text: isActive ? 'text-white' : 'text-purple-600',
-        border: 'border-purple-500',
-      },
-      orange: {
-        bg: 'bg-orange-50 hover:bg-orange-100',
-        bgActive: 'bg-orange-500',
-        text: isActive ? 'text-white' : 'text-orange-600',
-        border: 'border-orange-500',
-      },
-      gray: {
-        bg: 'bg-gray-50 hover:bg-gray-100',
-        bgActive: 'bg-gray-500',
-        text: isActive ? 'text-white' : 'text-gray-600',
-        border: 'border-gray-500',
-      },
+    // Всі таби мають сірий стиль як у SVG
+    return {
+      bg: 'bg-white hover:bg-gray-50',
+      bgActive: 'bg-gray-100',
+      text: 'text-gray-600',
+      border: 'border-gray-300',
     };
-    return colors[color] || colors.gray;
   };
 
-  // Розраховуємо максимальну висоту табів та центруємо їх
-  const totalHeight = tabs.length * 48 + (tabs.length - 1) * 4; // 48px на таб + 4px gap
-  const fitsInScreen = totalHeight <= maxHeight;
-  
   return (
     <div
       className={cn(
-        'fixed z-30 flex flex-col gap-1',
+        // Позиціонування: від header (top-16 = 64px) до самого низу (bottom-0)
+        // Завжди видимий і статичний, навіть коли відкритий сайдбар
+        // pointer-events-auto забезпечує клікабельність навіть коли сайдбар відкритий
+        'fixed z-[70] !top-16 bottom-0 pointer-events-auto',
         position === 'right' ? 'right-0' : 'left-0',
-        // Центруємо тільки якщо таби вміщаються, інакше вирівнюємо по верху з відступом
-        fitsInScreen 
-          ? 'top-1/2 -translate-y-1/2' 
-          : 'top-20',
         className
       )}
-      style={{
-        // Обмежуємо висоту якщо таби не вміщаються
-        maxHeight: fitsInScreen ? 'none' : `${maxHeight}px`,
-        overflowY: fitsInScreen ? 'visible' : 'auto',
+      style={{ 
+        top: '64px',
+        position: 'fixed',
+        zIndex: 70,
+        pointerEvents: 'auto'
       }}
     >
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        const colors = getTabColors(tab.color, isActive);
-        const Icon = tab.icon;
+      {/* Контейнер на всю висоту від header до низу */}
+      <div className="h-full bg-white border-l border-gray-200 shadow-sm flex flex-col pointer-events-auto">
+        
+        {/* Таби та Quick Actions — починаються зверху, йдуть вниз */}
+        <div className="flex flex-col gap-1 p-1 pt-2 shrink-0">
+          {/* Основні таби */}
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const colors = getTabColors(tab.color, isActive);
+            const Icon = tab.icon;
 
-        return (
-          <button
-            key={tab.id}
-            onClick={() => handleTabClick(tab.id)}
-            title={tab.label}
-            className={cn(
-              // Базові стилі
-              'w-12 h-12 flex items-center justify-center',
-              'transition-all duration-200 ease-out',
-              // Форма вушка
-              position === 'right' 
-                ? 'rounded-l-lg border-l-2 border-t border-b' 
-                : 'rounded-r-lg border-r-2 border-t border-b',
-              // Колір
-              isActive ? colors.bgActive : colors.bg,
-              colors.text,
-              colors.border,
-              // Тінь при активному
-              isActive && 'shadow-lg',
-              // Виїзд при hover
-              !isActive && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1')
-            )}
-          >
-            <Icon className="w-5 h-5" />
-          </button>
-        );
-      })}
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                title={tab.label}
+                className={cn(
+                  'w-12 h-12 flex items-center justify-center',
+                  'transition-all duration-200 ease-out',
+                  'rounded-lg',
+                  'pointer-events-auto cursor-pointer',
+                  isActive ? colors.bgActive : colors.bg,
+                  colors.text,
+                  isActive && 'shadow-md',
+                  !isActive && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1')
+                )}
+                style={{ pointerEvents: 'auto', zIndex: 71 }}
+              >
+                <Icon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
+              </button>
+            );
+          })}
+
+          {/* Quick Actions — в тому ж списку, як інші таби */}
+          {quickActions && quickActions.length > 0 && quickActions.map((action) => {
+            const ActionIcon = action.icon;
+            return (
+              <button
+                key={action.id}
+                type="button"
+                title={action.label}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className={cn(
+                  'w-12 h-12 flex items-center justify-center',
+                  'transition-all duration-200 ease-out',
+                  'rounded-lg',
+                  'bg-white hover:bg-gray-50',
+                  'text-gray-600',
+                  'cursor-pointer pointer-events-auto',
+                  !action.disabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                style={{ pointerEvents: action.disabled ? 'none' : 'auto', zIndex: 71 }}
+              >
+                <ActionIcon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
+              </button>
+            );
+          })}
+        </div>
+        
+        {/* Пустий простір — заповнює решту висоти */}
+        <div className="flex-1" />
+        
+      </div>
     </div>
   );
 }

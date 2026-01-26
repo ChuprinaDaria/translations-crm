@@ -28,7 +28,7 @@ export function SidePanel({
   
   const widthClasses = {
     sm: 'w-[320px]',
-    md: 'w-[400px]',
+    md: 'w-96', // 384px - стандартна ширина як в inbox
     lg: 'w-[540px]',
   };
 
@@ -38,21 +38,27 @@ export function SidePanel({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/20 z-40"
+        className="fixed inset-0 bg-black/20 z-30"
         onClick={onClose}
+        style={{ top: '64px' }} // Починається під header
       />
       
       {/* Panel */}
       <div
         className={cn(
-          'fixed top-0 right-0 h-full bg-white shadow-xl z-50',
+          'fixed right-0 bg-white shadow-xl z-40',
           'transform transition-transform duration-300 ease-out',
           'border-l border-gray-200',
           widthClasses[width],
           open ? 'translate-x-0' : 'translate-x-full',
           className
         )}
-        style={{ marginRight: '48px' }} // Відступ для табів (w-12 = 48px)
+        style={{ 
+          marginRight: '56px', 
+          top: '64px',
+          bottom: '0',
+          height: 'calc(100vh - 64px)'
+        }} // Відступ для табів (w-14 = 56px) та header (64px)
       >
         {/* Header */}
         {title && (

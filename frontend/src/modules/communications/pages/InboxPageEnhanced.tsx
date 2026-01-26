@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
+import { Menu, CreditCard, Package, UserPlus, FileText, FolderOpen } from 'lucide-react';
+import { type QuickAction } from '../../../components/ui';
 import { ConversationsSidebar, type FilterState, type Conversation } from '../components/ConversationsSidebar';
 import { ChatTabsArea } from '../components/ChatTabsArea';
 import { type Message } from '../components/ChatArea';
@@ -528,6 +530,13 @@ export function InboxPageEnhanced() {
     setFilters((prev) => ({ ...prev, search: query }));
   };
 
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarOpen((prev) => {
+      console.log('Toggle sidebar state:', prev, '->', !prev);
+      return !prev;
+    });
+  }, []);
+
   // Handlers for Quick Actions Sidebar
   const handleAddEmail = async (conversationId: string, email: string) => {
     if (!client?.id) {
@@ -828,6 +837,69 @@ export function InboxPageEnhanced() {
     handleDownloadAllFiles();
   };
 
+  // Quick Actions для бокових табів - завжди видимі (після всіх handler функцій)
+  const quickActions = useMemo<QuickAction[]>(() => {
+    const conversationId = activeTabId || '';
+    const hasClient = !!client;
+    const hasOrders = orders.length > 0;
+
+    return [
+      {
+        id: 'sidebar',
+        icon: Menu,
+        label: 'Відкрити список діалогів',
+        onClick: handleToggleSidebar,
+      },
+      {
+        id: 'client',
+        icon: UserPlus,
+        label: hasClient ? 'Переглянути клієнта' : 'Створити клієнта',
+        onClick: () => {
+          if (conversationId) {
+            handleClientClick(conversationId);
+          } else {
+            handleCreateClient();
+          }
+        },
+        disabled: !activeTabId && !hasClient,
+      },
+      {
+        id: 'order',
+        icon: FileText,
+        label: 'Utwórz zlecenie',
+        onClick: () => {
+          if (conversationId) {
+            handleOrderClick(conversationId);
+          } else {
+            handleCreateOrder();
+          }
+        },
+        disabled: !activeTabId && !hasClient,
+      },
+      {
+        id: 'payment',
+        icon: CreditCard,
+        label: 'Оплата',
+        onClick: () => conversationId && handlePaymentClick(conversationId),
+        disabled: !activeTabId || !hasOrders,
+      },
+      {
+        id: 'tracking',
+        icon: Package,
+        label: 'Трекінг',
+        onClick: () => conversationId && handleTrackingClick(conversationId),
+        disabled: !activeTabId || !hasOrders,
+      },
+      {
+        id: 'documents',
+        icon: FolderOpen,
+        label: 'Завантажити документи',
+        onClick: () => conversationId && handleDocumentsClick(conversationId),
+        disabled: !activeTabId,
+      },
+    ];
+  }, [activeTabId, client, orders, handleToggleSidebar, handleCreateClient, handleCreateOrder, handleClientClick, handleOrderClick, handlePaymentClick, handleTrackingClick, handleDocumentsClick]);
+
   // Helper functions to get client/order IDs for active conversation
   const getClientIdForConversation = (conversationId: string): string | undefined => {
     if (activeTabId === conversationId) {
@@ -875,13 +947,6 @@ export function InboxPageEnhanced() {
   const activeChat = openChats.find(chat => chat.conversationId === activeTabId);
   const chatConversation = activeChat ? activeChat.conversation : null;
 
-  const handleToggleSidebar = () => {
-    setIsSidebarOpen((prev) => {
-      console.log('Toggle sidebar state:', prev, '->', !prev);
-      return !prev;
-    });
-  };
-
   return (
     <CommunicationsErrorBoundary>
       <CommunicationsLayout
@@ -916,6 +981,7 @@ export function InboxPageEnhanced() {
           ) : null
         }
         onSearch={handleSearch}
+        quickActions={quickActions}
       >
         <ChatTabsArea
           openChats={openChats}

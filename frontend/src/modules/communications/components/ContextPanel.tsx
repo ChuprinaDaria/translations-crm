@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Phone, Mail, MapPin, Plus, Link, Download, FileText, Package, Calendar, CreditCard, Zap } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../../../components/ui/avatar';
 import { Button } from '../../../components/ui/button';
@@ -72,6 +72,7 @@ interface ContextPanelProps {
   onSendPaymentLink?: () => void;
   onSendTrackingStatus?: () => void;
   onAddInternalNote?: () => void;
+  activeSideTab?: string | null; // Таб, який вибрано в SideTabs
 }
 
 /**
@@ -94,8 +95,18 @@ export function ContextPanel({
   onSendPaymentLink,
   onSendTrackingStatus,
   onAddInternalNote,
+  activeSideTab,
 }: ContextPanelProps) {
   const [activeTab, setActiveTab] = useState('info');
+  
+  // Автоматично переключаємося на таб "notes", коли activeSideTab === 'notes'
+  useEffect(() => {
+    if (activeSideTab === 'notes') {
+      setActiveTab('notes');
+    } else if (activeSideTab === 'files') {
+      setActiveTab('files');
+    }
+  }, [activeSideTab]);
 
   if (!conversation) {
     return (

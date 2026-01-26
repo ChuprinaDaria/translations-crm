@@ -17,7 +17,7 @@ import {
   StickyNote,
   Settings,
 } from "lucide-react";
-import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+import { SideTabs, SidePanel, type SideTab, type QuickAction } from "../../../components/ui";
 
 // Конфігурація табів для Translators
 const TRANSLATORS_SIDE_TABS: SideTab[] = [
@@ -446,11 +446,6 @@ export function TranslatorsPage() {
             <p className="text-sm text-gray-500">Управління базою перекладачів</p>
           </div>
         </div>
-        
-        <Button onClick={handleOpenCreate} className="bg-orange-500 hover:bg-orange-600">
-          <Plus className="w-4 h-4 mr-2" />
-          Додати перекладача
-        </Button>
       </div>
 
       {/* Filters */}
@@ -913,6 +908,14 @@ export function TranslatorsPage() {
         activeTab={sidePanelTab}
         onTabChange={setSidePanelTab}
         position="right"
+        quickActions={[
+          {
+            id: 'add-translator',
+            icon: Plus,
+            label: 'Додати перекладача',
+            onClick: handleOpenCreate,
+          },
+        ]}
       />
 
       {/* SidePanel - Бокова панель з контентом */}

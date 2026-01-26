@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Plus, Edit, Trash2, Loader2, FileText, StickyNote, Settings } from 'lucide-react';
-import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
+import { SideTabs, SidePanel, type SideTab, type QuickAction } from '../../../components/ui';
 
 // Конфігурація табів для Languages
 const LANGUAGES_SIDE_TABS: SideTab[] = [
@@ -134,11 +134,6 @@ export function LanguagesPage() {
             <p className="text-sm text-gray-500">Управління мовами та базовими цінами для клієнтів</p>
           </div>
         </div>
-        
-        <Button onClick={handleOpenCreate} className="bg-orange-500 hover:bg-orange-600">
-          <Plus className="w-4 h-4 mr-2" />
-          Додати мову
-        </Button>
       </div>
 
       {/* Languages Grid */}
@@ -299,6 +294,14 @@ export function LanguagesPage() {
         activeTab={sidePanelTab}
         onTabChange={setSidePanelTab}
         position="right"
+        quickActions={[
+          {
+            id: 'add-language',
+            icon: Plus,
+            label: 'Додати мову',
+            onClick: handleOpenCreate,
+          },
+        ]}
       />
 
       {/* SidePanel - Бокова панель з контентом */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, FileText, StickyNote, User, Lightbulb, FolderOpen } from 'lucide-react';
+import { Search, FileText, StickyNote, User, Lightbulb, FolderOpen, Menu, CreditCard, Package, UserPlus } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
 import {
   Sheet,
@@ -15,11 +15,10 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
-import { SideTabs, type SideTab } from '../../../components/ui';
+import { SideTabs, type SideTab, type QuickAction } from '../../../components/ui';
 
-// Конфігурація табів для Inbox (скорочено до 3 основних)
+// Конфігурація табів для Inbox
 const INBOX_SIDE_TABS: SideTab[] = [
-  { id: 'context', icon: FileText, label: 'Контекст', color: 'blue' },
   { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'purple' },
   { id: 'files', icon: FolderOpen, label: 'Файли', color: 'orange' },
 ];
@@ -31,6 +30,9 @@ interface CommunicationsLayoutProps {
   onSearch?: (query: string) => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  quickActions?: QuickAction[];
+  activeSideTab?: string | null;
+  onActiveSideTabChange?: (tabId: string | null) => void;
 }
 
 /**
@@ -46,15 +48,27 @@ export function CommunicationsLayout({
   onSearch,
   isSidebarOpen: externalSidebarOpen,
   onToggleSidebar,
+  quickActions = [],
+  activeSideTab: externalActiveSideTab,
+  onActiveSideTabChange,
 }: CommunicationsLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
-  const [activeSideTab, setActiveSideTab] = useState<string | null>(null);
+  const [internalActiveSideTab, setInternalActiveSideTab] = useState<string | null>(null);
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   
   // Використовуємо external state якщо передано, інакше internal
   const isSidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen;
+  const activeSideTab = externalActiveSideTab !== undefined ? externalActiveSideTab : internalActiveSideTab;
+  
+  const setActiveSideTab = (tabId: string | null) => {
+    if (onActiveSideTabChange) {
+      onActiveSideTabChange(tabId);
+    } else {
+      setInternalActiveSideTab(tabId);
+    }
+  };
 
   // Responsive detection
   useEffect(() => {
@@ -129,12 +143,16 @@ export function CommunicationsLayout({
         {contextPanel && !isMobile && isContextPanelOpen && (
           <aside
             className={cn(
-              'w-80 h-full border-l border-gray-200 bg-white flex flex-col shrink-0 overflow-hidden',
-              'transition-all duration-300 ease-out'
+              'w-96 h-full border-l border-gray-200 bg-white flex flex-col shrink-0 overflow-hidden',
+              'transition-all duration-300 ease-out z-40 mr-14'
             )}
             aria-label="Context panel"
           >
-            {contextPanel}
+            {React.isValidElement(contextPanel)
+              ? React.cloneElement(contextPanel as React.ReactElement<any>, {
+                  activeSideTab,
+                })
+              : contextPanel}
           </aside>
         )}
       </div>
@@ -147,7 +165,7 @@ export function CommunicationsLayout({
           handleToggleSidebar();
         }}
       >
-        <SheetContent side="right" hideOverlay className="w-[300px] sm:w-[340px] p-0 z-[60] shadow-2xl border-l border-gray-200">
+        <SheetContent side="right" hideOverlay className="w-96 p-0 z-[60] shadow-2xl border-l border-gray-200 mr-14">
           <SheetHeader className="p-4 border-b">
             <SheetTitle>Розмови</SheetTitle>
           </SheetHeader>
@@ -168,14 +186,18 @@ export function CommunicationsLayout({
               </DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-auto">
-              {contextPanel}
+              {React.isValidElement(contextPanel)
+                ? React.cloneElement(contextPanel as React.ReactElement<any>, {
+                    activeSideTab,
+                  })
+                : contextPanel}
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* SideTabs - Vertical colored tabs on the right */}
-      {contextPanel && !isMobile && (
+      {/* SideTabs - Vertical colored tabs on the right (завжди видимі) */}
+      {!isMobile && (
         <SideTabs
           tabs={INBOX_SIDE_TABS}
           activeTab={activeSideTab}
@@ -189,8 +211,13 @@ export function CommunicationsLayout({
               setActiveSideTab(tabId);
               setIsContextPanelOpen(true);
             }
+            // Відкриваємо сайдбар при кліку на будь-який таб (якщо він закритий)
+            if (!isSidebarOpen) {
+              handleToggleSidebar();
+            }
           }}
           position="right"
+          quickActions={quickActions}
         />
       )}
     </div>

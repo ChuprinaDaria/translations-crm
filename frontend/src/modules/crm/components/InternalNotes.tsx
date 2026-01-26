@@ -29,7 +29,8 @@ export function InternalNotes({
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [newNote, setNewNote] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  // Для chat (діалогів) автоматично відкриваємо форму додавання нотатки
+  const [showAddForm, setShowAddForm] = useState(compact ? false : entityType === 'chat');
 
   useEffect(() => {
     loadNotes();
@@ -69,7 +70,10 @@ export function InternalNotes({
       });
       setNotes([note, ...notes]);
       setNewNote('');
-      setShowAddForm(false);
+      // Для chat не закриваємо форму, щоб можна було додати ще нотатки
+      if (entityType !== 'chat') {
+        setShowAddForm(false);
+      }
       toast.success('Нотатку додано');
     } catch (error: any) {
       console.error('Error adding note:', error);
@@ -156,33 +160,23 @@ export function InternalNotes({
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">
-            Internal Notes {notes.length > 0 && `(${notes.length})`}
-          </span>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="h-7 text-xs"
-        >
-          <Plus className="w-3.5 h-3.5 mr-1" />
-          Додати нотатку
-        </Button>
-      </div>
-
-      {showAddForm && (
+      {/* Для chat (діалогів) - форма додавання нотатки завжди видима зверху */}
+      {entityType === 'chat' && (
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="p-3 space-y-2">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageSquare className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">
+                Додати нотатку
+              </span>
+            </div>
             <Textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               placeholder="Введіть нотатку..."
               rows={3}
               className="text-sm"
+              autoFocus
             />
             <div className="flex gap-2">
               <Button
@@ -191,21 +185,77 @@ export function InternalNotes({
                 disabled={isAdding || !newNote.trim()}
                 className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
               >
-                {isAdding ? 'Додавання...' : 'Додати'}
+                {isAdding ? 'Додавання...' : 'Зберегти'}
               </Button>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  setShowAddForm(false);
                   setNewNote('');
                 }}
               >
-                Скасувати
+                Очистити
               </Button>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Для інших типів - стандартний режим з кнопкою */}
+      {entityType !== 'chat' && (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">
+                Internal Notes {notes.length > 0 && `(${notes.length})`}
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="h-7 text-xs"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Додати нотатку
+            </Button>
+          </div>
+
+          {showAddForm && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="p-3 space-y-2">
+                <Textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Введіть нотатку..."
+                  rows={3}
+                  className="text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleAddNote}
+                    disabled={isAdding || !newNote.trim()}
+                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  >
+                    {isAdding ? 'Додавання...' : 'Додати'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setNewNote('');
+                    }}
+                  >
+                    Скасувати
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       {isLoading ? (
