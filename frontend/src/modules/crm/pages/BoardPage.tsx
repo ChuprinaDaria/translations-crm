@@ -17,16 +17,31 @@ import {
   RefreshCw, 
   CheckCircle2, 
   Wallet, 
-  Package 
+  Package,
+  FileText,
+  StickyNote,
+  Truck,
+  Users
 } from "lucide-react";
 import { cn } from "../../../components/ui/utils";
+import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
 import { KanbanColumn } from "../components/KanbanColumn";
 import { KanbanCard, Order, Translator, ColumnColorKey } from "../components/KanbanCard";
 import { SendTranslationRequestDialog } from "../components/SendTranslationRequestDialog";
+import { OrderNotesSheet } from "../components/OrderNotesSheet";
+import { InternalNotes } from "../components/InternalNotes";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useI18n } from "../../../lib/i18n";
 import { ordersApi, translatorsApi } from "../api";
+
+// Конфігурація табів для сторінки Замовлень
+const ORDER_SIDE_TABS: SideTab[] = [
+  { id: 'details', icon: FileText, label: 'Деталі замовлення', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'translator', icon: Users, label: 'Перекладач', color: 'amber' },
+  { id: 'delivery', icon: Truck, label: 'Доставка', color: 'orange' },
+];
 
 // Will be loaded from API
 
@@ -95,6 +110,8 @@ export function BoardPage() {
   const [activeOverColumn, setActiveOverColumn] = useState<ColumnColorKey | null>(null);
   const [isUpdating, setIsUpdating] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   
   // Translators list loaded from API
   const [translators, setTranslators] = useState<Translator[]>([]);
@@ -423,7 +440,9 @@ export function BoardPage() {
   };
 
   const handleCardClick = (order: Order) => {
-    // Order details now open via OrderNotesSheet in KanbanCard
+    // Встановлюємо вибране замовлення та відкриваємо панель з табом details
+    setSelectedOrder(order);
+    setSidePanelTab('details');
   };
 
   const handleSaveOrder = (updatedOrder: Order) => {
@@ -529,6 +548,123 @@ export function BoardPage() {
             toast.success('Запит на переклад відправлено');
           }}
         />
+      )}
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      {selectedOrder && (
+        <SideTabs
+          tabs={ORDER_SIDE_TABS}
+          activeTab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          position="right"
+        />
+      )}
+
+      {/* SidePanel - Бокова панель з контентом */}
+      {selectedOrder && (
+        <SidePanel
+          open={sidePanelTab !== null}
+          onClose={() => {
+            setSidePanelTab(null);
+            setSelectedOrder(null);
+          }}
+          title={ORDER_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+          width="md"
+        >
+          {sidePanelTab === 'details' && selectedOrder && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">Основна інформація</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Номер замовлення:</span>
+                    <span className="ml-2 font-medium text-gray-900">{selectedOrder.orderNumber}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Клієнт:</span>
+                    <span className="ml-2 font-medium text-gray-900">{selectedOrder.clientName}</span>
+                  </div>
+                  {selectedOrder.deadline && (
+                    <div>
+                      <span className="text-gray-500">Термін:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {new Date(selectedOrder.deadline).toLocaleDateString('uk-UA')}
+                      </span>
+                    </div>
+                  )}
+                  {selectedOrder.price && (
+                    <div>
+                      <span className="text-gray-500">Ціна:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(selectedOrder.price)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {selectedOrder.description && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Опис</h4>
+                  <p className="text-sm text-gray-700">{selectedOrder.description}</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {sidePanelTab === 'notes' && selectedOrder && (
+            <InternalNotes
+              entityType="order"
+              entityId={selectedOrder.id}
+              orderNumber={selectedOrder.orderNumber}
+            />
+          )}
+          
+          {sidePanelTab === 'translator' && selectedOrder && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Перекладач</h4>
+              {selectedOrder.translatorName ? (
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Ім'я:</span>
+                    <span className="ml-2 font-medium text-gray-900">{selectedOrder.translatorName}</span>
+                  </div>
+                  {selectedOrder.translatorRate && (
+                    <div>
+                      <span className="text-gray-500">Ставка:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(selectedOrder.translatorRate)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">Перекладач не призначено</p>
+              )}
+            </div>
+          )}
+          
+          {sidePanelTab === 'delivery' && selectedOrder && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Доставка</h4>
+              {selectedOrder.delivery ? (
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Метод:</span>
+                    <span className="ml-2 font-medium text-gray-900">{selectedOrder.delivery.method || 'Не вказано'}</span>
+                  </div>
+                  {selectedOrder.delivery.tracking_number && (
+                    <div>
+                      <span className="text-gray-500">Номер відстеження:</span>
+                      <span className="ml-2 font-medium text-gray-900">{selectedOrder.delivery.tracking_number}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">Інформація про доставку відсутня</p>
+              )}
+            </div>
+          )}
+        </SidePanel>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Plus, Users, MessageSquare, Phone, Building } from 'lucide-react';
+import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
+import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
 import {
   Sheet,
   SheetContent,
@@ -31,12 +32,21 @@ import { ClientTabsArea } from '../components/ClientTabsArea';
 import { ClientTabContent } from '../components/ClientTabContent';
 import { OrderTabContent } from '../components/OrderTabContent';
 import { OrderDetailSheet } from '../components/OrderDetailSheet';
+import { ClientNotes } from '../components/ClientNotes';
 import type { Order as KanbanOrder } from '../components/KanbanCard';
 import { useClientTabs, type ClientTabData, type OrderTabData } from '../hooks/useClientTabs';
 import { clientsApi, type Client, type Order } from '../api/clients';
 import { ordersApi } from '../api/orders';
 import { cn } from '../../../components/ui/utils';
 import { CreateOrderDialog } from '../../communications/components/SmartActions/CreateOrderDialog';
+
+// Конфігурація табів для сторінки Клієнтів
+const CLIENT_SIDE_TABS: SideTab[] = [
+  { id: 'details', icon: FileText, label: 'Дані клієнта', color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
+  { id: 'payments', icon: CreditCard, label: 'Оплати', color: 'purple' },
+  { id: 'translators', icon: Users, label: 'Перекладачі', color: 'amber' },
+];
 
 /**
  * Enhanced Clients Page with Chrome-like tabs
@@ -50,7 +60,9 @@ export function ClientsPageEnhanced() {
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
 
   // Client/Order data for active tab
   const [activeClient, setActiveClient] = useState<Client | null>(null);
@@ -589,7 +601,7 @@ export function ClientsPageEnhanced() {
             className="md:hidden"
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           >
-            {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMobileSidebarOpen ? <X className="w-5 h-5" /> : <List className="w-5 h-5" />}
           </Button>
           <Button
             onClick={handleNewClient}
@@ -618,14 +630,16 @@ export function ClientsPageEnhanced() {
         </main>
 
         {/* Right Sidebar - Clients List - Desktop */}
-        <aside
-          className={cn(
-            'w-[280px] border border-gray-200 rounded-lg bg-white shrink-0 overflow-hidden',
-            'hidden md:flex flex-col'
-          )}
-        >
-          {sidebar}
-        </aside>
+        {isDesktopSidebarOpen && (
+          <aside
+            className={cn(
+              'w-[280px] border border-gray-200 rounded-lg bg-white shrink-0 overflow-hidden',
+              'hidden md:flex flex-col'
+            )}
+          >
+            {sidebar}
+          </aside>
+        )}
       </div>
 
       {/* Mobile Sidebar Drawer - Opens from RIGHT */}
@@ -642,6 +656,97 @@ export function ClientsPageEnhanced() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* SideTabs - Vertical colored tabs on the right (Desktop only) */}
+      {/* Показуємо таби тільки коли є активний клієнт */}
+      {!isMobile && activeClient && (
+        <SideTabs
+          tabs={CLIENT_SIDE_TABS}
+          activeTab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          position="right"
+        />
+      )}
+
+      {/* SidePanel - Бокова панель з контентом */}
+      {!isMobile && activeClient && (
+        <SidePanel
+          open={sidePanelTab !== null}
+          onClose={() => setSidePanelTab(null)}
+          title={CLIENT_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+          width="md"
+        >
+          {sidePanelTab === 'details' && activeClient && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">Основна інформація</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">Ім'я:</span>
+                    <span className="ml-2 font-medium text-gray-900">{activeClient.full_name}</span>
+                  </div>
+                  {activeClient.phone && (
+                    <div>
+                      <span className="text-gray-500">Телефон:</span>
+                      <span className="ml-2 font-medium text-gray-900">{activeClient.phone}</span>
+                    </div>
+                  )}
+                  {activeClient.email && (
+                    <div>
+                      <span className="text-gray-500">Email:</span>
+                      <span className="ml-2 font-medium text-gray-900">{activeClient.email}</span>
+                    </div>
+                  )}
+                  {activeClient.source && (
+                    <div>
+                      <span className="text-gray-500">Джерело:</span>
+                      <span className="ml-2 font-medium text-gray-900">{activeClient.source}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {activeOrders.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Замовлення</h4>
+                  <div className="space-y-2">
+                    {activeOrders.map((order) => (
+                      <div
+                        key={order.id}
+                        className="p-3 border border-gray-200 rounded-lg hover:border-[#FF5A00] cursor-pointer transition-colors"
+                        onClick={() => handleOpenOrder(order.id, order.order_number)}
+                      >
+                        <div className="font-medium text-gray-900">{order.order_number}</div>
+                        <div className="text-sm text-gray-500">{order.status}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {sidePanelTab === 'notes' && activeClient && (
+            <ClientNotes 
+              clientId={activeClient.id} 
+              orders={activeOrders.map(o => ({ id: o.id, order_number: o.order_number }))}
+            />
+          )}
+          
+          {sidePanelTab === 'payments' && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Історія оплат</h4>
+              <p className="text-sm text-gray-500">Функціонал оплат буде додано пізніше</p>
+            </div>
+          )}
+          
+          {sidePanelTab === 'translators' && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Перекладачі</h4>
+              <p className="text-sm text-gray-500">Функціонал перекладачів буде додано пізніше</p>
+            </div>
+          )}
+        </SidePanel>
+      )}
 
       {/* Create Client Dialog */}
       <Dialog open={isCreateClientOpen} onOpenChange={setIsCreateClientOpen}>

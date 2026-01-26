@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Menu, X } from 'lucide-react';
-import { Button } from '../../../components/ui/button';
+import { Search, FileText, StickyNote, User, Lightbulb, FolderOpen } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
 import {
   Sheet,
@@ -16,6 +15,16 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
+import { SideTabs, type SideTab } from '../../../components/ui';
+
+// Конфігурація табів для Inbox
+const INBOX_SIDE_TABS: SideTab[] = [
+  { id: 'context', icon: FileText, label: 'Контекст', color: 'blue' },
+  { id: 'suggestions', icon: Lightbulb, label: 'Підказки', color: 'amber' },
+  { id: 'client', icon: User, label: 'Клієнт', color: 'green' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'purple' },
+  { id: 'files', icon: FolderOpen, label: 'Файли', color: 'orange' },
+];
 
 interface CommunicationsLayoutProps {
   children: React.ReactNode;
@@ -42,6 +51,7 @@ export function CommunicationsLayout({
 }: CommunicationsLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
+  const [activeSideTab, setActiveSideTab] = useState<string | null>(null);
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   
@@ -103,38 +113,7 @@ export function CommunicationsLayout({
           </div>
         </div>
 
-        {/* Right side actions */}
-        <div className="flex items-center gap-2">
-          {/* Context panel toggle - Desktop/Tablet */}
-          {contextPanel && !isMobile && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsContextPanelOpen(!isContextPanelOpen)}
-              className="hidden md:flex text-gray-700 hover:text-gray-900"
-              aria-label="Toggle context panel"
-              aria-expanded={isContextPanelOpen}
-            >
-              {isContextPanelOpen ? (
-                <X className="w-5 h-5 text-gray-700" />
-              ) : (
-                <Menu className="w-5 h-5 text-gray-700" />
-              )}
-            </Button>
-          )}
-          {/* Context panel toggle - Mobile */}
-          {contextPanel && isMobile && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsContextPanelOpen(true)}
-              className="md:hidden text-gray-700 hover:text-gray-900"
-              aria-label="Open context panel"
-            >
-              <Menu className="w-5 h-5 text-gray-700" />
-            </Button>
-          )}
-        </div>
+        {/* Right side actions - removed, now using SideTabs */}
       </header>
 
       {/* Main content area - takes remaining height */}
@@ -197,6 +176,19 @@ export function CommunicationsLayout({
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* SideTabs - Vertical colored tabs on the right */}
+      {contextPanel && !isMobile && (
+        <SideTabs
+          tabs={INBOX_SIDE_TABS}
+          activeTab={activeSideTab}
+          onTabChange={(tabId) => {
+            setActiveSideTab(tabId);
+            setIsContextPanelOpen(tabId !== null);
+          }}
+          position="right"
+        />
       )}
     </div>
   );
