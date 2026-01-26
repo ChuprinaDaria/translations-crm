@@ -526,9 +526,28 @@ def create_note(
     db: Session = Depends(get_db),
     user: auth_models.User = Depends(get_current_user_db),
 ):
-    """Create a new internal note."""
-    # Get user name - використовуємо email
-    author_name = user.email
+    """Create a new internal note with manager identification."""
+    # Формуємо ім'я автора: first_name + last_name або email
+    if user.first_name and user.last_name:
+        author_name = f"{user.first_name} {user.last_name}"
+    elif user.first_name:
+        author_name = user.first_name
+    else:
+        author_name = user.email
+    
+    # Додаємо роль до імені для ідентифікації
+    user_role_str = user.role or "MANAGER"
+    try:
+        from modules.auth.models import UserRole
+        user_role = UserRole(user_role_str.upper())
+        role_label = {
+            UserRole.OWNER: "Власник",
+            UserRole.ACCOUNTANT: "Бухгалтер",
+            UserRole.MANAGER: "Менеджер"
+        }.get(user_role, "Менеджер")
+        author_name = f"{author_name} ({role_label})"
+    except (ValueError, ImportError):
+        author_name = f"{author_name} (Менеджер)"
     
     note = models.InternalNote(
         entity_type=note_in.entity_type,

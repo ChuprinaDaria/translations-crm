@@ -2677,8 +2677,19 @@ def bulk_delete_subcategories(
 ############################################################
 
 @router.get("/users", response_model=list[schema.UserOut])
-def list_users(db: Session = Depends(get_db), current_user = Depends(get_current_user_db)):
-    if not current_user.is_admin:
+def list_users(
+    db: Session = Depends(get_db), 
+    current_user = Depends(get_current_user_db)
+):
+    # Тільки OWNER може переглядати список користувачів
+    from modules.auth.models import UserRole
+    user_role_str = current_user.role or "MANAGER"
+    try:
+        user_role = UserRole(user_role_str.upper())
+    except ValueError:
+        user_role = UserRole.MANAGER
+    
+    if user_role != UserRole.OWNER and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Forbidden")
     return crud_user.get_users(db)
 
@@ -2690,8 +2701,24 @@ def update_user(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_db),
 ):
-    if not current_user.is_admin:
+    # Тільки OWNER може змінювати ролі користувачів
+    from modules.auth.models import UserRole
+    user_role_str = current_user.role or "MANAGER"
+    try:
+        user_role = UserRole(user_role_str.upper())
+    except ValueError:
+        user_role = UserRole.MANAGER
+    
+    if user_role != UserRole.OWNER and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Forbidden")
+    
+    # Якщо змінюється роль - тільки OWNER може це робити
+    if user_in.role and user_role != UserRole.OWNER:
+        raise HTTPException(
+            status_code=403, 
+            detail="Тільки власник може змінювати ролі користувачів"
+        )
+    
     updated = crud_user.update_user(db, user_id, user_in)
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")

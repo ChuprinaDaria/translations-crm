@@ -9,6 +9,7 @@ import { ClientsPageEnhanced } from "./modules/crm/pages/ClientsPageEnhanced";
 import { TranslatorsPage } from "./modules/crm/pages/TranslatorsPage";
 import { LanguagesPage } from "./modules/crm/pages/LanguagesPage";
 import { Settings } from "./components/Settings";
+import { UsersManagement } from "./components/UsersManagement";
 import { AuthPage } from "./components/auth/AuthPage";
 import { TermsOfService } from "./pages/TermsOfService";
 import { GDPRPolicy } from "./pages/GDPRPolicy";
@@ -326,6 +327,7 @@ function App() {
       translators: [{ label: "Translators" }],
       languages: [{ label: "Мови" }],
       analytics: [{ label: "Analytics" }],
+      users: [{ label: "Users" }],
       settings: [{ label: "Settings" }],
     };
 
@@ -360,6 +362,8 @@ function App() {
         return <LanguagesPage />;
       case "analytics":
         return <DashboardPage userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
+      case "users":
+        return <UsersManagement />;
       case "settings":
         return <Settings />;
       default:

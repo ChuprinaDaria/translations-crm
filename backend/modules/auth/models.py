@@ -11,10 +11,10 @@ if TYPE_CHECKING:
     from modules.crm.models import Order
 
 
-class Role(str, Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"
-    ACCOUNTANT = "accountant"
+class UserRole(str, Enum):
+    OWNER = "OWNER"
+    ACCOUNTANT = "ACCOUNTANT"
+    MANAGER = "MANAGER"
 
 
 class User(Base):
@@ -29,7 +29,7 @@ class User(Base):
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
-    role = Column(String, default='user')
+    role = Column(String, default='MANAGER')  # Default role for new users
     department = Column(String, nullable=True)
     
     # 2FA

@@ -35,6 +35,7 @@ class MessageSendRequest(BaseModel):
     """Схема для API запиту на відправку повідомлення."""
     content: str
     attachments: Optional[List[Dict[str, Any]]] = None
+    meta_data: Optional[Dict[str, Any]] = None
 
 
 class EmailMessageCreate(MessageCreate):

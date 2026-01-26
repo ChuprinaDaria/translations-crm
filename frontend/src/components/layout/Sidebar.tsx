@@ -12,6 +12,7 @@ import {
   Package,
   Languages,
   Globe,
+  UserCog,
 } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { cn } from "../ui/utils";
@@ -87,6 +88,13 @@ export function Sidebar({ activeItem, onItemClick, userRole, isMobile = false, o
           label: "Analytics",
           icon: <BarChart3 className="w-5 h-5" />,
           tooltip: "Дашборди, звіти та аналітика",
+        },
+        {
+          id: "users",
+          label: "Users",
+          icon: <UserCog className="w-5 h-5" />,
+          tooltip: "Управління користувачами та ролями",
+          roles: ["kp-lead", "sales-lead", "service-lead"], // Тільки для власників/лідів
         },
         {
           id: "settings",

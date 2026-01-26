@@ -281,6 +281,13 @@ export function MessageBubble({
 
         {/* Message content */}
         <div className={cn('space-y-2', isOutbound ? 'text-black' : '', !isOutbound && 'pl-8')}>
+          {/* Author name for outbound messages (manager identification) */}
+          {isOutbound && message.meta_data?.author_display && (
+            <div className="text-[10px] font-medium text-gray-600 mb-1">
+              {message.meta_data.author_display}
+            </div>
+          )}
+          
           {/* Text content - hide placeholder text for media messages */}
           {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
             <p className="text-sm whitespace-pre-wrap break-words">
@@ -442,7 +449,7 @@ export function MessageBubble({
           <div
             className={cn(
               'flex items-center gap-1 text-xs mt-1',
-              isOutbound ? 'text-white/80' : 'text-gray-400'
+              isOutbound ? 'text-gray-600' : 'text-gray-400'
             )}
           >
             <span>{timeStr}</span>

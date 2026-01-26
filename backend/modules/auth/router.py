@@ -22,7 +22,9 @@ def register(user_in: schema.UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
     
-    role = user_in.role or "user"
+    # Default role for new users is MANAGER
+    from modules.auth.models import UserRole
+    role = user_in.role or UserRole.MANAGER.value
     user = crud_user.create_user(
         db,
         email=user_in.email,

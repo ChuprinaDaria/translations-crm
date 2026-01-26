@@ -277,6 +277,38 @@ async def send_message(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
+    # Формуємо ім'я автора для ідентифікації менеджера
+    if user.first_name and user.last_name:
+        author_name = f"{user.first_name} {user.last_name}"
+    elif user.first_name:
+        author_name = user.first_name
+    else:
+        author_name = user.email
+    
+    # Додаємо роль до імені для ідентифікації
+    user_role_str = user.role or "MANAGER"
+    try:
+        from modules.auth.models import UserRole
+        user_role = UserRole(user_role_str.upper())
+        role_label = {
+            UserRole.OWNER: "Власник",
+            UserRole.ACCOUNTANT: "Бухгалтер",
+            UserRole.MANAGER: "Менеджер"
+        }.get(user_role, "Менеджер")
+        author_display = f"{author_name} ({role_label})"
+    except (ValueError, ImportError):
+        author_display = f"{author_name} (Менеджер)"
+    
+    # Створюємо meta_data з інформацією про автора
+    meta_data = {
+        "author_id": str(user.id),
+        "author_name": author_name,
+        "author_display": author_display,
+        "author_role": user_role_str,
+    }
+    if request.meta_data:
+        meta_data.update(request.meta_data)
+    
     # Create message in DB
     message = Message(
         conversation_id=conversation_id,
@@ -285,6 +317,7 @@ async def send_message(
         content=request.content,
         status=MessageStatus.QUEUED,
         attachments=request.attachments,
+        meta_data=meta_data,
     )
     db.add(message)
     db.commit()

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.rbac import require_scope, Scope, filter_by_scope, get_user_scopes
-from modules.auth.dependencies import get_current_user_db
+from modules.auth.dependencies import get_current_user_db, role_required
+from modules.auth.models import UserRole
 from modules.finance.models import Transaction, PaymentMethod
 from modules.crm.models import Order
 from sqlalchemy.orm import joinedload
@@ -18,7 +19,7 @@ router = APIRouter(tags=["finance"])
 @router.get("/revenue")
 def get_revenue(
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_scope(Scope.FINANCE_VIEW_REVENUE)),
+    user: models.User = Depends(role_required([UserRole.OWNER, UserRole.ACCOUNTANT, UserRole.MANAGER])),
 ):
     """
     Отримати виручку.
@@ -40,7 +41,7 @@ def get_revenue(
 @router.get("/profit")
 def get_profit(
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_scope(Scope.FINANCE_VIEW_PROFIT)),
+    user: models.User = Depends(role_required([UserRole.OWNER, UserRole.ACCOUNTANT])),
 ):
     """
     Отримати прибуток (чистий прибуток).
@@ -55,7 +56,7 @@ def get_profit(
 @router.get("/costs")
 def get_costs(
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_scope(Scope.FINANCE_VIEW_COSTS)),
+    user: models.User = Depends(role_required([UserRole.OWNER, UserRole.ACCOUNTANT])),
 ):
     """
     Отримати витрати.
@@ -68,7 +69,7 @@ def get_costs(
 @router.get("/payments")
 def get_payments(
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: models.User = Depends(role_required([UserRole.OWNER, UserRole.ACCOUNTANT, UserRole.MANAGER])),
 ):
     """
     Отримати список платежів (транзакцій).
@@ -275,7 +276,7 @@ def export_payments_excel(
 @router.get("/accounting")
 def get_accounting(
     db: Session = Depends(get_db),
-    user: models.User = Depends(require_scope(Scope.FINANCE_VIEW_PROFIT)),
+    user: models.User = Depends(role_required([UserRole.OWNER, UserRole.ACCOUNTANT])),
 ):
     """
     Отримати бухгалтерські звіти.

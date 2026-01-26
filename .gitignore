@@ -16,3 +16,13 @@ __pycache__/
 __pycache__/
 *.py[cod]
 *.class
+
+# SSL certificates
+backend/ssl/server.crt
+backend/ssl/server.key
+*.crt
+*.key
+*.pem
+
+# Python site-packages (should not be committed)
+**/site-packages/
