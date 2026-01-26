@@ -6,6 +6,7 @@ export interface SideTab {
   icon: LucideIcon;
   label: string;
   color: string; // Tailwind колір, наприклад 'blue', 'green', 'amber'
+  disabled?: boolean;
 }
 
 export interface QuickAction {
@@ -47,7 +48,7 @@ export function SideTabs({
   };
 
   // Кольори для табів - сірий стиль для всіх
-  const getTabColors = (color: string, isActive: boolean) => {
+  const getTabColors = () => {
     // Всі таби мають сірий стиль як у SVG
     return {
       bg: 'bg-white hover:bg-gray-50',
@@ -74,23 +75,26 @@ export function SideTabs({
           {/* Основні таби */}
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
-            const colors = getTabColors(tab.color, isActive);
+            const colors = getTabColors();
             const Icon = tab.icon;
+            const isDisabled = tab.disabled;
 
             return (
               <button
                 key={tab.id}
-                onClick={() => handleTabClick(tab.id)}
+                onClick={() => !isDisabled && handleTabClick(tab.id)}
+                disabled={isDisabled}
                 title={tab.label}
                 className={cn(
                   'w-12 h-12 flex items-center justify-center',
                   'transition-all duration-200 ease-out',
                   'rounded-lg',
-                  'cursor-pointer',
+                  isDisabled ? 'cursor-not-allowed' : 'cursor-pointer',
                   isActive ? colors.bgActive : colors.bg,
                   colors.text,
                   isActive && 'shadow-md',
-                  !isActive && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1')
+                  !isActive && !isDisabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
+                  isDisabled && 'opacity-50'
                 )}
               >
                 <Icon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />

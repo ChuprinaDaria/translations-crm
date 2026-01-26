@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard, UserPlus } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
@@ -99,6 +99,9 @@ export function ClientsPageEnhanced() {
     getActiveTab,
   } = useClientTabs();
 
+  // Store pending client ID for navigation
+  const pendingClientIdRef = useRef<string | null>(null);
+
   // Responsive detection
   useEffect(() => {
     const checkBreakpoint = () => {
@@ -114,6 +117,47 @@ export function ClientsPageEnhanced() {
   useEffect(() => {
     loadClients();
   }, []);
+
+  // Listen for navigation events to select a client
+  useEffect(() => {
+    const handleNavigateClient = (event: CustomEvent) => {
+      const { clientId } = event.detail;
+      if (clientId) {
+        pendingClientIdRef.current = clientId;
+        // Try to select immediately if clients are already loaded
+        if (!isLoading && clients.length > 0) {
+          const client = clients.find((c) => c.id === clientId);
+          if (client) {
+            const success = openClientTab(clientId, client.full_name);
+            if (!success) {
+              toast.warning('Забагато відкритих табів. Закрийте деякі, щоб відкрити нові.');
+            }
+            pendingClientIdRef.current = null;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('navigate:client', handleNavigateClient as EventListener);
+    return () => {
+      window.removeEventListener('navigate:client', handleNavigateClient as EventListener);
+    };
+  }, [clients, isLoading, openClientTab]);
+
+  // Select pending client when clients finish loading
+  useEffect(() => {
+    if (!isLoading && clients.length > 0 && pendingClientIdRef.current) {
+      const clientId = pendingClientIdRef.current;
+      const client = clients.find((c) => c.id === clientId);
+      if (client) {
+        const success = openClientTab(clientId, client.full_name);
+        if (!success) {
+          toast.warning('Забагато відкритих табів. Закрийте деякі, щоб відкрити нові.');
+        }
+        pendingClientIdRef.current = null;
+      }
+    }
+  }, [isLoading, clients, openClientTab]);
 
   // Load data for active tab
   useEffect(() => {

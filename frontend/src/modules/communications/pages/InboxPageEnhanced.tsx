@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
-import { Menu, CreditCard, Package, UserPlus, FileText, FolderOpen } from 'lucide-react';
+import { Menu, CreditCard, Package, UserPlus, User, FileText, FolderOpen } from 'lucide-react';
 import { type QuickAction } from '../../../components/ui';
 import { ConversationsSidebar, type FilterState, type Conversation } from '../components/ConversationsSidebar';
 import { ChatTabsArea } from '../components/ChatTabsArea';
 import { type Message } from '../components/ChatArea';
-import { ContextPanel, type Client } from '../components/ContextPanel';
+import type { Client } from '../components/ContextPanel';
 import { CommunicationsErrorBoundary } from '../components/ErrorBoundary';
 import { useOpenChats } from '../hooks/useOpenChats';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -522,8 +522,10 @@ export function InboxPageEnhanced() {
   };
 
   const handleViewClientProfile = (clientId: string) => {
-    // TODO: Navigate to client profile
-    toast.info('Перехід до профілю клієнта');
+    // Navigate to clients page and select the client
+    window.dispatchEvent(
+      new CustomEvent('command:navigate', { detail: { path: `/clients/${clientId}` } })
+    );
   };
 
   const handleSearch = (query: string) => {
@@ -843,17 +845,14 @@ export function InboxPageEnhanced() {
     const hasClient = !!client;
     const hasOrders = orders.length > 0;
 
-    return [
-      {
-        id: 'sidebar',
-        icon: Menu,
-        label: 'Відкрити список діалогів',
-        onClick: handleToggleSidebar,
-      },
-      {
-        id: 'client',
+    const actions: QuickAction[] = [];
+
+    // Створити клієнта (якщо немає клієнта)
+    if (!hasClient) {
+      actions.push({
+        id: 'create-client',
         icon: UserPlus,
-        label: hasClient ? 'Переглянути клієнта' : 'Створити клієнта',
+        label: 'Створити клієнта',
         onClick: () => {
           if (conversationId) {
             handleClientClick(conversationId);
@@ -861,44 +860,58 @@ export function InboxPageEnhanced() {
             handleCreateClient();
           }
         },
-        disabled: !activeTabId && !hasClient,
-      },
-      {
-        id: 'order',
-        icon: FileText,
-        label: 'Utwórz zlecenie',
+        disabled: !activeTabId,
+      });
+    } else {
+      // Переглянути клієнта (якщо є клієнт)
+      actions.push({
+        id: 'view-client',
+        icon: User,
+        label: 'Переглянути клієнта',
         onClick: () => {
-          if (conversationId) {
-            handleOrderClick(conversationId);
-          } else {
-            handleCreateOrder();
+          if (client?.id) {
+            handleViewClientProfile(client.id);
           }
         },
-        disabled: !activeTabId && !hasClient,
+        disabled: !client?.id,
+      });
+    }
+
+    // Utworz zlecenie
+    actions.push({
+      id: 'order',
+      icon: FileText,
+      label: 'Utwórz zlecenie',
+      onClick: () => {
+        if (conversationId) {
+          handleOrderClick(conversationId);
+        } else {
+          handleCreateOrder();
+        }
       },
-      {
-        id: 'payment',
-        icon: CreditCard,
-        label: 'Оплата',
-        onClick: () => conversationId && handlePaymentClick(conversationId),
-        disabled: !activeTabId || !hasOrders,
-      },
-      {
-        id: 'tracking',
-        icon: Package,
-        label: 'Трекінг',
-        onClick: () => conversationId && handleTrackingClick(conversationId),
-        disabled: !activeTabId || !hasOrders,
-      },
-      {
-        id: 'documents',
-        icon: FolderOpen,
-        label: 'Завантажити документи',
-        onClick: () => conversationId && handleDocumentsClick(conversationId),
-        disabled: !activeTabId,
-      },
-    ];
-  }, [activeTabId, client, orders, handleToggleSidebar, handleCreateClient, handleCreateOrder, handleClientClick, handleOrderClick, handlePaymentClick, handleTrackingClick, handleDocumentsClick]);
+      disabled: !activeTabId || !hasClient,
+    });
+
+    // Трекінг
+    actions.push({
+      id: 'tracking',
+      icon: Package,
+      label: 'Трекінг',
+      onClick: () => conversationId && handleTrackingClick(conversationId),
+      disabled: !activeTabId || !hasOrders,
+    });
+
+    // Відправити посилання на оплату
+    actions.push({
+      id: 'payment',
+      icon: CreditCard,
+      label: 'Відправити посилання на оплату',
+      onClick: () => conversationId && handlePaymentClick(conversationId),
+      disabled: !activeTabId || !hasOrders,
+    });
+
+    return actions;
+  }, [activeTabId, client, orders, handleToggleSidebar, handleCreateClient, handleCreateOrder, handleClientClick, handleOrderClick, handlePaymentClick, handleTrackingClick, handleViewClientProfile]);
 
   // Helper functions to get client/order IDs for active conversation
   const getClientIdForConversation = (conversationId: string): string | undefined => {
@@ -962,26 +975,11 @@ export function InboxPageEnhanced() {
             isLoading={isLoading}
           />
         }
-        contextPanel={
-          chatConversation ? (
-            <ContextPanel
-              conversation={chatConversation}
-              client={client}
-              messages={activeChat?.messages || []}
-              orders={orders}
-              onCreateClient={handleCreateClient}
-              onLinkClient={handleLinkClient}
-              onDownloadAllFiles={handleDownloadAllFiles}
-              onViewClientProfile={client ? () => handleViewClientProfile(client.id) : undefined}
-              onCreateOrder={handleCreateOrder}
-              onSendPaymentLink={handleSendPaymentLink}
-              onSendTrackingStatus={handleSendTrackingStatus}
-              onAddInternalNote={handleAddInternalNote}
-            />
-          ) : null
-        }
+        contextPanel={undefined}
         onSearch={handleSearch}
         quickActions={quickActions}
+        activeConversationId={activeTabId}
+        activeMessages={activeChat?.messages || []}
       >
         <ChatTabsArea
           openChats={openChats}

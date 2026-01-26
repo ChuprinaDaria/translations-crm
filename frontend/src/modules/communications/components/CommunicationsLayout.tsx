@@ -16,9 +16,13 @@ import {
 } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
 import { SideTabs, type SideTab, type QuickAction } from '../../../components/ui';
+import { ScrollArea } from '../../../components/ui/scroll-area';
+import { InternalNotes } from '../../crm/components/InternalNotes';
+import { AttachmentPreview } from './AttachmentPreview';
 
-// Конфігурація табів для Inbox
-const INBOX_SIDE_TABS: SideTab[] = [
+// Базові таби для Inbox (без quickActions, вони додаються динамічно)
+const BASE_INBOX_SIDE_TABS: SideTab[] = [
+  { id: 'sidebar', icon: Menu, label: 'Відкрити список діалогів', color: 'gray' },
   { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'purple' },
   { id: 'files', icon: FolderOpen, label: 'Файли', color: 'orange' },
 ];
@@ -33,6 +37,19 @@ interface CommunicationsLayoutProps {
   quickActions?: QuickAction[];
   activeSideTab?: string | null;
   onActiveSideTabChange?: (tabId: string | null) => void;
+  // Дані для відображення нотаток та файлів активного чату
+  activeConversationId?: string | null;
+  activeMessages?: Array<{
+    id: string;
+    attachments?: Array<{
+      id?: string;
+      type: string;
+      filename: string;
+      mime_type: string;
+      size: number;
+      url?: string;
+    }>;
+  }>;
 }
 
 /**
@@ -51,6 +68,8 @@ export function CommunicationsLayout({
   quickActions = [],
   activeSideTab: externalActiveSideTab,
   onActiveSideTabChange,
+  activeConversationId,
+  activeMessages = [],
 }: CommunicationsLayoutProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
@@ -93,6 +112,58 @@ export function CommunicationsLayout({
       onToggleSidebar();
     } else {
       setInternalSidebarOpen(!internalSidebarOpen);
+    }
+  };
+
+  // Формуємо повний список табів з quickActions
+  const allTabs = React.useMemo(() => {
+    const tabs: SideTab[] = [...BASE_INBOX_SIDE_TABS];
+    
+    // Додаємо quickActions як таби
+    quickActions.forEach((action) => {
+      tabs.push({
+        id: action.id,
+        icon: action.icon,
+        label: action.label,
+        color: 'gray',
+        disabled: action.disabled,
+      });
+    });
+    
+    return tabs;
+  }, [quickActions]);
+
+  // Обробник кліку на таб
+  const handleTabChange = (tabId: string | null) => {
+    if (!tabId) {
+      setActiveSideTab(null);
+      return;
+    }
+
+    // Обробка кліку на таб "sidebar"
+    if (tabId === 'sidebar') {
+      handleToggleSidebar();
+      setActiveSideTab(null);
+      return;
+    }
+
+    // Перевіряємо чи це quickAction
+    const quickAction = quickActions.find((action) => action.id === tabId);
+    if (quickAction) {
+      // Виконуємо дію quickAction (disabled перевірка вже в SideTabs)
+      if (!quickAction.disabled) {
+        quickAction.onClick();
+      }
+      // Не зберігаємо активний таб для quickActions (вони виконують дію і закриваються)
+      setActiveSideTab(null);
+      return;
+    }
+
+    // Для звичайних табів (notes, files) - переключаємо
+    if (tabId === activeSideTab) {
+      setActiveSideTab(null);
+    } else {
+      setActiveSideTab(tabId);
     }
   };
 
@@ -196,28 +267,63 @@ export function CommunicationsLayout({
         </Dialog>
       )}
 
+      {/* Side Panel for Notes and Files */}
+      {!isMobile && activeSideTab && activeSideTab !== 'sidebar' && (
+        <aside
+          className={cn(
+            'w-96 h-full border-l border-gray-200 bg-white flex flex-col shrink-0 overflow-hidden',
+            'transition-all duration-300 ease-out z-40 mr-14'
+          )}
+          aria-label="Side panel"
+        >
+          <ScrollArea className="flex-1">
+            {activeSideTab === 'notes' && activeConversationId && (
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 mb-4">Нотатки</h3>
+                <InternalNotes
+                  entityType="chat"
+                  entityId={activeConversationId}
+                />
+              </div>
+            )}
+            {activeSideTab === 'files' && activeMessages && (
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 mb-4">Файли</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {activeMessages
+                    .flatMap((msg) => msg.attachments || [])
+                    .filter((att) => att && att.url)
+                    .map((attachment, idx) => (
+                      <AttachmentPreview
+                        key={attachment.id || idx}
+                        attachment={attachment}
+                        onDownload={() => {
+                          if (attachment.url) {
+                            window.open(attachment.url, '_blank');
+                          }
+                        }}
+                      />
+                    ))}
+                  {activeMessages.flatMap((msg) => msg.attachments || []).filter((att) => att && att.url).length === 0 && (
+                    <div className="col-span-2 text-center text-gray-500 py-8">
+                      <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">Немає файлів</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </aside>
+      )}
+
       {/* SideTabs - Vertical colored tabs on the right (завжди видимі) */}
       {!isMobile && (
         <SideTabs
-          tabs={INBOX_SIDE_TABS}
+          tabs={allTabs}
           activeTab={activeSideTab}
-          onTabChange={(tabId) => {
-            if (tabId === activeSideTab) {
-              // Закриваємо панель якщо клікнули на активний таб
-              setActiveSideTab(null);
-              setIsContextPanelOpen(false);
-            } else {
-              // Відкриваємо панель з новим табом
-              setActiveSideTab(tabId);
-              setIsContextPanelOpen(true);
-            }
-            // Відкриваємо сайдбар при кліку на будь-який таб (якщо він закритий)
-            if (!isSidebarOpen) {
-              handleToggleSidebar();
-            }
-          }}
+          onTabChange={handleTabChange}
           position="right"
-          quickActions={quickActions}
         />
       )}
     </div>

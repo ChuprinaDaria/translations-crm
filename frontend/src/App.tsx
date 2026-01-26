@@ -222,6 +222,30 @@ function App() {
     }
   }, [currentPath, isAuthenticated]);
 
+  // Listen for navigation events (e.g., from command palette or other components)
+  useEffect(() => {
+    const handleNavigate = (event: CustomEvent) => {
+      const { path } = event.detail;
+      if (path?.startsWith('/clients/')) {
+        const clientId = path.split('/clients/')[1];
+        if (clientId) {
+          setActiveItem('clients');
+          // Dispatch event to ClientsPageEnhanced to select the client
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('navigate:client', { detail: { clientId } })
+            );
+          }, 100);
+        }
+      }
+    };
+
+    window.addEventListener('command:navigate', handleNavigate as EventListener);
+    return () => {
+      window.removeEventListener('command:navigate', handleNavigate as EventListener);
+    };
+  }, []);
+
   const handleAuthSuccess = () => {
     setIsAuthenticated(true);
   };
