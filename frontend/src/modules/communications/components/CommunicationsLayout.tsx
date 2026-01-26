@@ -117,7 +117,7 @@ export function CommunicationsLayout({
           handleToggleSidebar();
         }}
       >
-        <SheetContent side="right" hideOverlay className="w-96 p-0 z-[60] shadow-2xl border-l border-gray-200 mr-14">
+        <SheetContent side="right" hideOverlay className="w-96 p-0 z-[60] shadow-2xl border-l border-gray-200 mr-[64px]">
           <SheetHeader className="p-4 border-b">
             <SheetTitle>Розмови</SheetTitle>
           </SheetHeader>

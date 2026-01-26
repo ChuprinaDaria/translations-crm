@@ -852,8 +852,13 @@ export function InboxPageEnhanced() {
 
   const handleOrderClick = (conversationId: string) => {
     if (orders && orders.length > 0) {
-      // TODO: Navigate to order
-      toast.info('Przejście do zlecenia');
+      // Navigate to order page
+      const orderId = orders[0].id;
+      window.dispatchEvent(
+        new CustomEvent('command:navigate', {
+          detail: { path: '/crm', kpId: orderId }
+        })
+      );
     } else if (client?.id) {
       // Відкрити діалог створення замовлення
       setCreateOrderDialogOpen(true);
@@ -1076,7 +1081,7 @@ export function InboxPageEnhanced() {
 
       {/* Права частина: Бокова панель з табами */}
       {!isMobile && (
-        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-30">
+        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-[70]">
           <SideTabs
             tabs={inboxTabs}
             activeTab={sidePanelTab}

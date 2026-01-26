@@ -225,7 +225,7 @@ function App() {
   // Listen for navigation events (e.g., from command palette or other components)
   useEffect(() => {
     const handleNavigate = (event: CustomEvent) => {
-      const { path } = event.detail;
+      const { path, kpId } = event.detail;
       if (path?.startsWith('/clients/')) {
         const clientId = path.split('/clients/')[1];
         if (clientId) {
@@ -237,6 +237,16 @@ function App() {
             );
           }, 100);
         }
+      } else if (path === '/crm' && kpId) {
+        setActiveItem('crm');
+        // Dispatch event to BoardPage to select the order
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('navigate:order', { detail: { orderId: kpId } })
+          );
+        }, 100);
+      } else if (path === '/crm') {
+        setActiveItem('crm');
       }
     };
 

@@ -112,6 +112,7 @@ export function BoardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   
   // Translators list loaded from API
   const [translators, setTranslators] = useState<Translator[]>([]);
@@ -152,6 +153,49 @@ export function BoardPage() {
       window.removeEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
     };
   }, []);
+
+  // Listen for navigation to specific order
+  useEffect(() => {
+    const handleNavigateOrder = (event: CustomEvent) => {
+      const { orderId } = event.detail;
+      if (orderId) {
+        setPendingOrderId(orderId);
+        // If not loading, try to find immediately
+        if (!isLoading && orders.length > 0) {
+          const order = orders.find(o => o.id === orderId);
+          if (order) {
+            setSelectedOrder(order);
+            setSidePanelTab('details');
+            setPendingOrderId(null);
+          } else {
+            // Reload if not found
+            loadData();
+          }
+        } else if (!isLoading) {
+          // If not loading but no orders, load data
+          loadData();
+        }
+      }
+    };
+
+    window.addEventListener('navigate:order', handleNavigateOrder as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigate:order', handleNavigateOrder as EventListener);
+    };
+  }, [orders, isLoading]);
+
+  // Select pending order after orders are loaded
+  useEffect(() => {
+    if (pendingOrderId && !isLoading && orders.length > 0) {
+      const order = orders.find(o => o.id === pendingOrderId);
+      if (order) {
+        setSelectedOrder(order);
+        setSidePanelTab('details');
+        setPendingOrderId(null);
+      }
+    }
+  }, [pendingOrderId, orders, isLoading]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -556,7 +600,7 @@ export function BoardPage() {
 
       {/* Права частина: Бокова панель (тепер вона в потоці!) */}
       {selectedOrder && (
-        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-30">
+        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-[70]">
           <SideTabs
             tabs={ORDER_SIDE_TABS}
             activeTab={sidePanelTab}

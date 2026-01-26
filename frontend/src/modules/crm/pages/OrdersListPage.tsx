@@ -22,7 +22,6 @@ const ORDERS_LIST_SIDE_TABS: SideTab[] = [
   { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
   { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
 ];
-import { Card, CardContent } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Badge } from "../../../components/ui/badge";
@@ -61,12 +60,31 @@ import { timelineApi, type TimelineStep } from "../api/timeline";
 import { TimelineVisualization } from "../components/TimelineVisualization";
 import { cn } from "../../../components/ui/utils";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  do_wykonania: { label: "Нове", color: "bg-blue-100 text-blue-700" },
-  do_poswiadczenia: { label: "В роботі", color: "bg-yellow-100 text-yellow-700" },
-  do_wydania: { label: "Готово", color: "bg-green-100 text-green-700" },
-  ustne: { label: "Усний переклад", color: "bg-purple-100 text-purple-700" },
-  closed: { label: "Видано", color: "bg-gray-100 text-gray-700" },
+// Soft UI статуси з напівпрозорими фонами
+const STATUS_LABELS: Record<string, { label: string; bgColor: string; textColor: string; borderColor: string }> = {
+  do_wykonania: { label: "Нове", bgColor: "bg-blue-50", textColor: "text-blue-700", borderColor: "border-blue-100" },
+  do_poswiadczenia: { label: "В роботі", bgColor: "bg-amber-50", textColor: "text-amber-700", borderColor: "border-amber-100" },
+  do_wydania: { label: "Готово", bgColor: "bg-emerald-50", textColor: "text-emerald-700", borderColor: "border-emerald-100" },
+  ustne: { label: "Усний переклад", bgColor: "bg-purple-50", textColor: "text-purple-700", borderColor: "border-purple-100" },
+  closed: { label: "Видано", bgColor: "bg-slate-50", textColor: "text-slate-700", borderColor: "border-slate-100" },
+};
+
+// Компонент для м'якого бейджа статусу
+const OrderStatusBadge = ({ status, size = "sm" }: { status: string; size?: "sm" | "md" }) => {
+  const statusConfig = STATUS_LABELS[status] || STATUS_LABELS.do_wykonania;
+  const sizeClasses = size === "sm" ? "text-[10px] px-1.5 py-0.5" : "text-xs px-2 py-1";
+  
+  return (
+    <span className={cn(
+      "inline-flex items-center rounded border font-semibold uppercase tracking-wide",
+      statusConfig.bgColor,
+      statusConfig.textColor,
+      statusConfig.borderColor,
+      sizeClasses
+    )}>
+      {statusConfig.label}
+    </span>
+  );
 };
 
 // Парсер для витягування структурованих даних з опису
@@ -277,25 +295,24 @@ export function OrdersListPage() {
       </div>
 
       {/* Table */}
-      <Card className="flex-1 overflow-hidden flex flex-col min-h-0">
-        <CardContent className="p-0 flex-1 flex flex-col min-h-0">
-          <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin">
-            <Table className="table-fixed w-full min-w-[1100px] border-collapse">
-              <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                <TableRow className="h-8">
-                  <TableHead className="w-[120px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Nr. Zlecenia</TableHead>
-                  <TableHead className="w-[100px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Клієнт</TableHead>
-                  <TableHead className="px-1 py-0.5 text-[9px] font-bold border-r uppercase">Опис (Тип, Мова)</TableHead>
-                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Ціна</TableHead>
-                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Доставка</TableHead>
-                  <TableHead className="w-[120px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Адреса</TableHead>
-                  <TableHead className="w-[100px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Контакт</TableHead>
-                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold border-r uppercase text-center">Статус</TableHead>
-                  <TableHead className="w-[110px] px-1 py-0.5 text-[9px] font-bold border-r uppercase">Дедлайн</TableHead>
-                  <TableHead className="w-[80px] px-1 py-0.5 text-[9px] font-bold uppercase">Створено</TableHead>
-                  <TableHead className="w-[40px] px-1 py-0.5"></TableHead>
-                </TableRow>
-              </TableHeader>
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0 rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin">
+          <Table className="table-fixed w-full min-w-[1200px] border-separate border-spacing-0">
+            <TableHeader className="bg-slate-50/50 sticky top-0 z-10">
+              <TableRow className="h-10 hover:bg-transparent border-b border-slate-200">
+                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Nr. Zlecenia</TableHead>
+                <TableHead className="w-[130px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Клієнт</TableHead>
+                <TableHead className="min-w-[200px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Опис (Тип/Мова)</TableHead>
+                <TableHead className="w-[80px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-right">Ціна</TableHead>
+                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-center">Доставка</TableHead>
+                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Адреса</TableHead>
+                <TableHead className="w-[110px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Контакт</TableHead>
+                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200 text-center">Статус</TableHead>
+                <TableHead className="w-[120px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-r border-b border-slate-200">Дедлайн</TableHead>
+                <TableHead className="w-[100px] px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">Створено</TableHead>
+                <TableHead className="w-[40px] px-0 border-b border-slate-200"></TableHead>
+              </TableRow>
+            </TableHeader>
               <TableBody>
                 {filteredOrders.length === 0 ? (
                   <TableRow>
@@ -307,90 +324,106 @@ export function OrdersListPage() {
                 ) : (
                   filteredOrders.map((order) => {
                     const deadline = formatDeadline(order.deadline);
-                    const status = STATUS_LABELS[order.status] || STATUS_LABELS.do_wykonania;
                     const { price, languages, type, delivery, address, email, phone, cleanDescription } = parseOrderDetails(order.description);
                     const isOverdue = deadline && deadline.text.includes('Прострочено');
                     
                     return (
                       <TableRow 
                         key={order.id} 
-                        className="h-8 cursor-pointer hover:bg-slate-50/50 transition-colors border-b group"
+                        className="h-11 cursor-pointer hover:bg-slate-50/80 transition-colors group border-b border-slate-100"
                         onClick={() => handleViewTimeline(order)}
                       >
-                        <TableCell className="px-1 py-0.5 text-[10px] font-mono border-r tracking-tighter">
+                        <TableCell className="px-3 text-[11px] font-mono font-medium border-r border-slate-100 text-slate-900">
                           {order.order_number}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[10px] border-r truncate font-medium" title={order.client?.full_name || "—"}>
-                          {order.client?.full_name || "—"}
+                        <TableCell className="px-3 text-[11px] border-r border-slate-100">
+                          <div className="flex flex-col truncate">
+                            <span className="font-semibold text-slate-900 truncate" title={order.client?.full_name || "—"}>
+                              {order.client?.full_name || "—"}
+                            </span>
+                            {order.client?.id && (
+                              <span className="text-[9px] text-slate-400">ID: {order.client.id.slice(0, 8)}</span>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell 
-                          className="px-1 py-0.5 text-[9px] border-r truncate text-slate-500 cursor-help" 
-                          title={order.description || "—"}
-                        >
-                          <div className="flex flex-wrap gap-1 items-center">
+                        <TableCell className="px-3 border-r border-slate-100">
+                          <div className="flex flex-wrap gap-1.5 items-center">
                             {type && (
-                              <span className="bg-slate-100 text-[8px] px-1 rounded uppercase font-bold text-slate-600 shrink-0">
+                              <span className="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded border border-indigo-100 font-bold uppercase whitespace-nowrap shrink-0">
                                 {type}
                               </span>
                             )}
                             {languages && (
-                              <span className="bg-blue-50 text-[8px] px-1 rounded font-semibold text-blue-700 border border-blue-100 shrink-0">
-                                {languages}
-                              </span>
+                              <>
+                                <span className="text-slate-400 text-[10px]">|</span>
+                                <span className="bg-blue-50 text-blue-700 text-[9px] px-1.5 py-0.5 rounded border border-blue-100 font-semibold whitespace-nowrap shrink-0">
+                                  {languages}
+                                </span>
+                              </>
                             )}
-                            <span className="truncate">{cleanDescription || "—"}</span>
+                            {cleanDescription && (
+                              <>
+                                <span className="text-slate-400 text-[10px]">|</span>
+                                <span className="text-[10px] text-slate-600 truncate max-w-[200px]" title={order.description || "—"}>
+                                  {cleanDescription}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-right border-r font-mono font-bold text-green-700 text-[10px]">
+                        <TableCell className="px-3 text-[11px] text-right font-bold text-emerald-700 border-r border-slate-100">
                           {price || '—'}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
+                        <TableCell className="px-3 text-center border-r border-slate-100">
                           {delivery ? (
-                            <span className="bg-slate-100 px-1 rounded text-slate-600 font-medium">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                               {delivery}
                             </span>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[9px] border-r truncate text-slate-500" title={address || "—"}>
+                        <TableCell className="px-3 text-[10px] border-r border-slate-100 truncate text-slate-500" title={address || "—"}>
                           {address || '—'}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
+                        <TableCell className="px-3 text-[10px] border-r border-slate-100">
                           {(email || phone) ? (
-                            <div className="flex flex-col leading-none gap-0.5">
-                              {email && <span className="truncate text-[8px]">{email}</span>}
-                              {phone && <span className="font-mono text-slate-400 text-[8px]">{phone}</span>}
+                            <div className="flex flex-col leading-tight gap-0.5">
+                              {email && <span className="truncate text-[9px] text-slate-600" title={email}>{email}</span>}
+                              {phone && <span className="font-mono text-slate-400 text-[9px]">{phone}</span>}
                             </div>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 border-r text-center">
-                          <Badge className={cn("text-[8px] h-3.5 px-1 uppercase font-bold border-none", status.color)}>
-                            {status.label}
-                          </Badge>
+                        <TableCell className="px-3 border-r border-slate-100 text-center">
+                          <OrderStatusBadge status={order.status} size="sm" />
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[9px] border-r">
+                        <TableCell className="px-3 border-r border-slate-100">
                           {deadline ? (
-                            <div className="flex flex-col leading-none">
-                              <span className={cn(isOverdue ? "text-red-500 font-bold" : deadline.color)}>
+                            <div className="flex flex-col leading-tight">
+                              <span className={cn(
+                                "text-[10px] font-medium",
+                                isOverdue ? "text-red-600" : deadline.color
+                              )}>
                                 {deadline.text}
                               </span>
-                              {isOverdue && <span className="text-[7px] text-red-400 uppercase">Overdue</span>}
+                              {isOverdue && (
+                                <span className="text-[8px] font-bold text-red-500 uppercase">Прострочено</span>
+                              )}
                             </div>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[9px] text-slate-400 font-mono">
+                        <TableCell className="px-3 text-[10px] text-slate-400 font-mono border-slate-100">
                           {formatDate(order.created_at)}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-1 text-center" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <MoreVertical className="w-3 h-3" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="w-4 h-4 text-slate-400" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -408,8 +441,7 @@ export function OrdersListPage() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
       {/* Timeline Dialog */}
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
@@ -438,9 +470,7 @@ export function OrdersListPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">Статус:</span>
-                  <Badge className={STATUS_LABELS[selectedOrder.status]?.color || ""}>
-                    {STATUS_LABELS[selectedOrder.status]?.label || selectedOrder.status}
-                  </Badge>
+                  <OrderStatusBadge status={selectedOrder.status} size="md" />
                 </div>
                 {selectedOrder.deadline && (
                   <div className="flex items-center justify-between">
@@ -472,7 +502,7 @@ export function OrdersListPage() {
       </main>
 
       {/* Права частина: Бокова панель (тепер вона в потоці!) */}
-      <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-30">
+      <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-[70]">
         <SideTabs
           tabs={ORDERS_LIST_SIDE_TABS}
           activeTab={sidePanelTab}
