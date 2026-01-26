@@ -60,22 +60,14 @@ export function SideTabs({
   return (
     <div
       className={cn(
-        // Позиціонування: від header (top-16 = 64px) до самого низу (bottom-0)
-        // Завжди видимий і статичний, навіть коли відкритий сайдбар
-        // pointer-events-auto забезпечує клікабельність навіть коли сайдбар відкритий
-        'fixed z-[70] !top-16 bottom-0 pointer-events-auto',
-        position === 'right' ? 'right-0' : 'left-0',
+        // Тепер SideTabs працює в flexbox лейауті, тому не потрібне fixed позиціонування
+        // Він знаходиться всередині aside з flexbox структурою
+        'h-full w-full flex flex-col',
         className
       )}
-      style={{ 
-        top: '64px',
-        position: 'fixed',
-        zIndex: 70,
-        pointerEvents: 'auto'
-      }}
     >
-      {/* Контейнер на всю висоту від header до низу */}
-      <div className="h-full bg-white border-l border-gray-200 shadow-sm flex flex-col pointer-events-auto">
+      {/* Контейнер на всю висоту */}
+      <div className="h-full w-full flex flex-col">
         
         {/* Таби та Quick Actions — починаються зверху, йдуть вниз */}
         <div className="flex flex-col gap-1 p-1 pt-2 shrink-0">
@@ -94,13 +86,12 @@ export function SideTabs({
                   'w-12 h-12 flex items-center justify-center',
                   'transition-all duration-200 ease-out',
                   'rounded-lg',
-                  'pointer-events-auto cursor-pointer',
+                  'cursor-pointer',
                   isActive ? colors.bgActive : colors.bg,
                   colors.text,
                   isActive && 'shadow-md',
                   !isActive && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1')
                 )}
-                style={{ pointerEvents: 'auto', zIndex: 71 }}
               >
                 <Icon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
               </button>
@@ -123,11 +114,10 @@ export function SideTabs({
                   'rounded-lg',
                   'bg-white hover:bg-gray-50',
                   'text-gray-600',
-                  'cursor-pointer pointer-events-auto',
+                  'cursor-pointer',
                   !action.disabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
-                style={{ pointerEvents: action.disabled ? 'none' : 'auto', zIndex: 71 }}
               >
                 <ActionIcon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
               </button>
