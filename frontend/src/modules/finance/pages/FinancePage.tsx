@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Wallet, FileText, StickyNote, Settings } from "lucide-react";
+import { Wallet, FileText, StickyNote, Settings, Download } from "lucide-react";
 import { FinancePaymentsTable } from "../components/FinancePaymentsTable";
 import { OrderProfitTable, type OrderProfit } from "../components/OrderProfitTable";
 import { financeApi, Payment } from "../api/transactions";
@@ -9,12 +9,14 @@ import { toast } from "sonner";
 import { useI18n } from "../../../lib/i18n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs";
 import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+import { Button } from "../../../components/ui/button";
 
 // Конфігурація табів для Finance
 const FINANCE_SIDE_TABS: SideTab[] = [
   { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
   { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
   { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+  { id: 'export', icon: Download, label: 'Експорт', color: 'orange' },
 ];
 
 // Використовувати мокові дані для тестування (встановіть в true для розробки)
@@ -27,6 +29,7 @@ export function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [loadingProfits, setLoadingProfits] = useState(true);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadPayments();
@@ -142,35 +145,66 @@ export function FinancePage() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Wallet className="w-8 h-8 text-[#FF5A00]" />
-        <h1 className="text-2xl font-semibold text-gray-900">{t('finance.title')}</h1>
-      </div>
-      
-      <Tabs defaultValue="payments" className="w-full">
-        <TabsList>
-          <TabsTrigger value="payments">Płatności</TabsTrigger>
-          <TabsTrigger value="profits">Різниця оплат</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="payments" className="mt-6">
-          <FinancePaymentsTable payments={payments || []} loading={loading} />
-        </TabsContent>
-        
-        <TabsContent value="profits" className="mt-6">
-          <OrderProfitTable orders={orderProfits || []} loading={loadingProfits} />
-        </TabsContent>
-      </Tabs>
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const blob = await financeApi.exportPaymentsToExcel();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `platnosci_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success(t('finance.payments.exportSuccess'));
+    } catch (e: any) {
+      console.error(e);
+      toast.error(t('finance.payments.exportError'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
-      {/* SideTabs - Vertical colored tabs on the right */}
-      <SideTabs
-        tabs={FINANCE_SIDE_TABS}
-        activeTab={sidePanelTab}
-        onTabChange={setSidePanelTab}
-        position="right"
-      />
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-gray-50">
+      {/* Ліва частина: Основний контент */}
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <Wallet className="w-8 h-8 text-[#FF5A00]" />
+          <h1 className="text-2xl font-semibold text-gray-900">{t('finance.title')}</h1>
+        </div>
+        
+        <Tabs defaultValue="payments" className="w-full flex-1 flex flex-col">
+          <TabsList className="w-max">
+            <TabsTrigger value="payments">Płatności</TabsTrigger>
+            <TabsTrigger value="profits">Різниця оплат</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="payments" className="flex-1 mt-6 min-h-0">
+            {/* min-w-0 тут критично важливий для вкладених флексів */}
+            <div className="min-w-0 w-full">
+              <FinancePaymentsTable payments={payments || []} loading={loading} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="profits" className="flex-1 mt-6 min-h-0">
+            <div className="min-w-0 w-full">
+              <OrderProfitTable orders={orderProfits || []} loading={loadingProfits} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+
+      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+        <SideTabs
+          tabs={FINANCE_SIDE_TABS}
+          activeTab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          position="right"
+        />
+      </aside>
 
       {/* SidePanel - Бокова панель з контентом */}
       <SidePanel
@@ -206,6 +240,26 @@ export function FinancePage() {
           <div className="space-y-4">
             <h4 className="font-semibold text-gray-900">Налаштування</h4>
             <p className="text-sm text-gray-500">Налаштування фінансів</p>
+          </div>
+        )}
+        
+        {sidePanelTab === 'export' && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-gray-900">Експорт до Excel</h4>
+            <p className="text-sm text-gray-500 mb-4">
+              Експортуйте всі платежі до файлу Excel для подальшого аналізу або звітності.
+            </p>
+            <Button
+              onClick={handleExport}
+              disabled={exporting || payments.length === 0}
+              className="gap-2 w-full"
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? t('finance.payments.exporting') : t('finance.payments.export')}
+            </Button>
+            {payments.length === 0 && (
+              <p className="text-xs text-gray-400 mt-2">Немає платежів для експорту</p>
+            )}
           </div>
         )}
       </SidePanel>

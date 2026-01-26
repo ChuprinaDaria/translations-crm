@@ -124,17 +124,17 @@ export function LanguagesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Globe className="w-6 h-6 text-gray-600" />
+    <div className="flex h-screen w-full overflow-hidden bg-gray-50">
+      {/* Ліва частина: Основний контент */}
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <Globe className="w-8 h-8 text-[#FF5A00]" />
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Мови та ціни</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Мови та ціни</h1>
             <p className="text-sm text-gray-500">Управління мовами та базовими цінами для клієнтів</p>
           </div>
         </div>
-      </div>
 
       {/* Languages Grid */}
       {languages.length === 0 ? (
@@ -288,21 +288,25 @@ export function LanguagesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* SideTabs - Vertical colored tabs on the right */}
-      <SideTabs
-        tabs={LANGUAGES_SIDE_TABS}
-        activeTab={sidePanelTab}
-        onTabChange={setSidePanelTab}
-        position="right"
-        quickActions={[
-          {
-            id: 'add-language',
-            icon: Plus,
-            label: 'Додати мову',
-            onClick: handleOpenCreate,
-          },
-        ]}
-      />
+      </main>
+
+      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+        <SideTabs
+          tabs={LANGUAGES_SIDE_TABS}
+          activeTab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          position="right"
+          quickActions={[
+            {
+              id: 'add-language',
+              icon: Plus,
+              label: 'Додати мову',
+              onClick: handleOpenCreate,
+            },
+          ]}
+        />
+      </aside>
 
       {/* SidePanel - Бокова панель з контентом */}
       <SidePanel

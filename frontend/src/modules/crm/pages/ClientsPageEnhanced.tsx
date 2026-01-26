@@ -588,18 +588,17 @@ export function ClientsPageEnhanced() {
   );
 
   return (
-    <div className="space-y-6">
-      {/* Page Header - same style as Finance */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="flex h-screen w-full overflow-hidden bg-gray-50">
+      {/* Ліва частина: Основний контент */}
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+        {/* Page Header */}
+        <div className="flex items-center gap-3 mb-6">
           <Users className="w-8 h-8 text-[#FF5A00]" />
           <h1 className="text-2xl font-semibold text-gray-900">Клієнти</h1>
         </div>
-        {/* Кнопки прибрано - тепер вони в бокових табах */}
-      </div>
 
-      {/* Main content */}
-      <div className="flex gap-4 h-[calc(100vh-12rem)]">
+        {/* Main content */}
+        <div className="flex gap-4 flex-1 min-h-0">
         {/* Tabs + Content Area - LEFT */}
         <main className="flex-1 flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white">
           <ClientTabsArea
@@ -625,7 +624,47 @@ export function ClientsPageEnhanced() {
             {sidebar}
           </aside>
         )}
-      </div>
+        </div>
+      </main>
+
+      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      {!isMobile && (
+        <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+          <SideTabs
+            tabs={CLIENT_SIDE_TABS}
+            activeTab={
+              sidePanelTab 
+                ? sidePanelTab 
+                : (isDesktopSidebarOpen ? 'sidebar' : null)
+            }
+            onTabChange={(tabId) => {
+              if (tabId === 'sidebar') {
+                // Перемикаємо сайдбар
+                if (isDesktopSidebarOpen && sidePanelTab === null) {
+                  // Якщо сайдбар відкритий і це клік на активний таб - закриваємо
+                  setIsDesktopSidebarOpen(false);
+                } else {
+                  // Відкриваємо сайдбар
+                  setIsDesktopSidebarOpen(true);
+                  setSidePanelTab(null);
+                }
+              } else if (tabId === 'new') {
+                handleNewClient();
+                setSidePanelTab(null);
+              } else {
+                // Для інших табів потрібен активний клієнт
+                if (activeClient) {
+                  setSidePanelTab(tabId);
+                  setIsDesktopSidebarOpen(false); // Закриваємо сайдбар коли відкриваємо панель
+                } else {
+                  setSidePanelTab(null);
+                }
+              }
+            }}
+            position="right"
+          />
+        </aside>
+      )}
 
       {/* Mobile Sidebar Drawer - Opens from RIGHT */}
       <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
@@ -641,43 +680,6 @@ export function ClientsPageEnhanced() {
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* SideTabs - Vertical colored tabs on the right (Desktop only) */}
-      {!isMobile && (
-        <SideTabs
-          tabs={CLIENT_SIDE_TABS}
-          activeTab={
-            sidePanelTab 
-              ? sidePanelTab 
-              : (isDesktopSidebarOpen ? 'sidebar' : null)
-          }
-          onTabChange={(tabId) => {
-            if (tabId === 'sidebar') {
-              // Перемикаємо сайдбар
-              if (isDesktopSidebarOpen && sidePanelTab === null) {
-                // Якщо сайдбар відкритий і це клік на активний таб - закриваємо
-                setIsDesktopSidebarOpen(false);
-              } else {
-                // Відкриваємо сайдбар
-                setIsDesktopSidebarOpen(true);
-                setSidePanelTab(null);
-              }
-            } else if (tabId === 'new') {
-              handleNewClient();
-              setSidePanelTab(null);
-            } else {
-              // Для інших табів потрібен активний клієнт
-              if (activeClient) {
-                setSidePanelTab(tabId);
-                setIsDesktopSidebarOpen(false); // Закриваємо сайдбар коли відкриваємо панель
-              } else {
-                setSidePanelTab(null);
-              }
-            }
-          }}
-          position="right"
-        />
-      )}
 
       {/* SidePanel - Бокова панель з контентом */}
       {!isMobile && activeClient && sidePanelTab && sidePanelTab !== 'sidebar' && sidePanelTab !== 'new' && (

@@ -468,13 +468,15 @@ export function BoardPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col relative">
-      <div className="flex items-center gap-3 mb-4">
-        <Kanban className="w-6 h-6 text-gray-600" />
-        <h1 className="text-xl font-semibold text-gray-900">{t("kanban.title")}</h1>
-      </div>
+    <div className="flex h-screen w-full overflow-hidden bg-gray-50">
+      {/* Ліва частина: Основний контент */}
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <Kanban className="w-8 h-8 text-[#FF5A00]" />
+          <h1 className="text-2xl font-semibold text-gray-900">{t("kanban.title")}</h1>
+        </div>
 
-      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Main Kanban Area */}
         <div className={cn(
           "flex-1 transition-all duration-300",
@@ -550,14 +552,18 @@ export function BoardPage() {
         />
       )}
 
-      {/* SideTabs - Vertical colored tabs on the right */}
+      </main>
+
+      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
       {selectedOrder && (
-        <SideTabs
-          tabs={ORDER_SIDE_TABS}
-          activeTab={sidePanelTab}
-          onTabChange={setSidePanelTab}
-          position="right"
-        />
+        <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+          <SideTabs
+            tabs={ORDER_SIDE_TABS}
+            activeTab={sidePanelTab}
+            onTabChange={setSidePanelTab}
+            position="right"
+          />
+        </aside>
       )}
 
       {/* SidePanel - Бокова панель з контентом */}

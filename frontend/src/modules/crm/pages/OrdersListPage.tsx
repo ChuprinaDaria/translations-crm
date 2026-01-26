@@ -160,9 +160,17 @@ export function OrdersListPage() {
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+    <div className="flex h-screen w-full overflow-hidden bg-gray-50">
+      {/* Ліва частина: Основний контент */}
+      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <Package className="w-8 h-8 text-[#FF5A00]" />
+          <h1 className="text-2xl font-semibold text-gray-900">Список замовлень</h1>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
@@ -341,13 +349,17 @@ export function OrdersListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* SideTabs - Vertical colored tabs on the right */}
-      <SideTabs
-        tabs={ORDERS_LIST_SIDE_TABS}
-        activeTab={sidePanelTab}
-        onTabChange={setSidePanelTab}
-        position="right"
-      />
+      </main>
+
+      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      <aside className="w-[64px] border-l bg-white flex flex-col items-center py-4 shrink-0">
+        <SideTabs
+          tabs={ORDERS_LIST_SIDE_TABS}
+          activeTab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          position="right"
+        />
+      </aside>
 
       {/* SidePanel - Бокова панель з контентом */}
       <SidePanel
