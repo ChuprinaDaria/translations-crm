@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '../../../components/ui/tabs';
 import { ConversationItem } from './ConversationItem';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { cn } from '../../../components/ui/utils';
@@ -101,29 +100,61 @@ export function ConversationsSidebar({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Filter Tabs */}
-      <div className="p-3 border-b border-gray-200 flex-shrink-0 bg-white">
-        <Tabs value={filters.type} onValueChange={handleFilterChange}>
-          <TabsList className="grid w-full grid-cols-4 h-9">
-            <TabsTrigger value="all" className="text-xs">
-              Всі
-            </TabsTrigger>
-            <TabsTrigger value="new" className="text-xs relative">
-              Нові
-              {unreadTotal > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">
-                  {unreadTotal}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="in_progress" className="text-xs">
-              В роботі
-            </TabsTrigger>
-            <TabsTrigger value="needs_reply" className="text-xs">
-              Потребують відповіді
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Filter Tabs - Horizontal Segment Control */}
+      <div className="p-1.5 border-b border-gray-200 flex-shrink-0 bg-white">
+        <div className="flex bg-gray-100 rounded-full p-0 gap-0 w-full">
+          <button
+            onClick={() => handleFilterChange('all')}
+            className={cn(
+              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0',
+              filters.type === 'all'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'bg-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Всі
+          </button>
+          <button
+            onClick={() => handleFilterChange('new')}
+            className={cn(
+              'px-0 py-0 rounded-full text-[5px] font-medium transition-all relative flex-1 min-w-0',
+              filters.type === 'new'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'bg-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <span className="truncate">Нові</span>
+            {unreadTotal > 0 && (
+              <span className="ml-0.5 px-0.5 py-0 bg-red-500 text-white text-[4px] rounded-full leading-none">
+                {unreadTotal}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleFilterChange('in_progress')}
+            className={cn(
+              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0 truncate',
+              filters.type === 'in_progress'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'bg-transparent text-gray-500 hover:text-gray-700'
+            )}
+            title="В роботі"
+          >
+            В роботі
+          </button>
+          <button
+            onClick={() => handleFilterChange('needs_reply')}
+            className={cn(
+              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0 truncate',
+              filters.type === 'needs_reply'
+                ? 'bg-white shadow-sm text-gray-900'
+                : 'bg-transparent text-gray-500 hover:text-gray-700'
+            )}
+            title="Потребують відповіді"
+          >
+            Потрібна відповідь
+          </button>
+        </div>
       </div>
 
       {/* Search Input */}
