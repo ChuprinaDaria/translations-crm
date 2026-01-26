@@ -38,7 +38,7 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
         <span className="text-sm font-medium text-gray-700">
           Прогрес: {completedCount} / {TIMELINE_DEFINITIONS.length}
         </span>
-        <span className="text-sm font-semibold text-emerald-600">
+        <span className="text-sm font-semibold text-green-600">
           {progressPercent}%
         </span>
       </div>
@@ -50,7 +50,7 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
         
         {/* Прогрес лінія */}
         <div 
-          className="absolute top-4 left-6 h-1 bg-emerald-500 rounded-full transition-all duration-500"
+          className="absolute top-4 left-6 h-1 bg-green-500 rounded-full transition-all duration-500"
           style={{ width: `calc(${progressPercent}% - 48px)` }}
         />
 
@@ -70,10 +70,10 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
                     className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm relative z-10",
                       isCompleted
-                      ? "bg-emerald-500 text-white ring-2 ring-emerald-200"
+                      ? "bg-green-500 text-white ring-2 ring-green-200"
                       : isCurrent
-                      ? "bg-white border-2 border-emerald-500 text-emerald-600"
-                      : "bg-white border-2 border-gray-300 text-gray-400"
+                      ? "bg-white border-2 border-blue-500 text-blue-600 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse"
+                      : "bg-white border-2 border-slate-200 text-slate-400"
                     )}
                     title={def.label}
                   >
@@ -87,7 +87,7 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
                 {/* Мітка під кружком */}
                 <span className={cn(
                   "text-[10px] mt-2 text-center leading-tight font-medium",
-                  isCompleted ? "text-emerald-600" : isCurrent ? "text-emerald-600" : "text-gray-500"
+                  isCompleted ? "text-green-700" : isCurrent ? "text-blue-600" : "text-slate-400"
                 )}>
                   {def.shortLabel}
                 </span>
@@ -97,48 +97,57 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
         </div>
       </div>
 
-      {/* Опис етапів - вертикальний список */}
-      <div className="space-y-2 mt-4">
-        {TIMELINE_DEFINITIONS.map((def) => {
+      {/* Опис етапів - вертикальний список з лінією */}
+      <div className="space-y-0 mt-6">
+        {TIMELINE_DEFINITIONS.map((def, index) => {
           const isCompleted = completedStepsMap.has(def.step);
           const completedStep = completedStepsMap.get(def.step);
+          const isLast = index === TIMELINE_DEFINITIONS.length - 1;
+          
+          // Визначаємо активний крок (перший невиконаний після останнього виконаного)
+          const previousCompleted = index === 0 || completedStepsMap.has(TIMELINE_DEFINITIONS[index - 1].step);
+          const isActive = !isCompleted && previousCompleted;
 
           return (
-            <div
-              key={def.step}
-              className={cn(
-                "flex items-start gap-4 p-3 rounded-xl transition-colors",
-                isCompleted ? "bg-emerald-50/70" : "bg-gray-50/70"
+            <div key={def.step} className="relative flex gap-4 pb-6 last:pb-0">
+              {/* Вертикальна лінія-з'єднувач */}
+              {!isLast && (
+                <span 
+                  className={cn(
+                    "absolute left-[11px] top-6 h-full w-[2px] transition-colors duration-300",
+                    isCompleted ? "bg-green-500" : "bg-slate-200"
+                  )} 
+                />
               )}
-            >
-              <div
-                className={cn(
-                  "w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold",
-                  isCompleted
-                    ? "bg-emerald-500 text-white"
-                    : "bg-gray-200 text-gray-500"
-                )}
-              >
+
+              {/* Коло етапу */}
+              <div className={cn(
+                "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300",
+                isCompleted 
+                  ? "border-green-500 bg-green-500 text-white shadow-sm" 
+                  : isActive 
+                  ? "border-blue-500 bg-white text-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse" 
+                  : "border-slate-200 bg-white text-slate-400"
+              )}>
                 {isCompleted ? (
-                  <Check className="w-4 h-4" />
+                  <Check className="h-3.5 w-3.5 stroke-[3px]" />
                 ) : (
-                  def.order
+                  <span className="text-[10px] font-bold">{def.order}</span>
                 )}
               </div>
 
-              <div className="flex-1 min-w-0">
+              {/* Текст етапу */}
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-3">
-                  <span
-                    className={cn(
-                      "text-sm font-medium",
-                      isCompleted ? "text-emerald-700" : "text-gray-600"
-                    )}
-                  >
+                  <p className={cn(
+                    "text-[12px] font-semibold leading-none",
+                    isCompleted ? "text-slate-900" : isActive ? "text-blue-600" : "text-slate-400"
+                  )}>
                     {def.label}
-                  </span>
+                  </p>
                   {isCompleted && completedStep && (
-                    <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-                      ✓ {new Date(completedStep.completed_at).toLocaleDateString("uk-UA", {
+                    <span className="text-[10px] text-green-700 font-mono whitespace-nowrap">
+                      {new Date(completedStep.completed_at).toLocaleDateString("uk-UA", {
                         day: "2-digit",
                         month: "2-digit",
                         hour: "2-digit",
@@ -147,10 +156,10 @@ export function TimelineVisualization({ steps, className }: TimelineVisualizatio
                     </span>
                   )}
                 </div>
-
+                
                 {/* Метадані (якщо є) */}
                 {isCompleted && completedStep?.metadata && (
-                  <div className="text-xs text-gray-500 mt-1.5 bg-white/50 px-2 py-1 rounded">
+                  <div className="text-[10px] text-slate-500 mt-1 bg-slate-50 px-2 py-1 rounded border border-slate-100">
                     {completedStep.metadata}
                   </div>
                 )}

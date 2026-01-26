@@ -106,12 +106,31 @@ const parseOrderDetails = (text: string | null | undefined) => {
   const priceMatch = text.match(/(?:Ціна|Price|Cena):\s*(\d+\s?(?:zł|₴|\$|€|EUR|USD|PLN))|(\d+\s?(?:zł|₴|\$|€|EUR|USD|PLN))/i);
   const price = priceMatch ? (priceMatch[1] || priceMatch[2]) : null;
   
-  // Витягуємо мовну пару (наприклад: "UKR → ENG", "Польська → Українська", "Мова: UKR → ENG")
-  const langMatch = text.match(/(?:Мова|Language|Język):\s*([А-Яа-яA-Za-z]+\s?→\s?[А-Яа-яA-Za-z]+)|([А-Яа-яA-Za-z]+\s?→\s?[А-Яа-яA-Za-z]+)/i);
-  const languages = langMatch ? (langMatch[1] || langMatch[2]) : null;
+  // Витягуємо одну мову (не пару) - наприклад: "Англійська", "Португальська", "Мова: Англійська"
+  // Шукаємо мову після "Мова:" або просто назву мови
+  const langMatch = text.match(/(?:Мова|Language|Język):\s*([А-Яа-яA-Za-zіїєґІЇЄҐ]+(?:ська|ський|ське|ські)?)/i);
+  let languages = langMatch ? langMatch[1].trim() : null;
+  
+  // Якщо не знайдено через "Мова:", шукаємо просто назви мов
+  if (!languages) {
+    const commonLanguages = ['Англійська', 'Португальська', 'Німецька', 'Французька', 'Іспанська', 'Італійська', 'Польська', 'Українська', 'Російська', 'English', 'Portuguese', 'German', 'French', 'Spanish', 'Italian', 'Polish', 'Ukrainian', 'Russian'];
+    for (const lang of commonLanguages) {
+      if (text.includes(lang)) {
+        languages = lang;
+        break;
+      }
+    }
+  }
   
   // Витягуємо тип документа
-  const typeMatch = text.match(/(?:Тип документа|Тип|Document type|Rodzaj):\s*([^|,\n]+)/i);
+  let typeMatch = text.match(/(?:Тип документа|Тип|Document type|Rodzaj):\s*([^|,\n]+)/i);
+  let type = typeMatch ? typeMatch[1].trim() : null;
+  
+  // Якщо тип містить "UMOWA", не додаємо "ДОГОВІР"
+  if (type && /umowa/i.test(type)) {
+    // Видаляємо "ДОГОВІР" або "Договір" з типу, якщо воно там є
+    type = type.replace(/\s*-\s*ДОГОВІР|\s*-\s*Договір|\s*-\s*договір/gi, '').trim();
+  }
   
   // Витягуємо доставку
   const deliveryMatch = text.match(/(?:Доставка|Delivery|Dostawa):\s?([^|,\n]+)/i);
@@ -157,7 +176,7 @@ const parseOrderDetails = (text: string | null | undefined) => {
   return {
     price,
     languages,
-    type: typeMatch ? typeMatch[1].trim() : null,
+    type,
     delivery,
     address,
     email,
@@ -457,29 +476,128 @@ export function OrdersListPage() {
           </DialogHeader>
           
           <div className="py-4">
-            {/* Order Info */}
-            {selectedOrder && (
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Клієнт:</span>
-                  <span className="font-medium">{selectedOrder.client?.full_name || "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Опис:</span>
-                  <span>{selectedOrder.description || "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Статус:</span>
-                  <OrderStatusBadge status={selectedOrder.status} size="md" />
-                </div>
-                {selectedOrder.deadline && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">Дедлайн:</span>
-                    <span>{formatDate(selectedOrder.deadline)}</span>
+            {/* Order Info - Структурована сітка */}
+            {selectedOrder && (() => {
+              const { price, languages, type, delivery, address, email, phone } = parseOrderDetails(selectedOrder.description);
+              const deadline = formatDeadline(selectedOrder.deadline);
+              
+              return (
+                <div className="mb-6 space-y-4">
+                  {/* Прогрес-бар */}
+                  {timelineSteps.length > 0 && (() => {
+                    const completedCount = timelineSteps.filter(s => s.completed).length;
+                    const progressPercent = Math.round((completedCount / 7) * 100);
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-medium text-slate-700">Прогрес: {completedCount} / 7</span>
+                          <span className="font-semibold text-green-600">{progressPercent}%</span>
+                        </div>
+                        <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div 
+                            className="absolute top-0 left-0 h-full bg-green-500 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Ряд 1: Клієнт | Номер замовлення | Статус */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Клієнт</span>
+                      <p className="text-[11px] font-semibold text-slate-900 truncate" title={selectedOrder.client?.full_name || "—"}>
+                        {selectedOrder.client?.full_name || "—"}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Номер</span>
+                      <p className="text-[11px] font-mono font-medium text-slate-700 truncate" title={selectedOrder.order_number}>
+                        {selectedOrder.order_number}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Статус</span>
+                      <div>
+                        <OrderStatusBadge status={selectedOrder.status} size="sm" />
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+                  
+                  {/* Ряд 2: Тип/Мова | Дедлайн | Ціна */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Тип / Мова</span>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {type && (
+                          <span className="bg-indigo-50 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded border border-indigo-100 font-bold uppercase whitespace-nowrap">
+                            {type}
+                          </span>
+                        )}
+                        {languages && (
+                          <span className="bg-blue-50 text-blue-700 text-[9px] px-1.5 py-0.5 rounded border border-blue-100 font-semibold whitespace-nowrap">
+                            {languages}
+                          </span>
+                        )}
+                        {!type && !languages && (
+                          <span className="text-[10px] text-slate-400">—</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Дедлайн</span>
+                      {deadline ? (
+                        <p className={cn(
+                          "text-[11px] font-medium",
+                          deadline.text.includes('Прострочено') ? "text-red-600" : deadline.color
+                        )}>
+                          {deadline.text}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">—</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wide">Ціна</span>
+                      <p className="text-[11px] font-mono font-bold text-emerald-700">
+                        {price || '—'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Додаткова інформація (якщо є) */}
+                  {(delivery || address || email || phone) && (
+                    <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3">
+                      {delivery && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Доставка</span>
+                          <p className="text-[11px] text-slate-600">{delivery}</p>
+                        </div>
+                      )}
+                      {address && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Адреса</span>
+                          <p className="text-[11px] text-slate-600 truncate" title={address}>{address}</p>
+                        </div>
+                      )}
+                      {email && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Email</span>
+                          <p className="text-[11px] text-slate-600 truncate" title={email}>{email}</p>
+                        </div>
+                      )}
+                      {phone && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wide">Телефон</span>
+                          <p className="text-[11px] font-mono text-slate-600">{phone}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             
             {/* Timeline */}
             {isLoadingTimeline ? (
