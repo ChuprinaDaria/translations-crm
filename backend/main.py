@@ -14,6 +14,8 @@ from modules.finance.router import router as finance_router
 from modules.finance.models import Transaction
 from modules.communications.router import router as communications_router, messages_manager
 from modules.communications.models import Conversation, Message
+# Імпортуємо ManagerSmtpAccount щоб SQLAlchemy знав про таблицю для foreign key
+from models import ManagerSmtpAccount  # noqa: F401
 from modules.notifications.router import router as notifications_router
 from modules.notifications.models import Notification, NotificationSettings
 from modules.smart_paste.router import router as smart_paste_router

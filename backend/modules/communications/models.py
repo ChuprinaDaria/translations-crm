@@ -54,7 +54,7 @@ class Conversation(Base):
     platform: Mapped[PlatformEnum] = mapped_column(String, nullable=False, index=True)
     external_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     subject: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
-    manager_smtp_account_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("manager_smtp_accounts.id"), nullable=True, index=True)
+    manager_smtp_account_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("manager_smtp_accounts.id", use_alter=True, name="fk_conversations_manager_smtp_account"), nullable=True, index=True)
     assigned_manager_id: Mapped[UUID | None] = mapped_column(PostgresUUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     last_manager_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
