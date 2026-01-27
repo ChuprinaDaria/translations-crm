@@ -155,6 +155,13 @@ export function OrderNotesSheet({
   const [editLanguage, setEditLanguage] = useState('');
   const [editPaymentMethod, setEditPaymentMethod] = useState('none');
   const [editClientPrice, setEditClientPrice] = useState<string>('');
+  // CSV поля
+  const [editPriceNetto, setEditPriceNetto] = useState<string>('');
+  const [editPriceBrutto, setEditPriceBrutto] = useState<string>('');
+  const [editReferenceCode, setEditReferenceCode] = useState<string>('');
+  const [editRepertoriumNumber, setEditRepertoriumNumber] = useState<string>('');
+  const [editFollowUpDate, setEditFollowUpDate] = useState<string>('');
+  const [editOrderSource, setEditOrderSource] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
@@ -342,6 +349,14 @@ export function OrderNotesSheet({
             ?.filter((t: any) => t.type === 'income')
             .reduce((sum: number, t: any) => sum + t.amount, 0) || 0;
           setEditClientPrice(clientPayment > 0 ? clientPayment.toString() : '');
+          
+          // CSV поля
+          setEditPriceNetto((updatedOrder as any).price_netto ? String((updatedOrder as any).price_netto) : '');
+          setEditPriceBrutto((updatedOrder as any).price_brutto ? String((updatedOrder as any).price_brutto) : '');
+          setEditReferenceCode((updatedOrder as any).reference_code || '');
+          setEditRepertoriumNumber((updatedOrder as any).repertorium_number || '');
+          setEditFollowUpDate((updatedOrder as any).follow_up_date ? format(new Date((updatedOrder as any).follow_up_date), 'yyyy-MM-dd') : '');
+          setEditOrderSource((updatedOrder as any).order_source || '');
         } catch (error) {
           console.error('Error loading order data:', error);
           // Fallback to order prop data
@@ -375,6 +390,14 @@ export function OrderNotesSheet({
             ?.filter(t => t.type === 'income')
             .reduce((sum, t) => sum + t.amount, 0) || 0;
           setEditClientPrice(clientPayment > 0 ? clientPayment.toString() : '');
+          
+          // CSV поля
+          setEditPriceNetto((order as any).price_netto ? String((order as any).price_netto) : '');
+          setEditPriceBrutto((order as any).price_brutto ? String((order as any).price_brutto) : '');
+          setEditReferenceCode((order as any).reference_code || '');
+          setEditRepertoriumNumber((order as any).repertorium_number || '');
+          setEditFollowUpDate((order as any).follow_up_date ? format(new Date((order as any).follow_up_date), 'yyyy-MM-dd') : '');
+          setEditOrderSource((order as any).order_source || '');
         }
       };
       
@@ -518,6 +541,26 @@ export function OrderNotesSheet({
       // Якщо введено ціну клієнта, додаємо її до оновлення
       if (editClientPrice && parseFloat(editClientPrice) > 0) {
         updateData.amount_gross = parseFloat(editClientPrice);
+      }
+      
+      // CSV поля
+      if (editPriceNetto) {
+        updateData.price_netto = parseFloat(editPriceNetto);
+      }
+      if (editPriceBrutto) {
+        updateData.price_brutto = parseFloat(editPriceBrutto);
+      }
+      if (editReferenceCode) {
+        updateData.reference_code = editReferenceCode;
+      }
+      if (editRepertoriumNumber) {
+        updateData.repertorium_number = editRepertoriumNumber;
+      }
+      if (editFollowUpDate) {
+        updateData.follow_up_date = `${editFollowUpDate}T23:59:59.000Z`;
+      }
+      if (editOrderSource) {
+        updateData.order_source = editOrderSource;
       }
 
       const updatedOrder = await ordersApi.updateOrder(order.id, updateData);
@@ -798,7 +841,116 @@ export function OrderNotesSheet({
                     placeholder="0.00"
                     className="h-8 text-sm"
                   />
-                  <span className="text-xs text-gray-500">₴</span>
+                  <span className="text-xs text-gray-500">zł</span>
+                </div>
+              </div>
+
+              {/* Ціни нетто/брутто */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Ціна нетто</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPriceNetto}
+                      onChange={(e) => {
+                        setEditPriceNetto(e.target.value);
+                        setHasChanges(true);
+                      }}
+                      className="h-8 text-sm"
+                      placeholder="0.00"
+                    />
+                    <span className="text-xs text-gray-500">zł</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Ціна брутто</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPriceBrutto}
+                      onChange={(e) => {
+                        setEditPriceBrutto(e.target.value);
+                        setHasChanges(true);
+                      }}
+                      className="h-8 text-sm"
+                      placeholder="0.00"
+                    />
+                    <span className="text-xs text-gray-500">zł</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reference Code & Repertorium Number */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Код референційний</Label>
+                  <Input
+                    type="text"
+                    value={editReferenceCode}
+                    onChange={(e) => {
+                      setEditReferenceCode(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    className="h-8 text-sm"
+                    placeholder="Kod_ref"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Номер реперторію</Label>
+                  <Input
+                    type="text"
+                    value={editRepertoriumNumber}
+                    onChange={(e) => {
+                      setEditRepertoriumNumber(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    className="h-8 text-sm"
+                    placeholder="Nr_repertorium"
+                  />
+                </div>
+              </div>
+
+              {/* Follow-up Date & Order Source */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Дата повторного контакту</Label>
+                  <Input
+                    type="date"
+                    value={editFollowUpDate}
+                    onChange={(e) => {
+                      setEditFollowUpDate(e.target.value);
+                      setHasChanges(true);
+                    }}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Джерело замовлення</Label>
+                  <Select 
+                    value={editOrderSource} 
+                    onValueChange={(value) => {
+                      setEditOrderSource(value);
+                      setHasChanges(true);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Джерело" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Не вказано</SelectItem>
+                      <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                      <SelectItem value="Email">Email</SelectItem>
+                      <SelectItem value="Formularz kontaktowy">Formularz kontaktowy</SelectItem>
+                      <SelectItem value="Telegram">Telegram</SelectItem>
+                      <SelectItem value="Office visit">Візит в офіс</SelectItem>
+                      <SelectItem value="Phone">Телефон</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

@@ -8,6 +8,7 @@ import { NotesManager, Note } from "../../../components/NotesManager";
 import { notesApi, type InternalNote } from "../api/notes";
 import { timelineApi, type TimelineStep } from "../api/timeline";
 import { translatorsApi, type Translator, type TranslationRequest } from "../api/translators";
+import { ordersApi, type Order as ApiOrder } from "../api/orders";
 import {
   Select,
   SelectContent,
@@ -178,6 +179,10 @@ export function OrderDetailSheet({
   const [orderTranslators, setOrderTranslators] = useState<OrderTranslator[]>([]);
   const [isLoadingTranslators, setIsLoadingTranslators] = useState(false);
   
+  // Full order data from API (with CSV fields)
+  const [fullOrderData, setFullOrderData] = useState<ApiOrder | null>(null);
+  const [isLoadingOrderData, setIsLoadingOrderData] = useState(false);
+  
   const {
     register,
     handleSubmit,
@@ -295,14 +300,29 @@ export function OrderDetailSheet({
 
   const activePreset = getActivePreset();
 
-  // Завантаження timeline та перекладачів при відкритті
+  // Завантаження timeline, перекладачів та повних даних замовлення при відкритті
   useEffect(() => {
     if (open && order?.id) {
       loadTimeline();
       loadTranslators();
       loadOrderTranslators();
+      loadFullOrderData();
     }
   }, [open, order?.id]);
+  
+  const loadFullOrderData = async () => {
+    if (!order?.id) return;
+    setIsLoadingOrderData(true);
+    try {
+      const fullOrder = await ordersApi.getOrder(order.id);
+      setFullOrderData(fullOrder);
+    } catch (error) {
+      console.error('Error loading full order data:', error);
+      setFullOrderData(null);
+    } finally {
+      setIsLoadingOrderData(false);
+    }
+  };
 
   const loadTimeline = async () => {
     if (!order?.id) return;
@@ -743,6 +763,103 @@ export function OrderDetailSheet({
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* CSV Fields Section */}
+                {fullOrderData && (
+                  <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-blue-light)' }}>
+                    <CardContent className="p-3 rounded-xl">
+                      <div className="space-y-3">
+                        <Label className="text-xs uppercase tracking-wider text-gray-700 font-semibold">
+                          Додаткова інформація
+                        </Label>
+                        
+                        {/* Ціни нетто/брутто */}
+                        {(fullOrderData.price_netto || fullOrderData.price_brutto) && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {fullOrderData.price_netto && (
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Ціна нетто</Label>
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {fullOrderData.price_netto.toFixed(2)} zł
+                                </div>
+                              </div>
+                            )}
+                            {fullOrderData.price_brutto && (
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Ціна брутто</Label>
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {fullOrderData.price_brutto.toFixed(2)} zł
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Reference Code & Repertorium Number */}
+                        {(fullOrderData.reference_code || fullOrderData.repertorium_number) && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {fullOrderData.reference_code && (
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Код референційний</Label>
+                                <div className="text-sm font-mono text-gray-900">
+                                  {fullOrderData.reference_code}
+                                </div>
+                              </div>
+                            )}
+                            {fullOrderData.repertorium_number && (
+                              <div className="space-y-1">
+                                <Label className="text-xs text-gray-600">Номер реперторію</Label>
+                                <div className="text-sm font-mono text-gray-900">
+                                  {fullOrderData.repertorium_number}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Follow-up Date & Order Source */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {fullOrderData.follow_up_date && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-gray-600">Дата повторного контакту</Label>
+                              <div className="text-sm text-gray-900">
+                                {new Date(fullOrderData.follow_up_date).toLocaleDateString('pl-PL')}
+                              </div>
+                            </div>
+                          )}
+                          {fullOrderData.order_source && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-gray-600">Джерело замовлення</Label>
+                              <div className="text-sm font-semibold text-gray-900">
+                                {fullOrderData.order_source}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Language & Translation Type */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {fullOrderData.language && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-gray-600">Мова</Label>
+                              <div className="text-sm text-gray-900">
+                                {fullOrderData.language}
+                              </div>
+                            </div>
+                          )}
+                          {fullOrderData.translation_type && (
+                            <div className="space-y-1">
+                              <Label className="text-xs text-gray-600">Тип документа</Label>
+                              <div className="text-sm text-gray-900">
+                                {fullOrderData.translation_type}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Translators Section */}
                 <Card className="border-black/5 rounded-xl" style={{ backgroundColor: 'var(--color-bg-purple-light)' }}>

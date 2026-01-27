@@ -10,6 +10,17 @@ export interface OrderCreate {
   deadline?: string;
   file_url?: string;
   office_id?: number;
+  // Мова та тип перекладу
+  language?: string;
+  translation_type?: string;
+  payment_method?: string;
+  // CSV поля
+  price_netto?: number;
+  price_brutto?: number;
+  reference_code?: string;
+  repertorium_number?: string;
+  follow_up_date?: string;
+  order_source?: string;
 }
 
 export interface OrderUpdate {
@@ -20,6 +31,17 @@ export interface OrderUpdate {
   status?: "do_wykonania" | "do_poswiadczenia" | "do_wydania" | "ustne" | "closed";
   deadline?: string;
   file_url?: string;
+  // Мова та тип перекладу
+  language?: string;
+  translation_type?: string;
+  payment_method?: string;
+  // CSV поля
+  price_netto?: number;
+  price_brutto?: number;
+  reference_code?: string;
+  repertorium_number?: string;
+  follow_up_date?: string;
+  order_source?: string;
 }
 
 export const ordersApi = {

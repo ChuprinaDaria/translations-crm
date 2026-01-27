@@ -564,6 +564,10 @@ export function OrdersListPage() {
                   filteredOrders.map((order) => {
                     const { price, languages, type, delivery, address, email, phone } = 
                       parseOrderDetails(order.description);
+                    // Використовуємо price_brutto з order якщо є, інакше парсимо з description
+                    const displayPrice = order.price_brutto 
+                      ? `${order.price_brutto} zł` 
+                      : (order.price_netto ? `${order.price_netto} zł (netto)` : price);
                     const deadline = formatDeadline(order.deadline);
                     const isOverdue = order.deadline && 
                                      new Date(order.deadline) < new Date() && 
@@ -620,21 +624,29 @@ export function OrdersListPage() {
                           <div className="space-y-2">
                             {/* Теги */}
                             <div className="flex flex-wrap gap-1.5">
-                              {type && (
+                              {(order.translation_type || type) && (
                                 <Badge 
                                   variant="secondary" 
                                   className="bg-indigo-100 text-indigo-700 border-indigo-200 text-xs font-bold"
                                 >
-                                  {type}
+                                  {order.translation_type || type}
                                 </Badge>
                               )}
-                              {languages && (
+                              {(order.language || languages) && (
                                 <Badge 
                                   variant="outline" 
                                   className="text-xs border-slate-300 text-slate-700 flex items-center gap-1"
                                 >
                                   <Globe className="w-3 h-3" />
-                                  {languages}
+                                  {order.language || languages}
+                                </Badge>
+                              )}
+                              {order.order_source && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs border-blue-300 text-blue-700 bg-blue-50"
+                                >
+                                  {order.order_source}
                                 </Badge>
                               )}
                             </div>
@@ -660,11 +672,18 @@ export function OrdersListPage() {
 
                         {/* Ціна */}
                         <TableCell className="text-right">
-                          {price ? (
-                            <div className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                              <span className="text-lg font-bold text-emerald-700">
-                                {price}
-                              </span>
+                          {displayPrice ? (
+                            <div className="inline-flex flex-col items-end gap-1">
+                              <div className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                                <span className="text-lg font-bold text-emerald-700">
+                                  {displayPrice}
+                                </span>
+                              </div>
+                              {order.price_netto && order.price_brutto && (
+                                <span className="text-xs text-slate-500">
+                                  Netto: {order.price_netto} zł
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <span className="text-slate-400">—</span>

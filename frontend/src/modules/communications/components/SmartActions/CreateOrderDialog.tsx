@@ -11,6 +11,7 @@ import { officesApi, type Office } from '../../../crm/api/offices';
 import { ordersApi } from '../../../crm/api/orders';
 import { getUserIdFromToken } from '../../../notifications/utils/userId';
 import { clientsApi } from '../../../crm/api/clients';
+import { languagesApi, type Language } from '../../../crm/api/languages';
 
 interface CreateOrderDialogProps {
   open: boolean;
@@ -29,18 +30,14 @@ const DOCUMENT_TYPES_SIMPLE = [
   { value: 'inne', label: 'Inne - Інше', icon: '📁' },
 ];
 
-// Мови/напрямки перекладу
-const LANGUAGES = [
-  { value: 'uk-pl', label: 'Українська → Польська' },
-  { value: 'pl-uk', label: 'Польська → Українська' },
-  { value: 'uk-en', label: 'Українська → Англійська' },
-  { value: 'en-uk', label: 'Англійська → Українська' },
-  { value: 'pl-en', label: 'Польська → Англійська' },
-  { value: 'en-pl', label: 'Англійська → Польська' },
-  { value: 'uk-de', label: 'Українська → Німецька' },
-  { value: 'de-uk', label: 'Німецька → Українська' },
-  { value: 'ru-pl', label: 'Російська → Польська' },
-  { value: 'pl-ru', label: 'Польська → Російська' },
+// Джерела замовлень
+const ORDER_SOURCES = [
+  { value: 'WhatsApp', label: 'WhatsApp' },
+  { value: 'Email', label: 'Email' },
+  { value: 'Formularz kontaktowy', label: 'Formularz kontaktowy' },
+  { value: 'Telegram', label: 'Telegram' },
+  { value: 'Office visit', label: 'Візит в офіс' },
+  { value: 'Phone', label: 'Телефон' },
 ];
 
 // Способи оплати
@@ -61,9 +58,11 @@ export function CreateOrderDialog({
   const [customDocumentType, setCustomDocumentType] = useState('');
   const [language, setLanguage] = useState('');
   const [deadline, setDeadline] = useState('');
-  const [price, setPrice] = useState('');
+  const [priceNetto, setPriceNetto] = useState('');
+  const [priceBrutto, setPriceBrutto] = useState('');
   const [description, setDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('none');
+  const [orderSource, setOrderSource] = useState('');
   
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<'office' | 'inpost_courier' | 'inpost_locker'>('office');
@@ -83,9 +82,13 @@ export function CreateOrderDialog({
   // Client data for auto-fill
   const [clientData, setClientData] = useState<{ email?: string; phone?: string } | null>(null);
   
+  // Languages from API
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOffices, setIsLoadingOffices] = useState(false);
   const [isLoadingClient, setIsLoadingClient] = useState(false);
+  const [isLoadingLanguages, setIsLoadingLanguages] = useState(false);
 
   // Генерація номера замовлення
   const generateOrderNumber = (): string => {
@@ -149,13 +152,18 @@ export function CreateOrderDialog({
         finalDocumentType = foundType?.label || documentType;
       }
       
+      // Знаходимо назву мови
+      const selectedLanguage = availableLanguages.find(l => l.name_pl === language);
+      const languageLabel = selectedLanguage ? selectedLanguage.name_pl : language;
+      
       // Формуємо опис з полів діалогу
       const orderDescriptionParts = [
         `Тип документа: ${finalDocumentType}`,
-        `Мова: ${LANGUAGES.find(l => l.value === language)?.label || language}`,
+        `Мова: ${languageLabel}`,
         paymentMethod !== 'none' ? `Оплата: ${PAYMENT_METHODS.find(p => p.value === paymentMethod)?.label || paymentMethod}` : null,
         description ? `Опис: ${description}` : null,
-        price ? `Ціна: ${price} zł` : null,
+        priceNetto ? `Ціна нетто: ${priceNetto} zł` : null,
+        priceBrutto ? `Ціна брутто: ${priceBrutto} zł` : null,
       ];
       
       // Додаємо інформацію про доставку
@@ -190,6 +198,10 @@ export function CreateOrderDialog({
         language: language || undefined,
         translation_type: documentType || customDocumentType || undefined,
         payment_method: paymentMethod !== 'none' ? paymentMethod : undefined,
+        // CSV поля
+        price_netto: priceNetto ? parseFloat(priceNetto) : undefined,
+        price_brutto: priceBrutto ? parseFloat(priceBrutto) : undefined,
+        order_source: orderSource || undefined,
       });
 
       toast.success('Zlecenie zostało utworzone');
@@ -208,9 +220,11 @@ export function CreateOrderDialog({
     setCustomDocumentType('');
     setLanguage('');
     setDeadline('');
-    setPrice('');
+    setPriceNetto('');
+    setPriceBrutto('');
     setDescription('');
     setPaymentMethod('none');
+    setOrderSource('');
     setDeliveryMethod('office');
     setOfficeId('');
     setCourierAddress('');
@@ -231,13 +245,27 @@ export function CreateOrderDialog({
     }
   }, [open]);
 
-  // Завантажуємо офіси та дані клієнта при відкритті діалогу
+  // Завантажуємо офіси, мови та дані клієнта при відкритті діалогу
   useEffect(() => {
     if (open) {
       loadOffices();
       loadClientData();
+      loadLanguages();
     }
   }, [open, clientId]);
+  
+  const loadLanguages = async () => {
+    setIsLoadingLanguages(true);
+    try {
+      const languages = await languagesApi.getLanguages();
+      setAvailableLanguages(languages);
+    } catch (error: any) {
+      console.error('Error loading languages:', error);
+      toast.error('Помилка завантаження мов');
+    } finally {
+      setIsLoadingLanguages(false);
+    }
+  };
   
   const loadClientData = async () => {
     setIsLoadingClient(true);
@@ -348,14 +376,39 @@ export function CreateOrderDialog({
             <Label htmlFor="language">
               Мова <span className="text-red-500">*</span>
             </Label>
-            <Select value={language} onValueChange={setLanguage} required>
-              <SelectTrigger id="language">
-                <SelectValue placeholder="Оберіть мову" />
+            {isLoadingLanguages ? (
+              <div className="h-10 flex items-center text-sm text-gray-500">
+                Завантаження мов...
+              </div>
+            ) : (
+              <Select value={language} onValueChange={setLanguage} required>
+                <SelectTrigger id="language">
+                  <SelectValue placeholder="Оберіть мову" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLanguages.map((lang) => (
+                    <SelectItem key={lang.id} value={lang.name_pl}>
+                      {lang.name_pl} {lang.base_client_price > 0 && `(${lang.base_client_price} PLN)`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          
+          {/* Джерело замовлення */}
+          <div className="space-y-2">
+            <Label htmlFor="order_source">
+              Джерело замовлення
+            </Label>
+            <Select value={orderSource} onValueChange={setOrderSource}>
+              <SelectTrigger id="order_source">
+                <SelectValue placeholder="Оберіть джерело" />
               </SelectTrigger>
               <SelectContent>
-                {LANGUAGES.map((lang) => (
-                  <SelectItem key={lang.value} value={lang.value}>
-                    {lang.label}
+                {ORDER_SOURCES.map((source) => (
+                  <SelectItem key={source.value} value={source.value}>
+                    {source.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -376,25 +429,35 @@ export function CreateOrderDialog({
             />
           </div>
 
-          {/* Ціна */}
-          <div className="space-y-2">
-            <Label htmlFor="price" className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
-              Ціна (zł)
-            </Label>
-            <div className="relative">
+          {/* Ціни */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="price_netto" className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                Ціна нетто (zł)
+              </Label>
               <Input
-                id="price"
+                id="price_netto"
                 type="number"
                 step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                value={priceNetto}
+                onChange={(e) => setPriceNetto(e.target.value)}
                 placeholder="0.00"
-                className="pr-10"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
-                zł
-              </span>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="price_brutto" className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                Ціна брутто (zł)
+              </Label>
+              <Input
+                id="price_brutto"
+                type="number"
+                step="0.01"
+                value={priceBrutto}
+                onChange={(e) => setPriceBrutto(e.target.value)}
+                placeholder="0.00"
+              />
             </div>
           </div>
 

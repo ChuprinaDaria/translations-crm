@@ -116,8 +116,15 @@ class Order(Base):
     office_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("offices.id"), nullable=True, index=True)
     # Нові поля
     language: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Мова перекладу (uk, pl, en, de, etc.)
-    translation_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Тип перекладу
+    translation_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Тип перекладу (Dokument: Umowa, Zaświadczenie, Szkolne, Samochodowe)
     payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Спосіб оплати
+    # CSV поля
+    price_netto: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)  # Ціна нетто
+    price_brutto: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)  # Ціна брутто
+    reference_code: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Kod_ref
+    repertorium_number: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Nr_repertorium
+    follow_up_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)  # Ponowny_kontakt
+    order_source: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Zrodlo (WhatsApp, Email, Formularz kontaktowy)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     

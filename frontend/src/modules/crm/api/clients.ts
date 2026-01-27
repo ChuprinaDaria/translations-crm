@@ -57,6 +57,17 @@ export interface Order {
   deadline?: string;
   file_url?: string;
   office_id?: number;
+  // Мова та тип перекладу
+  language?: string;
+  translation_type?: string;
+  payment_method?: string;
+  // CSV поля
+  price_netto?: number;
+  price_brutto?: number;
+  reference_code?: string;
+  repertorium_number?: string;
+  follow_up_date?: string;
+  order_source?: string;
   created_at: string;
   updated_at: string;
   client?: Client;

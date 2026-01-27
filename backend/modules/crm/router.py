@@ -382,6 +382,19 @@ def update_order(
         order.translation_type = order_in.translation_type
     if order_in.payment_method is not None:
         order.payment_method = order_in.payment_method
+    # CSV поля
+    if order_in.price_netto is not None:
+        order.price_netto = order_in.price_netto
+    if order_in.price_brutto is not None:
+        order.price_brutto = order_in.price_brutto
+    if order_in.reference_code is not None:
+        order.reference_code = order_in.reference_code
+    if order_in.repertorium_number is not None:
+        order.repertorium_number = order_in.repertorium_number
+    if order_in.follow_up_date is not None:
+        order.follow_up_date = order_in.follow_up_date
+    if order_in.order_source is not None:
+        order.order_source = order_in.order_source
     
     # Оновлюємо або створюємо транзакцію якщо:
     # 1. Змінився payment_method на щось, крім 'none'
@@ -476,6 +489,16 @@ def create_order(
         deadline=order_in.deadline,
         file_url=order_in.file_url,
         office_id=office_id,
+        language=order_in.language,
+        translation_type=order_in.translation_type,
+        payment_method=order_in.payment_method,
+        # CSV поля
+        price_netto=order_in.price_netto,
+        price_brutto=order_in.price_brutto,
+        reference_code=order_in.reference_code,
+        repertorium_number=order_in.repertorium_number,
+        follow_up_date=order_in.follow_up_date,
+        order_source=order_in.order_source,
     )
     
     db.add(order)

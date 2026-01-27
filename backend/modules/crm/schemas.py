@@ -107,6 +107,13 @@ class OrderCreate(BaseModel):
     language: Optional[str] = None  # Мова перекладу
     translation_type: Optional[str] = None  # Тип перекладу
     payment_method: Optional[str] = None  # Спосіб оплати
+    # CSV поля
+    price_netto: Optional[float] = None  # Ціна нетто
+    price_brutto: Optional[float] = None  # Ціна брутто
+    reference_code: Optional[str] = None  # Kod_ref
+    repertorium_number: Optional[str] = None  # Nr_repertorium
+    follow_up_date: Optional[datetime] = None  # Ponowny_kontakt
+    order_source: Optional[str] = None  # Zrodlo (WhatsApp, Email, Formularz kontaktowy)
 
 
 class OrderUpdate(BaseModel):
@@ -121,6 +128,13 @@ class OrderUpdate(BaseModel):
     translation_type: Optional[str] = None  # Тип перекладу
     payment_method: Optional[str] = None  # Спосіб оплати (cash = готівка)
     amount_gross: Optional[float] = None  # Сума оплати клієнта для оновлення транзакції
+    # CSV поля
+    price_netto: Optional[float] = None  # Ціна нетто
+    price_brutto: Optional[float] = None  # Ціна брутто
+    reference_code: Optional[str] = None  # Kod_ref
+    repertorium_number: Optional[str] = None  # Nr_repertorium
+    follow_up_date: Optional[datetime] = None  # Ponowny_kontakt
+    order_source: Optional[str] = None  # Zrodlo (WhatsApp, Email, Formularz kontaktowy)
 
 
 class OrderRead(BaseModel):
@@ -136,6 +150,13 @@ class OrderRead(BaseModel):
     language: Optional[str] = None
     translation_type: Optional[str] = None
     payment_method: Optional[str] = None
+    # CSV поля
+    price_netto: Optional[float] = None  # Ціна нетто
+    price_brutto: Optional[float] = None  # Ціна брутто
+    reference_code: Optional[str] = None  # Kod_ref
+    repertorium_number: Optional[str] = None  # Nr_repertorium
+    follow_up_date: Optional[datetime] = None  # Ponowny_kontakt
+    order_source: Optional[str] = None  # Zrodlo (WhatsApp, Email, Formularz kontaktowy)
     created_at: datetime
     updated_at: datetime
     client: Optional["ClientReadSimple"] = None  # Use simple version to avoid recursion

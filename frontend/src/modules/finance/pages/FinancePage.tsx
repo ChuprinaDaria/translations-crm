@@ -100,15 +100,17 @@ export function FinancePage() {
       // Обчислюємо різницю для кожного замовлення
       const profits: OrderProfit[] = orders
         .filter(order => {
-          // Показуємо тільки замовлення з оплатою від клієнта
+          // Показуємо замовлення з оплатою від клієнта (price_brutto або транзакції)
+          const hasPriceBrutto = order.price_brutto && order.price_brutto > 0;
           const hasClientPayment = order.transactions?.some(t => t.type === "income");
-          return hasClientPayment;
+          return hasPriceBrutto || hasClientPayment;
         })
         .map(order => {
-          // Оплата від клієнта (income транзакції)
-          const clientPayment = order.transactions
-            ?.filter(t => t.type === "income")
-            .reduce((sum, t) => sum + t.amount, 0) || 0;
+          // Оплата від клієнта: використовуємо price_brutto якщо є, інакше з транзакцій
+          const clientPayment = order.price_brutto || 
+            (order.transactions
+              ?.filter(t => t.type === "income")
+              .reduce((sum, t) => sum + t.amount, 0) || 0);
 
           // Оплата перекладачу (expense транзакції або гонорар з запиту)
           const translatorPayment = order.transactions
