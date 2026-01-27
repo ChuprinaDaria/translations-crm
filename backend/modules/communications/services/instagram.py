@@ -31,14 +31,14 @@ class InstagramService(MessengerService):
             config: Конфігурація (access_token, app_secret, verify_token, page_id)
         """
         if config is None:
-            config = self._load_config()
+            config = self._load_config(db)
         super().__init__(db, config)
         self.base_url = "https://graph.facebook.com/v18.0"
     
     def get_platform(self) -> PlatformEnum:
         return PlatformEnum.INSTAGRAM
     
-    def _load_config(self) -> Dict[str, Any]:
+    def _load_config(self, db: Session) -> Dict[str, Any]:
         """Завантажити конфігурацію з бази даних або env."""
         import os
         import crud
@@ -48,7 +48,7 @@ class InstagramService(MessengerService):
         # Використовуємо передану сесію БД замість створення нової
         # Це дозволяє уникнути проблем з кешуванням та забезпечує актуальні дані
         try:
-            settings = crud.get_instagram_settings(self.db)
+            settings = crud.get_instagram_settings(db)
             logger.info(f"[Instagram Config] Loaded from DB: app_id={bool(settings.get('instagram_app_id'))}, access_token={bool(settings.get('instagram_access_token'))}, app_secret={bool(settings.get('instagram_app_secret'))}, verify_token={bool(settings.get('instagram_verify_token'))}")
             
             # Перевіряємо чи є хоча б один ключ (не обов'язково app_secret)
