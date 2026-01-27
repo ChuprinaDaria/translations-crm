@@ -95,14 +95,15 @@ async def create_notification_settings_table():
                 """)
                 await conn.execute(create_notifications_query)
                 
-                # Створюємо індекси для notifications
-                create_notifications_indexes = text("""
-                    CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-                    CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-                    CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
-                    CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
-                """)
-                await conn.execute(create_notifications_indexes)
+                # Створюємо індекси для notifications (окремо для кожного, бо asyncpg не підтримує множинні команди)
+                indexes = [
+                    "CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);",
+                    "CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);",
+                    "CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);",
+                    "CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);"
+                ]
+                for index_sql in indexes:
+                    await conn.execute(text(index_sql))
                 logger.info("✓ Table 'notifications' created successfully!")
             else:
                 logger.info("✓ Table 'notifications' already exists")

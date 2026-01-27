@@ -1,4 +1,5 @@
 import React from 'react';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import {
   Dialog,
   DialogContent,
@@ -196,15 +197,15 @@ export function OrderDetailsDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         className="w-full max-w-[calc(100vw-1rem)] sm:w-[30vw] sm:max-w-[30vw] h-full sm:h-screen max-h-screen p-0 gap-0 overflow-hidden flex flex-col !fixed !top-0 !right-0 !left-auto !bottom-0 !translate-x-0 !translate-y-0 rounded-none sm:rounded-l-xl border-l border-t-0 border-r-0 border-b-0 z-[100]"
-        aria-labelledby="order-dialog-title"
-        aria-describedby="order-dialog-description"
       >
-        <DialogHeader className="sr-only">
-          <DialogTitle id="order-dialog-title">Деталі замовлення {order.order_number}</DialogTitle>
-          <DialogDescription id="order-dialog-description">
-            Перегляд детальної інформації про замовлення
-          </DialogDescription>
-        </DialogHeader>
+        <VisuallyHidden.Root>
+          <DialogHeader>
+            <DialogTitle>Деталі замовлення {order.order_number}</DialogTitle>
+            <DialogDescription>
+              Перегляд детальної інформації про замовлення
+            </DialogDescription>
+          </DialogHeader>
+        </VisuallyHidden.Root>
         {/* Шапка з градієнтом та статусом */}
         <div className={cn(
           "relative px-3 sm:px-4 py-3 bg-gradient-to-br from-slate-50 to-white border-b shrink-0",
