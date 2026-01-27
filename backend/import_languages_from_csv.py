@@ -56,6 +56,81 @@ def import_languages_from_csv(csv_path: Path):
             
             reader = csv.DictReader(f, delimiter=delimiter)
             
+            # Check if we have the expected column names
+            if reader.fieldnames:
+                # Try to map column names to our expected format
+                field_map = {}
+                for field in reader.fieldnames:
+                    field_lower = field.lower().strip()
+                    if 'language' in field_lower or 'nazwa' in field_lower or 'name' in field_lower:
+                        field_map['name_pl'] = field
+                    elif 'price' in field_lower or 'cena' in field_lower or 'pln' in field_lower:
+                        field_map['price'] = field
+                    elif 'note' in field_lower or 'uwaga' in field_lower:
+                        field_map['notes'] = field
+                
+                # If we found the columns, use DictReader
+                if 'name_pl' in field_map or 'price' in field_map:
+                    for row_num, row in enumerate(reader, start=2):
+                        if not row or all(not str(v).strip() for v in row.values()):
+                            continue
+                        
+                        try:
+                            # Extract data using field mapping
+                            name_pl = row.get(field_map.get('name_pl', reader.fieldnames[0]), '').strip()
+                            price_str = row.get(field_map.get('price', reader.fieldnames[1] if len(reader.fieldnames) > 1 else ''), '0').strip()
+                            notes = row.get(field_map.get('notes', ''), '').strip() if field_map.get('notes') else ''
+                            
+                            if not name_pl:
+                                skipped_count += 1
+                                print(f"⚠️  Row {row_num}: Skipping - no language name")
+                                continue
+                            
+                            # Parse price
+                            try:
+                                price_str = price_str.replace('zł', '').replace('PLN', '').replace(' ', '').replace(',', '.')
+                                base_client_price = Decimal(price_str)
+                            except (ValueError, AttributeError):
+                                print(f"⚠️  Row {row_num}: Invalid price '{price_str}', using 0")
+                                base_client_price = Decimal('0')
+                            
+                            # Check if language already exists
+                            if name_pl.lower() in existing_languages:
+                                existing_lang = existing_languages[name_pl.lower()]
+                                print(f"ℹ️  Row {row_num}: Language '{name_pl}' already exists (ID: {existing_lang.id})")
+                                skipped_count += 1
+                                continue
+                            
+                            # Create language
+                            language_data = LanguageCreate(
+                                name_pl=name_pl,
+                                name_en=None,  # CSV doesn't have English name
+                                base_client_price=base_client_price
+                            )
+                            
+                            new_language = create_language(db, language_data)
+                            existing_languages[name_pl.lower()] = new_language
+                            created_count += 1
+                            print(f"✅ Row {row_num}: Created '{name_pl}' with price {base_client_price} zł" + (f" (Notes: {notes})" if notes else ""))
+                            
+                        except Exception as e:
+                            error_msg = f"Row {row_num}: {str(e)}"
+                            errors.append(error_msg)
+                            print(f"❌ {error_msg}")
+                    
+                    # Print summary and return
+                    print("\n" + "="*50)
+                    print("📊 Import Summary:")
+                    print(f"   ✅ Created: {created_count}")
+                    print(f"   ⏭️  Skipped: {skipped_count}")
+                    if errors:
+                        print(f"   ❌ Errors: {len(errors)}")
+                        for error in errors[:10]:
+                            print(f"      - {error}")
+                    print("="*50)
+                    db.close()
+                    return True
+            
             # If DictReader doesn't work, try reading as list
             if not reader.fieldnames:
                 f.seek(0)
