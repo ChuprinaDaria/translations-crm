@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS autobot_logs (
     error_message TEXT,
     
     -- Метадані
-    metadata JSONB,
+    meta_data JSONB,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

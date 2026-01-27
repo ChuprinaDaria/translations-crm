@@ -323,7 +323,7 @@ class AutobotService:
                     order_id=UUID(result["order_id"]),
                     action_taken="file_saved",
                     success=True,
-                    metadata={"files_count": files_saved}
+                    meta_data={"files_count": files_saved}
                 )
         
         return result
@@ -439,7 +439,7 @@ class AutobotService:
         client_id: Optional[UUID] = None,
         order_id: Optional[UUID] = None,
         error_message: Optional[str] = None,
-        metadata: Optional[dict] = None
+        meta_data: Optional[dict] = None
     ):
         """Записати лог дії бота"""
         log_entry = AutobotLog(
@@ -451,7 +451,7 @@ class AutobotService:
             action_taken=action_taken,
             success=success,
             error_message=error_message,
-            metadata=metadata
+            meta_data=meta_data
         )
         
         self.db.add(log_entry)

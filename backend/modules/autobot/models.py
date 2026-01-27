@@ -110,7 +110,7 @@ class AutobotLog(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     # Метадані
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(
+    meta_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
     )
