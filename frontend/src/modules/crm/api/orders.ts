@@ -28,7 +28,7 @@ export interface OrderUpdate {
   manager_id?: string;
   order_number?: string;
   description?: string;
-  status?: "do_wykonania" | "do_poswiadczenia" | "do_wydania" | "ustne" | "closed";
+  status?: "do_wykonania" | "oplacone" | "do_poswiadczenia" | "do_wydania" | "ustne" | "closed";
   deadline?: string;
   file_url?: string;
   // Мова та тип перекладу
@@ -42,6 +42,7 @@ export interface OrderUpdate {
   repertorium_number?: string;
   follow_up_date?: string;
   order_source?: string;
+  amount_gross?: number; // Для автоматичного створення транзакції
 }
 
 export const ordersApi = {

@@ -1,10 +1,48 @@
+import { useState, useEffect, useMemo } from "react";
 import { Checkbox } from "./ui/checkbox";
 import { Switch } from "./ui/switch";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { toast } from "sonner";
 import { itemsApi, categoriesApi, subcategoriesApi, getImageUrl, type Item, type Category, type Subcategory, type ItemCreate } from "../lib/api";
 import { AllergenIconPicker, getAllergenIcon, getAllergenName } from "./AllergenIconPicker";
-import { Home } from "lucide-react";
+import { Home, Search, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, CheckCircle2, XCircle, DollarSign } from "lucide-react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 type SortBy = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "date-asc" | "date-desc";
 
@@ -846,6 +884,9 @@ export function ItemsManagementEnhanced() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{viewItem?.name}</DialogTitle>
+            <DialogDescription>
+              Перегляд детальної інформації про товар
+            </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-6">
@@ -966,6 +1007,9 @@ export function ItemsManagementEnhanced() {
             <DialogTitle>
               {editingItem ? 'Редагувати товар' : 'Новий товар'}
             </DialogTitle>
+            <DialogDescription>
+              {editingItem ? 'Оновіть інформацію про товар' : 'Додайте новий товар до бази'}
+            </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-4">

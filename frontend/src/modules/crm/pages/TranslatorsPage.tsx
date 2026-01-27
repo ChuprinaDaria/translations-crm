@@ -207,10 +207,6 @@ export function TranslatorsPage() {
       toast.error("Введіть email перекладача");
       return;
     }
-    if (!form.phone.trim()) {
-      toast.error("Введіть телефон перекладача");
-      return;
-    }
     if (translatorRates.length === 0 || translatorRates.every(r => !r.language_id || r.language_id === 0)) {
       toast.error("Додайте хоча б одну мову та ставку");
       return;
@@ -221,7 +217,7 @@ export function TranslatorsPage() {
       const payload: TranslatorCreate = {
         name: form.name.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
+        phone: form.phone?.trim() || undefined,
         telegram_id: form.telegram_id?.trim() || undefined,
         whatsapp: form.whatsapp?.trim() || undefined,
         status: form.status,

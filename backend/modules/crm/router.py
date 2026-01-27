@@ -1322,8 +1322,11 @@ def add_translator_rate(
     user: auth_models.User = Depends(get_current_user_db),
 ):
     """Додати мову/ставку перекладачу"""
-    rate.translator_id = translator_id
-    return crud_languages.create_translator_rate(db, rate)
+    # Встановлюємо translator_id з URL параметра
+    rate_data = rate.model_dump(exclude_unset=True)
+    rate_data['translator_id'] = translator_id
+    rate_with_id = schemas.TranslatorLanguageRateCreate(**rate_data)
+    return crud_languages.create_translator_rate(db, rate_with_id)
 
 
 @router.put("/translator-rates/{rate_id}", response_model=schemas.TranslatorLanguageRate)

@@ -235,12 +235,14 @@ export function OrderDetailsDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="max-w-5xl w-[85vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col z-[100]"
+        className="max-w-5xl w-[85vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col z-[9999] pointer-events-auto"
+        aria-describedby="order-details-description"
+        style={{ pointerEvents: 'auto' }}
       >
         <VisuallyHidden.Root>
           <DialogHeader>
             <DialogTitle>Деталі замовлення {order.order_number}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription id="order-details-description">
               Перегляд детальної інформації про замовлення
             </DialogDescription>
           </DialogHeader>

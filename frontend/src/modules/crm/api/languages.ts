@@ -66,8 +66,8 @@ export const languagesApi = {
   /**
    * Get all languages
    */
-  async getLanguages(): Promise<Language[]> {
-    return apiFetch<Language[]>('/crm/languages');
+  async getLanguages(activeOnly: boolean = true): Promise<Language[]> {
+    return apiFetch<Language[]>(`/crm/languages?active_only=${activeOnly}`);
   },
 
   /**

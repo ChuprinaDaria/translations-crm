@@ -559,7 +559,7 @@ export function OrderNotesSheet({
       if (editFollowUpDate) {
         updateData.follow_up_date = `${editFollowUpDate}T23:59:59.000Z`;
       }
-      if (editOrderSource) {
+      if (editOrderSource && editOrderSource !== "__none__") {
         updateData.order_source = editOrderSource;
       }
 
@@ -932,9 +932,9 @@ export function OrderNotesSheet({
                 <div className="space-y-1">
                   <Label className="text-xs text-gray-500">Джерело замовлення</Label>
                   <Select 
-                    value={editOrderSource} 
+                    value={editOrderSource || "__none__"} 
                     onValueChange={(value) => {
-                      setEditOrderSource(value);
+                      setEditOrderSource(value === "__none__" ? "" : value);
                       setHasChanges(true);
                     }}
                   >
@@ -942,7 +942,7 @@ export function OrderNotesSheet({
                       <SelectValue placeholder="Джерело" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Не вказано</SelectItem>
+                      <SelectItem value="__none__">Не вказано</SelectItem>
                       <SelectItem value="WhatsApp">WhatsApp</SelectItem>
                       <SelectItem value="Email">Email</SelectItem>
                       <SelectItem value="Formularz kontaktowy">Formularz kontaktowy</SelectItem>

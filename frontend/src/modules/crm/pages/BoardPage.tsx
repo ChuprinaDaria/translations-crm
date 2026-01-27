@@ -432,11 +432,15 @@ export function BoardPage() {
       setOrders((prevOrders) =>
         prevOrders.map((o) => {
           if (o.id === orderId) {
+            // Визначаємо правильний статус з backend відповіді
+            const orderStatusFromApi = (updatedOrder as any).status || backendStatus;
+            const mappedStatus = mapStatusToColumn(orderStatusFromApi, updatedOrder);
+            
             return {
               ...o,
-              status: newStatus,
-              payment_method: newStatus === "PAID" ? "cash" : o.payment_method,
-              // Оновлюємо інші поля з API, якщо потрібно
+              status: mappedStatus,
+              payment_method: newStatus === "PAID" ? "cash" : ((updatedOrder as any).payment_method || o.payment_method),
+              // Оновлюємо інші поля з API
               ...(updatedOrder as any),
             };
           }

@@ -251,8 +251,51 @@ export function CreateOrderDialog({
       loadOffices();
       loadClientData();
       loadLanguages();
+      checkExistingOrders();
     }
   }, [open, clientId]);
+
+  // Перевіряємо, чи вже є замовлення для клієнта
+  const checkExistingOrders = async () => {
+    if (!clientId) return;
+    
+    try {
+      const existingOrders = await ordersApi.getOrders({ client_id: clientId, limit: 1 });
+      if (existingOrders && existingOrders.length > 0) {
+        const firstOrder = existingOrders[0];
+        toast.info('Для цього клієнта вже є замовлення. Переходимо до нього...', {
+          duration: 3000,
+        });
+        
+        // Закриваємо діалог
+        handleClose();
+        
+        // Переспрямовуємо на замовлення через невелику затримку
+        setTimeout(() => {
+          // Використовуємо window.location для навігації
+          window.location.href = `/crm/orders?orderId=${firstOrder.id}`;
+          
+          // Або через custom event для навігації в SPA
+          window.dispatchEvent(
+            new CustomEvent('command:navigate', {
+              detail: { path: '/crm/orders', orderId: firstOrder.id }
+            })
+          );
+          
+          // Викликаємо onSuccess з ID існуючого замовлення
+          if (onSuccess) {
+            onSuccess(firstOrder.id);
+          }
+        }, 300);
+        
+        return true; // Повертаємо true, якщо знайдено існуюче замовлення
+      }
+    } catch (error) {
+      console.error('Error checking existing orders:', error);
+      // Продовжуємо створення, якщо помилка
+    }
+    return false;
+  };
   
   const loadLanguages = async () => {
     setIsLoadingLanguages(true);

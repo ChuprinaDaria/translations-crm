@@ -181,7 +181,7 @@ class Translator(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
-    phone: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    phone: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     telegram_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     whatsapp: Mapped[str | None] = mapped_column(String, nullable=True)
     

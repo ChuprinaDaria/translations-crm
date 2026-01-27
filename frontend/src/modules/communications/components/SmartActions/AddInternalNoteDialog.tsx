@@ -100,12 +100,12 @@ export function AddInternalNoteDialog({
                 <Package className="w-4 h-4" />
                 Powiąż ze zleceniem (opcjonalnie)
               </Label>
-              <Select value={selectedOrderId} onValueChange={setSelectedOrderId}>
+              <Select value={selectedOrderId || "__none__"} onValueChange={(value) => setSelectedOrderId(value === "__none__" ? "" : value)}>
                 <SelectTrigger id="order-select">
                   <SelectValue placeholder="Wybierz zlecenie lub pozostaw puste" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Не прив'язувати</SelectItem>
+                  <SelectItem value="__none__">Не прив'язувати</SelectItem>
                   {orders.map((order) => (
                     <SelectItem key={order.id} value={order.id}>
                       {order.order_number}

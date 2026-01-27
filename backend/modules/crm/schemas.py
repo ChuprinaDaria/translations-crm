@@ -258,7 +258,7 @@ class TranslatorLanguageRead(BaseModel):
 class TranslatorCreate(BaseModel):
     name: str
     email: EmailStr
-    phone: str
+    phone: Optional[str] = None
     telegram_id: Optional[str] = None
     whatsapp: Optional[str] = None
     status: Optional[TranslatorStatus] = TranslatorStatus.ACTIVE
@@ -279,7 +279,7 @@ class TranslatorRead(BaseModel):
     id: int
     name: str
     email: str
-    phone: str
+    phone: Optional[str] = None
     telegram_id: Optional[str] = None
     whatsapp: Optional[str] = None
     status: TranslatorStatus
@@ -470,7 +470,7 @@ class TranslatorLanguageRateBase(BaseModel):
 
 
 class TranslatorLanguageRateCreate(TranslatorLanguageRateBase):
-    translator_id: int
+    translator_id: Optional[int] = None  # Встановлюється з URL параметра
 
 
 class TranslatorLanguageRateUpdate(BaseModel):

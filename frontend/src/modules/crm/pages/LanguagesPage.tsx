@@ -43,9 +43,11 @@ export function LanguagesPage() {
   const fetchLanguages = async () => {
     setIsLoading(true);
     try {
-      const data = await languagesApi.getLanguages();
+      const data = await languagesApi.getLanguages(false); // Завантажуємо всі мови (включно з неактивними)
+      console.log('Fetched languages:', data);
       setLanguages(data);
     } catch (error: any) {
+      console.error('Error fetching languages:', error);
       toast.error(`Помилка завантаження: ${error?.message || 'Невідома помилка'}`);
     } finally {
       setIsLoading(false);
@@ -71,14 +73,18 @@ export function LanguagesPage() {
         await languagesApi.updateLanguage(editingLanguage.id, formData);
         toast.success('Мову оновлено');
       } else {
-        await languagesApi.createLanguage(formData);
+        const newLanguage = await languagesApi.createLanguage(formData);
         toast.success('Мову додано');
+        console.log('Created language:', newLanguage);
       }
       setShowModal(false);
       setEditingLanguage(null);
       setFormData({ name_pl: '', name_en: '', base_client_price: 0 });
-      fetchLanguages();
+      // Невелика затримка перед оновленням списку, щоб дати час базі даних
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await fetchLanguages();
     } catch (error: any) {
+      console.error('Error saving language:', error);
       toast.error(`Помилка: ${error?.message || 'Невідома помилка'}`);
     } finally {
       setIsSaving(false);
