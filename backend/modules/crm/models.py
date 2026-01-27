@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from modules.auth.models import User
     from modules.communications.models import Conversation
     from modules.finance.models import Transaction
+    from modules.autobot.models import AutobotSettings
 
 
 class OrderStatus(str, Enum):
@@ -98,6 +99,7 @@ class Office(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="office", lazy="selectin")
+    autobot_settings: Mapped["AutobotSettings | None"] = relationship("AutobotSettings", back_populates="office", uselist=False, lazy="selectin")
 
 
 class Order(Base):

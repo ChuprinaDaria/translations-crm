@@ -19,6 +19,8 @@ from modules.notifications.models import Notification, NotificationSettings
 from modules.smart_paste.router import router as smart_paste_router
 from modules.drag_upload.router import router as drag_upload_router
 from modules.audio_notes.router import router as audio_notes_router
+from modules.autobot.router import router as autobot_router
+from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog
 from routes import router as legacy_router
 # Імпортуємо моделі з routes для автоматичного створення таблиць
 import models  # noqa: F401
@@ -113,6 +115,7 @@ app.include_router(notifications_router, prefix="/api/v1/notifications")
 app.include_router(smart_paste_router, prefix="/api/v1")
 app.include_router(drag_upload_router, prefix="/api/v1")
 app.include_router(audio_notes_router, prefix="/api/v1")
+app.include_router(autobot_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
 
 
