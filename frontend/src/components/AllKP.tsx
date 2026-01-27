@@ -119,7 +119,7 @@ export function AllKP({ onEditKP }: AllKPProps = {}) {
         const templateMap = new Map<number, string>();
         templates.forEach((t) => templateMap.set(t.id, t.name));
 
-        const userMap = new Map<number, ApiUser>();
+        const userMap = new Map<string, ApiUser>();
         usersData.forEach((u) => userMap.set(u.id, u));
 
         const mapped: KPListItem[] = kps.map((kp) => {

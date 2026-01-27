@@ -3,14 +3,14 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogTitle,
+  DialogDescription,
 } from '../../../components/ui/dialog';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { ScrollArea } from '../../../components/ui/scroll-area';
-import { Separator } from '../../../components/ui/separator';
-import { Progress } from '../../../components/ui/progress';
 import { 
-  Clock, 
+  Clock,
   User, 
   Package,
   MapPin,
@@ -31,17 +31,13 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { cn } from '../../../components/ui/utils';
-import { TimelineVisualization } from './TimelineVisualization';
 import { toast } from 'sonner';
 import type { Order } from '../api/clients';
-import type { TimelineStep } from '../api/timeline';
 
 interface OrderDetailsDialogProps {
   order: Order | null;
   isOpen: boolean;
   onClose: () => void;
-  timelineSteps: TimelineStep[];
-  isLoading: boolean;
 }
 
 // Конфігурація статусів
@@ -164,8 +160,6 @@ export function OrderDetailsDialog({
   order,
   isOpen,
   onClose,
-  timelineSteps,
-  isLoading,
 }: OrderDetailsDialogProps) {
   if (!order) return null;
 
@@ -188,11 +182,6 @@ export function OrderDetailsDialog({
     });
   };
 
-  // Прогрес
-  const completedSteps = timelineSteps.filter(s => s.completed).length;
-  const totalSteps = 7;
-  const progress = Math.round((completedSteps / totalSteps) * 100);
-
   // Копіювання тексту
   const copyToClipboard = async (text: string, label: string = 'Текст') => {
     try {
@@ -205,10 +194,20 @@ export function OrderDetailsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden">
+      <DialogContent 
+        className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col"
+        aria-labelledby="order-dialog-title"
+        aria-describedby="order-dialog-description"
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle id="order-dialog-title">Деталі замовлення {order.order_number}</DialogTitle>
+          <DialogDescription id="order-dialog-description">
+            Перегляд детальної інформації про замовлення
+          </DialogDescription>
+        </DialogHeader>
         {/* Шапка з градієнтом та статусом */}
         <div className={cn(
-          "relative px-4 sm:px-8 py-6 bg-gradient-to-br from-slate-50 to-white border-b",
+          "relative px-4 sm:px-5 py-4 bg-gradient-to-br from-slate-50 to-white border-b shrink-0",
           "before:absolute before:inset-0 before:bg-gradient-to-r",
           statusConfig.color === 'bg-blue-500' && "before:from-blue-500/5 before:to-blue-500/0",
           statusConfig.color === 'bg-amber-500' && "before:from-amber-500/5 before:to-amber-500/0",
@@ -218,21 +217,21 @@ export function OrderDetailsDialog({
         )}>
           <div className="relative">
             {/* Верхня частина: номер + статус */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2.5">
                 <div className={cn(
-                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  "w-10 h-10 rounded-lg flex items-center justify-center",
                   statusConfig.bgColor,
                   statusConfig.borderColor,
                   "border-2 shadow-sm"
                 )}>
-                  <StatusIcon className={cn("w-6 h-6", statusConfig.textColor)} />
+                  <StatusIcon className={cn("w-5 h-5", statusConfig.textColor)} />
                 </div>
                 <div>
-                  <div className="text-sm text-slate-500 font-medium mb-1">
+                  <div className="text-xs text-slate-500 font-medium mb-0.5">
                     Замовлення
                   </div>
-                  <div className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  <div className="text-xl font-bold text-slate-900 font-mono tracking-tight">
                     {order.order_number}
                   </div>
                 </div>
@@ -248,12 +247,12 @@ export function OrderDetailsDialog({
               </Button>
             </div>
 
-            {/* Статус та прогрес */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            {/* Статус */}
+            <div className="flex items-center">
               <Badge 
                 variant="outline"
                 className={cn(
-                  "px-3 py-1.5 text-sm font-semibold border-2",
+                  "px-2 py-1 text-xs font-semibold border-2",
                   statusConfig.bgColor,
                   statusConfig.textColor,
                   statusConfig.borderColor
@@ -261,35 +260,25 @@ export function OrderDetailsDialog({
               >
                 {statusConfig.label}
               </Badge>
-              
-              <div className="flex-1 flex items-center gap-3 w-full sm:w-auto">
-                <Progress 
-                  value={progress} 
-                  className="h-2 flex-1"
-                />
-                <span className="text-sm font-semibold text-slate-600 min-w-[4rem] text-right">
-                  {completedSteps}/{totalSteps} етапів
-                </span>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Основний контент */}
-        <ScrollArea className="max-h-[calc(85vh-180px)]">
-          <div className="px-4 sm:px-8 py-6 space-y-6">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="px-4 sm:px-5 py-4 space-y-4">
             
             {/* Блок: Основна інформація */}
             <section>
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <div className="w-1 h-4 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full" />
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <div className="w-1 h-3 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full" />
                 Основна інформація
               </h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Клієнт */}
                 <InfoCard
-                  icon={<User className="w-5 h-5 text-blue-500" />}
+                  icon={<User className="w-4 h-4 text-blue-500" />}
                   label="Клієнт"
                   value={order.client?.full_name || '—'}
                   bgColor="bg-blue-50"
@@ -297,10 +286,9 @@ export function OrderDetailsDialog({
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      className="h-7 text-xs"
+                      className="h-6 text-xs px-2"
                     >
-                      <Eye className="w-3 h-3 mr-1" />
-                      Профіль
+                      <Eye className="w-3 h-3" />
                     </Button>
                   }
                 />
@@ -309,9 +297,9 @@ export function OrderDetailsDialog({
                 <InfoCard
                   icon={
                     isOverdue ? (
-                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <AlertCircle className="w-4 h-4 text-red-500" />
                     ) : (
-                      <Calendar className="w-5 h-5 text-emerald-500" />
+                      <Calendar className="w-4 h-4 text-emerald-500" />
                     )
                   }
                   label="Дедлайн"
@@ -337,19 +325,19 @@ export function OrderDetailsDialog({
 
             {/* Блок: Деталі замовлення */}
             <section>
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <div className="w-1 h-4 bg-gradient-to-b from-purple-500 to-purple-600 rounded-full" />
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <div className="w-1 h-3 bg-gradient-to-b from-purple-500 to-purple-600 rounded-full" />
                 Деталі замовлення
               </h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Тип документу */}
                 <InfoCard
-                  icon={<FileText className="w-5 h-5 text-indigo-500" />}
+                  icon={<FileText className="w-4 h-4 text-indigo-500" />}
                   label="Тип документу"
                   value={
                     details.type ? (
-                      <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold">
+                      <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold text-[10px] px-1.5 py-0.5">
                         {details.type}
                       </Badge>
                     ) : '—'
@@ -359,11 +347,11 @@ export function OrderDetailsDialog({
 
                 {/* Мова */}
                 <InfoCard
-                  icon={<span className="text-xl">🌐</span>}
+                  icon={<span className="text-base">🌐</span>}
                   label="Мова"
                   value={
                     details.languages ? (
-                      <span className="text-sm font-semibold text-slate-700">
+                      <span className="text-xs font-semibold text-slate-700">
                         {details.languages}
                       </span>
                     ) : '—'
@@ -373,11 +361,11 @@ export function OrderDetailsDialog({
 
                 {/* Ціна */}
                 <InfoCard
-                  icon={<DollarSign className="w-5 h-5 text-emerald-500" />}
+                  icon={<DollarSign className="w-4 h-4 text-emerald-500" />}
                   label="Вартість"
                   value={
                     details.price ? (
-                      <span className="text-lg font-bold text-emerald-600">
+                      <span className="text-sm font-bold text-emerald-600">
                         {details.price}
                       </span>
                     ) : '—'
@@ -390,16 +378,16 @@ export function OrderDetailsDialog({
             {/* Блок: Доставка та контакти */}
             {(details.delivery || details.address || details.email || details.phone) && (
               <section>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <div className="w-1 h-4 bg-gradient-to-b from-teal-500 to-teal-600 rounded-full" />
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <div className="w-1 h-3 bg-gradient-to-b from-teal-500 to-teal-600 rounded-full" />
                   Доставка та контакти
                 </h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Доставка */}
                   {details.delivery && (
                     <InfoCard
-                      icon={<Truck className="w-5 h-5 text-orange-500" />}
+                      icon={<Truck className="w-4 h-4 text-orange-500" />}
                       label="Спосіб доставки"
                       value={details.delivery}
                       bgColor="bg-orange-50"
@@ -407,10 +395,9 @@ export function OrderDetailsDialog({
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-6 text-xs px-2"
                         >
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          Відстежити
+                          <ExternalLink className="w-3 h-3" />
                         </Button>
                       }
                     />
@@ -419,7 +406,7 @@ export function OrderDetailsDialog({
                   {/* Адреса */}
                   {details.address && (
                     <InfoCard
-                      icon={<MapPin className="w-5 h-5 text-red-500" />}
+                      icon={<MapPin className="w-4 h-4 text-red-500" />}
                       label="Адреса"
                       value={details.address}
                       bgColor="bg-red-50"
@@ -427,11 +414,10 @@ export function OrderDetailsDialog({
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-6 text-xs px-2"
                           onClick={() => copyToClipboard(details.address!, 'Адресу')}
                         >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Копіювати
+                          <Copy className="w-3 h-3" />
                         </Button>
                       }
                     />
@@ -440,7 +426,7 @@ export function OrderDetailsDialog({
                   {/* Email */}
                   {details.email && (
                     <InfoCard
-                      icon={<Mail className="w-5 h-5 text-blue-500" />}
+                      icon={<Mail className="w-4 h-4 text-blue-500" />}
                       label="Email"
                       value={details.email}
                       bgColor="bg-blue-50"
@@ -448,11 +434,10 @@ export function OrderDetailsDialog({
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-6 text-xs px-2"
                           onClick={() => copyToClipboard(details.email!, 'Email')}
                         >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Копіювати
+                          <Copy className="w-3 h-3" />
                         </Button>
                       }
                     />
@@ -461,7 +446,7 @@ export function OrderDetailsDialog({
                   {/* Телефон */}
                   {details.phone && (
                     <InfoCard
-                      icon={<Phone className="w-5 h-5 text-green-500" />}
+                      icon={<Phone className="w-4 h-4 text-green-500" />}
                       label="Телефон"
                       value={details.phone}
                       bgColor="bg-green-50"
@@ -469,11 +454,10 @@ export function OrderDetailsDialog({
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-6 text-xs px-2"
                           onClick={() => copyToClipboard(details.phone!, 'Телефон')}
                         >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Копіювати
+                          <Copy className="w-3 h-3" />
                         </Button>
                       }
                     />
@@ -481,48 +465,28 @@ export function OrderDetailsDialog({
                 </div>
               </section>
             )}
-
-            <Separator />
-
-            {/* Timeline */}
-            <section>
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <div className="w-1 h-4 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full" />
-                Етапи виконання
-              </h3>
-              
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-4 border-slate-200 border-t-orange-500 rounded-full animate-spin" />
-                </div>
-              ) : timelineSteps.length === 0 ? (
-                <EmptyState />
-              ) : (
-                <TimelineVisualization steps={timelineSteps} />
-              )}
-            </section>
           </div>
         </ScrollArea>
 
         {/* Футер з діями */}
-        <div className="px-4 sm:px-8 py-4 bg-slate-50 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 bg-slate-50 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
           <div className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm" className="h-9">
-              <Edit2 className="w-4 h-4 mr-2" />
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Edit2 className="w-3.5 h-3.5 mr-1.5" />
               Редагувати
             </Button>
-            <Button variant="outline" size="sm" className="h-9">
-              <Download className="w-4 h-4 mr-2" />
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Download className="w-3.5 h-3.5 mr-1.5" />
               Завантажити
             </Button>
           </div>
           
           <Button 
             size="sm" 
-            className="h-9 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 w-full sm:w-auto"
+            className="h-8 text-xs bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 w-full sm:w-auto"
           >
-            <Send className="w-4 h-4 mr-2" />
-            Надіслати клієнту
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            Надіслати
           </Button>
         </div>
       </DialogContent>
@@ -542,40 +506,24 @@ interface InfoCardProps {
 function InfoCard({ icon, label, value, bgColor = "bg-slate-50", actions }: InfoCardProps) {
   return (
     <div className={cn(
-      "p-4 rounded-xl border border-slate-200",
+      "p-3 rounded-lg border border-slate-200",
       bgColor,
       "transition-all duration-200 hover:shadow-sm"
     )}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-1.5">
           {icon}
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
             {label}
           </span>
         </div>
         {actions}
       </div>
-      <div className="text-sm text-slate-900">
+      <div className="text-xs text-slate-900">
         {value}
       </div>
     </div>
   );
 }
 
-// Empty state
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
-        <Clock className="w-8 h-8 text-slate-400" />
-      </div>
-      <h4 className="text-base font-semibold text-slate-900 mb-1">
-        Немає етапів timeline
-      </h4>
-      <p className="text-sm text-slate-500">
-        Етапи будуть додаватися автоматично при виконанні дій
-      </p>
-    </div>
-  );
-}
 

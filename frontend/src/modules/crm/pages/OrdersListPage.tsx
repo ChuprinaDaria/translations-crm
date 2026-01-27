@@ -45,7 +45,6 @@ import {
 import { toast } from "sonner";
 import { ordersApi } from "../api/orders";
 import { type Order } from "../api/clients";
-import { timelineApi, type TimelineStep } from "../api/timeline";
 import { cn } from "../../../components/ui/utils";
 
 // Soft UI статуси з напівпрозорими фонами
@@ -180,10 +179,8 @@ export function OrdersListPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   
-  // Timeline dialog
+  // Order details dialog
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([]);
-  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -205,17 +202,8 @@ export function OrdersListPage() {
     }
   };
 
-  const handleViewTimeline = async (order: Order) => {
+  const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
-    setIsLoadingTimeline(true);
-    try {
-      const steps = await timelineApi.getTimeline(order.id);
-      setTimelineSteps(steps);
-    } catch (error: any) {
-      toast.error(`Помилка завантаження timeline: ${error?.message || "Невідома помилка"}`);
-    } finally {
-      setIsLoadingTimeline(false);
-    }
   };
 
   // Filter orders
@@ -336,7 +324,7 @@ export function OrdersListPage() {
                       <TableRow 
                         key={order.id} 
                         className="h-12 cursor-pointer hover:bg-slate-50/80 transition-all group border-b border-slate-50"
-                        onClick={() => handleViewTimeline(order)}
+                        onClick={() => handleViewOrder(order)}
                       >
                         {/* Номер: моноширинний шрифт і світло-сірий текст */}
                         <TableCell className="px-3 border-r border-slate-100 font-mono text-[11px] text-slate-500 tracking-tighter min-w-0">
@@ -447,9 +435,9 @@ export function OrdersListPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleViewTimeline(order)}>
+                              <DropdownMenuItem onClick={() => handleViewOrder(order)}>
                                 <Eye className="w-4 h-4 mr-2" />
-                                Переглянути Timeline
+                                Переглянути деталі
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -468,8 +456,6 @@ export function OrdersListPage() {
         order={selectedOrder}
         isOpen={!!selectedOrder}
         onClose={() => setSelectedOrder(null)}
-        timelineSteps={timelineSteps}
-        isLoading={isLoadingTimeline}
       />
 
       </main>

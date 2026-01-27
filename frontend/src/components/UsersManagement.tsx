@@ -22,7 +22,7 @@ export function UsersManagement() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [editingNames, setEditingNames] = useState<Record<number, { first_name: string; last_name: string; phone: string }>>({});
+  const [editingNames, setEditingNames] = useState<Record<string, { first_name: string; last_name: string; phone: string }>>({});
 
   useEffect(() => {
     loadUsers();

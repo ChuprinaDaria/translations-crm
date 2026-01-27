@@ -1,5 +1,5 @@
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, field_serializer
 from typing import Optional, List, Literal, Dict, Any, Union
 from datetime import datetime
 
@@ -140,7 +140,7 @@ class UserUpdate(BaseModel):
 
 
 class UserOut(UserBase):
-    id: int  # Змінено з UUID на int, оскільки модель User використовує Integer
+    id: UUID  # Використовуємо UUID, оскільки модель User використовує PostgresUUID
     phone: Optional[str] = None
     is_active: bool
     is_admin: bool
@@ -148,6 +148,11 @@ class UserOut(UserBase):
     department: Optional[str] = None
     created_at: Optional[datetime] = None
     otpauth_url: Optional[str] = None
+    
+    @field_serializer('id')
+    def serialize_id(self, value: UUID) -> str:
+        """Серіалізує UUID в string для JSON відповіді"""
+        return str(value)
     
     class Config:
         from_attributes = True

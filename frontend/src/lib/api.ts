@@ -106,7 +106,7 @@ export interface ItemCreate {
 
 // Users API types
 export interface User {
-  id: number;
+  id: string; // UUID as string
   email: string;
   first_name?: string;
   last_name?: string;
@@ -1529,7 +1529,7 @@ export const usersApi = {
     return apiFetch<User[]>("/users");
   },
 
-  async updateUser(id: number, data: UserUpdate): Promise<User> {
+  async updateUser(id: string, data: UserUpdate): Promise<User> {
     return apiFetch<User>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

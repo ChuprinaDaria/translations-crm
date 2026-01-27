@@ -357,8 +357,8 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
         .slice(0, 10);
 
       // 3. Активні менеджери (КП та анкети)
-      const managerStatsMap = new Map<number, { name: string; kpCount: number; questionnaireCount: number; revenue: number }>();
-      const userMap = new Map<number, User>();
+      const managerStatsMap = new Map<string, { name: string; kpCount: number; questionnaireCount: number; revenue: number }>();
+      const userMap = new Map<string, User>();
       users.forEach(user => {
         userMap.set(user.id, user);
         const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
@@ -368,7 +368,9 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
       // Підрахунок КП по менеджерах
       kps.forEach(kp => {
         if (kp.created_by_id) {
-          const manager = managerStatsMap.get(kp.created_by_id);
+          // created_by_id is still a number in KP, but User.id is now UUID (string)
+          // We need to convert it to string for lookup, but this indicates a schema mismatch
+          const manager = managerStatsMap.get(String(kp.created_by_id));
           if (manager) {
             manager.kpCount += 1;
             manager.revenue += kp.total_price || 0;
@@ -379,15 +381,17 @@ export function DashboardEnhanced({ userRole, onNavigate }: DashboardProps) {
       // Підрахунок анкет по менеджерах
       questionnaires.forEach(q => {
         if (q.manager_id) {
-          const manager = managerStatsMap.get(q.manager_id);
+          // manager_id is still a number, but User.id is now UUID (string)
+          // Convert to string for lookup
+          const manager = managerStatsMap.get(String(q.manager_id));
           if (manager) {
             manager.questionnaireCount += 1;
           } else {
             // Якщо менеджера немає в списку, додаємо
-            const user = userMap.get(q.manager_id);
+            const user = userMap.get(String(q.manager_id));
             if (user) {
               const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email;
-              managerStatsMap.set(q.manager_id, { name: fullName, kpCount: 0, questionnaireCount: 1, revenue: 0 });
+              managerStatsMap.set(user.id, { name: fullName, kpCount: 0, questionnaireCount: 1, revenue: 0 });
             }
           }
         }
