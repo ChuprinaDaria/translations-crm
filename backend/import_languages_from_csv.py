@@ -26,17 +26,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 if not os.getenv("DATABASE_URL"):
     os.environ["DATABASE_URL"] = "postgresql://translator:traslatorini2025@localhost:5434/crm_db"
 
+# ВАЖЛИВО: Імпортуємо всі моделі ПЕРЕД імпортом database та crud
+# Це необхідно для правильного визначення relationships між моделями в SQLAlchemy
+# Порядок імпорту важливий - спочатку базові моделі, потім залежні
+import modules.auth.models  # noqa: F401 - User (базова модель)
+import modules.crm.models  # noqa: F401 - Client, Order, Office, Language, etc.
+import modules.communications.models  # noqa: F401 - Conversation (залежить від Client)
+import modules.autobot.models  # noqa: F401 - AutobotSettings (залежить від Office)
+import modules.finance.models  # noqa: F401 - Transaction (залежить від Order)
+import modules.notifications.models  # noqa: F401 - Notification models
+
 from core.database import SessionLocal
 from modules.crm.crud_languages import create_language, get_languages
 from modules.crm.schemas import LanguageCreate
-
-# Імпортуємо всі моделі для реєстрації в Base.metadata (щоб SQLAlchemy знав про всі зв'язки)
-# Це необхідно для правильного визначення relationships між моделями
-import modules.crm.models  # noqa: F401
-import modules.communications.models  # noqa: F401
-import modules.autobot.models  # noqa: F401 - для AutobotSettings в Office
-import modules.auth.models  # noqa: F401 - для User в Order
-import modules.finance.models  # noqa: F401 - для Transaction в Order
 
 def import_languages_from_csv(csv_path: Path):
     """Import languages from CSV file"""
