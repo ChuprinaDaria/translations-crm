@@ -1086,19 +1086,6 @@ def get_offices(
     return query.order_by(models.Office.is_default.desc(), models.Office.name).all()
 
 
-@router.get("/offices/{office_id}", response_model=schemas.OfficeRead)
-def get_office(
-    office_id: int,
-    db: Session = Depends(get_db),
-    user: auth_models.User = Depends(get_current_user_db),
-):
-    """Get office by ID."""
-    office = db.query(models.Office).filter(models.Office.id == office_id).first()
-    if not office:
-        raise HTTPException(status_code=404, detail="Office not found")
-    return office
-
-
 @router.get("/offices/default", response_model=schemas.OfficeRead)
 def get_default_office(
     db: Session = Depends(get_db),
@@ -1117,6 +1104,19 @@ def get_default_office(
     if not office:
         raise HTTPException(status_code=404, detail="No active office found")
     
+    return office
+
+
+@router.get("/offices/{office_id}", response_model=schemas.OfficeRead)
+def get_office(
+    office_id: int,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Get office by ID."""
+    office = db.query(models.Office).filter(models.Office.id == office_id).first()
+    if not office:
+        raise HTTPException(status_code=404, detail="Office not found")
     return office
 
 

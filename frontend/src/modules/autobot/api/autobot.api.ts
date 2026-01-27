@@ -46,14 +46,14 @@ export const autobotApi = {
    * Отримати налаштування
    */
   async getSettings(officeId: number): Promise<AutobotSettings> {
-    return apiFetch<AutobotSettings>(`/api/v1/autobot/settings/${officeId}`);
+    return apiFetch<AutobotSettings>(`/autobot/settings/${officeId}`);
   },
 
   /**
    * Створити налаштування
    */
   async createSettings(settings: Partial<AutobotSettings>): Promise<AutobotSettings> {
-    return apiFetch<AutobotSettings>('/api/v1/autobot/settings', {
+    return apiFetch<AutobotSettings>('/autobot/settings', {
       method: 'POST',
       body: JSON.stringify(settings),
     });
@@ -66,7 +66,7 @@ export const autobotApi = {
     officeId: number,
     settings: Partial<AutobotSettings>
   ): Promise<AutobotSettings> {
-    return apiFetch<AutobotSettings>(`/api/v1/autobot/settings/${officeId}`, {
+    return apiFetch<AutobotSettings>(`/autobot/settings/${officeId}`, {
       method: 'PATCH',
       body: JSON.stringify(settings),
     });
@@ -76,7 +76,7 @@ export const autobotApi = {
    * Отримати статус бота
    */
   async getStatus(officeId: number): Promise<AutobotStatus> {
-    return apiFetch<AutobotStatus>(`/api/v1/autobot/status/${officeId}`);
+    return apiFetch<AutobotStatus>(`/autobot/status/${officeId}`);
   },
 
   /**
@@ -86,7 +86,7 @@ export const autobotApi = {
     settingsId: number,
     holiday: Omit<Holiday, 'id' | 'settings_id' | 'created_at'>
   ): Promise<Holiday> {
-    return apiFetch<Holiday>(`/api/v1/autobot/holidays?settings_id=${settingsId}`, {
+    return apiFetch<Holiday>(`/autobot/holidays?settings_id=${settingsId}`, {
       method: 'POST',
       body: JSON.stringify(holiday),
     });
@@ -96,7 +96,7 @@ export const autobotApi = {
    * Видалити свято
    */
   async deleteHoliday(holidayId: number): Promise<void> {
-    await apiFetch(`/api/v1/autobot/holidays/${holidayId}`, {
+    await apiFetch(`/autobot/holidays/${holidayId}`, {
       method: 'DELETE',
     });
   },
@@ -105,7 +105,7 @@ export const autobotApi = {
    * Отримати свята
    */
   async getHolidays(settingsId: number): Promise<Holiday[]> {
-    return apiFetch<Holiday[]>(`/api/v1/autobot/holidays/${settingsId}`);
+    return apiFetch<Holiday[]>(`/autobot/holidays/${settingsId}`);
   },
 };
 
