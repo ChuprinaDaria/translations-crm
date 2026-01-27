@@ -31,8 +31,12 @@ from modules.crm.crud_languages import create_language, get_languages
 from modules.crm.schemas import LanguageCreate
 
 # Імпортуємо всі моделі для реєстрації в Base.metadata (щоб SQLAlchemy знав про всі зв'язки)
+# Це необхідно для правильного визначення relationships між моделями
 import modules.crm.models  # noqa: F401
 import modules.communications.models  # noqa: F401
+import modules.autobot.models  # noqa: F401 - для AutobotSettings в Office
+import modules.auth.models  # noqa: F401 - для User в Order
+import modules.finance.models  # noqa: F401 - для Transaction в Order
 
 def import_languages_from_csv(csv_path: Path):
     """Import languages from CSV file"""
