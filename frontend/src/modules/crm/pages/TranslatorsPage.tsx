@@ -119,6 +119,7 @@ export function TranslatorsPage() {
   const [apiLanguages, setApiLanguages] = useState<Language[]>([]);
   const [apiSpecializations, setApiSpecializations] = useState<Specialization[]>([]);
   const [translatorRates, setTranslatorRates] = useState<TranslatorLanguageRate[]>([]);
+  const [allTranslatorRates, setAllTranslatorRates] = useState<Map<number, TranslatorLanguageRate[]>>(new Map());
   const [showSpecModal, setShowSpecModal] = useState(false);
   const [newSpecName, setNewSpecName] = useState('');
 
@@ -127,6 +128,39 @@ export function TranslatorsPage() {
     loadLanguages();
     loadSpecializations();
   }, []);
+
+  const loadAllTranslatorRates = async (translatorsList?: Translator[]) => {
+    try {
+      // Завантажуємо ставки для всіх перекладачів
+      const ratesMap = new Map<number, TranslatorLanguageRate[]>();
+      const translatorsToProcess = translatorsList || translators;
+      
+      // Завантажуємо ставки для кожного перекладача паралельно
+      const ratePromises = translatorsToProcess.map(async (translator) => {
+        try {
+          const rates = await translatorRatesApi.getTranslatorRates(translator.id);
+          if (rates && rates.length > 0) {
+            return { translatorId: translator.id, rates };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error loading rates for translator ${translator.id}:`, error);
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(ratePromises);
+      results.forEach((result) => {
+        if (result) {
+          ratesMap.set(result.translatorId, result.rates);
+        }
+      });
+      
+      setAllTranslatorRates(ratesMap);
+    } catch (error: any) {
+      console.error('Error loading all translator rates:', error);
+    }
+  };
 
   const loadLanguages = async () => {
     try {
@@ -151,6 +185,8 @@ export function TranslatorsPage() {
     try {
       const data = await translatorsApi.getTranslators();
       setTranslators(data);
+      // Після завантаження перекладачів, завантажуємо ставки для них
+      await loadAllTranslatorRates(data);
     } catch (error: any) {
       toast.error(`Помилка завантаження: ${error?.message || "Невідома помилка"}`);
     } finally {
@@ -211,6 +247,19 @@ export function TranslatorsPage() {
       toast.error("Додайте хоча б одну мову та ставку");
       return;
     }
+    // Валідація: перевірка що всі ставки мають обов'язкові поля
+    for (const rate of translatorRates) {
+      if (rate.language_id && rate.language_id > 0) {
+        if (!rate.specialization_id || rate.specialization_id === 0) {
+          toast.error("Оберіть спеціалізацію для всіх мов");
+          return;
+        }
+        if (!rate.translator_rate || rate.translator_rate <= 0) {
+          toast.error("Введіть ставку перекладача для всіх мов");
+          return;
+        }
+      }
+    }
 
     setIsSaving(true);
     try {
@@ -236,8 +285,9 @@ export function TranslatorsPage() {
       // Зберегти ставки після створення/оновлення перекладача
       if (savedTranslator && translatorRates.length > 0) {
         try {
+          let savedCount = 0;
           for (const rate of translatorRates) {
-            if (rate.language_id && rate.language_id > 0) {
+            if (rate.language_id && rate.language_id > 0 && rate.specialization_id && rate.specialization_id > 0) {
               if (rate.id) {
                 // Оновити існуючу ставку
                 await translatorRatesApi.updateTranslatorRate(rate.id, {
@@ -247,6 +297,7 @@ export function TranslatorsPage() {
                   custom_client_price: rate.custom_client_price,
                   notes: rate.notes,
                 });
+                savedCount++;
               } else {
                 // Створити нову ставку
                 await translatorRatesApi.createTranslatorRate(savedTranslator.id, {
@@ -256,18 +307,35 @@ export function TranslatorsPage() {
                   custom_client_price: rate.custom_client_price,
                   notes: rate.notes,
                 });
+                savedCount++;
               }
             }
           }
+          if (savedCount > 0) {
+            toast.success(`Мови та ставки збережено (${savedCount})`);
+          }
         } catch (rateError: any) {
           console.error('Error saving rates:', rateError);
-          // Не блокуємо збереження перекладача, якщо ставки не збереглися
-          toast.warning("Перекладача збережено, але деякі ставки не вдалося зберегти");
+          const errorMessage = rateError?.data?.detail || rateError?.message || "Невідома помилка";
+          toast.error(`Помилка збереження ставок: ${errorMessage}`);
         }
       }
 
       setIsDialogOpen(false);
       setTranslatorRates([]);
+      // Оновити ставки для збереженого перекладача
+      if (savedTranslator) {
+        try {
+          const updatedRates = await translatorRatesApi.getTranslatorRates(savedTranslator.id);
+          setAllTranslatorRates(prev => {
+            const newMap = new Map(prev);
+            newMap.set(savedTranslator.id, updatedRates);
+            return newMap;
+          });
+        } catch (error) {
+          console.error('Error refreshing rates:', error);
+        }
+      }
       loadTranslators();
     } catch (error: any) {
       // Обробка конкретних помилок
@@ -574,11 +642,32 @@ export function TranslatorsPage() {
                 <div>
                   <div className="text-xs font-medium text-gray-500 mb-2">Мови та ставки:</div>
                   <div className="flex flex-wrap gap-1">
-                    {translator.languages.map((lang, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {lang.language}: {lang.rate_per_page} zł
-                      </Badge>
-                    ))}
+                    {(() => {
+                      // Пріоритет новим ставкам з TranslatorLanguageRate
+                      const rates = allTranslatorRates.get(translator.id) || [];
+                      if (rates.length > 0) {
+                        return rates.map((rate) => {
+                          const language = apiLanguages.find(l => l.id === rate.language_id);
+                          const specialization = apiSpecializations.find(s => s.id === rate.specialization_id);
+                          const langName = language?.name_pl || `ID:${rate.language_id}`;
+                          const specName = specialization?.name || '';
+                          return (
+                            <Badge key={`rate-${rate.id}`} variant="outline" className="text-xs">
+                              {langName}{specName ? ` (${specName})` : ''}: {rate.translator_rate} zł
+                            </Badge>
+                          );
+                        });
+                      }
+                      // Якщо нових ставок немає, показуємо старі мови (для сумісності)
+                      if (translator.languages && translator.languages.length > 0) {
+                        return translator.languages.map((lang, index) => (
+                          <Badge key={`old-${index}`} variant="outline" className="text-xs">
+                            {lang.language}: {lang.rate_per_page} zł
+                          </Badge>
+                        ));
+                      }
+                      return <span className="text-xs text-gray-400">Немає доданих мов та ставок</span>;
+                    })()}
                   </div>
                 </div>
                 

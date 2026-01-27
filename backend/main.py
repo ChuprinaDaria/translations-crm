@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, status, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -188,13 +188,12 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
         messages_manager.disconnect(user_id)
 
 
-# Endpoint to broadcast a new message notification (used by telegram_listener.py)
+# Endpoint to broadcast a new message notification (used by telegram_listener.py and email_imap_listener.py)
 @app.post("/api/v1/communications/broadcast-message")
-async def broadcast_message(notification: dict = None):
+async def broadcast_message(notification: dict = Body(None)):
     """Broadcast a new message notification to all connected WebSocket clients."""
     from uuid import uuid4
     from datetime import datetime
-    from fastapi import Body
     
     logger.info(f"Broadcast endpoint called. Active connections: {list(messages_manager.active_connections.keys())}")
     
@@ -232,6 +231,6 @@ async def broadcast_message(notification: dict = None):
 
 # Test endpoint (kept for backward compatibility)
 @app.post("/api/v1/communications/test-notification")
-async def send_test_notification(notification: dict = None):
+async def send_test_notification(notification: dict = Body(None)):
     """Send a test notification to all connected WebSocket clients."""
     return await broadcast_message(notification)
