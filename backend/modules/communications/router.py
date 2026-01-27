@@ -113,6 +113,8 @@ def get_inbox(
         Conversation.subject,
         Conversation.created_at,
         Conversation.updated_at,
+        Conversation.assigned_manager_id,
+        Conversation.last_manager_response_at,
         func.count(Message.id).filter(
             Message.status != MessageStatus.READ, 
             Message.direction == MessageDirection.INBOUND
@@ -151,6 +153,8 @@ def get_inbox(
         Conversation.subject,
         Conversation.created_at,
         Conversation.updated_at,
+        Conversation.assigned_manager_id,
+        Conversation.last_manager_response_at,
     ]
     if search:
         group_by_cols.extend([Client.id, Client.name, Client.full_name])
@@ -187,6 +191,8 @@ def get_inbox(
         clients = db.query(Client).filter(Client.id.in_(client_ids)).all()
         clients_map = {c.id: c for c in clients}
     
+    from datetime import datetime, timezone, timedelta
+    
     for row in results:
         # Get last message
         last_message = db.query(Message)\
@@ -200,6 +206,21 @@ def get_inbox(
             client = clients_map[row.client_id]
             client_name = getattr(client, 'name', None) or getattr(client, 'full_name', None)
         
+        # Перевірка спливючого чату (10 хв без відповіді менеджера)
+        needs_attention = False
+        if row.assigned_manager_id and row.last_manager_response_at:
+            # Якщо є остання відповідь менеджера, перевіряємо чи пройшло 10+ хвилин
+            time_since_response = datetime.now(timezone.utc) - row.last_manager_response_at
+            if time_since_response >= timedelta(minutes=10):
+                # Перевіряємо чи є нові вхідні повідомлення після останньої відповіді
+                if last_message and last_message.direction == MessageDirection.INBOUND:
+                    if last_message.created_at > row.last_manager_response_at:
+                        needs_attention = True
+        elif row.assigned_manager_id and not row.last_manager_response_at:
+            # Якщо менеджер призначений, але ніколи не відповідав, і є нові повідомлення
+            if last_message and last_message.direction == MessageDirection.INBOUND:
+                needs_attention = True
+        
         conversations.append(schemas.ConversationListItem(
             id=row.id,
             platform=row.platform,
@@ -211,6 +232,8 @@ def get_inbox(
             last_message=last_message.content if last_message else None,
             last_message_at=last_message.created_at if last_message else None,
             updated_at=row.updated_at,
+            assigned_manager_id=row.assigned_manager_id,
+            needs_attention=needs_attention,
         ))
         unread_total += row.unread_count or 0
     
@@ -308,6 +331,16 @@ async def send_message(
     }
     if request.meta_data:
         meta_data.update(request.meta_data)
+    
+    # Автоматично призначаємо менеджера при першій відповіді
+    from datetime import datetime, timezone
+    if not conversation.assigned_manager_id:
+        conversation.assigned_manager_id = user.id
+        logger.info(f"Assigned manager {user.id} to conversation {conversation_id}")
+    
+    # Оновлюємо час останньої відповіді менеджера
+    conversation.last_manager_response_at = datetime.now(timezone.utc)
+    db.commit()
     
     # Create message in DB
     message = Message(

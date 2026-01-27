@@ -106,6 +106,13 @@ export function MessageBubble({
   const [detectedData, setDetectedData] = useState<DetectedData[]>([]);
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
 
+  // Тимчасово для діагностики
+  useEffect(() => {
+    if (isOutbound) {
+      console.log('🔍 MessageBubble platform:', platform, 'isOutbound:', isOutbound);
+    }
+  }, [platform, isOutbound]);
+
   // Функція для нормалізації телефону для порівняння
   const normalizePhone = (phone: string): string => {
     return phone.replace(/[\s-()]/g, '').toLowerCase();
@@ -260,7 +267,7 @@ export function MessageBubble({
     <div
       className={cn(
         'flex',
-        isOutbound ? 'justify-end' : 'justify-start'
+        isOutbound ? 'justify-end pr-4' : 'justify-start pl-4'
       )}
     >
       <div

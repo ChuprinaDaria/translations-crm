@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import String, Text, ForeignKey, DateTime
+from sqlalchemy import String, Text, ForeignKey, DateTime, Integer
 from sqlalchemy.types import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB
@@ -11,6 +11,7 @@ from core.db import Base
 
 if TYPE_CHECKING:
     from modules.crm.models import Client
+    from modules.auth.models import User
 
 
 class PlatformEnum(str, Enum):
@@ -53,10 +54,14 @@ class Conversation(Base):
     platform: Mapped[PlatformEnum] = mapped_column(String, nullable=False, index=True)
     external_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     subject: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    manager_smtp_account_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("manager_smtp_accounts.id"), nullable=True, index=True)
+    assigned_manager_id: Mapped[UUID | None] = mapped_column(PostgresUUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    last_manager_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     client: Mapped["Client | None"] = relationship("Client", back_populates="conversations", lazy="joined")
+    assigned_manager: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_manager_id], lazy="joined")
     messages: Mapped[list["Message"]] = relationship("Message", back_populates="conversation", lazy="selectin", cascade="all, delete-orphan")
 
 

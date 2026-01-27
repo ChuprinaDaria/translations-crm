@@ -109,6 +109,8 @@ class ConversationListItem(BaseModel):
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
     updated_at: datetime
+    assigned_manager_id: Optional[UUID] = None
+    needs_attention: bool = False  # True якщо менеджер не відповідав 10+ хвилин
     
     class Config:
         from_attributes = True

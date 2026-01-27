@@ -15,6 +15,8 @@ export interface ConversationListItem {
   last_message?: string;
   last_message_at?: string;
   updated_at: string;
+  assigned_manager_id?: string;
+  needs_attention?: boolean; // True якщо менеджер не відповідав 10+ хвилин
 }
 
 export interface InboxResponse {

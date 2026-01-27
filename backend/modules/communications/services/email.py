@@ -25,9 +25,10 @@ from modules.communications.models import Conversation
 from core.database import SessionLocal
 import sys
 import os
-# Add parent directory to path for crud import
+# Add parent directory to path for crud and models import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
 import crud
+import models
 
 
 class EmailService(MessengerService):
@@ -86,6 +87,32 @@ class EmailService(MessengerService):
         if not conversation:
             raise ValueError(f"Conversation {conversation_id} not found")
         
+        # Перевірити, чи є менеджерський SMTP акаунт для цієї розмови
+        manager_smtp_account = None
+        if conversation.manager_smtp_account_id:
+            manager_smtp_account = self.db.query(models.ManagerSmtpAccount).filter(
+                models.ManagerSmtpAccount.id == conversation.manager_smtp_account_id,
+                models.ManagerSmtpAccount.is_active == True
+            ).first()
+        
+        # Визначити SMTP налаштування
+        if manager_smtp_account:
+            # Використовуємо менеджерський SMTP
+            smtp_host = manager_smtp_account.smtp_host
+            smtp_port = manager_smtp_account.smtp_port
+            smtp_user = manager_smtp_account.smtp_user
+            smtp_password = manager_smtp_account.smtp_password
+            from_email = manager_smtp_account.email
+            from_name = manager_smtp_account.name
+        else:
+            # Використовуємо стандартні KP SMTP налаштування
+            smtp_host = self.config["smtp_host"]
+            smtp_port = self.config["smtp_port"]
+            smtp_user = self.config["smtp_user"]
+            smtp_password = self.config["smtp_password"]
+            from_email = self.config["smtp_from_email"]
+            from_name = self.config["smtp_from_name"]
+        
         # Створити повідомлення в БД
         subject = conversation.subject or "No Subject"
         message = self.create_message_in_db(
@@ -101,7 +128,7 @@ class EmailService(MessengerService):
         try:
             # Створити email повідомлення
             msg = MIMEMultipart()
-            msg['From'] = f"{self.config['smtp_from_name']} <{self.config['smtp_from_email']}>"
+            msg['From'] = f"{from_name} <{from_email}>"
             msg['To'] = conversation.external_id  # Email адреса
             msg['Subject'] = subject
             
@@ -119,11 +146,6 @@ class EmailService(MessengerService):
                     pass
             
             # Відправити через SMTP
-            smtp_host = self.config["smtp_host"]
-            smtp_port = self.config["smtp_port"]
-            smtp_user = self.config["smtp_user"]
-            smtp_password = self.config["smtp_password"]
-            
             if smtp_port == 465:
                 server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
             else:
@@ -153,9 +175,21 @@ class EmailService(MessengerService):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        to_email: Optional[str] = None,
     ) -> "MessageModel":
         """Обробити вхідне email повідомлення."""
         from modules.communications.models import Message as MessageModel
+        
+        # Перевірити, чи email надійшов на менеджерський SMTP акаунт
+        manager_smtp_account_id = None
+        if to_email:
+            # Знайти менеджерський SMTP акаунт за email адресою
+            manager_account = self.db.query(models.ManagerSmtpAccount).filter(
+                models.ManagerSmtpAccount.email == to_email,
+                models.ManagerSmtpAccount.is_active == True
+            ).first()
+            if manager_account:
+                manager_smtp_account_id = manager_account.id
         
         # Отримати або створити розмову
         subject = sender_info.get("subject", "No Subject")
@@ -163,6 +197,7 @@ class EmailService(MessengerService):
             external_id=external_id,
             client_id=None,
             subject=subject,
+            manager_smtp_account_id=manager_smtp_account_id,
         )
         
         # Створити повідомлення
@@ -183,8 +218,10 @@ class EmailService(MessengerService):
         external_id: str,
         client_id: Optional[UUID] = None,
         subject: Optional[str] = None,
+        manager_smtp_account_id: Optional[int] = None,
     ) -> Conversation:
         """Отримати або створити розмову."""
+        
         # Шукаємо існуючу розмову
         conversation = self.db.query(Conversation).filter(
             Conversation.platform == PlatformEnum.EMAIL,
@@ -193,6 +230,11 @@ class EmailService(MessengerService):
         ).first()
         
         if conversation:
+            # Оновити manager_smtp_account_id якщо він не встановлений
+            if not conversation.manager_smtp_account_id and manager_smtp_account_id:
+                conversation.manager_smtp_account_id = manager_smtp_account_id
+                self.db.commit()
+                self.db.refresh(conversation)
             return conversation
         
         # Створюємо нову розмову
@@ -201,6 +243,7 @@ class EmailService(MessengerService):
             external_id=external_id,
             client_id=client_id,
             subject=subject,
+            manager_smtp_account_id=manager_smtp_account_id,
         )
         self.db.add(conversation)
         self.db.commit()
@@ -267,10 +310,18 @@ class EmailService(MessengerService):
                             "subject": subject,
                         }
                         
+                        # Витягнути email адресу з поля "To"
+                        to_email = to
+                        if '<' in to:
+                            to_email = to.split('<')[1].split('>')[0].strip()
+                        else:
+                            to_email = to.strip()
+                        
                         message = await self.receive_message(
                             external_id=sender,
                             content=content,
                             sender_info=sender_info,
+                            to_email=to_email,
                         )
                         messages.append(message)
             

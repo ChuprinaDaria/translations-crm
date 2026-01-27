@@ -33,6 +33,15 @@ def register(user_in: schema.UserCreate, db: Session = Depends(get_db)):
         first_name=user_in.first_name,
         last_name=user_in.last_name,
     )
+    
+    # Відправляємо email з даними для входу
+    try:
+        from email_service import send_registration_email
+        send_registration_email(user.email, user_in.password)
+    except Exception as e:
+        # Не блокуємо реєстрацію, якщо email не відправлено
+        print(f"Failed to send registration email: {e}")
+    
     return user
 
 

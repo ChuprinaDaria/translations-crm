@@ -285,3 +285,174 @@ def send_password_reset_code(to_email: str, code: str) -> bool:
         print(f"Error sending password reset email: {error_msg}")
         raise
 
+
+def send_registration_email(to_email: str, password: str) -> bool:
+    """
+    Відправляє email при реєстрації користувача з паролем
+    
+    Args:
+        to_email: Email адреса отримувача
+        password: Пароль користувача
+    
+    Returns:
+        True якщо відправка успішна, False інакше
+    """
+    config = _load_smtp_config()
+    host = config["host"]
+    port = config["port"]
+    user = config["user"]
+    password_smtp = config["password"]
+    from_email = config["from_email"]
+    from_name = config["from_name"]
+
+    if not user or not password_smtp:
+        raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
+    
+    if not host:
+        raise ValueError("SMTP host is empty. Please configure SMTP settings.")
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = "Реєстрація в системі CRM"
+        
+        body_text = f"""
+Шановний(а) користувачу!
+
+Вітаємо! Ваш обліковий запис успішно створено.
+
+Ваші дані для входу:
+Email: {to_email}
+Пароль: {password}
+
+Будь ласка, змініть пароль після першого входу в систему.
+
+З повагою,
+Команда BOX Catering
+
+---
+Це автоматичне повідомлення. Будь ласка, не відповідайте на цей email.
+"""
+        
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+        
+        # Відправляємо email
+        smtp_host = host
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+$', host):
+            try:
+                ip_address = socket.gethostbyname(host)
+                smtp_host = ip_address
+            except socket.gaierror:
+                smtp_host = host
+        
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(smtp_host, port, timeout=30)
+            server.starttls()
+        
+        server.login(user, password_smtp)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Error sending registration email: {e}")
+        raise
+
+
+def send_translation_request_email(
+    to_email: str,
+    translator_name: str,
+    order_number: str,
+    offered_rate: float,
+    notes: Optional[str] = None,
+    deadline: Optional[str] = None,
+) -> bool:
+    """
+    Відправляє email з пропозицією перекладу перекладачу
+    
+    Args:
+        to_email: Email адреса перекладача
+        translator_name: Ім'я перекладача
+        order_number: Номер замовлення
+        offered_rate: Запропонована ставка
+        notes: Додаткові нотатки (опціонально)
+        deadline: Дедлайн (опціонально)
+    
+    Returns:
+        True якщо відправка успішна, False інакше
+    """
+    config = _load_smtp_config()
+    host = config["host"]
+    port = config["port"]
+    user = config["user"]
+    password = config["password"]
+    from_email = config["from_email"]
+    from_name = config["from_name"]
+
+    if not user or not password:
+        raise ValueError("SMTP credentials not configured. Please set SMTP settings in the system settings.")
+    
+    if not host:
+        raise ValueError("SMTP host is empty. Please configure SMTP settings.")
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = f"Пропозиція перекладу - Замовлення {order_number}"
+        
+        body_text = f"""
+Шановний(а) {translator_name}!
+
+Ми маємо для вас пропозицію перекладу.
+
+Деталі:
+- Номер замовлення: {order_number}
+- Запропонована ставка: {offered_rate} zł/сторінка
+"""
+        
+        if deadline:
+            body_text += f"- Дедлайн: {deadline}\n"
+        
+        if notes:
+            body_text += f"\nДодаткові нотатки:\n{notes}\n"
+        
+        body_text += """
+Будь ласка, підтвердіть або відхиліть цю пропозицію в системі CRM.
+
+З повагою,
+Команда BOX Catering
+
+---
+Це автоматичне повідомлення. Будь ласка, не відповідайте на цей email.
+"""
+        
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+        
+        # Відправляємо email
+        smtp_host = host
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+$', host):
+            try:
+                ip_address = socket.gethostbyname(host)
+                smtp_host = ip_address
+            except socket.gaierror:
+                smtp_host = host
+        
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(smtp_host, port, timeout=30)
+            server.starttls()
+        
+        server.login(user, password)
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Error sending translation request email: {e}")
+        raise
+

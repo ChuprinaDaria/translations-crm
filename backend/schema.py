@@ -574,6 +574,43 @@ class TelegramAccount(TelegramAccountBase):
         from_attributes = True
 
 
+class ManagerSmtpAccountBase(BaseModel):
+    name: str
+    email: str
+    smtp_host: str
+    smtp_port: int = 587
+    smtp_user: str
+    smtp_password: str
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = 993
+
+
+class ManagerSmtpAccountCreate(ManagerSmtpAccountBase):
+    pass
+
+
+class ManagerSmtpAccountUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    imap_host: Optional[str] = None
+    imap_port: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class ManagerSmtpAccount(ManagerSmtpAccountBase):
+    id: int
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 ############################################################
 # Menu schemas
 ############################################################

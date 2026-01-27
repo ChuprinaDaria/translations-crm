@@ -1185,6 +1185,44 @@ export interface InPostConfig {
   api_key: string;
 }
 
+export interface ManagerSmtpAccount {
+  id: number;
+  name: string;
+  email: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  imap_host: string | null;
+  imap_port: number | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string | null;
+}
+
+export interface ManagerSmtpAccountCreate {
+  name: string;
+  email: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password: string;
+  imap_host?: string | null;
+  imap_port?: number | null;
+}
+
+export interface ManagerSmtpAccountUpdate {
+  name?: string;
+  email?: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  imap_host?: string | null;
+  imap_port?: number | null;
+  is_active?: boolean;
+}
+
 // Templates API
 export const templatesApi = {
   async getTemplates(): Promise<Template[]> {
@@ -1416,6 +1454,33 @@ export const settingsApi = {
     formData.append("from_email", data.from_email);
     formData.append("from_name", data.from_name);
     return apiFetchMultipart<{ status: string }>("/settings/smtp", formData, "POST");
+  },
+
+  async getManagerSmtpAccounts(): Promise<ManagerSmtpAccount[]> {
+    return apiFetch<ManagerSmtpAccount[]>("/settings/manager-smtp-accounts");
+  },
+
+  async createManagerSmtpAccount(data: ManagerSmtpAccountCreate): Promise<ManagerSmtpAccount> {
+    return apiFetch<ManagerSmtpAccount>("/settings/manager-smtp-accounts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateManagerSmtpAccount(
+    id: number,
+    data: ManagerSmtpAccountUpdate
+  ): Promise<ManagerSmtpAccount> {
+    return apiFetch<ManagerSmtpAccount>(`/settings/manager-smtp-accounts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteManagerSmtpAccount(id: number): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>(`/settings/manager-smtp-accounts/${id}`, {
+      method: "DELETE",
+    });
   },
 
   async getTelegramApiConfig(): Promise<TelegramApiConfig> {

@@ -342,6 +342,27 @@ class AppSetting(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+class ManagerSmtpAccount(Base):
+    """
+    SMTP акаунт менеджера для підключення до inbox.
+    Використовується для автоматичного імпорту email та відправки відповідей з inbox.
+    """
+    __tablename__ = "manager_smtp_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)          # Назва в UI (наприклад, "Менеджер Іван")
+    email = Column(String, nullable=False, index=True)         # Email адреса
+    smtp_host = Column(String, nullable=False)                 # SMTP сервер
+    smtp_port = Column(Integer, nullable=False, default=587)   # SMTP порт
+    smtp_user = Column(String, nullable=False)                 # SMTP логін
+    smtp_password = Column(String, nullable=False)            # SMTP пароль
+    imap_host = Column(String, nullable=True)                  # IMAP сервер (якщо відрізняється від SMTP)
+    imap_port = Column(Integer, nullable=True, default=993)   # IMAP порт
+    is_active = Column(Boolean, default=True)                  # Чи активний акаунт
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class Client(Base):
     __tablename__ = "clients"
 

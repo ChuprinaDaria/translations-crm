@@ -2487,6 +2487,61 @@ def delete_telegram_account(
     return {"status": "success"}
 
 
+@router.get("/settings/manager-smtp-accounts", response_model=list[schema.ManagerSmtpAccount])
+def list_manager_smtp_accounts(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """
+    Повертає всі активні SMTP акаунти менеджерів для підключення до inbox.
+    """
+    return crud.get_manager_smtp_accounts(db)
+
+
+@router.post("/settings/manager-smtp-accounts", response_model=schema.ManagerSmtpAccount)
+def create_manager_smtp_account(
+    account_in: schema.ManagerSmtpAccountCreate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Додає SMTP акаунт менеджера для підключення до inbox.
+    Максимум 10 акаунтів.
+    """
+    try:
+        return crud.create_manager_smtp_account(db, account_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/settings/manager-smtp-accounts/{account_id}", response_model=schema.ManagerSmtpAccount)
+def update_manager_smtp_account(
+    account_id: int,
+    account_update: schema.ManagerSmtpAccountUpdate,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Оновлює SMTP акаунт менеджера.
+    """
+    updated = crud.update_manager_smtp_account(db, account_id, account_update)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Manager SMTP account not found")
+    return updated
+
+
+@router.delete("/settings/manager-smtp-accounts/{account_id}")
+def delete_manager_smtp_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user),
+):
+    """
+    Видаляє SMTP акаунт менеджера.
+    """
+    deleted = crud.delete_manager_smtp_account(db, account_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Manager SMTP account not found")
+    return {"status": "success"}
+
+
 # Тимчасове зберігання сесій для генерації session string
 _telegram_sessions = {}
 

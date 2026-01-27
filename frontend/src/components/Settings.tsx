@@ -15,6 +15,9 @@ import {
   type BrandingSettings,
   type TelegramAccount,
   type SmtpSettings,
+  type ManagerSmtpAccount,
+  type ManagerSmtpAccountCreate,
+  type ManagerSmtpAccountUpdate,
   type WhatsAppConfig,
   type InstagramConfig,
   type FacebookConfig,
@@ -51,6 +54,20 @@ export function Settings() {
     from_email: "",
     from_name: "",
   });
+
+  // Manager SMTP accounts state
+  const [managerSmtpAccounts, setManagerSmtpAccounts] = useState<ManagerSmtpAccount[]>([]);
+  const [newManagerSmtp, setNewManagerSmtp] = useState<ManagerSmtpAccountCreate>({
+    name: "",
+    email: "",
+    smtp_host: "",
+    smtp_port: 587,
+    smtp_user: "",
+    smtp_password: "",
+    imap_host: null,
+    imap_port: 993,
+  });
+  const [isSavingManagerSmtp, setIsSavingManagerSmtp] = useState(false);
 
   // WhatsApp state
   const [whatsapp, setWhatsapp] = useState<WhatsAppConfig>({
@@ -161,6 +178,7 @@ export function Settings() {
           brandingData,
           tgAccounts,
           smtpSettings,
+          managerSmtpAccountsData,
           whatsappConfig,
           instagramConfig,
           facebookConfig,
@@ -170,6 +188,7 @@ export function Settings() {
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
           settingsApi.getSmtpSettings(),
+          settingsApi.getManagerSmtpAccounts().catch(() => []),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
           settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
@@ -179,6 +198,7 @@ export function Settings() {
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
         setSmtp(smtpSettings);
+        setManagerSmtpAccounts(managerSmtpAccountsData);
         setWhatsapp(whatsappConfig);
         setInstagram(instagramConfig);
         setFacebook(facebookConfig);
@@ -830,7 +850,8 @@ export function Settings() {
         </TabsContent>
 
         {/* SMTP Tab */}
-        <TabsContent value="smtp" className="mt-0">
+        <TabsContent value="smtp" className="mt-0 space-y-6">
+          {/* KP SMTP Settings */}
           <Card>
             <CardHeader>
               <CardTitle>SMTP налаштування для email‑відправки КП</CardTitle>
@@ -915,6 +936,230 @@ export function Settings() {
                   Зберегти SMTP
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Manager SMTP Accounts */}
+          <Card>
+            <CardHeader>
+              <CardTitle>SMTP акаунти менеджерів для inbox ({managerSmtpAccounts.length}/10)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Додайте SMTP акаунти менеджерів для підключення до inbox. Якщо менеджерський SMTP підключено,
+                всі email, які приходять на цей акаунт, автоматично потрапляють в inbox чат.
+                Відповіді з inbox відправляються з підключеного email.
+              </p>
+
+              {/* Existing Accounts */}
+              {managerSmtpAccounts.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Поточні акаунти</Label>
+                  <div className="space-y-2">
+                    {managerSmtpAccounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between gap-4 p-3 border rounded-lg bg-gray-50"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 mb-1">
+                            {account.name}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            📧 {account.email}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {account.smtp_host}:{account.smtp_port}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50 shrink-0"
+                          onClick={async () => {
+                            if (confirm(`Видалити SMTP акаунт "${account.name}"?`)) {
+                              try {
+                                await settingsApi.deleteManagerSmtpAccount(account.id);
+                                setManagerSmtpAccounts((prev) =>
+                                  prev.filter((a) => a.id !== account.id)
+                                );
+                                toast.success("SMTP акаунт видалено");
+                              } catch (error) {
+                                console.error(error);
+                                toast.error("Не вдалося видалити SMTP акаунт");
+                              }
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add New Account */}
+              {managerSmtpAccounts.length < 10 && (
+                <div className="border-t pt-4 space-y-4">
+                  <Label>Додати новий SMTP акаунт менеджера</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-name">Назва менеджера *</Label>
+                      <Input
+                        id="manager-smtp-name"
+                        placeholder="Наприклад: Менеджер Іван"
+                        value={newManagerSmtp.name}
+                        onChange={(e) =>
+                          setNewManagerSmtp({ ...newManagerSmtp, name: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-email">Email адреса *</Label>
+                      <Input
+                        id="manager-smtp-email"
+                        type="email"
+                        placeholder="manager@example.com"
+                        value={newManagerSmtp.email}
+                        onChange={(e) =>
+                          setNewManagerSmtp({ ...newManagerSmtp, email: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-host">SMTP Host *</Label>
+                      <Input
+                        id="manager-smtp-host"
+                        placeholder="smtp.gmail.com"
+                        value={newManagerSmtp.smtp_host}
+                        onChange={(e) =>
+                          setNewManagerSmtp({ ...newManagerSmtp, smtp_host: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-port">SMTP Port *</Label>
+                      <Input
+                        id="manager-smtp-port"
+                        type="number"
+                        placeholder="587"
+                        value={newManagerSmtp.smtp_port}
+                        onChange={(e) =>
+                          setNewManagerSmtp({
+                            ...newManagerSmtp,
+                            smtp_port: parseInt(e.target.value) || 587,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-user">SMTP User (логін) *</Label>
+                      <Input
+                        id="manager-smtp-user"
+                        placeholder="user@example.com"
+                        value={newManagerSmtp.smtp_user}
+                        onChange={(e) =>
+                          setNewManagerSmtp({ ...newManagerSmtp, smtp_user: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-smtp-password">SMTP Password *</Label>
+                      <Input
+                        id="manager-smtp-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={newManagerSmtp.smtp_password}
+                        onChange={(e) =>
+                          setNewManagerSmtp({ ...newManagerSmtp, smtp_password: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-imap-host">IMAP Host (опційно)</Label>
+                      <Input
+                        id="manager-imap-host"
+                        placeholder="imap.gmail.com (за замовчуванням = SMTP Host)"
+                        value={newManagerSmtp.imap_host || ""}
+                        onChange={(e) =>
+                          setNewManagerSmtp({
+                            ...newManagerSmtp,
+                            imap_host: e.target.value || null,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager-imap-port">IMAP Port (опційно)</Label>
+                      <Input
+                        id="manager-imap-port"
+                        type="number"
+                        placeholder="993"
+                        value={newManagerSmtp.imap_port || ""}
+                        onChange={(e) =>
+                          setNewManagerSmtp({
+                            ...newManagerSmtp,
+                            imap_port: e.target.value ? parseInt(e.target.value) : null,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                      disabled={
+                        isSavingManagerSmtp ||
+                        !newManagerSmtp.name ||
+                        !newManagerSmtp.email ||
+                        !newManagerSmtp.smtp_host ||
+                        !newManagerSmtp.smtp_user ||
+                        !newManagerSmtp.smtp_password
+                      }
+                      onClick={async () => {
+                        setIsSavingManagerSmtp(true);
+                        try {
+                          const created = await settingsApi.createManagerSmtpAccount(newManagerSmtp);
+                          setManagerSmtpAccounts((prev) => [...prev, created]);
+                          setNewManagerSmtp({
+                            name: "",
+                            email: "",
+                            smtp_host: "",
+                            smtp_port: 587,
+                            smtp_user: "",
+                            smtp_password: "",
+                            imap_host: null,
+                            imap_port: 993,
+                          });
+                          toast.success("SMTP акаунт менеджера додано");
+                        } catch (error: any) {
+                          const message =
+                            error?.detail ||
+                            error?.message ||
+                            "Не вдалося додати SMTP акаунт";
+                          toast.error(
+                            typeof message === "string" ? message : "Не вдалося додати SMTP акаунт"
+                          );
+                        } finally {
+                          setIsSavingManagerSmtp(false);
+                        }
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      {isSavingManagerSmtp ? "Збереження..." : "Додати SMTP акаунт"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {managerSmtpAccounts.length >= 10 && (
+                <p className="text-sm text-amber-600">
+                  Досягнуто максимальної кількості SMTP акаунтів (10). Видаліть один з існуючих, щоб додати новий.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

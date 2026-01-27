@@ -843,6 +843,64 @@ def delete_telegram_account(db: Session, account_id: int):
     return True
 
 
+# Manager SMTP accounts CRUD
+def create_manager_smtp_account(db: Session, account_in: schemas.ManagerSmtpAccountCreate):
+    # Перевірка ліміту (максимум 10 акаунтів)
+    existing_count = db.query(models.ManagerSmtpAccount).count()
+    if existing_count >= 10:
+        raise ValueError("Максимальна кількість SMTP акаунтів менеджерів - 10")
+    
+    db_account = models.ManagerSmtpAccount(
+        name=account_in.name,
+        email=account_in.email,
+        smtp_host=account_in.smtp_host,
+        smtp_port=account_in.smtp_port,
+        smtp_user=account_in.smtp_user,
+        smtp_password=account_in.smtp_password,
+        imap_host=account_in.imap_host or account_in.smtp_host,  # Якщо не вказано, використовуємо SMTP host
+        imap_port=account_in.imap_port or 993,
+        is_active=True,
+    )
+    db.add(db_account)
+    db.commit()
+    db.refresh(db_account)
+    return db_account
+
+
+def get_manager_smtp_accounts(db: Session):
+    return db.query(models.ManagerSmtpAccount).filter(models.ManagerSmtpAccount.is_active == True).all()
+
+
+def get_manager_smtp_account(db: Session, account_id: int):
+    return db.query(models.ManagerSmtpAccount).filter(
+        models.ManagerSmtpAccount.id == account_id,
+        models.ManagerSmtpAccount.is_active == True
+    ).first()
+
+
+def update_manager_smtp_account(db: Session, account_id: int, account_update: schemas.ManagerSmtpAccountUpdate):
+    account = db.query(models.ManagerSmtpAccount).filter(models.ManagerSmtpAccount.id == account_id).first()
+    if not account:
+        return None
+    
+    update_data = account_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(account, key, value)
+    
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def delete_manager_smtp_account(db: Session, account_id: int):
+    account = db.query(models.ManagerSmtpAccount).filter(models.ManagerSmtpAccount.id == account_id).first()
+    if not account:
+        return False
+    db.delete(account)
+    db.commit()
+    return True
+
+
 # App settings (SMTP, Telegram API, etc.)
 def set_setting(db: Session, key: str, value: str | None):
     try:

@@ -932,8 +932,25 @@ def create_translation_request(
     db.commit()
     db.refresh(translation_request)
     
-    # TODO: Send email/telegram/whatsapp notification to translator
-    # This would call a service to send the actual message
+    # Відправляємо email/telegram/whatsapp notification to translator
+    if request_in.sent_via == "email" and translator.email:
+        try:
+            from email_service import send_translation_request_email
+            deadline_str = None
+            if order.deadline:
+                deadline_str = order.deadline.strftime("%d.%m.%Y %H:%M")
+            send_translation_request_email(
+                to_email=translator.email,
+                translator_name=translator.name,
+                order_number=order.order_number,
+                offered_rate=request_in.offered_rate,
+                notes=request_in.notes,
+                deadline=deadline_str,
+            )
+        except Exception as e:
+            # Не блокуємо створення запиту, якщо email не відправлено
+            print(f"Failed to send translation request email: {e}")
+    # TODO: Додати відправку через telegram/whatsapp
     
     return schemas.TranslationRequestRead.model_validate(translation_request)
 
