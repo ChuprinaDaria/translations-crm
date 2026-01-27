@@ -2,7 +2,7 @@
 Communications routes - unified inbox endpoints for Telegram, Email, etc.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, distinct
 from typing import Optional, List, Dict
@@ -992,16 +992,17 @@ async def whatsapp_webhook_receive(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/webhooks/instagram")
+@router.get("/instagram/webhook")
 async def instagram_webhook_verify(
+    request: Request,
     hub_mode: str = Query(None, alias="hub.mode"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token"),
     hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
     db: Session = Depends(get_db),
 ):
     """
-    Instagram webhook verification endpoint (GET).
-    Meta requires this for webhook setup.
+    Верифікація webhook від Instagram/Facebook.
+    Facebook надсилає GET запит з параметрами для перевірки.
     """
     logger.info(f"Instagram webhook verification: mode={hub_mode}, token={hub_verify_token}")
     
@@ -1018,23 +1019,21 @@ async def instagram_webhook_verify(
         
         if hub_verify_token == verify_token:
             logger.info("Instagram webhook verified successfully")
-            return int(hub_challenge) if hub_challenge else 200
+            # Повертаємо challenge для підтвердження
+            return PlainTextResponse(content=hub_challenge, status_code=200)
         else:
             logger.warning(f"Instagram webhook verification failed: token mismatch. Expected: {verify_token[:10] if verify_token else '(empty)'}..., Got: {hub_verify_token[:10] if hub_verify_token else '(empty)'}...")
             print(f"[Instagram Webhook] Token mismatch! Expected: '{verify_token}' (len={len(verify_token)}), Got: '{hub_verify_token}' (len={len(hub_verify_token)})", flush=True)
-            raise HTTPException(status_code=403, detail="Verification token mismatch")
+            raise HTTPException(status_code=403, detail="Verification failed")
     
     logger.warning(f"Instagram webhook verification failed: invalid request. mode={hub_mode}, has_token={bool(hub_verify_token)}")
-    raise HTTPException(status_code=400, detail="Invalid verification request")
+    raise HTTPException(status_code=403, detail="Verification failed")
 
 
-@router.post("/webhooks/instagram")
-async def instagram_webhook_receive(
-    request: Request,
-    db: Session = Depends(get_db),
-):
+@router.post("/instagram/webhook")
+async def instagram_webhook_handler(request: Request, db: Session = Depends(get_db)):
     """
-    Instagram webhook endpoint (POST) - receives messages from Meta.
+    Обробка вхідних повідомлень від Instagram
     """
     try:
         # Get signature from headers
@@ -1050,11 +1049,11 @@ async def instagram_webhook_receive(
             raise HTTPException(status_code=403, detail="Invalid signature")
         
         # Parse JSON payload
-        webhook_data = await request.json()
-        logger.info(f"Instagram webhook received: {webhook_data.get('object', 'unknown')}")
+        data = await request.json()
+        logger.info(f"Instagram webhook received: {data}")
         
         # Process webhook
-        result = await handle_instagram_webhook(db, webhook_data)
+        result = await handle_instagram_webhook(db, data)
         
         return result
     except Exception as e:
