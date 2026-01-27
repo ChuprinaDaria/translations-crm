@@ -246,13 +246,13 @@ export function MessageBubble({
     
     switch (platform) {
       case 'whatsapp':
-        return 'bg-green-50/50 border-2 border-green-500 text-black';
+        return 'bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 border-r border-t border-b border-green-200/50 text-gray-900 shadow-sm';
       case 'telegram':
-        return 'bg-blue-50/50 border-2 border-blue-500 text-black';
+        return 'bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-500 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
       case 'email':
-        return 'bg-orange-50/50 border-2 border-orange-500 text-black';
+        return 'bg-gradient-to-r from-orange-50 to-amber-50 border-l-4 border-orange-500 border-r border-t border-b border-orange-200/50 text-gray-900 shadow-sm';
       default:
-        return 'bg-blue-50/50 border-2 border-blue-500 text-black';
+        return 'bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-500 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
     }
   };
 
