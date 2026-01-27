@@ -280,17 +280,43 @@ def import_languages_from_csv(csv_path: Path):
         db.close()
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python import_languages_from_csv.py <path_to_csv_file>")
-        print("\nCSV format expected:")
-        print("  Column 1: name_pl (Polish name)")
-        print("  Column 2: name_en (English name, optional)")
-        print("  Column 3: base_client_price (Price in PLN)")
-        print("\nExample:")
-        print("  python import_languages_from_csv.py languages.csv")
-        sys.exit(1)
+    csv_path = None
     
-    csv_path = Path(sys.argv[1])
+    if len(sys.argv) >= 2:
+        csv_path = Path(sys.argv[1])
+    else:
+        # Try to find languages.csv in project root
+        base_dir = Path(__file__).parent.parent
+        default_csv = base_dir / "languages.csv"
+        if default_csv.exists():
+            csv_path = default_csv
+            print(f"📁 Using default file: {csv_path}")
+        else:
+            print("Usage: python import_languages_from_csv.py <path_to_csv_file>")
+            print("\nCSV format supported:")
+            print("  Format 1: Language,Price_PLN,Notes")
+            print("  Format 2: name_pl,name_en,base_client_price")
+            print("  Format 3: name_pl,base_client_price")
+            print("\nThe script automatically detects column names and order.")
+            print("\nExample:")
+            print("  python import_languages_from_csv.py languages.csv")
+            print("  python import_languages_from_csv.py /path/to/languages.csv")
+            sys.exit(1)
+    
+    # If relative path, try to resolve from script location or current directory
+    if not csv_path.is_absolute():
+        base_dir = Path(__file__).parent.parent
+        potential_path = base_dir / csv_path
+        if potential_path.exists():
+            csv_path = potential_path
+        elif csv_path.exists():
+            csv_path = csv_path.resolve()
+        else:
+            print(f"❌ File not found: {csv_path}")
+            print(f"   Tried: {base_dir / csv_path}")
+            print(f"   Tried: {csv_path.resolve()}")
+            sys.exit(1)
+    
     success = import_languages_from_csv(csv_path)
     sys.exit(0 if success else 1)
 
