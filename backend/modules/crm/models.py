@@ -79,7 +79,11 @@ class Client(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="client", lazy="selectin", cascade="all, delete-orphan")
-    conversations: Mapped[list["Conversation"]] = relationship("Conversation", back_populates="client", lazy="selectin", cascade="all, delete-orphan")
+    conversations: Mapped[list["Conversation"]] = relationship(
+        "Conversation",
+        back_populates="client",
+        lazy="selectin"
+    )
 
 
 class Office(Base):

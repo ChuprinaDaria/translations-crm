@@ -30,6 +30,10 @@ from core.database import SessionLocal
 from modules.crm.crud_languages import create_language, get_languages
 from modules.crm.schemas import LanguageCreate
 
+# Імпортуємо всі моделі для реєстрації в Base.metadata (щоб SQLAlchemy знав про всі зв'язки)
+import modules.crm.models  # noqa: F401
+import modules.communications.models  # noqa: F401
+
 def import_languages_from_csv(csv_path: Path):
     """Import languages from CSV file"""
     print(f"📄 Reading CSV file: {csv_path}")
