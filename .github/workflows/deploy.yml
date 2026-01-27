@@ -254,13 +254,28 @@ jobs:
             # Невелика затримка для звільнення портів
             sleep 2
             
+            # Очищаємо BuildKit кеш для уникнення помилок snapshot (не торкаємося volumes та контейнерів)
+            echo "Cleaning Docker BuildKit cache to prevent snapshot errors..."
+            docker builder prune -f || echo "Warning: Failed to prune build cache, continuing anyway..."
+            
             # Build and start new containers (volumes зберігаються автоматично)
             echo "Building and starting new containers..."
             if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans; then
-              echo "❌ Docker compose up failed!"
-              echo "Checking docker-compose logs..."
-              $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs --tail 50 || true
-              exit 1
+              echo "❌ Docker compose up failed! Trying with --no-cache..."
+              echo "Cleaning build cache again and retrying..."
+              docker builder prune -af || true
+              if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml build --no-cache; then
+                echo "❌ Docker build failed even with --no-cache!"
+                echo "Checking docker-compose logs..."
+                $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs --tail 50 || true
+                exit 1
+              fi
+              # Якщо build успішний, запускаємо контейнери
+              if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --remove-orphans; then
+                echo "❌ Docker compose up failed after rebuild!"
+                $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs --tail 50 || true
+                exit 1
+              fi
             fi
             
             # Check if containers started successfully
