@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import {
   Dialog,
@@ -33,7 +33,8 @@ import {
   ExternalLink,
   Zap,
   Info,
-  Contact
+  Contact,
+  Globe
 } from 'lucide-react';
 import { cn } from '../../../components/ui/utils';
 import { toast } from 'sonner';
@@ -167,14 +168,8 @@ export function OrderDetailsDialog({
   onClose,
 }: OrderDetailsDialogProps) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [mounted, setMounted] = useState(false);
 
-  // Перевірка монтування для уникнення проблем з гідратацією
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!order || !mounted) return null;
+  if (!order) return null;
 
   const statusConfig = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.do_wykonania;
   const StatusIcon = statusConfig.icon;
@@ -416,7 +411,7 @@ export function OrderDetailsDialog({
 
                   {/* Мова */}
                   <InfoCard
-                    icon={<span className="text-xl">🌐</span>}
+                    icon={<Globe className="w-5 h-5 text-blue-500" />}
                     label="Мова"
                     value={
                       details.languages ? (
