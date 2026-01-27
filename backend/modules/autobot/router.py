@@ -59,8 +59,15 @@ def create_autobot_settings(
             detail="Settings already exist for this office"
         )
     
-    created = service.create_settings(settings)
-    return _settings_to_response(created)
+    try:
+        created = service.create_settings(settings)
+        return _settings_to_response(created)
+    except ValueError as e:
+        # Помилка валідації (наприклад, офіс не існує)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.patch("/settings/{office_id}", response_model=AutobotSettingsResponse)

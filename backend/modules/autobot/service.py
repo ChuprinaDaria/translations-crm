@@ -7,7 +7,7 @@ import pytz
 
 from .models import AutobotSettings, AutobotHoliday, AutobotLog
 from .schemas import AutobotSettingsCreate, AutobotSettingsUpdate, HolidayCreate
-from ..crm.models import Client, Order, ClientSource, OrderStatus
+from ..crm.models import Client, Order, ClientSource, OrderStatus, Office
 from ..communications.models import Message
 
 
@@ -25,6 +25,11 @@ class AutobotService:
     
     def create_settings(self, settings_data: AutobotSettingsCreate) -> AutobotSettings:
         """Створити налаштування бота"""
+        # Перевірити чи існує офіс
+        office = self.db.query(Office).filter(Office.id == settings_data.office_id).first()
+        if not office:
+            raise ValueError(f"Office with id {settings_data.office_id} does not exist")
+        
         # Конвертуємо WorkingHours в окремі поля
         db_settings = AutobotSettings(
             office_id=settings_data.office_id,

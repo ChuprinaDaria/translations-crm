@@ -38,10 +38,14 @@ export function AutobotSettingsPage() {
     try {
       const defaultOffice = await officesApi.getDefaultOffice();
       setOfficeId(defaultOffice.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading default office:', error);
-      // Fallback to office ID 1 if default office not found
-      setOfficeId(1);
+      // Не встановлюємо officeId якщо офіс не знайдено
+      // Користувач побачить повідомлення про помилку
+      setOfficeId(null);
+      toast.error(
+        error?.detail || error?.message || 'Не вдалося завантажити офіс. Будь ласка, створіть офіс в налаштуваннях.'
+      );
     }
   };
 
@@ -75,7 +79,10 @@ export function AutobotSettingsPage() {
   };
 
   const handleCreateSettings = async () => {
-    if (!officeId) return;
+    if (!officeId) {
+      toast.error('Офіс не вибрано. Будь ласка, створіть офіс в налаштуваннях.');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -107,8 +114,9 @@ https://www.tlumaczeniamt.pl/cennik/
       toast.success('Налаштування створено!');
       loadData(); // Оновити статус
     } catch (error: any) {
-      toast.error('Помилка створення налаштувань');
-      console.error(error);
+      const errorMessage = error?.detail || error?.message || 'Помилка створення налаштувань';
+      toast.error(errorMessage);
+      console.error('Error creating autobot settings:', error);
     } finally {
       setIsSaving(false);
     }
@@ -144,10 +152,26 @@ https://www.tlumaczeniamt.pl/cennik/
     }
   };
 
-  if (isLoading || !officeId) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
+  if (!officeId) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Bot className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+            <h3 className="text-lg font-semibold mb-2">Офіс не знайдено</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Для налаштування автобота потрібен активний офіс. Будь ласка, створіть офіс в налаштуваннях системи.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
