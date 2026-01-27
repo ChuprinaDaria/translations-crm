@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { ScrollArea } from '../../../components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs';
 import { 
   Clock,
   User, 
@@ -29,7 +30,10 @@ import {
   Download,
   Send,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  Info,
+  Contact
 } from 'lucide-react';
 import { cn } from '../../../components/ui/utils';
 import { toast } from 'sonner';
@@ -162,7 +166,15 @@ export function OrderDetailsDialog({
   isOpen,
   onClose,
 }: OrderDetailsDialogProps) {
-  if (!order) return null;
+  const [activeTab, setActiveTab] = useState('overview');
+  const [mounted, setMounted] = useState(false);
+
+  // Перевірка монтування для уникнення проблем з гідратацією
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!order || !mounted) return null;
 
   const statusConfig = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.do_wykonania;
   const StatusIcon = statusConfig.icon;
@@ -193,10 +205,42 @@ export function OrderDetailsDialog({
     }
   };
 
+  // Швидкі дії
+  const quickActions = [
+    {
+      label: 'Копіювати номер',
+      icon: Copy,
+      onClick: () => copyToClipboard(order.order_number, 'Номер замовлення'),
+    },
+    {
+      label: 'Копіювати всі контакти',
+      icon: Contact,
+      onClick: () => {
+        const contacts = [
+          details.email && `Email: ${details.email}`,
+          details.phone && `Телефон: ${details.phone}`,
+          details.address && `Адреса: ${details.address}`,
+        ].filter(Boolean).join('\n');
+        if (contacts) {
+          copyToClipboard(contacts, 'Контакти');
+        } else {
+          toast.info('Немає контактів для копіювання');
+        }
+      },
+    },
+    {
+      label: 'Відкрити клієнта',
+      icon: Eye,
+      onClick: () => {
+        toast.info('Функція відкриття клієнта буде додана');
+      },
+    },
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="w-full max-w-[calc(100vw-1rem)] sm:w-[30vw] sm:max-w-[30vw] h-full sm:h-screen max-h-screen p-0 gap-0 overflow-hidden flex flex-col !fixed !top-0 !right-0 !left-auto !bottom-0 !translate-x-0 !translate-y-0 rounded-none sm:rounded-l-xl border-l border-t-0 border-r-0 border-b-0 z-[100]"
+        className="max-w-5xl w-[85vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col z-[100]"
       >
         <VisuallyHidden.Root>
           <DialogHeader>
@@ -206,9 +250,10 @@ export function OrderDetailsDialog({
             </DialogDescription>
           </DialogHeader>
         </VisuallyHidden.Root>
+
         {/* Шапка з градієнтом та статусом */}
         <div className={cn(
-          "relative px-3 sm:px-4 py-3 bg-gradient-to-br from-slate-50 to-white border-b shrink-0",
+          "relative px-6 py-4 bg-gradient-to-br from-slate-50 to-white border-b shrink-0",
           "before:absolute before:inset-0 before:bg-gradient-to-r",
           statusConfig.color === 'bg-blue-500' && "before:from-blue-500/5 before:to-blue-500/0",
           statusConfig.color === 'bg-amber-500' && "before:from-amber-500/5 before:to-amber-500/0",
@@ -216,229 +261,269 @@ export function OrderDetailsDialog({
           statusConfig.color === 'bg-purple-500' && "before:from-purple-500/5 before:to-purple-500/0",
           statusConfig.color === 'bg-slate-500' && "before:from-slate-500/5 before:to-slate-500/0"
         )}>
-          <div className="relative">
-            {/* Верхня частина: номер + статус */}
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-                  statusConfig.bgColor,
-                  statusConfig.borderColor,
-                  "border-2 shadow-sm"
-                )}>
-                  <StatusIcon className={cn("w-4 h-4", statusConfig.textColor)} />
+          <div className="relative flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                statusConfig.bgColor,
+                statusConfig.borderColor,
+                "border-2 shadow-md transition-transform hover:scale-105"
+              )}>
+                <StatusIcon className={cn("w-6 h-6", statusConfig.textColor)} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm text-slate-500 font-medium mb-1">
+                  Замовлення
                 </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] text-slate-500 font-medium mb-0.5">
-                    Замовлення
-                  </div>
-                  <div className="text-lg font-bold text-slate-900 font-mono tracking-tight truncate">
-                    {order.order_number}
-                  </div>
+                <div className="text-2xl font-bold text-slate-900 font-mono tracking-tight">
+                  {order.order_number}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge 
+                    variant="outline"
+                    className={cn(
+                      "px-3 py-1 text-sm font-semibold border-2",
+                      statusConfig.bgColor,
+                      statusConfig.textColor,
+                      statusConfig.borderColor,
+                      "transition-all hover:shadow-md"
+                    )}
+                  >
+                    {statusConfig.label}
+                  </Badge>
+                  {isOverdue && (
+                    <Badge className="px-3 py-1 text-sm font-semibold bg-red-100 text-red-700 border-red-300 border-2">
+                      Прострочено
+                    </Badge>
+                  )}
                 </div>
               </div>
-              
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={onClose}
-                className="h-7 w-7 rounded-full hover:bg-slate-100 shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </Button>
             </div>
-
-            {/* Статус */}
-            <div className="flex items-center">
-              <Badge 
-                variant="outline"
-                className={cn(
-                  "px-1.5 py-0.5 text-[10px] font-semibold border",
-                  statusConfig.bgColor,
-                  statusConfig.textColor,
-                  statusConfig.borderColor
-                )}
-              >
-                {statusConfig.label}
-              </Badge>
-            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={onClose}
+              className="h-10 w-10 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </Button>
           </div>
         </div>
 
-        {/* Основний контент */}
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="px-3 sm:px-4 py-3 space-y-3">
-            
-            {/* Блок: Основна інформація */}
-            <section>
-              <h3 className="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <div className="w-0.5 h-2.5 bg-gradient-to-b from-orange-500 to-orange-600 rounded-full" />
-                Основна інформація
-              </h3>
-              
-              <div className="grid grid-cols-1 gap-2">
-                {/* Клієнт */}
-                <InfoCard
-                  icon={<User className="w-4 h-4 text-blue-500" />}
-                  label="Клієнт"
-                  value={order.client?.full_name || '—'}
-                  bgColor="bg-blue-50"
-                  actions={
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="h-6 text-xs px-2"
-                    >
-                      <Eye className="w-3 h-3" />
-                    </Button>
-                  }
-                />
+        {/* Таби та контент */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* Таби */}
+          <div className="px-6 pt-4 border-b bg-white shrink-0">
+            <TabsList className="w-full justify-start bg-transparent h-auto p-0 gap-2">
+              <TabsTrigger 
+                value="overview" 
+                className="px-4 py-2.5 text-sm font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 transition-all hover:bg-slate-50"
+              >
+                <Info className="w-4 h-4 mr-2" />
+                Огляд
+              </TabsTrigger>
+              <TabsTrigger 
+                value="details" 
+                className="px-4 py-2.5 text-sm font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 transition-all hover:bg-slate-50"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Деталі
+              </TabsTrigger>
+              <TabsTrigger 
+                value="contacts" 
+                className="px-4 py-2.5 text-sm font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 transition-all hover:bg-slate-50"
+              >
+                <Contact className="w-4 h-4 mr-2" />
+                Контакти
+              </TabsTrigger>
+              <TabsTrigger 
+                value="actions" 
+                className="px-4 py-2.5 text-sm font-medium data-[state=active]:bg-slate-100 data-[state=active]:text-slate-900 transition-all hover:bg-slate-50"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                Швидкі дії
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-                {/* Дедлайн */}
-                <InfoCard
-                  icon={
-                    isOverdue ? (
-                      <AlertCircle className="w-4 h-4 text-red-500" />
-                    ) : (
-                      <Calendar className="w-4 h-4 text-emerald-500" />
-                    )
-                  }
-                  label="Дедлайн"
-                  value={
-                    order.deadline ? (
-                      <span className={cn(
-                        "font-semibold",
-                        isOverdue ? "text-red-600" : "text-slate-900"
-                      )}>
-                        {formatDate(order.deadline)}
-                        {isOverdue && (
-                          <span className="ml-2 text-xs text-red-500 font-bold uppercase">
-                            Прострочено!
-                          </span>
-                        )}
-                      </span>
-                    ) : '—'
-                  }
-                  bgColor={isOverdue ? "bg-red-50" : "bg-emerald-50"}
-                />
-              </div>
-            </section>
+          {/* Основний контент */}
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-6">
+              {/* Таб: Огляд */}
+              <TabsContent value="overview" className="mt-0 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Клієнт */}
+                  <InfoCard
+                    icon={<User className="w-5 h-5 text-blue-500" />}
+                    label="Клієнт"
+                    value={order.client?.full_name || '—'}
+                    bgColor="bg-blue-50"
+                    actions={
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="h-8 px-3 text-sm hover:bg-blue-100 transition-colors"
+                        onClick={() => toast.info('Функція відкриття клієнта буде додана')}
+                      >
+                        <Eye className="w-4 h-4 mr-1.5" />
+                        Переглянути
+                      </Button>
+                    }
+                  />
 
-            {/* Блок: Деталі замовлення */}
-            <section>
-              <h3 className="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <div className="w-0.5 h-2.5 bg-gradient-to-b from-purple-500 to-purple-600 rounded-full" />
-                Деталі замовлення
-              </h3>
-              
-              <div className="grid grid-cols-1 gap-2">
-                {/* Тип документу */}
-                <InfoCard
-                  icon={<FileText className="w-4 h-4 text-indigo-500" />}
-                  label="Тип документу"
-                  value={
-                    details.type ? (
-                      <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-bold text-[10px] px-1.5 py-0.5">
-                        {details.type}
-                      </Badge>
-                    ) : '—'
-                  }
-                  bgColor="bg-indigo-50"
-                />
+                  {/* Дедлайн */}
+                  <InfoCard
+                    icon={
+                      isOverdue ? (
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                      ) : (
+                        <Calendar className="w-5 h-5 text-emerald-500" />
+                      )
+                    }
+                    label="Дедлайн"
+                    value={
+                      order.deadline ? (
+                        <span className={cn(
+                          "text-base font-semibold",
+                          isOverdue ? "text-red-600" : "text-slate-900"
+                        )}>
+                          {formatDate(order.deadline)}
+                          {isOverdue && (
+                            <span className="ml-2 text-sm text-red-500 font-bold">
+                              Прострочено!
+                            </span>
+                          )}
+                        </span>
+                      ) : '—'
+                    }
+                    bgColor={isOverdue ? "bg-red-50" : "bg-emerald-50"}
+                  />
 
-                {/* Мова */}
-                <InfoCard
-                  icon={<span className="text-base">🌐</span>}
-                  label="Мова"
-                  value={
-                    details.languages ? (
-                      <span className="text-xs font-semibold text-slate-700">
-                        {details.languages}
-                      </span>
-                    ) : '—'
-                  }
-                  bgColor="bg-blue-50"
-                />
+                  {/* Тип документу */}
+                  <InfoCard
+                    icon={<FileText className="w-5 h-5 text-indigo-500" />}
+                    label="Тип документу"
+                    value={
+                      details.type ? (
+                        <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 font-semibold text-sm px-3 py-1">
+                          {details.type}
+                        </Badge>
+                      ) : '—'
+                    }
+                    bgColor="bg-indigo-50"
+                  />
 
-                {/* Ціна */}
-                <InfoCard
-                  icon={<DollarSign className="w-4 h-4 text-emerald-500" />}
-                  label="Вартість"
-                  value={
-                    details.price ? (
-                      <span className="text-sm font-bold text-emerald-600">
-                        {details.price}
-                      </span>
-                    ) : '—'
-                  }
-                  bgColor="bg-emerald-50"
-                />
-              </div>
-            </section>
+                  {/* Мова */}
+                  <InfoCard
+                    icon={<span className="text-xl">🌐</span>}
+                    label="Мова"
+                    value={
+                      details.languages ? (
+                        <span className="text-base font-semibold text-slate-700">
+                          {details.languages}
+                        </span>
+                      ) : '—'
+                    }
+                    bgColor="bg-blue-50"
+                  />
 
-            {/* Блок: Доставка та контакти */}
-            {(details.delivery || details.address || details.email || details.phone) && (
-              <section>
-                <h3 className="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <div className="w-0.5 h-2.5 bg-gradient-to-b from-teal-500 to-teal-600 rounded-full" />
-                  Доставка та контакти
-                </h3>
-                
-                <div className="grid grid-cols-1 gap-2">
+                  {/* Ціна */}
+                  <InfoCard
+                    icon={<DollarSign className="w-5 h-5 text-emerald-500" />}
+                    label="Вартість"
+                    value={
+                      details.price ? (
+                        <span className="text-lg font-bold text-emerald-600">
+                          {details.price}
+                        </span>
+                      ) : '—'
+                    }
+                    bgColor="bg-emerald-50"
+                  />
+
                   {/* Доставка */}
                   {details.delivery && (
                     <InfoCard
-                      icon={<Truck className="w-4 h-4 text-orange-500" />}
+                      icon={<Truck className="w-5 h-5 text-orange-500" />}
                       label="Спосіб доставки"
-                      value={details.delivery}
+                      value={<span className="text-base font-medium text-slate-900">{details.delivery}</span>}
                       bgColor="bg-orange-50"
-                      actions={
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-6 text-xs px-2"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </Button>
-                      }
                     />
                   )}
+                </div>
+              </TabsContent>
 
-                  {/* Адреса */}
-                  {details.address && (
-                    <InfoCard
-                      icon={<MapPin className="w-4 h-4 text-red-500" />}
-                      label="Адреса"
-                      value={details.address}
-                      bgColor="bg-red-50"
-                      actions={
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="h-6 text-xs px-2"
-                          onClick={() => copyToClipboard(details.address!, 'Адресу')}
-                        >
-                          <Copy className="w-3 h-3" />
-                        </Button>
-                      }
-                    />
-                  )}
+              {/* Таб: Деталі */}
+              <TabsContent value="details" className="mt-0 space-y-4">
+                <div className="space-y-4">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <h3 className="text-base font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-indigo-500" />
+                      Детальна інформація
+                    </h3>
+                    <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {order.description || 'Немає опису'}
+                    </div>
+                  </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className="text-sm font-semibold text-blue-700 mb-2">Номер замовлення</div>
+                      <div className="text-base font-mono font-bold text-blue-900">{order.order_number}</div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 h-8 px-3 text-sm hover:bg-blue-100"
+                        onClick={() => copyToClipboard(order.order_number, 'Номер замовлення')}
+                      >
+                        <Copy className="w-4 h-4 mr-1.5" />
+                        Копіювати
+                      </Button>
+                    </div>
+
+                    {order.deadline && (
+                      <div className={cn(
+                        "rounded-lg p-4 border",
+                        isOverdue ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"
+                      )}>
+                        <div className={cn(
+                          "text-sm font-semibold mb-2",
+                          isOverdue ? "text-red-700" : "text-emerald-700"
+                        )}>
+                          Дедлайн
+                        </div>
+                        <div className={cn(
+                          "text-base font-bold",
+                          isOverdue ? "text-red-900" : "text-emerald-900"
+                        )}>
+                          {formatDate(order.deadline)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Таб: Контакти */}
+              <TabsContent value="contacts" className="mt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Email */}
                   {details.email && (
                     <InfoCard
-                      icon={<Mail className="w-4 h-4 text-blue-500" />}
+                      icon={<Mail className="w-5 h-5 text-blue-500" />}
                       label="Email"
-                      value={details.email}
+                      value={<span className="text-base font-medium text-slate-900">{details.email}</span>}
                       bgColor="bg-blue-50"
                       actions={
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-6 text-xs px-2"
+                          className="h-8 px-3 text-sm hover:bg-blue-100 transition-colors"
                           onClick={() => copyToClipboard(details.email!, 'Email')}
                         >
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-4 h-4 mr-1.5" />
+                          Копіювати
                         </Button>
                       }
                     />
@@ -447,46 +532,160 @@ export function OrderDetailsDialog({
                   {/* Телефон */}
                   {details.phone && (
                     <InfoCard
-                      icon={<Phone className="w-4 h-4 text-green-500" />}
+                      icon={<Phone className="w-5 h-5 text-green-500" />}
                       label="Телефон"
-                      value={details.phone}
+                      value={<span className="text-base font-medium text-slate-900 font-mono">{details.phone}</span>}
                       bgColor="bg-green-50"
                       actions={
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          className="h-6 text-xs px-2"
+                          className="h-8 px-3 text-sm hover:bg-green-100 transition-colors"
                           onClick={() => copyToClipboard(details.phone!, 'Телефон')}
                         >
-                          <Copy className="w-3 h-3" />
+                          <Copy className="w-4 h-4 mr-1.5" />
+                          Копіювати
                         </Button>
                       }
                     />
                   )}
+
+                  {/* Адреса */}
+                  {details.address && (
+                    <InfoCard
+                      icon={<MapPin className="w-5 h-5 text-red-500" />}
+                      label="Адреса"
+                      value={<span className="text-base font-medium text-slate-900">{details.address}</span>}
+                      bgColor="bg-red-50"
+                      actions={
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="h-8 px-3 text-sm hover:bg-red-100 transition-colors"
+                          onClick={() => copyToClipboard(details.address!, 'Адресу')}
+                        >
+                          <Copy className="w-4 h-4 mr-1.5" />
+                          Копіювати
+                        </Button>
+                      }
+                    />
+                  )}
+
+                  {/* Доставка */}
+                  {details.delivery && (
+                    <InfoCard
+                      icon={<Truck className="w-5 h-5 text-orange-500" />}
+                      label="Спосіб доставки"
+                      value={<span className="text-base font-medium text-slate-900">{details.delivery}</span>}
+                      bgColor="bg-orange-50"
+                    />
+                  )}
                 </div>
-              </section>
-            )}
-          </div>
-        </ScrollArea>
+
+                {!details.email && !details.phone && !details.address && (
+                  <div className="text-center py-12 text-slate-500">
+                    <Contact className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <p className="text-base">Немає контактної інформації</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Таб: Швидкі дії */}
+              <TabsContent value="actions" className="mt-0">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {quickActions.map((action, index) => {
+                      const Icon = action.icon;
+                      return (
+                        <button
+                          key={index}
+                          onClick={action.onClick}
+                          className={cn(
+                            "p-4 rounded-lg border-2 border-slate-200 bg-white",
+                            "hover:border-orange-300 hover:bg-orange-50",
+                            "transition-all duration-200 hover:shadow-md hover:scale-105",
+                            "flex flex-col items-center gap-3 text-center"
+                          )}
+                        >
+                          <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                            <Icon className="w-6 h-6 text-orange-600" />
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {action.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-slate-200">
+                    <h3 className="text-base font-semibold text-slate-900 mb-4">Основні дії</h3>
+                    <div className="flex flex-wrap gap-3">
+                      <Button 
+                        variant="outline" 
+                        size="default"
+                        className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                      >
+                        <Edit2 className="w-4 h-4 mr-2" />
+                        Редагувати замовлення
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="default"
+                        className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Завантажити файли
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="default"
+                        className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Переглянути клієнта
+                      </Button>
+                      <Button 
+                        size="default"
+                        className="h-10 px-4 text-sm bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all hover:shadow-md"
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Надіслати email
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </div>
+          </ScrollArea>
+        </Tabs>
 
         {/* Футер з діями */}
-        <div className="px-3 sm:px-4 py-2 bg-slate-50 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
-          <div className="flex flex-col sm:flex-row gap-1.5 flex-1">
-            <Button variant="outline" size="sm" className="h-7 text-[10px] px-2">
-              <Edit2 className="w-3 h-3 mr-1" />
+        <div className="px-6 py-4 bg-slate-50 border-t flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-4 text-sm hover:bg-white transition-colors"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
               Редагувати
             </Button>
-            <Button variant="outline" size="sm" className="h-7 text-[10px] px-2">
-              <Download className="w-3 h-3 mr-1" />
+            <Button 
+              variant="outline" 
+              size="default"
+              className="h-10 px-4 text-sm hover:bg-white transition-colors"
+            >
+              <Download className="w-4 h-4 mr-2" />
               Завантажити
             </Button>
           </div>
           
           <Button 
-            size="sm" 
-            className="h-7 text-[10px] px-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 w-full sm:w-auto"
+            size="default"
+            className="h-10 px-4 text-sm bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all hover:shadow-md"
           >
-            <Send className="w-3 h-3 mr-1" />
+            <Send className="w-4 h-4 mr-2" />
             Надіслати
           </Button>
         </div>
@@ -507,24 +706,22 @@ interface InfoCardProps {
 function InfoCard({ icon, label, value, bgColor = "bg-slate-50", actions }: InfoCardProps) {
   return (
     <div className={cn(
-      "p-2 rounded-lg border border-slate-200",
+      "p-4 rounded-lg border-2 border-slate-200",
       bgColor,
-      "transition-all duration-200 hover:shadow-sm"
+      "transition-all duration-200 hover:shadow-md hover:border-slate-300"
     )}>
-      <div className="flex items-start justify-between mb-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2 min-w-0">
           <div className="shrink-0">{icon}</div>
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider truncate">
+          <span className="text-sm font-semibold text-slate-600 uppercase tracking-wide">
             {label}
           </span>
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>
-      <div className="text-[11px] text-slate-900 break-words">
+      <div className="text-base text-slate-900 break-words">
         {value}
       </div>
     </div>
   );
 }
-
-
