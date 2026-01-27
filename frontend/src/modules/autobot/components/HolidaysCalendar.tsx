@@ -126,74 +126,128 @@ export function HolidaysCalendar({ settingsId }: HolidaysCalendarProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-01-01', 'Новий Рік')}
+              onClick={() => addQuickHoliday('2026-01-01', 'Nowy Rok', true)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">1 січня</span>
-              <span className="text-xs text-slate-600">Новий Рік</span>
+              <span className="text-sm font-semibold">1 stycznia</span>
+              <span className="text-xs text-slate-600">Nowy Rok</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-01-07', 'Різдво')}
+              onClick={() => addQuickHoliday('2026-01-06', 'Święto Trzech Króli', true)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">7 січня</span>
-              <span className="text-xs text-slate-600">Різдво</span>
+              <span className="text-sm font-semibold">6 stycznia</span>
+              <span className="text-xs text-slate-600">Święto Trzech Króli</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-03-08', '8 Березня')}
+              onClick={() => addQuickHoliday('2026-04-05', 'Wielkanoc', false)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">8 березня</span>
-              <span className="text-xs text-slate-600">8 Березня</span>
+              <span className="text-sm font-semibold">5 kwietnia</span>
+              <span className="text-xs text-slate-600">Wielkanoc</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-05-01', 'День Праці')}
+              onClick={() => addQuickHoliday('2026-04-06', 'Poniedziałek Wielkanocny', false)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">1 травня</span>
-              <span className="text-xs text-slate-600">День Праці</span>
+              <span className="text-sm font-semibold">6 kwietnia</span>
+              <span className="text-xs text-slate-600">Poniedziałek Wielkanocny</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-05-09', 'День Перемоги')}
+              onClick={() => addQuickHoliday('2026-05-01', 'Święto Pracy', true)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">9 травня</span>
-              <span className="text-xs text-slate-600">День Перемоги</span>
+              <span className="text-sm font-semibold">1 maja</span>
+              <span className="text-xs text-slate-600">Święto Pracy</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-06-28', 'День Конституції')}
+              onClick={() => addQuickHoliday('2026-05-03', 'Święto Narodowe Trzeciego Maja', true)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">28 червня</span>
-              <span className="text-xs text-slate-600">День Конституції</span>
+              <span className="text-sm font-semibold">3 maja</span>
+              <span className="text-xs text-slate-600">Święto Narodowe Trzeciego Maja</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-08-24', 'День Незалежності')}
+              onClick={() => addQuickHoliday('2026-05-24', 'Zielone Świątki', false)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">24 серпня</span>
-              <span className="text-xs text-slate-600">День Незалежності</span>
+              <span className="text-sm font-semibold">24 maja</span>
+              <span className="text-xs text-slate-600">Zielone Świątki</span>
             </Button>
 
             <Button
               variant="outline"
-              onClick={() => addQuickHoliday('2025-12-25', 'Католицьке Різдво')}
+              onClick={() => addQuickHoliday('2026-06-04', 'Boże Ciało', false)}
               className="h-auto py-3 flex flex-col items-start"
             >
-              <span className="text-sm font-semibold">25 грудня</span>
-              <span className="text-xs text-slate-600">Католицьке Різдво</span>
+              <span className="text-sm font-semibold">4 czerwca</span>
+              <span className="text-xs text-slate-600">Boże Ciało</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-08-15', 'Wniebowzięcie NMP i Święto Wojska Polskiego', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">15 sierpnia</span>
+              <span className="text-xs text-slate-600">Wniebowzięcie NMP</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-11-01', 'Wszystkich Świętych', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">1 listopada</span>
+              <span className="text-xs text-slate-600">Wszystkich Świętych</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-11-11', 'Narodowe Święto Niepodległości', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">11 listopada</span>
+              <span className="text-xs text-slate-600">Święto Niepodległości</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-12-24', 'Wigilia Bożego Narodzenia', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">24 grudnia</span>
+              <span className="text-xs text-slate-600">Wigilia</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-12-25', 'Boże Narodzenie I dzień', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">25 grudnia</span>
+              <span className="text-xs text-slate-600">Boże Narodzenie I</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => addQuickHoliday('2026-12-26', 'Boże Narodzenie II dzień', true)}
+              className="h-auto py-3 flex flex-col items-start"
+            >
+              <span className="text-sm font-semibold">26 grudnia</span>
+              <span className="text-xs text-slate-600">Boże Narodzenie II</span>
             </Button>
           </div>
         </CardContent>
