@@ -13,6 +13,7 @@ import {
   Languages,
   Globe,
   UserCog,
+  Bot,
 } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { cn } from "../ui/utils";
@@ -96,6 +97,12 @@ export function Sidebar({ activeItem, onItemClick, userRole, isAdmin = false, is
           icon: <UserCog className="w-5 h-5" />,
           tooltip: "Управління користувачами та ролями",
           roles: ["OWNER"], // Тільки для адміністраторів (OWNER)
+        },
+        {
+          id: "autobot",
+          label: "Autobot",
+          icon: <Bot className="w-5 h-5" />,
+          tooltip: "Налаштування автобота для Inbox",
         },
         {
           id: "settings",

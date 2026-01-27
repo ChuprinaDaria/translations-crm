@@ -10,6 +10,7 @@ import { TranslatorsPage } from "./modules/crm/pages/TranslatorsPage";
 import { LanguagesPage } from "./modules/crm/pages/LanguagesPage";
 import { Settings } from "./components/Settings";
 import { UsersManagement } from "./components/UsersManagement";
+import { AutobotSettingsPage } from "./modules/autobot/pages/AutobotSettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
 import { TermsOfService } from "./pages/TermsOfService";
 import { GDPRPolicy } from "./pages/GDPRPolicy";
@@ -392,6 +393,8 @@ function App() {
         return <UsersManagement />;
       case "settings":
         return <Settings />;
+      case "autobot":
+        return <AutobotSettingsPage />;
       default:
         return <DashboardPage userRole={getRoleLabel(userRole)} onNavigate={setActiveItem} />;
     }
