@@ -84,6 +84,7 @@ export function Settings() {
     access_token: "",
     app_secret: "",
     verify_token: "",
+    page_id: "",
   });
   const [isSavingInstagram, setIsSavingInstagram] = useState(false);
 
@@ -190,7 +191,7 @@ export function Settings() {
           settingsApi.getSmtpSettings(),
           settingsApi.getManagerSmtpAccounts().catch(() => []),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
-          settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "" })),
+          settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
@@ -1272,6 +1273,15 @@ export function Settings() {
                     id="instagram-verify-token"
                     value={instagram.verify_token}
                     onChange={(e) => setInstagram({ ...instagram, verify_token: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="instagram-page-id">Page ID</Label>
+                  <Input
+                    id="instagram-page-id"
+                    value={instagram.page_id}
+                    onChange={(e) => setInstagram({ ...instagram, page_id: e.target.value })}
+                    placeholder="Встановлюється автоматично через OAuth або введіть вручну"
                   />
                 </div>
               </div>

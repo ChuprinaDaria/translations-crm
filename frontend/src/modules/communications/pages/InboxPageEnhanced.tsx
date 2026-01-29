@@ -246,11 +246,21 @@ export function InboxPageEnhanced() {
     // Show notification for inbound messages
     if (message.direction === 'inbound') {
       const conv = conversations.find(c => c.id === conversationId);
+      // Визначити platform з conversation або з WebSocket даних
+      const platform = conv?.platform || (message as any).conversation?.platform || 'telegram';
+      const channelMap: Record<string, 'telegram' | 'whatsapp' | 'instagram' | 'email'> = {
+        'telegram': 'telegram',
+        'whatsapp': 'whatsapp',
+        'instagram': 'instagram',
+        'email': 'email',
+      };
+      const channel = channelMap[platform.toLowerCase()] || 'telegram';
+      
       addNotification({
         id: message.id,
         conversationId,
         clientName: conv?.client_name || conv?.external_id || 'Невідомий',
-        channel: (conv?.platform as 'telegram' | 'whatsapp' | 'instagram' | 'email') || 'telegram',
+        channel: channel,
         message: message.content.substring(0, 100),
         timestamp: new Date(),
         onOpen: () => {

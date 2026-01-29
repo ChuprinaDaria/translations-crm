@@ -1185,6 +1185,7 @@ export interface InstagramConfig {
   access_token: string;
   app_secret: string;
   verify_token: string;
+  page_id: string;
 }
 
 export interface FacebookConfig {
@@ -1568,6 +1569,7 @@ export const settingsApi = {
     formData.append("access_token", data.access_token);
     formData.append("app_secret", data.app_secret);
     formData.append("verify_token", data.verify_token);
+    formData.append("page_id", data.page_id || "");
     return apiFetchMultipart<{ status: string }>("/settings/instagram-config", formData, "POST");
   },
 

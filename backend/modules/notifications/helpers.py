@@ -26,7 +26,7 @@ async def notify_new_message(
         message=f"{client_name} - {channel}",
         entity_type=EntityType.CHAT,
         entity_id=conversation_id,
-        action_url=f"/inbox/{conversation_id}",
+        action_url=f"/communications/inbox?conversation_id={conversation_id}",
         data={
             "client_name": client_name,
             "channel": channel,

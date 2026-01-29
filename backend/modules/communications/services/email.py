@@ -333,8 +333,20 @@ class EmailService(MessengerService):
                                 content_type = part.get_content_type()
                                 if content_type == "text/html":
                                     html_content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                                    if not content:  # Якщо немає plain text, використати HTML
-                                        content = html_content
+                                    if not content:  # Якщо немає plain text, конвертувати HTML в текст
+                                        # Простий парсер HTML для витягування тексту
+                                        import re
+                                        # Видалити скрипти та стилі
+                                        html_clean = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+                                        html_clean = re.sub(r'<style[^>]*>.*?</style>', '', html_clean, flags=re.DOTALL | re.IGNORECASE)
+                                        # Замінити <br>, <p>, <div> на нові рядки
+                                        html_clean = re.sub(r'<br\s*/?>', '\n', html_clean, flags=re.IGNORECASE)
+                                        html_clean = re.sub(r'</(p|div|tr|li)>', '\n', html_clean, flags=re.IGNORECASE)
+                                        # Видалити всі HTML теги
+                                        html_clean = re.sub(r'<[^>]+>', '', html_clean)
+                                        # Декодувати HTML entities
+                                        import html
+                                        content = html.unescape(html_clean).strip()
                                 elif content_type == "text/plain" and not content:
                                     content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
                                 elif part.get_content_disposition() == 'attachment':

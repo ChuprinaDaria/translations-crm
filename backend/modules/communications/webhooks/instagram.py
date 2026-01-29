@@ -79,15 +79,22 @@ async def handle_instagram_webhook(
             }
             
             # Якщо це повідомлення від клієнта, отримати профіль через Graph API
+            username = None
             if not is_from_me:
                 try:
                     profile = await service.get_user_profile(sender_id)
                     if profile:
                         sender_info["name"] = profile.get("name") or profile.get("username", "Instagram User")
-                        sender_info["username"] = profile.get("username")
+                        username = profile.get("username")
+                        sender_info["username"] = username
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).warning(f"Failed to fetch Instagram profile for {sender_id}: {e}")
+            
+            # Оновити external_id якщо є username (додати @username)
+            external_id_to_use = client_igsid
+            if username:
+                external_id_to_use = f"@{username}"
             
             # Обробити вкладення
             attachments = []
@@ -101,7 +108,7 @@ async def handle_instagram_webhook(
             
             # Обробити повідомлення
             message = await service.receive_message(
-                external_id=client_igsid,  # IGSID клієнта (завжди)
+                external_id=external_id_to_use,  # Використовуємо @username якщо є, інакше IGSID
                 content=content,
                 sender_info=sender_info,
                 attachments=attachments if attachments else None,
@@ -110,6 +117,7 @@ async def handle_instagram_webhook(
                     "timestamp": event.get("timestamp"),
                     "sender_id": sender_id,
                     "recipient_id": recipient_id,
+                    "igsid": client_igsid,  # Зберігаємо оригінальний IGSID в metadata
                 },
                 is_from_me=is_from_me,
             )

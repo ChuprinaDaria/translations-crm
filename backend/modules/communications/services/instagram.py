@@ -335,13 +335,32 @@ class InstagramService(MessengerService):
         subject: Optional[str] = None,
     ) -> Conversation:
         """Отримати або створити розмову."""
-        # Шукаємо існуючу розмову
+        # Якщо external_id починається з @, шукаємо за ним
+        # Якщо це IGSID (число), шукаємо за ним або за @username з metadata
+        search_id = external_id
+        
+        # Шукаємо існуючу розмову за external_id
         conversation = self.db.query(Conversation).filter(
             Conversation.platform == PlatformEnum.INSTAGRAM,
             Conversation.external_id == external_id,
         ).first()
         
+        # Якщо не знайдено і external_id це @username, шукаємо за IGSID в metadata
+        if not conversation and external_id.startswith("@"):
+            # Шукаємо розмови з цим IGSID в metadata повідомлень
+            from modules.communications.models import Message
+            messages = self.db.query(Message).join(Conversation).filter(
+                Conversation.platform == PlatformEnum.INSTAGRAM,
+                Message.meta_data.contains({"igsid": external_id.replace("@", "")})
+            ).first()
+            if messages:
+                conversation = messages.conversation
+        
         if conversation:
+            # Оновити external_id якщо він змінився (з IGSID на @username)
+            if external_id.startswith("@") and conversation.external_id != external_id:
+                conversation.external_id = external_id
+                self.db.commit()
             return conversation
         
         # Створюємо нову розмову

@@ -2219,6 +2219,7 @@ def get_instagram_config(db: Session = Depends(get_db), user = Depends(get_curre
         "access_token": settings.get("instagram_access_token") or "",
         "app_secret": settings.get("instagram_app_secret") or "",
         "verify_token": settings.get("instagram_verify_token") or "",
+        "page_id": settings.get("instagram_page_id") or "",
     }
 
 
@@ -2228,6 +2229,7 @@ def update_instagram_config(
     access_token: str = Form(""),
     app_secret: str = Form(""),
     verify_token: str = Form(""),
+    page_id: str = Form(""),
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
@@ -2236,8 +2238,8 @@ def update_instagram_config(
     logger = logging.getLogger(__name__)
     
     # Логування вхідних даних
-    logger.info(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}...")
-    print(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}...", flush=True)
+    logger.info(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}..., page_id={page_id[:10] if page_id else '(empty)'}...")
+    print(f"[Instagram Config] Received: app_id={app_id[:10] if app_id else '(empty)'}..., access_token={'***' if access_token else '(empty)'}, app_secret={'***' if app_secret else '(empty)'}, verify_token={verify_token[:10] if verify_token else '(empty)'}..., page_id={page_id[:10] if page_id else '(empty)'}...", flush=True)
     
     # Зберігаємо всі поля
     try:
@@ -2249,11 +2251,13 @@ def update_instagram_config(
         logger.info(f"[Instagram Config] Saved: instagram_app_secret")
         crud.set_setting(db, "instagram_verify_token", verify_token)
         logger.info(f"[Instagram Config] Saved: instagram_verify_token")
+        crud.set_setting(db, "instagram_page_id", page_id)
+        logger.info(f"[Instagram Config] Saved: instagram_page_id")
         
         # Перевіряємо що все збережено
         settings = crud.get_instagram_settings(db)
-        logger.info(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}")
-        print(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}", flush=True)
+        logger.info(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}, page_id: {bool(settings.get('instagram_page_id'))}")
+        print(f"[Instagram Config] Verification - app_id: {bool(settings.get('instagram_app_id'))}, access_token: {bool(settings.get('instagram_access_token'))}, app_secret: {bool(settings.get('instagram_app_secret'))}, verify_token: {bool(settings.get('instagram_verify_token'))}, page_id: {bool(settings.get('instagram_page_id'))}", flush=True)
         
         return {"status": "success"}
     except Exception as e:

@@ -34,10 +34,10 @@ export function handleNotificationNavigation(actionUrl: string | null | undefine
     }
   }
 
-  // Parse /communications?conversation={conversation_id}
+  // Parse /communications/inbox?conversation_id={conversation_id}
   if (actionUrl.startsWith('/communications')) {
     const url = new URL(actionUrl, window.location.origin);
-    const conversationId = url.searchParams.get('conversation');
+    const conversationId = url.searchParams.get('conversation_id') || url.searchParams.get('conversation');
     if (conversationId) {
       // Navigate to inbox page
       window.dispatchEvent(

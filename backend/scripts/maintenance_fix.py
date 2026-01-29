@@ -20,6 +20,7 @@ from sqlalchemy.orm import sessionmaker
 from core.database import SessionLocal
 from modules.communications.models import Conversation, Message, PlatformEnum
 from modules.communications.services.instagram import InstagramService
+from modules.crm.models import Client
 import logging
 
 logging.basicConfig(
