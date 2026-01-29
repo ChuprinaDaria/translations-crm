@@ -16,14 +16,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Виділяємо vendor chunks для кращої обробки залежностей
+          // Всі vendor бібліотеки (включаючи React) в одному chunk
+          // щоб уникнути проблем з порядком завантаження та TDZ помилок
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
             return 'vendor';
           }
-          // Виділяємо API модуль окремо
+          // Виділяємо API модуль окремо для кращого кешування
           if (id.includes('/lib/api')) {
             return 'api';
           }
