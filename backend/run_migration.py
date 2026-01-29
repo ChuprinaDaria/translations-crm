@@ -17,6 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini20
 MIGRATIONS = [
     "ensure_manager_smtp_accounts_table.sql",
     "fix_telegram_accounts_api_id_type.sql",
+    "fix_telegram_accounts_id_type.sql",  # Виправлення типу id з UUID на INTEGER
 ]
 
 def run_migration(migration_file: Path):
