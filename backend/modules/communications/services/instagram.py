@@ -49,7 +49,8 @@ class InstagramService(MessengerService):
         # Це дозволяє уникнути проблем з кешуванням та забезпечує актуальні дані
         try:
             settings = crud.get_instagram_settings(db)
-            logger.info(f"[Instagram Config] Loaded from DB: app_id={bool(settings.get('instagram_app_id'))}, access_token={bool(settings.get('instagram_access_token'))}, app_secret={bool(settings.get('instagram_app_secret'))}, verify_token={bool(settings.get('instagram_verify_token'))}")
+            page_id = settings.get("instagram_page_id") or ""
+            logger.info(f"[Instagram Config] Loaded from DB: app_id={bool(settings.get('instagram_app_id'))}, access_token={bool(settings.get('instagram_access_token'))}, app_secret={bool(settings.get('instagram_app_secret'))}, verify_token={bool(settings.get('instagram_verify_token'))}, page_id={bool(page_id)}")
             
             # Перевіряємо чи є хоча б один ключ (не обов'язково app_secret)
             if any(settings.values()):
@@ -58,9 +59,9 @@ class InstagramService(MessengerService):
                     "app_secret": settings.get("instagram_app_secret") or "",
                     "verify_token": settings.get("instagram_verify_token") or "",
                     "app_id": settings.get("instagram_app_id") or "",
-                    "page_id": settings.get("instagram_page_id") or "",
+                    "page_id": page_id,
                 }
-                logger.info(f"[Instagram Config] Using DB config, verify_token length: {len(config.get('verify_token', ''))}")
+                logger.info(f"[Instagram Config] Using DB config, verify_token length: {len(config.get('verify_token', ''))}, page_id: {bool(config.get('page_id'))}")
                 return config
         except Exception as e:
             logger.warning(f"[Instagram Config] Error loading from DB: {e}")
@@ -200,8 +201,14 @@ class InstagramService(MessengerService):
             page_id = self.config.get("page_id")
             access_token = self.config.get("access_token")
             
-            if not page_id or not access_token:
-                error_msg = "Instagram credentials not configured"
+            if not access_token:
+                error_msg = "Instagram access token is missing in settings"
+                logger.error(f"[Instagram Send] {error_msg}")
+                print(f"[Instagram Send] ERROR: {error_msg}", flush=True)
+                raise ValueError(error_msg)
+            
+            if not page_id:
+                error_msg = "Instagram Business ID (page_id) is missing in settings. Please configure it in Settings -> Instagram"
                 logger.error(f"[Instagram Send] {error_msg}")
                 print(f"[Instagram Send] ERROR: {error_msg}", flush=True)
                 raise ValueError(error_msg)
@@ -213,8 +220,24 @@ class InstagramService(MessengerService):
                 "Content-Type": "application/json",
             }
             
+            # Якщо external_id це @username, використовуємо IGSID з metadata першого повідомлення
+            recipient_id = conversation.external_id
+            if recipient_id.startswith("@"):
+                # Шукаємо IGSID в metadata повідомлень
+                first_message = self.db.query(Message).filter(
+                    Message.conversation_id == conversation_id
+                ).order_by(Message.created_at.asc()).first()
+                
+                if first_message and first_message.meta_data and first_message.meta_data.get("igsid"):
+                    recipient_id = first_message.meta_data["igsid"]
+                    logger.info(f"[Instagram Send] Using IGSID from metadata: {recipient_id[:20]}...")
+                else:
+                    # Якщо IGSID не знайдено, спробувати отримати з external_id (видалити @)
+                    # Але це не спрацює, тому краще використати оригінальний external_id
+                    logger.warning(f"[Instagram Send] IGSID not found in metadata, using external_id as-is")
+            
             payload = {
-                "recipient": {"id": conversation.external_id},  # Instagram User ID (IGSID)
+                "recipient": {"id": recipient_id},  # Instagram User ID (IGSID)
                 "message": {"text": content},
             }
             
@@ -345,16 +368,35 @@ class InstagramService(MessengerService):
             Conversation.external_id == external_id,
         ).first()
         
-        # Якщо не знайдено і external_id це @username, шукаємо за IGSID в metadata
-        if not conversation and external_id.startswith("@"):
-            # Шукаємо розмови з цим IGSID в metadata повідомлень
+        # Якщо не знайдено, шукаємо за IGSID або username в metadata
+        if not conversation:
             from modules.communications.models import Message
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Шукаємо всі повідомлення Instagram з metadata
             messages = self.db.query(Message).join(Conversation).filter(
                 Conversation.platform == PlatformEnum.INSTAGRAM,
-                Message.meta_data.contains({"igsid": external_id.replace("@", "")})
-            ).first()
-            if messages:
-                conversation = messages.conversation
+                Message.meta_data.isnot(None)
+            ).all()
+            
+            # Перевіряємо кожне повідомлення
+            for msg in messages:
+                if msg.meta_data and isinstance(msg.meta_data, dict):
+                    # Якщо external_id це @username, шукаємо за username в metadata
+                    if external_id.startswith("@"):
+                        username = external_id.replace("@", "")
+                        if msg.meta_data.get("username") == username:
+                            conversation = msg.conversation
+                            logger.info(f"[Instagram Conversation] Found by username: {username}")
+                            break
+                    else:
+                        # Якщо external_id це IGSID (числовий), шукаємо за IGSID в metadata
+                        igsid = msg.meta_data.get("igsid")
+                        if igsid and str(igsid) == str(external_id):
+                            conversation = msg.conversation
+                            logger.info(f"[Instagram Conversation] Found by IGSID: {external_id}")
+                            break
         
         if conversation:
             # Оновити external_id якщо він змінився (з IGSID на @username)

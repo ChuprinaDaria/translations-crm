@@ -96,31 +96,85 @@ async def handle_instagram_webhook(
             if username:
                 external_id_to_use = f"@{username}"
             
-            # Обробити вкладення
+            # Підготувати metadata з усією необхідною інформацією
+            # Важливо: metadata має бути dict, не JSON-рядок
+            metadata = {
+                "message_id": message_data.get("mid"),
+                "timestamp": event.get("timestamp"),
+                "sender_id": sender_id,
+                "recipient_id": recipient_id,
+                "igsid": client_igsid,  # Числовий Instagram Scoped ID
+            }
+            # Додати username якщо є
+            if username:
+                metadata["username"] = username
+            
+            # Обробити вкладення - завантажити з URL та зберегти
             attachments = []
             if "attachments" in message_data:
+                from modules.communications.utils.media import download_and_save_media
+                from uuid import UUID
+                
+                # Спочатку створюємо повідомлення, щоб отримати message_id
+                temp_message = await service.receive_message(
+                    external_id=external_id_to_use,
+                    content=content,
+                    sender_info=sender_info,
+                    attachments=None,  # Спочатку без вкладень
+                    metadata=metadata,
+                    is_from_me=is_from_me,
+                )
+                
+                # Завантажити та зберегти вкладення
                 for att in message_data["attachments"]:
-                    attachments.append({
-                        "type": att.get("type"),
-                        "url": att.get("payload", {}).get("url"),
-                        "title": att.get("title"),
-                    })
-            
-            # Обробити повідомлення
-            message = await service.receive_message(
-                external_id=external_id_to_use,  # Використовуємо @username якщо є, інакше IGSID
-                content=content,
-                sender_info=sender_info,
-                attachments=attachments if attachments else None,
-                metadata={
-                    "message_id": message_data.get("mid"),
-                    "timestamp": event.get("timestamp"),
-                    "sender_id": sender_id,
-                    "recipient_id": recipient_id,
-                    "igsid": client_igsid,  # Зберігаємо оригінальний IGSID в metadata
-                },
-                is_from_me=is_from_me,
-            )
+                    url = att.get("payload", {}).get("url")
+                    att_type = att.get("type", "image")
+                    mime_type = "image/jpeg"  # За замовчуванням для Instagram
+                    if att_type == "video":
+                        mime_type = "video/mp4"
+                    elif att_type == "audio":
+                        mime_type = "audio/mpeg"
+                    
+                    original_name = f"instagram_{att_type}_{sender_id[:10]}.jpg"
+                    if att_type == "video":
+                        original_name = f"instagram_video_{sender_id[:10]}.mp4"
+                    
+                    if url:
+                        # Завантажити та зберегти
+                        attachment = await download_and_save_media(
+                            db=db,
+                            message_id=UUID(str(temp_message.id)),
+                            url=url,
+                            mime_type=mime_type,
+                            original_name=original_name,
+                            file_type=att_type,
+                        )
+                        if attachment:
+                            attachments.append({
+                                "id": str(attachment.id),
+                                "type": att_type,
+                                "url": f"/media/{attachment.file_path.split('/')[-1]}",
+                                "filename": attachment.original_name,
+                            })
+                
+                # Оновити повідомлення з інформацією про вкладення
+                if attachments:
+                    if temp_message.meta_data is None:
+                        temp_message.meta_data = {}
+                    temp_message.meta_data["attachments"] = attachments
+                    db.commit()
+                
+                message = temp_message
+            else:
+                # Обробити повідомлення без вкладень
+                message = await service.receive_message(
+                    external_id=external_id_to_use,
+                    content=content,
+                    sender_info=sender_info,
+                    attachments=None,
+                    metadata=metadata,
+                    is_from_me=is_from_me,
+                )
             
             results.append({
                 "status": "processed",

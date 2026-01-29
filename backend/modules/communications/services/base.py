@@ -129,12 +129,31 @@ class MessengerService(ABC):
             content: Текст повідомлення
             status: Статус повідомлення
             attachments: Список вкладень
-            metadata: Додаткові метадані
+            metadata: Додаткові метадані (має бути dict, не JSON-рядок)
             sent_at: Час відправки
             
         Returns:
             Створене повідомлення
         """
+        import json
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Переконатися, що metadata - це dict, а не JSON-рядок
+        if metadata is not None:
+            if isinstance(metadata, str):
+                # Якщо передано JSON-рядок, розпарсити його
+                try:
+                    metadata = json.loads(metadata)
+                    logger.warning(f"[Message DB] Metadata was a string, parsed to dict")
+                except json.JSONDecodeError as e:
+                    logger.error(f"[Message DB] Failed to parse metadata string: {e}")
+                    metadata = {}
+            elif not isinstance(metadata, dict):
+                # Якщо це не dict і не рядок, конвертувати в dict
+                logger.warning(f"[Message DB] Metadata is not a dict, converting: {type(metadata)}")
+                metadata = {}
+        
         message = MessageModel(
             conversation_id=conversation_id,
             direction=direction,

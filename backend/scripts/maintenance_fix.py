@@ -18,9 +18,13 @@ sys.path.insert(0, str(backend_path))
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from core.database import SessionLocal
-from modules.communications.models import Conversation, Message, PlatformEnum
+
+# Імпортуємо всі моделі, які використовуються в relationships
+# Це необхідно для SQLAlchemy, щоб він міг знайти всі класи при створенні relationships
+from modules.auth.models import User  # Використовується в Conversation.assigned_manager
+from modules.crm.models import Client  # Використовується в Conversation.client
+from modules.communications.models import Conversation, Message, PlatformEnum, Attachment
 from modules.communications.services.instagram import InstagramService
-from modules.crm.models import Client
 import logging
 
 logging.basicConfig(
@@ -109,11 +113,13 @@ def fix_instagram_profiles(db, rate_limit_delay=1.0):
                     has_name = True
             
             # Якщо є Client, перевірити чи в нього є ім'я
-            if conv.client_id and conv.client:
-                from modules.crm.models import Client
-                client = db.query(Client).filter(Client.id == conv.client_id).first()
-                if client and (client.name or client.full_name):
-                    has_name = True
+            if conv.client_id:
+                try:
+                    client = db.query(Client).filter(Client.id == conv.client_id).first()
+                    if client and (client.name or client.full_name):
+                        has_name = True
+                except Exception as e:
+                    logger.warning(f"Error checking client for conversation {conv.id}: {e}")
             
             if has_name:
                 logger.debug(f"[{i}/{len(conversations)}] Conversation {conv.id} already has client name")
@@ -204,7 +210,10 @@ def fix_instagram_profiles(db, rate_limit_delay=1.0):
                 except Exception as e:
                     logger.warning(f"Could not save profile data for conversation {conv.id}: {e}")
                     error_count += 1
-                    db.rollback()
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass  # Ігноруємо помилки rollback
             else:
                 logger.warning(f"  ✗ No profile data for {conv.external_id[:20]}...")
                 error_count += 1
@@ -212,7 +221,10 @@ def fix_instagram_profiles(db, rate_limit_delay=1.0):
         except Exception as e:
             logger.error(f"Error processing conversation {conv.id}: {e}", exc_info=True)
             error_count += 1
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass  # Ігноруємо помилки rollback
             continue
     
     logger.info(f"\nInstagram profiles fixed: {fixed_count} successful, {error_count} errors, {skipped_count} skipped")
