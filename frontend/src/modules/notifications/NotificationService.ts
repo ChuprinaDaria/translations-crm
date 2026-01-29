@@ -4,6 +4,7 @@
  */
 
 import { toast } from "sonner";
+import { handleNotificationNavigation } from "./utils/navigation";
 
 export interface Notification {
   type: string;
@@ -119,7 +120,7 @@ class NotificationService {
         ? {
             label: "Переглянути",
             onClick: () => {
-              window.location.href = notification.action_url!;
+              handleNotificationNavigation(notification.action_url);
             },
           }
         : undefined,
@@ -157,7 +158,7 @@ class NotificationService {
       if (notification.action_url) {
         browserNotification.onclick = () => {
           window.focus();
-          window.location.href = notification.action_url!;
+          handleNotificationNavigation(notification.action_url);
           browserNotification.close();
         };
       }

@@ -5,10 +5,13 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { Message, ConversationListItem } from '../api/inbox';
 
 export interface WebSocketMessage {
-  type: 'new_message' | 'message_status' | 'conversation_update' | 'connection_established';
+  type: 'new_message' | 'message_status' | 'conversation_update' | 'connection_established' | 'manager_assigned';
   conversation_id?: string;
   message?: Message;
   conversation?: Partial<ConversationListItem>;
+  manager_id?: string;
+  manager_name?: string;
+  timestamp?: string;
 }
 
 interface UseMessagesWebSocketOptions {
@@ -96,6 +99,14 @@ export function useMessagesWebSocket({
 
           if (data.type === 'conversation_update' && data.conversation) {
             onConversationUpdateRef.current?.(data.conversation);
+          }
+
+          if (data.type === 'manager_assigned' && data.conversation_id) {
+            // Handle manager assignment as a conversation update
+            onConversationUpdateRef.current?.({
+              id: data.conversation_id,
+              assigned_manager_id: data.manager_id,
+            });
           }
         } catch (e) {
           console.error('[WebSocket] Failed to parse message:', e, event.data);

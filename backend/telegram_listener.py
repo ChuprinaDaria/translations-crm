@@ -23,6 +23,7 @@ import httpx
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
+# В Docker використовуємо backend:8000, локально - localhost:8000
 WEBSOCKET_NOTIFY_URL = os.getenv("WEBSOCKET_NOTIFY_URL", "http://localhost:8000/api/v1/communications/test-notification")
 
 # Files directory

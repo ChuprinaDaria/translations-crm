@@ -23,6 +23,7 @@ interface UseOpenChatsReturn {
   markChatAsRead: (conversationId: string) => void;
   getActiveChat: () => OpenChat | undefined;
   getStoredConversationIds: () => string[];
+  getStoredActiveTabId: () => string | null;
 }
 
 const MAX_OPEN_TABS = 7;
@@ -81,6 +82,12 @@ export function useOpenChats(): UseOpenChatsReturn {
   const getStoredConversationIds = useCallback((): string[] => {
     const stored = loadFromStorage();
     return stored?.conversationIds || [];
+  }, []);
+
+  // Get stored active tab ID for restoring
+  const getStoredActiveTabId = useCallback((): string | null => {
+    const stored = loadFromStorage();
+    return stored?.activeTabId || null;
   }, []);
 
   const openChat = useCallback((conversation: Conversation, messages: Message[]) => {
@@ -178,6 +185,7 @@ export function useOpenChats(): UseOpenChatsReturn {
     markChatAsRead,
     getActiveChat,
     getStoredConversationIds,
+    getStoredActiveTabId,
   };
 }
 

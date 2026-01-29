@@ -14,6 +14,7 @@ import { cn } from '@/components/ui/utils';
 import { notificationApi } from '../api';
 import type { Notification } from '../types';
 import { NotificationItem } from './NotificationItem';
+import { handleNotificationNavigation } from '../utils/navigation';
 
 interface NotificationCenterProps {
   userId: string;
@@ -94,9 +95,7 @@ export function NotificationCenter({ userId, onNotificationClick }: Notification
     onNotificationClick?.(notification);
     
     // Перейти за action_url якщо є
-    if (notification.action_url) {
-      window.location.href = notification.action_url;
-    }
+    handleNotificationNavigation(notification.action_url);
   };
 
   return (

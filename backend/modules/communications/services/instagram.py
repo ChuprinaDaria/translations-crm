@@ -102,18 +102,24 @@ class InstagramService(MessengerService):
         
         return hmac.compare_digest(expected_signature, received_signature)
     
-    async def get_user_profile(self, igsid: str) -> Optional[Dict[str, Any]]:
+    async def get_user_profile(self, igsid: str, rate_limit_delay: float = 0.0) -> Optional[Dict[str, Any]]:
         """
         Отримати профіль Instagram користувача за його IGSID через Graph API.
         
         Args:
             igsid: Instagram Scoped ID користувача
+            rate_limit_delay: Затримка перед запитом (для rate limiting)
             
         Returns:
-            Словник з полями: username, name, profile_picture_url
+            Словник з полями: username, name, profile_pic
         """
         import logging
+        import asyncio
         logger = logging.getLogger(__name__)
+        
+        # Rate limiting: затримка перед запитом
+        if rate_limit_delay > 0:
+            await asyncio.sleep(rate_limit_delay)
         
         access_token = self.config.get("access_token")
         if not access_token:
@@ -125,7 +131,7 @@ class InstagramService(MessengerService):
             # Використовуємо graph.instagram.com замість graph.facebook.com
             url = f"https://graph.instagram.com/v18.0/{igsid}"
             params = {
-                "fields": "username,name,profile_picture_url",
+                "fields": "username,name,profile_pic",
                 "access_token": access_token,
             }
             

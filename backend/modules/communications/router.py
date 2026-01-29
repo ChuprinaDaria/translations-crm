@@ -344,38 +344,78 @@ async def send_message(
     conversation.last_manager_response_at = datetime.now(timezone.utc)
     db.commit()
     
-    # Create message in DB
-    message = Message(
-        conversation_id=conversation_id,
-        direction=MessageDirection.OUTBOUND,
-        type=MessageType.TEXT,
-        content=request.content,
-        status=MessageStatus.QUEUED,
-        attachments=request.attachments,
-        meta_data=meta_data,
-    )
-    db.add(message)
-    db.commit()
-    db.refresh(message)
-    
     # Send via appropriate service based on platform
+    # Сервіси самі створюють повідомлення в БД
     try:
+        logger.info(f"Sending message via {conversation.platform} to conversation {conversation_id}")
+        
         if conversation.platform == PlatformEnum.TELEGRAM:
             from modules.communications.services.telegram import TelegramService
             service = TelegramService(db)
-            await service.send_message(
+            message = await service.send_message(
                 conversation_id=conversation_id,
                 content=request.content,
                 attachments=request.attachments,
+                metadata=meta_data,
             )
-            message.status = MessageStatus.SENT
+            
+        elif conversation.platform == PlatformEnum.INSTAGRAM:
+            from modules.communications.services.instagram import InstagramService
+            service = InstagramService(db)
+            message = await service.send_message(
+                conversation_id=conversation_id,
+                content=request.content,
+                attachments=request.attachments,
+                metadata=meta_data,
+            )
+            
+        elif conversation.platform == PlatformEnum.WHATSAPP:
+            from modules.communications.services.whatsapp import WhatsAppService
+            service = WhatsAppService(db)
+            message = await service.send_message(
+                conversation_id=conversation_id,
+                content=request.content,
+                attachments=request.attachments,
+                metadata=meta_data,
+            )
+            
+        elif conversation.platform == PlatformEnum.FACEBOOK:
+            from modules.communications.services.facebook import FacebookService
+            service = FacebookService(db)
+            message = await service.send_message(
+                conversation_id=conversation_id,
+                content=request.content,
+                attachments=request.attachments,
+                metadata=meta_data,
+            )
+            
+        elif conversation.platform == PlatformEnum.EMAIL:
+            from modules.communications.services.email import EmailService
+            service = EmailService(db)
+            message = await service.send_message(
+                conversation_id=conversation_id,
+                content=request.content,
+                attachments=request.attachments,
+                metadata=meta_data,
+            )
+            
         else:
-            # Other platforms - mark as sent for now
-            message.status = MessageStatus.SENT
+            # Unknown platform - create message manually and mark as sent
+            logger.warning(f"Unknown platform {conversation.platform}, message not actually sent")
+            message = Message(
+                conversation_id=conversation_id,
+                direction=MessageDirection.OUTBOUND,
+                type=MessageType.TEXT,
+                content=request.content,
+                status=MessageStatus.SENT,
+                attachments=request.attachments,
+                meta_data=meta_data,
+            )
+            db.add(message)
+            from datetime import datetime
+            message.sent_at = datetime.utcnow()
+            db.commit()
         
-        from datetime import datetime
-        message.sent_at = datetime.utcnow()
-        db.commit()
         db.refresh(message)
         
         # Broadcast to WebSocket
@@ -396,9 +436,14 @@ async def send_message(
         })
         
     except Exception as e:
-        logger.error(f"Failed to send message: {e}")
-        message.status = MessageStatus.FAILED
-        db.commit()
+        logger.error(f"Failed to send message via {conversation.platform}: {e}", exc_info=True)
+        # Якщо повідомлення було створено сервісом, оновити його статус
+        if 'message' in locals() and message:
+            try:
+                message.status = MessageStatus.FAILED
+                db.commit()
+            except Exception as commit_error:
+                logger.error(f"Failed to update message status: {commit_error}")
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
     
     return schemas.MessageRead.model_validate(message)
@@ -420,6 +465,44 @@ def mark_conversation_read(
     db.commit()
     
     return {"status": "ok"}
+
+
+@router.post("/conversations/{conversation_id}/assign-manager")
+async def assign_manager_to_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Assign current user as manager to conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Assign manager if not already assigned
+    if not conversation.assigned_manager_id:
+        conversation.assigned_manager_id = user.id
+        logger.info(f"Assigned manager {user.id} to conversation {conversation_id}")
+        db.commit()
+        db.refresh(conversation)
+        
+        # Broadcast assignment to all connected managers via WebSocket
+        from modules.communications.router import messages_manager
+        assignment_notification = {
+            "type": "manager_assigned",
+            "conversation_id": str(conversation_id),
+            "manager_id": str(user.id),
+            "manager_name": f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email,
+            "timestamp": conversation.updated_at.isoformat() if conversation.updated_at else None,
+        }
+        await messages_manager.broadcast(assignment_notification)
+        logger.info(f"Broadcasted manager assignment for conversation {conversation_id}")
+    
+    return {
+        "status": "ok",
+        "assigned_manager_id": str(conversation.assigned_manager_id),
+        "assigned": conversation.assigned_manager_id == user.id,
+    }
 
 
 @router.post("/conversations/{conversation_id}/create-client")

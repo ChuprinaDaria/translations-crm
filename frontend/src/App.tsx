@@ -278,6 +278,8 @@ function App() {
         }, 100);
       } else if (path === '/crm') {
         setActiveItem('crm');
+      } else if (path === '/inbox') {
+        setActiveItem('inbox');
       }
     };
 

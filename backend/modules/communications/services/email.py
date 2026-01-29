@@ -177,6 +177,7 @@ class EmailService(MessengerService):
         metadata: Optional[Dict[str, Any]] = None,
         is_from_me: Optional[bool] = None,
         to_email: Optional[str] = None,
+        html_content: Optional[str] = None,
     ) -> "MessageModel":
         """Обробити вхідне email повідомлення."""
         from modules.communications.models import Message as MessageModel
@@ -201,11 +202,17 @@ class EmailService(MessengerService):
             manager_smtp_account_id=manager_smtp_account_id,
         )
         
+        # Додати HTML в meta_data якщо є
+        if metadata is None:
+            metadata = {}
+        if html_content:
+            metadata['html_content'] = html_content
+        
         # Створити повідомлення
         message = self.create_message_in_db(
             conversation_id=conversation.id,
             direction=MessageDirection.INBOUND,
-            message_type=MessageType.HTML,
+            message_type=MessageType.HTML if html_content else MessageType.TEXT,
             content=content,
             status=MessageStatus.SENT,
             attachments=attachments,
@@ -287,27 +294,79 @@ class EmailService(MessengerService):
                         email_body = msg_data[0][1]
                         email_message = email.message_from_bytes(email_body)
                         
-                        # Парсити email
-                        sender = email_message['From']
-                        subject = email_message['Subject']
-                        to = email_message['To']
+                        # Парсити email з MIME декодуванням
+                        from email.header import decode_header
                         
-                        # Отримати текст
-                        if email_message.is_multipart():
-                            content = ""
-                            for part in email_message.walk():
-                                if part.get_content_type() == "text/html":
-                                    content = part.get_payload(decode=True).decode()
-                                    break
-                                elif part.get_content_type() == "text/plain" and not content:
-                                    content = part.get_payload(decode=True).decode()
+                        # Декодувати From
+                        sender_raw = email_message['From'] or ""
+                        sender_decoded_parts = decode_header(sender_raw)
+                        sender_decoded = "".join([
+                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                            for part in sender_decoded_parts
+                        ])
+                        
+                        # Декодувати Subject
+                        subject_raw = email_message['Subject'] or ""
+                        subject_decoded_parts = decode_header(subject_raw)
+                        subject = "".join([
+                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                            for part in subject_decoded_parts
+                        ])
+                        
+                        to = email_message['To'] or ""
+                        
+                        # Витягнути email адреси з декодованого From
+                        sender_email = sender_decoded
+                        sender_name = ""
+                        if '<' in sender_decoded:
+                            sender_email = sender_decoded.split('<')[1].split('>')[0].strip()
+                            sender_name = sender_decoded.split('<')[0].strip().strip('"\'')
                         else:
-                            content = email_message.get_payload(decode=True).decode()
+                            sender_name = sender_decoded
+                        
+                        # Отримати текст та HTML
+                        content = ""
+                        html_content = ""
+                        attachments = []
+                        if email_message.is_multipart():
+                            for part in email_message.walk():
+                                content_type = part.get_content_type()
+                                if content_type == "text/html":
+                                    html_content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                                    if not content:  # Якщо немає plain text, використати HTML
+                                        content = html_content
+                                elif content_type == "text/plain" and not content:
+                                    content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                                elif part.get_content_disposition() == 'attachment':
+                                    # Обробити вкладення
+                                    filename = part.get_filename()
+                                    if filename:
+                                        # Декодувати ім'я файлу
+                                        filename_parts = decode_header(filename)
+                                        decoded_filename = "".join([
+                                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                                            for part in filename_parts
+                                        ])
+                                        file_data = part.get_payload(decode=True)
+                                        attachments.append({
+                                            "filename": decoded_filename,
+                                            "content_type": content_type,
+                                            "data": file_data,
+                                        })
+                        else:
+                            payload = email_message.get_payload(decode=True)
+                            if payload:
+                                content = payload.decode('utf-8', errors='ignore')
+                                if email_message.get_content_type() == "text/html":
+                                    html_content = content
+                        
+                        if not content:
+                            content = "(No content)"
                         
                         # Обробити повідомлення
                         sender_info = {
-                            "email": sender,
-                            "name": sender.split('<')[0].strip() if '<' in sender else sender,
+                            "email": sender_email,
+                            "name": sender_name,
                             "subject": subject,
                         }
                         
@@ -319,10 +378,12 @@ class EmailService(MessengerService):
                             to_email = to.strip()
                         
                         message = await self.receive_message(
-                            external_id=sender,
+                            external_id=sender_email,
                             content=content,
                             sender_info=sender_info,
                             to_email=to_email,
+                            html_content=html_content if html_content else None,
+                            attachments=attachments if attachments else None,
                         )
                         messages.append(message)
             

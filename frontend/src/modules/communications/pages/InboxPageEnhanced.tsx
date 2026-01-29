@@ -62,6 +62,7 @@ export function InboxPageEnhanced() {
     markChatAsRead,
     getActiveChat,
     getStoredConversationIds,
+    getStoredActiveTabId,
   } = useOpenChats();
   const [client, setClient] = useState<Client | undefined>(undefined);
   const [orders, setOrders] = useState<Array<{
@@ -142,11 +143,35 @@ export function InboxPageEnhanced() {
     }
   }, [openChats, updateChatMessages, conversations, addNotification]);
 
+  // Handle conversation updates from WebSocket (e.g., manager assignment)
+  const handleWebSocketConversationUpdate = useCallback((conversation: Partial<ConversationListItem>) => {
+    console.log('[WebSocket] Conversation update received:', conversation);
+    
+    // Update conversations list
+    if (conversation.id) {
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversation.id 
+          ? { ...conv, ...conversation }
+          : conv
+      ));
+      
+      // Update open chat if it's open
+      const chat = openChats.find(c => c.conversationId === conversation.id);
+      if (chat && conversation.assigned_manager_id !== undefined) {
+        updateChatMessages(conversation.id, chat.messages, {
+          ...chat.conversation,
+          assigned_manager_id: conversation.assigned_manager_id,
+        });
+      }
+    }
+  }, [openChats, updateChatMessages]);
+
   // WebSocket for real-time updates
   const userId = getUserIdFromToken();
   const { isConnected: wsConnected } = useMessagesWebSocket({
     userId: userId || 'current-user', // Fallback if no user ID found
     onNewMessage: handleWebSocketNewMessage,
+    onConversationUpdate: handleWebSocketConversationUpdate,
     onConnect: () => {
       console.log('[WebSocket] Connected to real-time messages');
     },
@@ -175,6 +200,7 @@ export function InboxPageEnhanced() {
   useEffect(() => {
     if (conversations && conversations.length > 0 && openChats.length === 0 && !isLoading) {
       const storedIds = getStoredConversationIds();
+      const storedActiveTabId = getStoredActiveTabId();
       
       if (storedIds.length > 0) {
         // Restore previously open chats
@@ -189,15 +215,40 @@ export function InboxPageEnhanced() {
               }
             }
           }
+          
+          // Restore active tab after all chats are restored
+          if (storedActiveTabId && storedIds.includes(storedActiveTabId)) {
+            // Wait a bit for chats to be fully loaded
+            setTimeout(() => {
+              switchToChat(storedActiveTabId);
+            }, 100);
+          }
         };
         restoreChats();
       } else {
         // No stored chats - open first conversation
         const firstConversation = conversations[0];
-        handleOpenChat(firstConversation.id);
+        if (firstConversation) {
+          handleOpenChat(firstConversation.id);
+        }
       }
     }
-  }, [conversations, openChats.length, isLoading]);
+  }, [conversations, openChats.length, isLoading, getStoredConversationIds, getStoredActiveTabId, switchToChat]);
+
+  // Listen for navigation events to open conversation
+  useEffect(() => {
+    const handleNavigateConversation = (event: CustomEvent) => {
+      const { conversationId } = event.detail;
+      if (conversationId) {
+        handleOpenChat(conversationId);
+      }
+    };
+
+    window.addEventListener('navigate:conversation', handleNavigateConversation as EventListener);
+    return () => {
+      window.removeEventListener('navigate:conversation', handleNavigateConversation as EventListener);
+    };
+  }, [handleOpenChat]);
 
   // Keyboard shortcuts
   const activeIndex = openChats.findIndex(chat => chat.conversationId === activeTabId);
@@ -291,6 +342,14 @@ export function InboxPageEnhanced() {
   const handleOpenChat = async (conversationId: string) => {
     // Перевірити чи вже відкритий
     const existingChat = openChats.find(chat => chat.conversationId === conversationId);
+    
+    // Призначити менеджера при відкритті діалогу
+    try {
+      await inboxApi.assignManager(conversationId);
+    } catch (error) {
+      console.error('Failed to assign manager:', error);
+      // Не блокуємо відкриття діалогу, якщо призначення не вдалося
+    }
     
     // Позначити як прочитане та оновити локальний стан
     try {

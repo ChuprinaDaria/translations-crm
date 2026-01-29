@@ -13,6 +13,7 @@ import { LanguageSwitcher } from "../LanguageSwitcher";
 import { NotificationCenter } from "@/modules/notifications/components/NotificationCenter";
 import { NotificationSettings } from "@/modules/notifications/components/NotificationSettings";
 import { getUserIdFromToken } from "@/modules/notifications/utils/userId";
+import { handleNotificationNavigation } from "@/modules/notifications/utils/navigation";
 
 interface HeaderProps {
   breadcrumbs: { label: string; href?: string }[];
@@ -88,9 +89,7 @@ export function Header({
               <NotificationCenter 
                 userId={userId} 
                 onNotificationClick={(notification) => {
-                  if (notification.action_url) {
-                    window.location.href = notification.action_url;
-                  }
+                  handleNotificationNavigation(notification.action_url);
                 }}
               />
               <NotificationSettings userId={userId} />

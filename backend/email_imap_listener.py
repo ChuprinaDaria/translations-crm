@@ -115,25 +115,48 @@ def get_or_create_conversation(db, external_id: str, subject: str = None, manage
     return conv_id
 
 
-def save_message(db, conv_id: str, content: str, sender_email: str, sender_name: str, subject: str):
+def save_message(db, conv_id: str, content: str, sender_email: str, sender_name: str, subject: str, html_content: str = None, attachments: list = None):
     """Save incoming email message to database."""
     from uuid import uuid4
+    import json
     msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
     
+    # Визначити тип повідомлення
+    message_type = 'html' if html_content else 'text'
+    
+    # Зберегти HTML в meta_data якщо є
+    meta_data = {}
+    if html_content:
+        meta_data['html_content'] = html_content
+    if attachments:
+        # Зберігаємо інформацію про attachments в meta_data
+        # Самі файли потрібно буде зберегти окремо в файлову систему
+        meta_data['attachments'] = [
+            {
+                "filename": att.get("filename"),
+                "content_type": att.get("content_type"),
+                "size": len(att.get("data", b""))
+            }
+            for att in attachments
+        ]
+    
     db.execute(text("""
         INSERT INTO communications_messages 
-        (id, conversation_id, direction, type, content, status, created_at)
-        VALUES (:id, :conversation_id, 'inbound', 'html', :content, 'sent', :now)
+        (id, conversation_id, direction, type, content, status, created_at, meta_data, attachments)
+        VALUES (:id, :conversation_id, 'inbound', :type, :content, 'sent', :now, :meta_data, :attachments)
     """), {
         "id": msg_id,
         "conversation_id": conv_id,
+        "type": message_type,
         "content": content,
+        "meta_data": json.dumps(meta_data) if meta_data else None,
+        "attachments": json.dumps(attachments) if attachments else None,
         "now": now
     })
     db.commit()
     
-    logger.info(f"Saved message {msg_id} in conversation {conv_id}")
+    logger.info(f"Saved message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)}, has_attachments: {bool(attachments)})")
     return msg_id
 
 
@@ -218,30 +241,54 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                         email_body = msg_data[0][1]
                         email_message = email.message_from_bytes(email_body)
                         
-                        # Парсити email
-                        sender = email_message['From']
-                        subject = email_message['Subject'] or "No Subject"
-                        to = email_message['To']
+                        # Парсити email з MIME декодуванням
+                        from email.header import decode_header
                         
-                        # Витягнути email адреси
-                        sender_email = sender
-                        if '<' in sender:
-                            sender_email = sender.split('<')[1].split('>')[0].strip()
-                            sender_name = sender.split('<')[0].strip()
+                        # Декодувати From
+                        sender_raw = email_message['From'] or ""
+                        sender_decoded_parts = decode_header(sender_raw)
+                        sender_decoded = "".join([
+                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                            for part in sender_decoded_parts
+                        ])
+                        
+                        # Декодувати Subject
+                        subject_raw = email_message['Subject'] or "No Subject"
+                        subject_decoded_parts = decode_header(subject_raw)
+                        subject = "".join([
+                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                            for part in subject_decoded_parts
+                        ])
+                        
+                        to = email_message['To'] or ""
+                        
+                        # Витягнути email адреси з декодованого From
+                        sender_email = sender_decoded
+                        sender_name = ""
+                        if '<' in sender_decoded:
+                            sender_email = sender_decoded.split('<')[1].split('>')[0].strip()
+                            sender_name = sender_decoded.split('<')[0].strip().strip('"\'')
                         else:
-                            sender_name = sender
+                            sender_name = sender_decoded
                         
-                        # Отримати текст
+                        # Отримати текст та HTML
                         content = ""
+                        html_content = ""
                         if email_message.is_multipart():
                             for part in email_message.walk():
-                                if part.get_content_type() == "text/html":
-                                    content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                                    break
-                                elif part.get_content_type() == "text/plain" and not content:
+                                content_type = part.get_content_type()
+                                if content_type == "text/html":
+                                    html_content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                                    if not content:  # Якщо немає plain text, використати HTML
+                                        content = html_content
+                                elif content_type == "text/plain" and not content:
                                     content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
                         else:
-                            content = email_message.get_payload(decode=True).decode('utf-8', errors='ignore')
+                            payload = email_message.get_payload(decode=True)
+                            if payload:
+                                content = payload.decode('utf-8', errors='ignore')
+                                if email_message.get_content_type() == "text/html":
+                                    html_content = content
                         
                         if not content:
                             content = "(No content)"
@@ -252,6 +299,8 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                             "subject": subject,
                             "to": to,
                             "content": content,
+                            "html_content": html_content if html_content else None,
+                            "attachments": attachments if attachments else [],
                             "account_id": account["id"],
                             "account_email": account["email"],
                         })
@@ -300,6 +349,8 @@ async def process_account(account: Dict[str, Any]):
                     sender_email=email_data["sender_email"],
                     sender_name=email_data["sender_name"],
                     subject=email_data["subject"],
+                    html_content=email_data.get("html_content"),
+                    attachments=email_data.get("attachments", []),
                 )
                 
                 # Сповістити через WebSocket

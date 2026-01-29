@@ -120,6 +120,16 @@ export const inboxApi = {
   },
 
   /**
+   * Assign current user as manager to conversation
+   */
+  async assignManager(conversationId: string): Promise<{ status: string; assigned_manager_id: string; assigned: boolean }> {
+    return apiFetch(
+      `/communications/conversations/${conversationId}/assign-manager`,
+      { method: 'POST' }
+    );
+  },
+
+  /**
    * Create client from conversation
    */
   async createClientFromConversation(conversationId: string, data?: {
