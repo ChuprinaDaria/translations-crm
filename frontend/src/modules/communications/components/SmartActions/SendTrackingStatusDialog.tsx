@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../../components/ui/dialog';
 import { Button } from '../../../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
 import { Input } from '../../../../components/ui/input';
@@ -157,6 +157,9 @@ export function SendTrackingStatusDialog({
             <Package className="w-5 h-5" />
             📦 Відправити статус
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Діалогове вікно для відправки статусу доставки замовлення
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

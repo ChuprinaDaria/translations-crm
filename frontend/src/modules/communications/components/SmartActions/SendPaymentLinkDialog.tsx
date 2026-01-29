@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../../components/ui/dialog';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
@@ -92,6 +92,9 @@ export function SendPaymentLinkDialog({
             <CreditCard className="w-5 h-5" />
             💳 Відправити оплату
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Діалогове вікно для відправки посилання на оплату
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

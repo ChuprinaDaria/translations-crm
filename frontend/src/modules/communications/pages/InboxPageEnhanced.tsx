@@ -18,7 +18,7 @@ import { CreateOrderDialog } from '../components/SmartActions/CreateOrderDialog'
 import { SendPaymentLinkDialog } from '../components/SmartActions/SendPaymentLinkDialog';
 import { SendTrackingStatusDialog } from '../components/SmartActions/SendTrackingStatusDialog';
 import { AddInternalNoteDialog } from '../components/SmartActions/AddInternalNoteDialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../components/ui/dialog';
 import { DeadlineDialogContent } from '../components/SmartActions/DeadlineDialogContent';
 import { NotificationToast, type NotificationData } from '../components/NotificationToast';
 import { useNotifications } from '../hooks/useNotifications';
@@ -1239,6 +1239,7 @@ export function InboxPageEnhanced() {
                 onOpenChange={setCreateOrderDialogOpen}
                 clientId={client.id}
                 onSuccess={handleCreateOrderSuccess}
+                conversation={chatConversation}
               />
               
               {orders.length > 0 && (
@@ -1304,6 +1305,9 @@ export function InboxPageEnhanced() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ustaw termin dla zlecenia</DialogTitle>
+            <DialogDescription className="sr-only">
+              Діалогове вікно для встановлення терміну виконання замовлення
+            </DialogDescription>
           </DialogHeader>
           <DeadlineDialogContent 
             onConfirm={handleCreateOrderWithDeadline}

@@ -83,8 +83,15 @@ export function useMessagesWebSocket({
       };
 
       wsRef.current.onmessage = (event) => {
-        // Handle ping/pong - don't try to parse as JSON
+        // Handle ping/pong для keep-alive з'єднання
+        if (event.data === 'ping') {
+          wsRef.current?.send('pong');
+          console.log('[WebSocket] Received ping, sent pong');
+          return;
+        }
+        
         if (event.data === 'pong') {
+          console.log('[WebSocket] Received pong');
           return;
         }
         

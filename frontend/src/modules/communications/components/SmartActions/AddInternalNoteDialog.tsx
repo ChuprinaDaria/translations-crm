@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../../components/ui/dialog';
 import { Button } from '../../../../components/ui/button';
 import { Textarea } from '../../../../components/ui/textarea';
 import { Label } from '../../../../components/ui/label';
@@ -90,6 +90,9 @@ export function AddInternalNoteDialog({
             <FileText className="w-5 h-5" />
             📝 Нотатка
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Діалогове вікно для додавання внутрішньої нотатки
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../../components/ui/dialog';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -12,12 +12,24 @@ import { ordersApi } from '../../../crm/api/orders';
 import { getUserIdFromToken } from '../../../notifications/utils/userId';
 import { clientsApi } from '../../../crm/api/clients';
 import { languagesApi, type Language } from '../../../crm/api/languages';
+import { cn } from '../../../../components/ui/utils';
+
+interface Conversation {
+  id: string;
+  platform?: 'telegram' | 'whatsapp' | 'email' | 'facebook' | 'instagram';
+  external_id?: string;
+  subject?: string;
+  client_id?: string;
+  client_name?: string;
+  client_avatar?: string;
+}
 
 interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientId: string;
   onSuccess?: (orderId: string) => void;
+  conversation?: Conversation | null;
 }
 
 // Типи документів (спрощений список)
@@ -53,6 +65,7 @@ export function CreateOrderDialog({
   onOpenChange,
   clientId,
   onSuccess,
+  conversation,
 }: CreateOrderDialogProps) {
   const [documentType, setDocumentType] = useState('');
   const [customDocumentType, setCustomDocumentType] = useState('');
@@ -245,6 +258,24 @@ export function CreateOrderDialog({
     }
   }, [open]);
 
+  // Автоматично вибираємо джерело замовлення на основі платформи розмови
+  useEffect(() => {
+    if (open && conversation?.platform && !orderSource) {
+      const platformToSource: Record<string, string> = {
+        'telegram': 'Telegram',
+        'whatsapp': 'WhatsApp',
+        'instagram': 'Instagram',
+        'facebook': 'Facebook',
+        'email': 'Email',
+      };
+      
+      const source = platformToSource[conversation.platform.toLowerCase()];
+      if (source) {
+        setOrderSource(source);
+      }
+    }
+  }, [open, conversation?.platform, orderSource]);
+
   // Завантажуємо офіси, мови та дані клієнта при відкритті діалогу
   useEffect(() => {
     if (open) {
@@ -356,48 +387,50 @@ export function CreateOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-2">
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            📝 Nowe zlecenie
+            <FileText className="h-5 w-5" />
+            Nowe zlecenie
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Діалогове вікно для створення нового замовлення
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Тип документа */}
-          <div className="space-y-3">
-            <Label>
+          {/* Тип документа - компактні чіпси */}
+          <div className="space-y-2">
+            <Label className="text-sm">
               Тип документа <span className="text-red-500">*</span>
             </Label>
             
-            {/* Типи документів як кнопки */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Типи документів як горизонтальні чіпси */}
+            <div className="flex flex-wrap gap-2">
               {DOCUMENT_TYPES_SIMPLE.map((type) => (
-                <Button
+                <button
                   key={type.value}
                   type="button"
-                  variant={documentType === type.value ? "default" : "outline"}
-                  size="sm"
                   onClick={() => {
                     setDocumentType(type.value);
                     setCustomDocumentType('');
                   }}
-                  className={`justify-start ${
+                  className={cn(
+                    "px-3 py-1.5 text-sm rounded-full border transition-colors",
                     documentType === type.value
-                      ? "bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
-                      : ""
-                  }`}
+                      ? "bg-[#FF5A00] text-white border-[#FF5A00]"
+                      : "bg-white hover:bg-gray-50 border-gray-200"
+                  )}
                 >
-                  <span className="mr-2">{type.icon}</span>
+                  <span className="mr-1.5">{type.icon}</span>
                   {type.label.split(' - ')[0]}
-                </Button>
+                </button>
               ))}
             </div>
             
             {/* Кастомний тип документа */}
-            <div className="space-y-2">
-              <Label className="text-sm text-gray-600">
+            <div className="space-y-1">
+              <Label className="text-xs text-gray-600">
                 Або введіть власний тип:
               </Label>
               <Input
@@ -414,69 +447,98 @@ export function CreateOrderDialog({
             </div>
           </div>
 
-          {/* Мова */}
-          <div className="space-y-2">
-            <Label htmlFor="language">
-              Мова <span className="text-red-500">*</span>
-            </Label>
-            {isLoadingLanguages ? (
-              <div className="h-10 flex items-center text-sm text-gray-500">
-                Завантаження мов...
-              </div>
-            ) : (
-              <Select value={language} onValueChange={setLanguage} required>
-                <SelectTrigger id="language">
-                  <SelectValue placeholder="Оберіть мову" />
+          {/* Мова та Джерело замовлення - 2 колонки */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="language" className="text-sm">
+                Мова <span className="text-red-500">*</span>
+              </Label>
+              {isLoadingLanguages ? (
+                <div className="h-10 flex items-center text-xs text-gray-500">
+                  Завантаження...
+                </div>
+              ) : (
+                <Select value={language} onValueChange={setLanguage} required>
+                  <SelectTrigger id="language" className="h-9">
+                    <SelectValue placeholder="Оберіть мову" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableLanguages.map((lang) => (
+                      <SelectItem key={lang.id} value={lang.name_pl}>
+                        {lang.name_pl} {lang.base_client_price > 0 && `(${lang.base_client_price} PLN)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="order_source" className="text-sm">
+                Джерело замовлення
+              </Label>
+              <Select value={orderSource} onValueChange={setOrderSource}>
+                <SelectTrigger id="order_source" className="h-9">
+                  <SelectValue placeholder="Оберіть джерело" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableLanguages.map((lang) => (
-                    <SelectItem key={lang.id} value={lang.name_pl}>
-                      {lang.name_pl} {lang.base_client_price > 0 && `(${lang.base_client_price} PLN)`}
+                  {ORDER_SOURCES.map((source) => (
+                    <SelectItem key={source.value} value={source.value}>
+                      {source.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
-          </div>
-          
-          {/* Джерело замовлення */}
-          <div className="space-y-2">
-            <Label htmlFor="order_source">
-              Джерело замовлення
-            </Label>
-            <Select value={orderSource} onValueChange={setOrderSource}>
-              <SelectTrigger id="order_source">
-                <SelectValue placeholder="Оберіть джерело" />
-              </SelectTrigger>
-              <SelectContent>
-                {ORDER_SOURCES.map((source) => (
-                  <SelectItem key={source.value} value={source.value}>
-                    {source.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            </div>
           </div>
 
-          {/* Дедлайн */}
-          <div className="space-y-2">
-            <Label htmlFor="deadline" className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Дедлайн
-            </Label>
-            <Input
-              id="deadline"
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
-          </div>
-
-          {/* Ціни */}
+          {/* Дедлайн та Статус оплати - 2 колонки */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="price_netto" className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
+              <Label htmlFor="deadline" className="text-sm flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                Дедлайн
+              </Label>
+              <Input
+                id="deadline"
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5" />
+                Статус оплати
+              </Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((method) => (
+                    <SelectItem key={method.value} value={method.value}>
+                      {method.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          {paymentMethod !== 'none' && (
+            <p className="text-xs text-green-600 -mt-2">
+              ✅ Zlecenie zostanie utworzone ze statusem "Opłacone"
+            </p>
+          )}
+
+          {/* Ціни - 2 колонки */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="price_netto" className="text-sm flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5" />
                 Ціна нетто (zł)
               </Label>
               <Input
@@ -486,11 +548,12 @@ export function CreateOrderDialog({
                 value={priceNetto}
                 onChange={(e) => setPriceNetto(e.target.value)}
                 placeholder="0.00"
+                className="h-9"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="price_brutto" className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
+              <Label htmlFor="price_brutto" className="text-sm flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5" />
                 Ціна брутто (zł)
               </Label>
               <Input
@@ -500,43 +563,19 @@ export function CreateOrderDialog({
                 value={priceBrutto}
                 onChange={(e) => setPriceBrutto(e.target.value)}
                 placeholder="0.00"
+                className="h-9"
               />
             </div>
           </div>
 
-          {/* Спосіб оплати */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
-              Статус оплати
-            </Label>
-            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((method) => (
-                  <SelectItem key={method.value} value={method.value}>
-                    {method.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {paymentMethod !== 'none' && (
-              <p className="text-xs text-green-600">
-                ✅ Zlecenie zostanie utworzone ze statusem "Opłacone"
-              </p>
-            )}
-          </div>
-
           {/* Спосіб доставки */}
           <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Truck className="w-4 h-4" />
+            <Label className="text-sm flex items-center gap-1.5">
+              <Truck className="w-3.5 h-3.5" />
               Спосіб доставки
             </Label>
             <Select value={deliveryMethod} onValueChange={(v) => setDeliveryMethod(v as 'office' | 'inpost_courier' | 'inpost_locker')}>
-              <SelectTrigger>
+              <SelectTrigger className="h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -565,15 +604,15 @@ export function CreateOrderDialog({
           {/* Офіс (якщо вибрано офіс) */}
           {deliveryMethod === 'office' && (
             <div className="space-y-2">
-              <Label htmlFor="office" className="flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
+              <Label htmlFor="office" className="text-sm flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" />
                 Офіс видачі
               </Label>
               {isLoadingOffices ? (
-                <div className="text-sm text-gray-500 py-2">Завантаження офісів...</div>
+                <div className="text-xs text-gray-500 py-2">Завантаження офісів...</div>
               ) : (
                 <Select value={officeId} onValueChange={setOfficeId}>
-                  <SelectTrigger id="office">
+                  <SelectTrigger id="office" className="h-9">
                     <SelectValue placeholder="Оберіть офіс" />
                   </SelectTrigger>
                   <SelectContent>
@@ -595,7 +634,7 @@ export function CreateOrderDialog({
                 </Select>
               )}
               {officeId && offices.find(o => o.id.toString() === officeId) && (
-                <div className="text-xs text-gray-500 space-y-1">
+                <div className="text-xs text-gray-500 space-y-0.5">
                   <div>{offices.find(o => o.id.toString() === officeId)?.address}</div>
                   <div>📞 {offices.find(o => o.id.toString() === officeId)?.phone}</div>
                   <div>🕐 {offices.find(o => o.id.toString() === officeId)?.working_hours}</div>
@@ -606,7 +645,7 @@ export function CreateOrderDialog({
 
           {/* InPost кур'єр поля */}
           {deliveryMethod === 'inpost_courier' && (
-            <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <Label className="text-sm font-medium text-blue-900">Дані для доставки кур'єром</Label>
               <div className="space-y-2">
                 <div className="space-y-1">
@@ -617,27 +656,32 @@ export function CreateOrderDialog({
                     onChange={(e) => setCourierAddress(e.target.value)}
                     placeholder="Введіть адресу доставки"
                     required
+                    className="h-9"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="courier-email" className="text-xs">Email</Label>
-                  <Input
-                    id="courier-email"
-                    type="email"
-                    value={courierEmail}
-                    onChange={(e) => setCourierEmail(e.target.value)}
-                    placeholder={clientData?.email || "Email"}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="courier-phone" className="text-xs">Телефон</Label>
-                  <Input
-                    id="courier-phone"
-                    type="tel"
-                    value={courierPhone}
-                    onChange={(e) => setCourierPhone(e.target.value)}
-                    placeholder={clientData?.phone || "Телефон"}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="courier-email" className="text-xs">Email</Label>
+                    <Input
+                      id="courier-email"
+                      type="email"
+                      value={courierEmail}
+                      onChange={(e) => setCourierEmail(e.target.value)}
+                      placeholder={clientData?.email || "Email"}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="courier-phone" className="text-xs">Телефон</Label>
+                    <Input
+                      id="courier-phone"
+                      type="tel"
+                      value={courierPhone}
+                      onChange={(e) => setCourierPhone(e.target.value)}
+                      placeholder={clientData?.phone || "Телефон"}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -645,7 +689,7 @@ export function CreateOrderDialog({
 
           {/* InPost автомат поля */}
           {deliveryMethod === 'inpost_locker' && (
-            <div className="space-y-3 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="space-y-2 p-3 bg-green-50 rounded-lg border border-green-200">
               <Label className="text-sm font-medium text-green-900">Дані для доставки в автомат</Label>
               <div className="space-y-2">
                 <div className="space-y-1">
@@ -656,27 +700,32 @@ export function CreateOrderDialog({
                     onChange={(e) => setLockerNumber(e.target.value)}
                     placeholder="Введіть номер автомата"
                     required
+                    className="h-9"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="locker-email" className="text-xs">Email</Label>
-                  <Input
-                    id="locker-email"
-                    type="email"
-                    value={lockerEmail}
-                    onChange={(e) => setLockerEmail(e.target.value)}
-                    placeholder={clientData?.email || "Email"}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="locker-phone" className="text-xs">Телефон</Label>
-                  <Input
-                    id="locker-phone"
-                    type="tel"
-                    value={lockerPhone}
-                    onChange={(e) => setLockerPhone(e.target.value)}
-                    placeholder={clientData?.phone || "Телефон"}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="locker-email" className="text-xs">Email</Label>
+                    <Input
+                      id="locker-email"
+                      type="email"
+                      value={lockerEmail}
+                      onChange={(e) => setLockerEmail(e.target.value)}
+                      placeholder={clientData?.email || "Email"}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="locker-phone" className="text-xs">Телефон</Label>
+                    <Input
+                      id="locker-phone"
+                      type="tel"
+                      value={lockerPhone}
+                      onChange={(e) => setLockerPhone(e.target.value)}
+                      placeholder={clientData?.phone || "Телефон"}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -684,17 +733,18 @@ export function CreateOrderDialog({
 
           {/* Опис */}
           <div className="space-y-2">
-            <Label htmlFor="description">Опис (опціонально)</Label>
+            <Label htmlFor="description" className="text-sm">Опис (опціонально)</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Dodatkowe szczegóły zlecenia..."
               rows={3}
+              className="text-sm"
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-4">
             <Button type="button" variant="outline" onClick={handleClose} disabled={isLoading}>
               Скасувати
             </Button>
