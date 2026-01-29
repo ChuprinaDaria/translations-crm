@@ -281,8 +281,17 @@ class EmailService(MessengerService):
             mail.login(smtp_user, smtp_password)
             mail.select('inbox')
             
-            # Пошук непрочитаних листів
-            status, messages_data = mail.search(None, 'UNSEEN')
+            # Перевіряємо листи за останні X хвилин замість UNSEEN
+            # (оскільки інші клієнти можуть позначати листи як прочитані)
+            from datetime import timedelta, timezone
+            import os
+            CHECK_MINUTES = int(os.getenv("EMAIL_CHECK_MINUTES", "10"))  # Перевіряти листи за останні 10 хвилин
+            
+            # Формуємо дату для пошуку (останні X хвилин)
+            since_date = (datetime.now(timezone.utc) - timedelta(minutes=CHECK_MINUTES)).strftime("%d-%b-%Y")
+            search_criteria = f'(SINCE {since_date})'
+            
+            status, messages_data = mail.search(None, search_criteria)
             
             if status == 'OK':
                 email_ids = messages_data[0].split()
@@ -296,22 +305,43 @@ class EmailService(MessengerService):
                         
                         # Парсити email з MIME декодуванням
                         from email.header import decode_header
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        
+                        def decode_mime_header(header_value: str) -> str:
+                            """Декодувати MIME header з підтримкою base64 та quoted-printable."""
+                            if not header_value:
+                                return ""
+                            
+                            # Якщо header вже декодований (немає =?UTF-8?B? або =?UTF-8?Q?)
+                            if "=?" not in header_value:
+                                return header_value
+                            
+                            try:
+                                decoded_parts = decode_header(header_value)
+                                result = ""
+                                for part, encoding in decoded_parts:
+                                    if isinstance(part, bytes):
+                                        # Якщо encoding вказано, використовуємо його
+                                        if encoding:
+                                            result += part.decode(encoding, errors='ignore')
+                                        else:
+                                            # Спробуємо декодувати як UTF-8
+                                            result += part.decode('utf-8', errors='ignore')
+                                    else:
+                                        result += str(part)
+                                return result
+                            except Exception as e:
+                                logger.warning(f"Failed to decode MIME header '{header_value[:50]}...': {e}")
+                                return header_value
                         
                         # Декодувати From
                         sender_raw = email_message['From'] or ""
-                        sender_decoded_parts = decode_header(sender_raw)
-                        sender_decoded = "".join([
-                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
-                            for part in sender_decoded_parts
-                        ])
+                        sender_decoded = decode_mime_header(sender_raw)
                         
                         # Декодувати Subject
                         subject_raw = email_message['Subject'] or ""
-                        subject_decoded_parts = decode_header(subject_raw)
-                        subject = "".join([
-                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
-                            for part in subject_decoded_parts
-                        ])
+                        subject = decode_mime_header(subject_raw)
                         
                         to = email_message['To'] or ""
                         

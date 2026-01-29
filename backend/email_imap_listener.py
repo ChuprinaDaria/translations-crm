@@ -9,7 +9,7 @@ import email
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -70,6 +70,29 @@ def get_manager_smtp_accounts():
         return accounts
     finally:
         db.close()
+
+
+def check_message_exists(db, sender_email: str, subject: str, message_date: datetime) -> bool:
+    """Перевірити, чи лист вже збережений в БД."""
+    from datetime import timedelta
+    # Перевіряємо за комбінацією sender_email + subject + дата (з точністю до хвилини)
+    # щоб уникнути дублікатів
+    result = db.execute(text("""
+        SELECT COUNT(*) FROM communications_messages m
+        JOIN communications_conversations c ON m.conversation_id = c.id
+        WHERE c.platform = 'email' 
+        AND c.external_id = :sender_email
+        AND (:subject IS NULL OR m.meta_data::text LIKE '%' || :subject || '%')
+        AND m.created_at >= :min_date
+        AND m.created_at <= :max_date
+    """), {
+        "sender_email": sender_email,
+        "subject": subject or "",
+        "min_date": message_date - timedelta(minutes=1),
+        "max_date": message_date + timedelta(minutes=1)
+    })
+    count = result.scalar()
+    return count > 0
 
 
 def get_or_create_conversation(db, external_id: str, subject: str = None, manager_smtp_account_id: int = None):
@@ -253,15 +276,21 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
         mail.select('inbox')
         logger.info(f"IMAP inbox selected for {account['email']}")
         
-        # ТИМЧАСОВО: Пошук всіх листів (ALL замість UNSEEN) для тестування MIME декодування та HTML stripping
-        # Ліміт 5 повідомлень, щоб не завантажувати всю історію
-        status, messages_data = mail.search(None, 'ALL')
+        # Перевіряємо листи за останні X хвилин замість UNSEEN
+        # (оскільки інші клієнти можуть позначати листи як прочитані)
+        from datetime import timedelta
+        CHECK_MINUTES = int(os.getenv("EMAIL_CHECK_MINUTES", "10"))  # Перевіряти листи за останні 10 хвилин
+        
+        # Формуємо дату для пошуку (останні X хвилин)
+        since_date = (datetime.now(timezone.utc) - timedelta(minutes=CHECK_MINUTES)).strftime("%d-%b-%Y")
+        search_criteria = f'(SINCE {since_date})'
+        
+        logger.info(f"Searching emails since {since_date} (last {CHECK_MINUTES} minutes) for {account['email']}")
+        status, messages_data = mail.search(None, search_criteria)
         
         if status == 'OK':
             email_ids = messages_data[0].split()
-            # Обмежити до 5 останніх повідомлень для тестування
-            email_ids = email_ids[-5:] if len(email_ids) > 5 else email_ids
-            logger.info(f"Found {len(email_ids)} emails for {account['email']} (limited to 5 for testing)")
+            logger.info(f"Found {len(email_ids)} emails in last {CHECK_MINUTES} minutes for {account['email']}")
             
             for email_id in email_ids:
                 try:
@@ -273,22 +302,42 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                         
                         # Парсити email з MIME декодуванням
                         from email.header import decode_header
+                        import base64
+                        
+                        def decode_mime_header(header_value: str) -> str:
+                            """Декодувати MIME header з підтримкою base64 та quoted-printable."""
+                            if not header_value:
+                                return ""
+                            
+                            # Якщо header вже декодований (немає =?UTF-8?B? або =?UTF-8?Q?)
+                            if "=?" not in header_value:
+                                return header_value
+                            
+                            try:
+                                decoded_parts = decode_header(header_value)
+                                result = ""
+                                for part, encoding in decoded_parts:
+                                    if isinstance(part, bytes):
+                                        # Якщо encoding вказано, використовуємо його
+                                        if encoding:
+                                            result += part.decode(encoding, errors='ignore')
+                                        else:
+                                            # Спробуємо декодувати як UTF-8
+                                            result += part.decode('utf-8', errors='ignore')
+                                    else:
+                                        result += str(part)
+                                return result
+                            except Exception as e:
+                                logger.warning(f"Failed to decode MIME header '{header_value[:50]}...': {e}")
+                                return header_value
                         
                         # Декодувати From
                         sender_raw = email_message['From'] or ""
-                        sender_decoded_parts = decode_header(sender_raw)
-                        sender_decoded = "".join([
-                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
-                            for part in sender_decoded_parts
-                        ])
+                        sender_decoded = decode_mime_header(sender_raw)
                         
                         # Декодувати Subject
                         subject_raw = email_message['Subject'] or "No Subject"
-                        subject_decoded_parts = decode_header(subject_raw)
-                        subject = "".join([
-                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
-                            for part in subject_decoded_parts
-                        ])
+                        subject = decode_mime_header(subject_raw)
                         
                         to = email_message['To'] or ""
                         
@@ -361,6 +410,30 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                         if not content:
                             content = "(No content)"
                         
+                        # Отримати дату листа
+                        email_date_str = email_message.get('Date')
+                        email_date = datetime.now(timezone.utc)  # fallback
+                        if email_date_str:
+                            try:
+                                from email.utils import parsedate_to_datetime
+                                email_date = parsedate_to_datetime(email_date_str)
+                                if email_date.tzinfo is None:
+                                    # Якщо немає timezone, вважаємо UTC
+                                    email_date = email_date.replace(tzinfo=timezone.utc)
+                            except Exception as e:
+                                logger.warning(f"Could not parse email date '{email_date_str}': {e}")
+                        
+                        # Перевірити, чи лист вже збережений (щоб уникнути дублікатів)
+                        # Створюємо тимчасову сесію для перевірки
+                        temp_db = Session()
+                        try:
+                            if check_message_exists(temp_db, sender_email, subject, email_date):
+                                logger.info(f"Email from {sender_email} with subject '{subject[:50]}...' already exists, skipping")
+                                temp_db.close()
+                                continue
+                        finally:
+                            temp_db.close()
+                        
                         messages.append({
                             "sender_email": sender_email,
                             "sender_name": sender_name,
@@ -371,10 +444,11 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                             "attachments": attachments if attachments else [],
                             "account_id": account["id"],
                             "account_email": account["email"],
+                            "email_date": email_date,
                         })
                         
-                        # Позначити як прочитане
-                        mail.store(email_id, '+FLAGS', '\\Seen')
+                        # НЕ позначаємо як прочитане автоматично (інші клієнти можуть це робити)
+                        # mail.store(email_id, '+FLAGS', '\\Seen')
                         
                 except Exception as e:
                     logger.error(f"Error processing email {email_id}: {e}")
