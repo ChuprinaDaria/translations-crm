@@ -94,6 +94,124 @@ export function InboxPageEnhanced() {
     conversationId: string;
   } | null>(null);
 
+  // Load conversation data with client and orders
+  const loadConversationData = async (conversationId: string): Promise<{ conversation: ConversationWithMessages, client?: Client, orders: any[] }> => {
+    try {
+      const conversation = await inboxApi.getConversation(conversationId);
+      
+      // Load client data if client_id exists
+      let client: Client | undefined;
+      let orders: any[] = [];
+      
+      if (conversation.client_id) {
+        try {
+          // Завантажуємо реальні дані клієнта через API
+          const { clientsApi } = await import('../../crm/api/clients');
+          const clientData = await clientsApi.getClient(conversation.client_id);
+          client = {
+            id: clientData.id,
+            full_name: clientData.full_name,
+            email: clientData.email,
+            phone: clientData.phone,
+            company_name: clientData.company_name,
+          };
+          
+          // Завантажуємо замовлення клієнта
+          try {
+            const clientOrders = await ordersApi.getOrders({ client_id: conversation.client_id });
+            orders = clientOrders.map((order: any) => ({
+              id: order.id,
+              title: order.order_number,
+              status: order.status,
+              created_at: order.created_at,
+              total_amount: order.transactions?.reduce((sum: number, t: any) => 
+                t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+              file_url: order.file_url,
+              description: order.description,
+            }));
+          } catch (orderError) {
+            console.error('Error loading client orders:', orderError);
+          }
+        } catch (error) {
+          console.error('Error loading client data:', error);
+          // Якщо не вдалося завантажити, залишаємо client undefined
+        }
+      }
+      
+      return { conversation, client, orders };
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      throw error;
+    }
+  };
+
+  // Handle opening a chat conversation
+  const handleOpenChat = useCallback(async (conversationId: string) => {
+    // Перевірити чи вже відкритий
+    const existingChat = openChats.find(chat => chat.conversationId === conversationId);
+    
+    // Призначити менеджера при відкритті діалогу
+    try {
+      await inboxApi.assignManager(conversationId);
+    } catch (error) {
+      console.error('Failed to assign manager:', error);
+      // Не блокуємо відкриття діалогу, якщо призначення не вдалося
+    }
+    
+    // Позначити як прочитане та оновити локальний стан
+    try {
+      await inboxApi.markConversationRead(conversationId);
+      // Оновити unread_count в списку розмов
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
+      ));
+      // Оновити unread_count у відкритому табі
+      markChatAsRead(conversationId);
+    } catch (error) {
+      console.error('Failed to mark conversation as read:', error);
+    }
+    
+    if (existingChat) {
+      // Просто переключитись на існуючий таб
+      switchToChat(conversationId);
+      
+      // Оновити client/orders для context panel
+      if (existingChat.conversation.client_id) {
+        const { client: clientData, orders: ordersData } = await loadConversationData(conversationId);
+        setClient(clientData);
+        setOrders(ordersData);
+      }
+    } else {
+      // Завантажити розмову та додати новий таб
+      try {
+        const { conversation, client: clientData, orders: ordersData } = await loadConversationData(conversationId);
+        
+        // Знайти conversation list item для додаткових даних
+        const convListItem = conversations.find(c => c.id === conversationId);
+        
+        const chatConversation: Conversation = {
+          id: conversation.id,
+          platform: conversation.platform as any,
+          external_id: conversation.external_id,
+          subject: conversation.subject,
+          client_id: conversation.client_id,
+          client_name: convListItem?.client_name,
+          client_avatar: undefined,
+          unread_count: 0, // Вже прочитано
+          last_message: convListItem?.last_message,
+          last_message_at: convListItem?.last_message_at,
+          updated_at: convListItem?.updated_at || new Date().toISOString(),
+        };
+        
+        openChat(chatConversation, conversation.messages || []);
+        setClient(clientData);
+        setOrders(ordersData);
+      } catch (error) {
+        toast.error('Помилка завантаження розмови');
+      }
+    }
+  }, [openChats, openChat, switchToChat, markChatAsRead, conversations, setClient, setOrders, setConversations]);
+
   // Handle new message from WebSocket
   const handleWebSocketNewMessage = useCallback((message: InboxMessage, conversationId: string) => {
     console.log('[WebSocket] New message received:', message, 'for conversation:', conversationId);
@@ -141,7 +259,7 @@ export function InboxPageEnhanced() {
         },
       });
     }
-  }, [openChats, updateChatMessages, conversations, addNotification]);
+  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat]);
 
   // Handle conversation updates from WebSocket (e.g., manager assignment)
   const handleWebSocketConversationUpdate = useCallback((conversation: Partial<ConversationListItem>) => {
@@ -233,7 +351,7 @@ export function InboxPageEnhanced() {
         }
       }
     }
-  }, [conversations, openChats.length, isLoading, getStoredConversationIds, getStoredActiveTabId, switchToChat]);
+  }, [conversations, openChats.length, isLoading, getStoredConversationIds, getStoredActiveTabId, switchToChat, handleOpenChat]);
 
   // Listen for navigation events to open conversation
   useEffect(() => {
@@ -289,57 +407,7 @@ export function InboxPageEnhanced() {
     }
   };
 
-  const loadConversationData = async (conversationId: string): Promise<{ conversation: ConversationWithMessages, client?: Client, orders: any[] }> => {
-    try {
-      const conversation = await inboxApi.getConversation(conversationId);
-      
-      // Load client data if client_id exists
-      let client: Client | undefined;
-      let orders: any[] = [];
-      
-      if (conversation.client_id) {
-        try {
-          // Завантажуємо реальні дані клієнта через API
-          const { clientsApi } = await import('../../crm/api/clients');
-          const clientData = await clientsApi.getClient(conversation.client_id);
-          client = {
-            id: clientData.id,
-            full_name: clientData.full_name,
-            email: clientData.email,
-            phone: clientData.phone,
-            company_name: clientData.company_name,
-          };
-          
-          // Завантажуємо замовлення клієнта
-          try {
-            const clientOrders = await ordersApi.getOrders({ client_id: conversation.client_id });
-            orders = clientOrders.map((order: any) => ({
-              id: order.id,
-              title: order.order_number,
-              status: order.status,
-              created_at: order.created_at,
-              total_amount: order.transactions?.reduce((sum: number, t: any) => 
-                t.type === 'income' ? sum + t.amount : sum, 0) || 0,
-              file_url: order.file_url,
-              description: order.description,
-            }));
-          } catch (orderError) {
-            console.error('Error loading client orders:', orderError);
-          }
-        } catch (error) {
-          console.error('Error loading client data:', error);
-          // Якщо не вдалося завантажити, залишаємо client undefined
-        }
-      }
-      
-      return { conversation, client, orders };
-    } catch (error) {
-      console.error('Error loading conversation:', error);
-      throw error;
-    }
-  };
-
-  const handleOpenChat = async (conversationId: string) => {
+  const handleSendMessage = async (conversationId: string, content: string, attachments?: File[]) => {
     // Перевірити чи вже відкритий
     const existingChat = openChats.find(chat => chat.conversationId === conversationId);
     
