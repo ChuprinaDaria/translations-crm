@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { File, Image as ImageIcon, Video, Music, Download, X, ZoomIn } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
+import { Dialog, DialogContent } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
 
 interface AttachmentPreviewProps {
@@ -82,7 +83,10 @@ export function AttachmentPreview({
 
   const imageUrl = getImageUrl();
 
-  const handleDownload = () => {
+  const handleDownload = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation(); // Не відкривати lightbox при кліку на download
+    }
     if (attachment?.url) {
       // Open in new tab or download
       const link = document.createElement('a');
@@ -104,25 +108,49 @@ export function AttachmentPreview({
   if (isImage && imageUrl && !imageError) {
     return (
       <>
+        {/* Мініатюра */}
         <div 
           className={cn(
             'relative rounded-lg overflow-hidden group cursor-pointer',
             'border border-gray-200 shadow-sm',
-            isPreview ? 'w-[120px] h-[120px]' : 'w-[160px] h-[160px]'
+            isPreview ? 'w-[120px] h-[120px]' : 'max-w-[200px]'
           )}
           onClick={() => setIsZoomed(true)}
         >
           <img
             src={imageUrl}
             alt={displayName}
-            className="w-full h-full object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
+            className="w-full h-auto max-h-[200px] object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
             onError={() => setImageError(true)}
           />
           
-          {/* Hover overlay with zoom hint */}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <ZoomIn className="w-6 h-6 text-white drop-shadow-lg" />
+          {/* Overlay з іконками при hover */}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
+            <button 
+              className="p-2 bg-white/90 rounded-full hover:bg-white transition-colors pointer-events-auto"
+              title="Збільшити"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsZoomed(true);
+              }}
+            >
+              <ZoomIn className="w-4 h-4 text-gray-700" />
+            </button>
+            <button 
+              onClick={handleDownload}
+              className="p-2 bg-white/90 rounded-full hover:bg-white transition-colors pointer-events-auto"
+              title="Завантажити"
+            >
+              <Download className="w-4 h-4 text-gray-700" />
+            </button>
           </div>
+
+          {/* Назва файлу під зображенням */}
+          {displayName && displayName !== 'Файл' && (
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+              <span className="text-xs text-white truncate block">{displayName}</span>
+            </div>
+          )}
 
           {/* Remove button for preview mode */}
           {isPreview && onRemove && (
@@ -140,41 +168,39 @@ export function AttachmentPreview({
           )}
         </div>
 
-        {/* Zoomed modal - full size on click */}
-        {isZoomed && (
-          <div
-            className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
-            onClick={() => setIsZoomed(false)}
+        {/* Lightbox - повнорозмірне зображення */}
+        <Dialog open={isZoomed} onOpenChange={setIsZoomed}>
+          <DialogContent 
+            className="max-w-[90vw] max-h-[90vh] p-0 bg-transparent border-none"
+            hideClose={true}
           >
-            <div className="relative max-w-[95vw] max-h-[95vh]" onClick={(e) => e.stopPropagation()}>
-              <img
-                src={imageUrl}
-                alt={displayName}
-                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
+            <div className="relative">
+              {/* Кнопка закрити */}
+              <button 
                 onClick={() => setIsZoomed(false)}
-                className="absolute top-2 right-2 h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white"
+                className="absolute top-2 right-2 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
               >
-                <X className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownload();
-                }}
-                className="absolute bottom-4 right-4"
+                <X className="w-5 h-5 text-white" />
+              </button>
+              
+              {/* Кнопка завантажити */}
+              <button 
+                onClick={handleDownload}
+                className="absolute top-2 right-14 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
+                title="Завантажити"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Завантажити
-              </Button>
+                <Download className="w-5 h-5 text-white" />
+              </button>
+              
+              {/* Повнорозмірне зображення */}
+              <img 
+                src={imageUrl} 
+                alt={displayName}
+                className="max-w-full max-h-[85vh] object-contain mx-auto rounded-lg"
+              />
             </div>
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
       </>
     );
   }

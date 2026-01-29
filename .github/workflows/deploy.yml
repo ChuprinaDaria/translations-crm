@@ -356,21 +356,36 @@ jobs:
           
           echo "❌ Health check failed after $MAX_RETRIES attempts"
           echo ""
-          echo "=== Container Status ==="
-          docker ps -a --filter "name=crm_translations" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
-          echo ""
-          echo "=== Docker Compose Status ==="
-          $DOCKER_COMPOSE_CMD -f docker-compose.production.yml ps || true
-          echo ""
-          echo "=== Backend Container Logs ==="
-          docker logs crm_translations_backend --tail 100 2>&1 || echo "Container not found"
-          echo ""
-          echo "=== Postgres Container Logs ==="
-          docker logs crm_translations_postgres --tail 50 2>&1 || echo "Postgres container not found"
-          echo ""
-          echo "=== Network Status ==="
-          docker network ls | grep crm_translations || true
-          echo ""
-          echo "=== Port Status ==="
-          netstat -tuln | grep -E ":(8002|5435|8082)" || ss -tuln | grep -E ":(8002|5435|8082)" || true
+          echo "=== Getting diagnostics from server ==="
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'DIAG_SCRIPT'
+            DEPLOY_DIR="/opt/translations/translations-crm"
+            cd "$DEPLOY_DIR" || exit 1
+            
+            # Перевіряємо яка версія docker compose доступна
+            if command -v docker-compose &> /dev/null; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            elif docker compose version &> /dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker compose"
+            else
+              DOCKER_COMPOSE_CMD="docker compose"
+            fi
+            
+            echo "=== Container Status ==="
+            docker ps -a --filter "name=crm_translations" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+            echo ""
+            echo "=== Docker Compose Status ==="
+            $DOCKER_COMPOSE_CMD -f docker-compose.production.yml ps || true
+            echo ""
+            echo "=== Backend Container Logs ==="
+            docker logs crm_translations_backend --tail 100 2>&1 || echo "Container not found"
+            echo ""
+            echo "=== Postgres Container Logs ==="
+            docker logs crm_translations_postgres --tail 50 2>&1 || echo "Postgres container not found"
+            echo ""
+            echo "=== Network Status ==="
+            docker network ls | grep crm_translations || true
+            echo ""
+            echo "=== Port Status ==="
+            netstat -tuln | grep -E ":(8002|5435|8082)" || ss -tuln | grep -E ":(8002|5435|8082)" || true
+          DIAG_SCRIPT
           exit 1
