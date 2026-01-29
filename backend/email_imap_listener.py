@@ -169,8 +169,11 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
         logger.info(f"Connecting to IMAP {imap_host}:{imap_port} for {account['email']}")
         
         mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+        logger.info(f"IMAP SSL connection established for {account['email']}")
         mail.login(smtp_user, smtp_password)
+        logger.info(f"IMAP login successful for {account['email']}")
         mail.select('inbox')
+        logger.info(f"IMAP inbox selected for {account['email']}")
         
         # Пошук непрочитаних листів
         status, messages_data = mail.search(None, 'UNSEEN')
@@ -234,9 +237,10 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
             
             mail.close()
             mail.logout()
+            logger.info(f"IMAP connection closed for {account['email']}")
             
     except Exception as e:
-        logger.error(f"Error fetching emails for {account['email']}: {e}")
+        logger.error(f"Error fetching emails for {account['email']}: {e}", exc_info=True)
     
     return messages
 
@@ -245,8 +249,10 @@ async def process_account(account: Dict[str, Any]):
     """Process emails for a single manager account."""
     db = Session()
     try:
+        logger.info(f"Processing account: {account.get('email', 'unknown')} (ID: {account.get('id')})")
         # Отримати нові email
         emails = fetch_emails_for_account(account)
+        logger.info(f"Found {len(emails)} new emails for account {account.get('email')}")
         
         for email_data in emails:
             try:

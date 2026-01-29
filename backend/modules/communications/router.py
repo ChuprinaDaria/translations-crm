@@ -59,7 +59,9 @@ class MessagesConnectionManager:
     async def send_message(self, user_id: str, message: dict):
         if user_id in self.active_connections:
             try:
+                logger.info(f"WebSocket sending message to user {user_id}: {message.get('type', 'unknown')} - {message}")
                 await self.active_connections[user_id].send_json(message)
+                logger.info(f"WebSocket successfully sent message to user {user_id}")
             except Exception as e:
                 logger.error(f"Error sending message to {user_id}: {e}")
                 self.disconnect(user_id)

@@ -173,15 +173,23 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
         messages_manager.active_connections[user_id] = websocket
         
         # Send welcome message
-        await websocket.send_json({
+        welcome_msg = {
             "type": "connection_established",
             "message": "Connected to real-time messages"
-        })
+        }
+        await websocket.send_json(welcome_msg)
+        logger.info(f"WebSocket sent welcome message to user {user_id}: {welcome_msg}")
         
         while True:
             data = await websocket.receive_text()
+            logger.info(f"WebSocket received from user {user_id}: {data}")
             if data == "ping":
-                await websocket.send_text("pong")
+                response = "pong"
+                await websocket.send_text(response)
+                logger.info(f"WebSocket sent pong to user {user_id}")
+            else:
+                # Log any other data received
+                logger.debug(f"WebSocket received non-ping data from user {user_id}: {data}")
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for user: {user_id}")
         messages_manager.disconnect(user_id)

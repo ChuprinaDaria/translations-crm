@@ -194,10 +194,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         while True:
             # Receive ping from client
             data = await websocket.receive_text()
+            logger.info(f"WebSocket received from user {user_uuid}: {data}")
             
             # Respond with pong
             if data == "ping":
-                await websocket.send_text("pong")
+                response = "pong"
+                await websocket.send_text(response)
+                logger.info(f"WebSocket sent pong to user {user_uuid}")
+            else:
+                # Log any other data received
+                logger.debug(f"WebSocket received non-ping data from user {user_uuid}: {data}")
             
     except WebSocketDisconnect:
         manager.disconnect(user_uuid)
