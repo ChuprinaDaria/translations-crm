@@ -2216,10 +2216,12 @@ def get_instagram_config(db: Session = Depends(get_db), user = Depends(get_curre
     settings = crud.get_instagram_settings(db)
     return {
         "app_id": settings.get("instagram_app_id") or "",
-        "access_token": settings.get("instagram_access_token") or "",
+        "access_token": bool(settings.get("instagram_access_token")),  # тільки bool для безпеки
         "app_secret": settings.get("instagram_app_secret") or "",
         "verify_token": settings.get("instagram_verify_token") or "",
         "page_id": settings.get("instagram_page_id") or "",
+        "page_name": settings.get("instagram_page_name") or "",
+        "business_id": settings.get("instagram_business_id") or "",
     }
 
 

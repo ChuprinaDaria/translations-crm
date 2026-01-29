@@ -1894,40 +1894,168 @@ async def instagram_oauth_callback(
             pages_response.raise_for_status()
             pages_data = pages_response.json()
         
-        # Шукаємо Instagram сторінку (має поле instagram_business_account)
-        instagram_page_id = None
+        # Збираємо всі сторінки з Instagram Business акаунтами
+        instagram_pages = []
         for page in pages_data.get("data", []):
             if "instagram_business_account" in page:
-                instagram_page_id = page["id"]
-                break
+                instagram_pages.append({
+                    "page_id": page["id"],
+                    "page_name": page.get("name", ""),
+                    "business_id": page["instagram_business_account"]["id"],
+                    "page_access_token": page.get("access_token", ""),
+                })
         
         # Зберігаємо access_token в налаштуваннях
         crud.set_setting(db, "instagram_access_token", access_token)
-        if instagram_page_id:
-            crud.set_setting(db, "instagram_page_id", instagram_page_id)
         
-        logger.info(f"Instagram OAuth successful. Access token saved. Page ID: {instagram_page_id}")
+        # Якщо знайдено тільки одну сторінку - зберігаємо автоматично
+        if len(instagram_pages) == 1:
+            page = instagram_pages[0]
+            crud.set_setting(db, "instagram_page_id", page["page_id"])
+            if page["page_name"]:
+                crud.set_setting(db, "instagram_page_name", page["page_name"])
+            if page["business_id"]:
+                crud.set_setting(db, "instagram_business_id", page["business_id"])
+            if page["page_access_token"]:
+                crud.set_setting(db, "instagram_page_access_token", page["page_access_token"])
+            
+            logger.info(f"Instagram OAuth successful. Access token saved. Page ID: {page['page_id']}")
+            
+            return HTMLResponse(
+                content=f"""
+                <html>
+                    <head>
+                        <title>Instagram OAuth Success</title>
+                        <meta http-equiv="refresh" content="3;url=/settings">
+                    </head>
+                    <body>
+                        <h1>✅ Instagram успішно підключено!</h1>
+                        <p>Сторінка "{page['page_name']}" підключена. Перенаправлення до налаштувань...</p>
+                        <p><a href="/settings">Перейти до налаштувань</a></p>
+                        <script>
+                            setTimeout(function() {{
+                                window.location.href = '/settings';
+                            }}, 3000);
+                        </script>
+                    </body>
+                </html>
+                """
+            )
         
-        return HTMLResponse(
-            content=f"""
-            <html>
-                <head>
-                    <title>Instagram OAuth Success</title>
-                    <meta http-equiv="refresh" content="3;url=/settings">
-                </head>
-                <body>
-                    <h1>✅ Instagram успішно підключено!</h1>
-                    <p>Access token збережено. Перенаправлення до налаштувань...</p>
-                    <p><a href="/settings">Перейти до налаштувань</a></p>
-                    <script>
-                        setTimeout(function() {{
-                            window.location.href = '/settings';
-                        }}, 3000);
-                    </script>
-                </body>
-            </html>
-            """
-        )
+        # Якщо знайдено кілька сторінок - показуємо вибір
+        elif len(instagram_pages) > 1:
+            import json
+            import base64
+            # Кодуємо дані про сторінки в base64 для передачі через URL
+            pages_json = json.dumps(instagram_pages)
+            pages_encoded = base64.b64encode(pages_json.encode()).decode()
+            
+            # Формуємо HTML з вибором сторінок
+            pages_options = ""
+            for idx, page in enumerate(instagram_pages):
+                pages_options += f"""
+                    <div style="margin: 10px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                        <input type="radio" name="page" value="{idx}" id="page_{idx}" style="margin-right: 10px;">
+                        <label for="page_{idx}" style="cursor: pointer;">
+                            <strong>{page['page_name'] or 'Без назви'}</strong><br>
+                            <small style="color: #666;">Page ID: {page['page_id']}</small>
+                        </label>
+                    </div>
+                """
+            
+            return HTMLResponse(
+                content=f"""
+                <html>
+                    <head>
+                        <title>Вибір Instagram сторінки</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
+                            h1 {{ color: #333; }}
+                            button {{ background: #FF5A00; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }}
+                            button:hover {{ background: #FF5A00/90; }}
+                            button:disabled {{ background: #ccc; cursor: not-allowed; }}
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Оберіть Instagram сторінку</h1>
+                        <p>Знайдено {len(instagram_pages)} сторінок з Instagram Business акаунтами. Оберіть одну для підключення:</p>
+                        <form id="pageForm" onsubmit="return false;">
+                            {pages_options}
+                            <input type="hidden" id="pagesData" value="{pages_encoded}">
+                            <button type="button" onclick="selectPage()" id="selectBtn" disabled style="margin-top: 20px;">
+                                Підключити вибрану сторінку
+                            </button>
+                        </form>
+                        <script>
+                            // Вмикаємо кнопку коли вибрано сторінку
+                            document.querySelectorAll('input[name="page"]').forEach(radio => {{
+                                radio.addEventListener('change', function() {{
+                                    document.getElementById('selectBtn').disabled = false;
+                                }});
+                            }});
+                            
+                            function selectPage() {{
+                                const selected = document.querySelector('input[name="page"]:checked');
+                                if (!selected) {{
+                                    alert('Будь ласка, оберіть сторінку');
+                                    return;
+                                }}
+                                
+                                const pagesData = document.getElementById('pagesData').value;
+                                const pageIndex = parseInt(selected.value);
+                                
+                                // Відправляємо запит на збереження
+                                fetch('/api/v1/communications/instagram/select-page', {{
+                                    method: 'POST',
+                                    headers: {{
+                                        'Content-Type': 'application/json',
+                                    }},
+                                    body: JSON.stringify({{
+                                        pages_data: pagesData,
+                                        page_index: pageIndex
+                                    }})
+                                }})
+                                .then(response => response.json())
+                                .then(data => {{
+                                    if (data.status === 'success') {{
+                                        window.location.href = '/settings';
+                                    }} else {{
+                                        alert('Помилка: ' + (data.detail || 'Невідома помилка'));
+                                    }}
+                                }})
+                                .catch(error => {{
+                                    console.error('Error:', error);
+                                    alert('Помилка при збереженні сторінки');
+                                }});
+                            }}
+                        </script>
+                    </body>
+                </html>
+                """
+            )
+        
+        # Якщо сторінок не знайдено
+        else:
+            logger.warning("Instagram OAuth: не знайдено сторінок з Instagram Business акаунтами")
+            return HTMLResponse(
+                content=f"""
+                <html>
+                    <head><title>Instagram OAuth Error</title></head>
+                    <body>
+                        <h1>⚠️ Сторінки не знайдено</h1>
+                        <p>Не знайдено жодної сторінки Facebook з підключеним Instagram Business акаунтом.</p>
+                        <p>Переконайтеся, що:</p>
+                        <ul>
+                            <li>У вас є Facebook сторінка</li>
+                            <li>Сторінка підключена до Instagram Business акаунту</li>
+                            <li>Ви надали необхідні дозволи при авторизації</li>
+                        </ul>
+                        <p><a href="/settings">Повернутися до налаштувань</a></p>
+                    </body>
+                </html>
+                """,
+                status_code=400
+            )
         
     except httpx.HTTPStatusError as e:
         error_detail = f"HTTP {e.response.status_code}: {e.response.text}"
@@ -1960,3 +2088,51 @@ async def instagram_oauth_callback(
             """,
             status_code=500
         )
+
+
+@router.post("/instagram/select-page")
+async def instagram_select_page(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint для збереження вибраної Instagram сторінки після OAuth.
+    """
+    import json
+    import base64
+    from fastapi.responses import JSONResponse
+    
+    try:
+        data = await request.json()
+        pages_data_encoded = data.get("pages_data")
+        page_index = data.get("page_index")
+        
+        if not pages_data_encoded or page_index is None:
+            raise HTTPException(status_code=400, detail="Необхідні дані не надано")
+        
+        # Декодуємо дані про сторінки
+        pages_json = base64.b64decode(pages_data_encoded.encode()).decode()
+        instagram_pages = json.loads(pages_json)
+        
+        if page_index < 0 or page_index >= len(instagram_pages):
+            raise HTTPException(status_code=400, detail="Невірний індекс сторінки")
+        
+        # Отримуємо вибрану сторінку
+        selected_page = instagram_pages[page_index]
+        
+        # Зберігаємо дані сторінки
+        crud.set_setting(db, "instagram_page_id", selected_page["page_id"])
+        if selected_page["page_name"]:
+            crud.set_setting(db, "instagram_page_name", selected_page["page_name"])
+        if selected_page["business_id"]:
+            crud.set_setting(db, "instagram_business_id", selected_page["business_id"])
+        if selected_page["page_access_token"]:
+            crud.set_setting(db, "instagram_page_access_token", selected_page["page_access_token"])
+        
+        logger.info(f"Instagram page selected: {selected_page['page_name']} (ID: {selected_page['page_id']})")
+        
+        return JSONResponse(content={"status": "success"})
+        
+    except Exception as e:
+        logger.error(f"Error selecting Instagram page: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Помилка при збереженні сторінки: {str(e)}")

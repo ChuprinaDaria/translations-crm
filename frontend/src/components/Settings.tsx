@@ -85,6 +85,8 @@ export function Settings() {
     app_secret: "",
     verify_token: "",
     page_id: "",
+    page_name: "",
+    business_id: "",
   });
   const [isSavingInstagram, setIsSavingInstagram] = useState(false);
 
@@ -191,7 +193,7 @@ export function Settings() {
           settingsApi.getSmtpSettings(),
           settingsApi.getManagerSmtpAccounts().catch(() => []),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
-          settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
+          settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: false as boolean, app_secret: "", verify_token: "", page_id: "", page_name: "", business_id: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
@@ -1237,9 +1239,37 @@ export function Settings() {
         <TabsContent value="instagram" className="mt-0">
           <Card>
             <CardHeader>
-              <CardTitle>Instagram API налаштування</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Instagram API налаштування</CardTitle>
+                {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? (
+                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                    ✓ Підключено
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
+                    ✗ Не підключено
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Статус підключення та інформація про сторінку */}
+              {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) && instagram.page_id && (
+                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2 border">
+                  <p className="text-sm">
+                    <span className="font-medium">Сторінка:</span> {instagram.page_name || 'Невідомо'}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium">Page ID:</span> {instagram.page_id}
+                  </p>
+                  {instagram.business_id && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="font-medium">Instagram Business ID:</span> {instagram.business_id}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="instagram-app-id">Instagram App ID</Label>
@@ -1254,9 +1284,21 @@ export function Settings() {
                   <Input
                     id="instagram-access-token"
                     type="password"
-                    value={instagram.access_token}
-                    onChange={(e) => setInstagram({ ...instagram, access_token: e.target.value })}
+                    value={(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? "••••••••••••" : ""}
+                    onChange={(e) => {
+                      // Не дозволяємо редагувати через UI, тільки через OAuth
+                      if (e.target.value === "") {
+                        setInstagram({ ...instagram, access_token: "" });
+                      }
+                    }}
+                    placeholder={(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? "Встановлено через OAuth" : "Встановлюється через OAuth"}
+                    disabled={instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)}
                   />
+                  {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) && (
+                    <p className="text-xs text-muted-foreground">
+                      Access Token встановлено через OAuth. Для зміни використайте кнопку "Переподключити"
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="instagram-app-secret">App Secret</Label>
@@ -1282,7 +1324,13 @@ export function Settings() {
                     value={instagram.page_id}
                     onChange={(e) => setInstagram({ ...instagram, page_id: e.target.value })}
                     placeholder="Встановлюється автоматично через OAuth або введіть вручну"
+                    disabled={!!instagram.page_id && (instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0))}
                   />
+                  {instagram.page_id && (instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) && (
+                    <p className="text-xs text-muted-foreground">
+                      Page ID встановлено автоматично через OAuth
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-center">
@@ -1301,7 +1349,7 @@ export function Settings() {
                   }}
                 >
                   <ImageIcon className="w-4 h-4 mr-2" />
-                  Підключити Instagram
+                  {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? "Переподключити Instagram" : "Підключити Instagram"}
                 </Button>
                 <Button
                   type="button"

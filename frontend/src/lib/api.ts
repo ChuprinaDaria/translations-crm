@@ -1182,10 +1182,12 @@ export interface WhatsAppConfig {
 
 export interface InstagramConfig {
   app_id: string;
-  access_token: string;
+  access_token: string | boolean; // boolean коли отримуємо з API (для безпеки), string коли відправляємо
   app_secret: string;
   verify_token: string;
   page_id: string;
+  page_name?: string;
+  business_id?: string;
 }
 
 export interface FacebookConfig {
@@ -1566,7 +1568,14 @@ export const settingsApi = {
   async updateInstagramConfig(data: InstagramConfig): Promise<{ status: string }> {
     const formData = new FormData();
     formData.append("app_id", data.app_id);
-    formData.append("access_token", data.access_token);
+    // Якщо access_token це boolean (true), не відправляємо його (він вже збережений через OAuth)
+    // Якщо це string, відправляємо тільки якщо він не порожній
+    if (typeof data.access_token === "string" && data.access_token.length > 0) {
+      formData.append("access_token", data.access_token);
+    } else if (data.access_token === false) {
+      // Якщо false, відправляємо порожній рядок для очищення
+      formData.append("access_token", "");
+    }
     formData.append("app_secret", data.app_secret);
     formData.append("verify_token", data.verify_token);
     formData.append("page_id", data.page_id || "");
