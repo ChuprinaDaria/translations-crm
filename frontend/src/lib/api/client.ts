@@ -68,6 +68,23 @@ export async function apiFetch<T>(
     }
     console.error('[API] Error response:', errorData);
     
+    // Handle "User not found" error - clear all storage and force logout
+    const errorDetail = errorData?.detail || '';
+    const isUserNotFound = 
+      typeof errorDetail === 'string' && 
+      (errorDetail.toLowerCase().includes('user not found') || 
+       errorDetail.toLowerCase().includes('user not found'));
+    
+    if (isUserNotFound || response.status === 404) {
+      console.error('[API] User not found - clearing all storage and forcing logout');
+      // Clear all localStorage to remove old UUID tokens
+      localStorage.clear();
+      tokenManager.removeToken();
+      // Dispatch logout event
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+      window.dispatchEvent(new CustomEvent('auth:token-changed'));
+    }
+    
     // Log detailed validation errors for 422
     if (response.status === 422 && errorData.detail && Array.isArray(errorData.detail)) {
       console.error('[API] Validation errors:', JSON.stringify(errorData.detail, null, 2));

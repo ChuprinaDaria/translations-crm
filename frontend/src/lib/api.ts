@@ -365,6 +365,24 @@ const authFetch = async <T>(endpoint: string, options: RequestInit = {}): Promis
     } catch {
       errorData = { detail: response.statusText };
     }
+    
+    // Handle "User not found" error - clear all storage and force logout
+    const errorDetail = errorData?.detail || '';
+    const isUserNotFound = 
+      typeof errorDetail === 'string' && 
+      (errorDetail.toLowerCase().includes('user not found') || 
+       errorDetail.toLowerCase().includes('user not found'));
+    
+    if (isUserNotFound || response.status === 404) {
+      console.error('[Auth] User not found - clearing all storage and forcing logout');
+      // Clear all localStorage to remove old UUID tokens
+      localStorage.clear();
+      tokenManager.removeToken();
+      // Dispatch logout event
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+      window.dispatchEvent(new CustomEvent('auth:token-changed'));
+    }
+    
     throw new ApiError(response.status, response.statusText, errorData);
   }
 
