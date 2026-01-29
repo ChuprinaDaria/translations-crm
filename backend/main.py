@@ -13,6 +13,7 @@ from modules.crm.models import Client, Order, InternalNote, TimelineStep, Transl
 from modules.finance.router import router as finance_router
 from modules.finance.models import Transaction
 from modules.communications.router import router as communications_router, messages_manager
+from modules.communications.router_telegram_webhook import router as telegram_webhook_router
 from modules.communications.models import Conversation, Message
 # Імпортуємо ManagerSmtpAccount щоб SQLAlchemy знав про таблицю для foreign key
 from models import ManagerSmtpAccount  # noqa: F401
@@ -113,6 +114,7 @@ app.include_router(auth_router, prefix="/auth")
 app.include_router(crm_router, prefix="/api/v1/crm")
 app.include_router(finance_router, prefix="/api/v1/finance")
 app.include_router(communications_router, prefix="/api/v1/communications")
+app.include_router(telegram_webhook_router, prefix="/api/v1/communications")
 app.include_router(notifications_router, prefix="/api/v1/notifications")
 app.include_router(smart_paste_router, prefix="/api/v1")
 app.include_router(drag_upload_router, prefix="/api/v1")
@@ -189,7 +191,7 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
                 await asyncio.sleep(20)  # Wait 20 seconds
                 try:
                     if user_id in messages_manager.active_connections:
-                        await websocket.send_text("ping")
+                        await websocket.send_json({"type": "ping"})
                         logger.debug(f"WebSocket keep-alive ping sent to user {user_id}")
                 except Exception as e:
                     logger.warning(f"WebSocket keep-alive ping failed for user {user_id}: {e}")

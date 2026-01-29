@@ -29,7 +29,9 @@ from modules.communications.webhooks import (
     handle_whatsapp_webhook,
     handle_instagram_webhook,
     handle_facebook_webhook,
+    handle_telegram_webhook,
 )
+from modules.communications.router_telegram_webhook import router as telegram_webhook_router
 from modules.communications.services.whatsapp import WhatsAppService
 from modules.communications.services.instagram import InstagramService
 from modules.communications.services.facebook import FacebookService
@@ -67,18 +69,29 @@ class MessagesConnectionManager:
                 self.disconnect(user_id)
     
     async def broadcast(self, message: dict):
-        logger.info(f"Broadcasting message to {len(self.active_connections)} connections: {message.get('type')}")
+        active_count = len(self.active_connections)
+        message_type = message.get('type', 'unknown')
+        logger.info(f"Broadcasting {message_type} to {active_count} active WebSocket connections")
+        
         if not self.active_connections:
-            logger.warning("No active WebSocket connections to broadcast to!")
+            logger.warning(f"No active WebSocket connections to broadcast {message_type} to!")
             return
+        
+        success_count = 0
+        error_count = 0
+        
         for user_id, connection in list(self.active_connections.items()):
             try:
-                logger.info(f"Sending to user: {user_id}")
+                logger.debug(f"Sending {message_type} to user: {user_id}")
                 await connection.send_json(message)
-                logger.info(f"Successfully sent to user: {user_id}")
+                success_count += 1
+                logger.debug(f"Successfully sent {message_type} to user: {user_id}")
             except Exception as e:
-                logger.error(f"Error broadcasting to {user_id}: {e}")
+                error_count += 1
+                logger.error(f"Error broadcasting {message_type} to {user_id}: {e}", exc_info=True)
                 self.disconnect(user_id)
+        
+        logger.info(f"Broadcast {message_type} completed: {success_count} successful, {error_count} errors")
 
 messages_manager = MessagesConnectionManager()
 
@@ -465,6 +478,32 @@ def mark_conversation_read(
     db.commit()
     
     return {"status": "ok"}
+
+
+@router.delete("/messages/{message_id}")
+async def delete_message(
+    message_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Delete a message by ID."""
+    message = db.query(Message).filter(Message.id == message_id).first()
+    
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    conversation_id = message.conversation_id
+    
+    # Видалити повідомлення (cascade видалить attachments автоматично)
+    db.delete(message)
+    db.commit()
+    
+    logger.info(f"Message {message_id} deleted by user {user.id}")
+    
+    # Notify via WebSocket
+    await notify_message_deleted(message_id, conversation_id)
+    
+    return {"status": "success", "message_id": str(message_id)}
 
 
 @router.post("/conversations/{conversation_id}/assign-manager")
@@ -985,27 +1024,45 @@ async def add_address_to_order(
 # Helper function to notify about new incoming messages
 async def notify_new_message(message: Message, conversation: Conversation):
     """Send WebSocket notification about new message."""
-    await messages_manager.broadcast({
-        "type": "new_message",
-        "conversation_id": str(conversation.id),
-        "message": {
-            "id": str(message.id),
-            "conversation_id": str(message.conversation_id),
-            "direction": str(message.direction),
-            "type": str(message.type),
-            "content": message.content,
-            "status": str(message.status),
-            "attachments": message.attachments,
-            "created_at": message.created_at.isoformat(),
-            "sent_at": message.sent_at.isoformat() if message.sent_at else None,
-        },
-        "conversation": {
-            "id": str(conversation.id),
-            "platform": str(conversation.platform),
-            "external_id": conversation.external_id,
-            "client_name": conversation.client.name if conversation.client else None,
-        }
-    })
+    try:
+        await messages_manager.broadcast({
+            "type": "new_message",
+            "conversation_id": str(conversation.id),
+            "message": {
+                "id": str(message.id),
+                "conversation_id": str(message.conversation_id),
+                "direction": str(message.direction),
+                "type": str(message.type),
+                "content": message.content,
+                "status": str(message.status),
+                "attachments": message.attachments,
+                "created_at": message.created_at.isoformat(),
+                "sent_at": message.sent_at.isoformat() if message.sent_at else None,
+            },
+            "conversation": {
+                "id": str(conversation.id),
+                "platform": str(conversation.platform),
+                "external_id": conversation.external_id,
+                "client_name": conversation.client.name if conversation.client else None,
+            }
+        })
+        logger.info(f"WebSocket notification sent for new message {message.id}")
+    except Exception as e:
+        logger.error(f"Failed to send WebSocket notification for new message: {e}", exc_info=True)
+
+
+# Helper function to notify about deleted message
+async def notify_message_deleted(message_id: UUID, conversation_id: UUID):
+    """Send WebSocket notification about deleted message."""
+    try:
+        await messages_manager.broadcast({
+            "type": "message_deleted",
+            "message_id": str(message_id),
+            "conversation_id": str(conversation_id),
+        })
+        logger.info(f"WebSocket notification sent for deleted message {message_id}")
+    except Exception as e:
+        logger.error(f"Failed to send WebSocket notification for deleted message: {e}", exc_info=True)
 
 
 # ============================================================================

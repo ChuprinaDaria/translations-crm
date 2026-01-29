@@ -197,9 +197,12 @@ class InstagramService(MessengerService):
         logger = logging.getLogger(__name__)
         
         try:
+            # Динамічно завантажити конфігурацію з БД (налаштування можуть змінитися)
+            current_config = self._load_config(self.db)
+            
             # Відправити через Meta Instagram Graph API
-            page_id = self.config.get("page_id")
-            access_token = self.config.get("access_token")
+            page_id = current_config.get("page_id")
+            access_token = current_config.get("access_token")
             
             if not access_token:
                 error_msg = "Instagram access token is missing in settings"

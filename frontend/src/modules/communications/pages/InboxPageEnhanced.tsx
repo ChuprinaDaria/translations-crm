@@ -480,6 +480,24 @@ export function InboxPageEnhanced() {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await inboxApi.deleteMessage(messageId);
+      
+      // Remove message from all open chats
+      const chat = openChats.find(c => c.messages.some(m => m.id === messageId));
+      if (chat) {
+        const updatedMessages = chat.messages.filter(m => m.id !== messageId);
+        updateChatMessages(chat.conversationId, updatedMessages);
+      }
+      
+      toast.success('Повідомлення видалено');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Помилка видалення повідомлення');
+    }
+  };
+
   const handleQuickAction = async (conversationId: string, action: string, data?: Record<string, any>) => {
     if (!conversationId) return;
 
@@ -1147,6 +1165,7 @@ export function InboxPageEnhanced() {
           onOrderClick={handleOrderClick}
           onDocumentsClick={handleDocumentsClick}
           onToggleSidebar={handleToggleSidebar}
+          onDeleteMessage={handleDeleteMessage}
         />
       </CommunicationsLayout>
 

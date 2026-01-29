@@ -117,21 +117,48 @@ def get_or_create_conversation(db, external_id: str, subject: str = None, manage
 
 def save_message(db, conv_id: str, content: str, sender_email: str, sender_name: str, subject: str, html_content: str = None, attachments: list = None):
     """Save incoming email message to database."""
-    from uuid import uuid4
+    from uuid import uuid4, UUID
     import json
+    from modules.communications.utils.html_sanitizer import sanitize_html
+    from modules.communications.utils.media import save_media_file
+    
     msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
     
     # Визначити тип повідомлення
     message_type = 'html' if html_content else 'text'
     
+    # Очистити HTML якщо є
+    if html_content:
+        html_content = sanitize_html(html_content)
+    
     # Зберегти HTML в meta_data якщо є
     meta_data = {}
     if html_content:
         meta_data['html_content'] = html_content
+    
+    # Зберегти вкладення у файлову систему та створити записи в БД
+    attachment_ids = []
     if attachments:
-        # Зберігаємо інформацію про attachments в meta_data
-        # Самі файли потрібно буде зберегти окремо в файлову систему
+        for att in attachments:
+            file_data = att.get("data")
+            filename = att.get("filename")
+            content_type = att.get("content_type", "application/octet-stream")
+            
+            if file_data and filename:
+                try:
+                    attachment = save_media_file(
+                        db=db,
+                        message_id=UUID(msg_id),
+                        file_data=file_data,
+                        mime_type=content_type,
+                        original_name=filename,
+                    )
+                    attachment_ids.append(str(attachment.id))
+                except Exception as e:
+                    logger.error(f"Failed to save attachment {filename}: {e}")
+        
+        # Зберігаємо інформацію про attachments в meta_data для сумісності
         meta_data['attachments'] = [
             {
                 "filename": att.get("filename"),
@@ -151,12 +178,12 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
         "type": message_type,
         "content": content,
         "meta_data": json.dumps(meta_data) if meta_data else None,
-        "attachments": json.dumps(attachments) if attachments else None,
+        "attachments": json.dumps(meta_data.get('attachments', [])) if meta_data.get('attachments') else None,
         "now": now
     })
     db.commit()
     
-    logger.info(f"Saved message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)}, has_attachments: {bool(attachments)})")
+    logger.info(f"Saved message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)}, has_attachments: {len(attachment_ids)})")
     return msg_id
 
 
@@ -226,12 +253,15 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
         mail.select('inbox')
         logger.info(f"IMAP inbox selected for {account['email']}")
         
-        # Пошук непрочитаних листів
-        status, messages_data = mail.search(None, 'UNSEEN')
+        # ТИМЧАСОВО: Пошук всіх листів (ALL замість UNSEEN) для тестування MIME декодування та HTML stripping
+        # Ліміт 5 повідомлень, щоб не завантажувати всю історію
+        status, messages_data = mail.search(None, 'ALL')
         
         if status == 'OK':
             email_ids = messages_data[0].split()
-            logger.info(f"Found {len(email_ids)} unread emails for {account['email']}")
+            # Обмежити до 5 останніх повідомлень для тестування
+            email_ids = email_ids[-5:] if len(email_ids) > 5 else email_ids
+            logger.info(f"Found {len(email_ids)} emails for {account['email']} (limited to 5 for testing)")
             
             for email_id in email_ids:
                 try:
@@ -274,6 +304,7 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                         # Отримати текст та HTML
                         content = ""
                         html_content = ""
+                        attachments = []
                         if email_message.is_multipart():
                             for part in email_message.walk():
                                 content_type = part.get_content_type()
@@ -295,6 +326,22 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                                         content = html.unescape(html_clean).strip()
                                 elif content_type == "text/plain" and not content:
                                     content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
+                                elif part.get_content_disposition() == 'attachment':
+                                    # Обробити вкладення
+                                    filename = part.get_filename()
+                                    if filename:
+                                        # Декодувати ім'я файлу
+                                        filename_parts = decode_header(filename)
+                                        decoded_filename = "".join([
+                                            part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
+                                            for part in filename_parts
+                                        ])
+                                        file_data = part.get_payload(decode=True)
+                                        attachments.append({
+                                            "filename": decoded_filename,
+                                            "content_type": content_type,
+                                            "data": file_data,
+                                        })
                         else:
                             payload = email_message.get_payload(decode=True)
                             if payload:

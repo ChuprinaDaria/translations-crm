@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package } from 'lucide-react';
+import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { AttachmentPreview } from './AttachmentPreview';
 import { cn } from '../../../components/ui/utils';
@@ -47,6 +47,7 @@ interface MessageBubbleProps {
   onAddFile?: (fileUrl: string, fileName: string) => void;
   onAddFileAutoCreateOrder?: (fileUrl: string, fileName: string) => void; // Create order and add file
   onAddAddress?: (address: string, isPaczkomat: boolean, paczkomatCode?: string) => void; // Add address or paczkomat to order
+  onDeleteMessage?: (messageId: string) => void; // Delete message callback
 }
 
 /**
@@ -99,6 +100,7 @@ export function MessageBubble({
   onAddFile,
   onAddFileAutoCreateOrder,
   onAddAddress,
+  onDeleteMessage,
 }: MessageBubbleProps) {
   const isOutbound = message.direction === 'outbound';
   const isRead = message.status === 'read';
@@ -272,7 +274,7 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          'max-w-[70%] rounded-lg px-3 py-2 relative',
+          'max-w-[70%] rounded-lg px-3 py-2 relative group',
           isOutbound
             ? getManagerMessageStyles()
             : 'bg-white border border-gray-200',
@@ -284,6 +286,22 @@ export function MessageBubble({
           <div className="absolute top-2 left-2 bg-white rounded-full p-0.5 border border-gray-200 z-10">
             <PlatformIcon platform={platform} className="w-3 h-3" />
           </div>
+        )}
+
+        {/* Delete button - appears on hover */}
+        {onDeleteMessage && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm('Ви впевнені, що хочете видалити це повідомлення?')) {
+                onDeleteMessage(message.id);
+              }
+            }}
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-100 text-red-500 hover:text-red-700 z-20"
+            title="Видалити повідомлення"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         )}
 
         {/* Message content */}

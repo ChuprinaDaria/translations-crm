@@ -65,6 +65,7 @@ interface ChatAreaProps {
   onOrderClick?: () => void;
   onDocumentsClick?: () => void;
   onToggleSidebar?: () => void;
+  onDeleteMessage?: (messageId: string) => void;
 }
 
 export function ChatArea({
@@ -89,6 +90,7 @@ export function ChatArea({
   onOrderClick,
   onDocumentsClick,
   onToggleSidebar,
+  onDeleteMessage,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -184,6 +186,7 @@ export function ChatArea({
                   onAddFile={onAddFile}
                   onAddFileAutoCreateOrder={onAddFileAutoCreateOrder}
                   onAddAddress={onAddAddress}
+                  onDeleteMessage={onDeleteMessage}
                 />
               ))
             )}

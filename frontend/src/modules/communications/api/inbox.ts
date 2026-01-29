@@ -247,4 +247,13 @@ export const inboxApi = {
       }),
     });
   },
+
+  /**
+   * Delete message
+   */
+  async deleteMessage(messageId: string): Promise<{ status: string; message_id: string }> {
+    return apiFetch(`/communications/messages/${messageId}`, {
+      method: 'DELETE',
+    });
+  },
 };
