@@ -102,6 +102,38 @@ class InstagramService(MessengerService):
         
         return hmac.compare_digest(expected_signature, received_signature)
     
+    async def get_user_profile(self, igsid: str) -> Optional[Dict[str, Any]]:
+        """
+        Отримати профіль Instagram користувача за його IGSID через Graph API.
+        
+        Args:
+            igsid: Instagram Scoped ID користувача
+            
+        Returns:
+            Словник з полями: username, name, profile_picture_url
+        """
+        access_token = self.config.get("access_token")
+        if not access_token:
+            return None
+        
+        try:
+            # Використовуємо Graph API для отримання профілю
+            # Для Instagram потрібно використовувати Instagram Graph API endpoint
+            url = f"{self.base_url}/{igsid}"
+            params = {
+                "fields": "username,name,profile_picture_url",
+                "access_token": access_token,
+            }
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to fetch Instagram profile for {igsid}: {e}")
+            return None
+    
     async def send_message(
         self,
         conversation_id: UUID,
@@ -129,6 +161,7 @@ class InstagramService(MessengerService):
             status=MessageStatus.QUEUED,
             attachments=attachments,
             metadata=metadata,
+            is_from_me=True,  # Відправлені повідомлення завжди від нас
         )
         
         try:
@@ -179,11 +212,28 @@ class InstagramService(MessengerService):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        is_from_me: Optional[bool] = None,
     ) -> "MessageModel":
-        """Обробити вхідне повідомлення з Instagram Direct Messages."""
+        """
+        Обробити вхідне повідомлення з Instagram Direct Messages.
+        
+        Args:
+            external_id: IGSID клієнта (завжди клієнта, навіть якщо повідомлення від нас)
+            content: Текст повідомлення
+            sender_info: Інформація про відправника
+            attachments: Вкладення
+            metadata: Метадані
+            is_from_me: Чи повідомлення від нас (True) або від клієнта (False)
+        """
         from modules.communications.models import Message as MessageModel
         
+        # Визначити direction на основі is_from_me
+        # Якщо is_from_me=True, то це OUTBOUND (ми відправили)
+        # Якщо is_from_me=False або None, то це INBOUND (клієнт надіслав)
+        direction = MessageDirection.OUTBOUND if is_from_me else MessageDirection.INBOUND
+        
         # Отримати або створити розмову
+        # external_id завжди містить IGSID клієнта
         conversation = await self.get_or_create_conversation(
             external_id=external_id,
             client_id=None,
@@ -192,12 +242,13 @@ class InstagramService(MessengerService):
         # Створити повідомлення
         message = self.create_message_in_db(
             conversation_id=conversation.id,
-            direction=MessageDirection.INBOUND,
+            direction=direction,
             message_type=MessageType.TEXT,
             content=content,
             status=MessageStatus.SENT,
             attachments=attachments,
             metadata=metadata,
+            is_from_me=is_from_me,
         )
         
         # Notify via WebSocket

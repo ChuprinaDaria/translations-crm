@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import String, Text, ForeignKey, DateTime, Integer
+from sqlalchemy import String, Text, ForeignKey, DateTime, Integer, Boolean
 from sqlalchemy.types import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB
@@ -83,6 +83,7 @@ class Message(Base):
         JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
     )
+    is_from_me: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None, index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     

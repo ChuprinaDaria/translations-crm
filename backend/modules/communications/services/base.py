@@ -70,6 +70,7 @@ class MessengerService(ABC):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        is_from_me: Optional[bool] = None,
     ) -> MessageModel:
         """
         Обробити вхідне повідомлення.
@@ -116,6 +117,7 @@ class MessengerService(ABC):
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         sent_at: Optional[datetime] = None,
+        is_from_me: Optional[bool] = None,
     ) -> MessageModel:
         """
         Створити повідомлення в базі даних.
@@ -142,6 +144,7 @@ class MessengerService(ABC):
             attachments=attachments,
             meta_data=metadata,
             sent_at=sent_at or datetime.utcnow(),
+            is_from_me=is_from_me,
         )
         self.db.add(message)
         self.db.commit()

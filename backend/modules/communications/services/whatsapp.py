@@ -171,6 +171,7 @@ class WhatsAppService(MessengerService):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        is_from_me: Optional[bool] = None,
     ) -> "MessageModel":
         """Обробити вхідне повідомлення з WhatsApp."""
         from modules.communications.models import Message as MessageModel

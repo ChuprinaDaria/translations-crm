@@ -175,6 +175,7 @@ class EmailService(MessengerService):
         sender_info: Dict[str, Any],
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        is_from_me: Optional[bool] = None,
         to_email: Optional[str] = None,
     ) -> "MessageModel":
         """Обробити вхідне email повідомлення."""
