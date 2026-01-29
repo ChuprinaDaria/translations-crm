@@ -12,6 +12,24 @@ export default defineConfig({
   },
   build: {
     outDir: 'build',
+    sourcemap: true, // Додати source maps для діагностики TDZ помилок
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // Виділяємо vendor chunks для кращої обробки залежностей
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            return 'vendor';
+          }
+          // Виділяємо API модуль окремо
+          if (id.includes('/lib/api')) {
+            return 'api';
+          }
+        },
+      },
+    },
   },
   server: {
     proxy: {
