@@ -180,16 +180,50 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
         await websocket.send_json(welcome_msg)
         logger.info(f"WebSocket sent welcome message to user {user_id}: {welcome_msg}")
         
-        while True:
-            data = await websocket.receive_text()
-            logger.info(f"WebSocket received from user {user_id}: {data}")
-            if data == "ping":
-                response = "pong"
-                await websocket.send_text(response)
-                logger.info(f"WebSocket sent pong to user {user_id}")
-            else:
-                # Log any other data received
-                logger.debug(f"WebSocket received non-ping data from user {user_id}: {data}")
+        # Import asyncio for keep-alive
+        import asyncio
+        
+        # Keep-alive task: send ping every 20 seconds
+        async def keep_alive():
+            while True:
+                await asyncio.sleep(20)  # Wait 20 seconds
+                try:
+                    if user_id in messages_manager.active_connections:
+                        await websocket.send_text("ping")
+                        logger.debug(f"WebSocket keep-alive ping sent to user {user_id}")
+                except Exception as e:
+                    logger.warning(f"WebSocket keep-alive ping failed for user {user_id}: {e}")
+                    break
+        
+        # Start keep-alive task
+        keep_alive_task = asyncio.create_task(keep_alive())
+        
+        try:
+            while True:
+                # Use asyncio.wait_for with timeout to allow keep-alive to work
+                try:
+                    data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                    logger.info(f"WebSocket received from user {user_id}: {data}")
+                    if data == "ping":
+                        response = "pong"
+                        await websocket.send_text(response)
+                        logger.debug(f"WebSocket sent pong to user {user_id}")
+                    elif data == "pong":
+                        # Client responded to our ping
+                        logger.debug(f"WebSocket received pong from user {user_id}")
+                    else:
+                        # Log any other data received
+                        logger.debug(f"WebSocket received non-ping data from user {user_id}: {data}")
+                except asyncio.TimeoutError:
+                    # Timeout is normal - keep-alive will send ping
+                    continue
+        finally:
+            # Cancel keep-alive task when connection closes
+            keep_alive_task.cancel()
+            try:
+                await keep_alive_task
+            except asyncio.CancelledError:
+                pass
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for user: {user_id}")
         messages_manager.disconnect(user_id)

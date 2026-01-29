@@ -48,16 +48,24 @@ def get_manager_smtp_accounts():
         """))
         accounts = []
         for row in result:
+            # Примусово очищаємо пробіли з host та port
+            smtp_host = (row[3] or "").strip() if row[3] else ""
+            smtp_port = (str(row[4]) or "").strip() if row[4] else ""
+            imap_host_raw = row[7] or row[3]  # Якщо IMAP host не вказано, використовуємо SMTP host
+            imap_host = (imap_host_raw or "").strip() if imap_host_raw else ""
+            imap_port_raw = row[8] or 993
+            imap_port = int((str(imap_port_raw) or "993").strip()) if imap_port_raw else 993
+            
             accounts.append({
                 "id": row[0],
                 "name": row[1],
                 "email": row[2],
-                "smtp_host": row[3],
-                "smtp_port": row[4],
+                "smtp_host": smtp_host,
+                "smtp_port": smtp_port,
                 "smtp_user": row[5],
                 "smtp_password": row[6],
-                "imap_host": row[7] or row[3],  # Якщо IMAP host не вказано, використовуємо SMTP host
-                "imap_port": row[8] or 993,
+                "imap_host": imap_host,
+                "imap_port": imap_port,
             })
         return accounts
     finally:
@@ -157,18 +165,38 @@ async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name:
 
 def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Fetch new emails from IMAP server for a manager account."""
+    import socket
+    
     messages = []
     
     try:
         # Підключитися до IMAP
-        imap_host = account["imap_host"]
+        # Примусово очищаємо пробіли (захист від помилок у БД)
+        imap_host = (account["imap_host"] or "").strip()
         imap_port = account["imap_port"]
         smtp_user = account["smtp_user"]
         smtp_password = account["smtp_password"]
         
+        # Валідація host та port
+        if not imap_host:
+            logger.error(f"Invalid IMAP host for account {account['email']}: host is empty")
+            return messages
+        
+        if not isinstance(imap_port, int) or imap_port <= 0:
+            logger.error(f"Invalid IMAP port for account {account['email']}: {imap_port}")
+            return messages
+        
         logger.info(f"Connecting to IMAP {imap_host}:{imap_port} for {account['email']}")
         
-        mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+        # Обробка DNS помилок
+        try:
+            mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+        except socket.gaierror as e:
+            logger.error(f"DNS/Host error for {account['email']} (host: {imap_host}): Invalid host format - {e}")
+            return messages
+        except OSError as e:
+            logger.error(f"Connection error for {account['email']} (host: {imap_host}:{imap_port}): {e}")
+            return messages
         logger.info(f"IMAP SSL connection established for {account['email']}")
         mail.login(smtp_user, smtp_password)
         logger.info(f"IMAP login successful for {account['email']}")
