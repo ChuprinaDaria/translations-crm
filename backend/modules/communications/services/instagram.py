@@ -112,26 +112,48 @@ class InstagramService(MessengerService):
         Returns:
             Словник з полями: username, name, profile_picture_url
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         access_token = self.config.get("access_token")
         if not access_token:
+            logger.warning(f"[Instagram Profile] No access token configured")
             return None
         
         try:
-            # Використовуємо Graph API для отримання профілю
-            # Для Instagram потрібно використовувати Instagram Graph API endpoint
-            url = f"{self.base_url}/{igsid}"
+            # Для Instagram потрібно використовувати Instagram Graph API endpoint, а не Facebook
+            # Використовуємо graph.instagram.com замість graph.facebook.com
+            url = f"https://graph.instagram.com/v18.0/{igsid}"
             params = {
                 "fields": "username,name,profile_picture_url",
                 "access_token": access_token,
             }
             
+            logger.info(f"[Instagram Profile] Fetching profile for IGSID: {igsid[:20]}...")
+            
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                return response.json()
+                response = await client.get(url, params=params, timeout=10.0)
+                
+                # Логуємо повну відповідь при помилці
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"[Instagram Profile] Failed to fetch profile for {igsid}: HTTP {response.status_code}")
+                    logger.error(f"[Instagram Profile] Error response: {error_text}")
+                    print(f"[Instagram Profile] Error: {error_text}", flush=True)
+                    return None
+                
+                result = response.json()
+                logger.info(f"[Instagram Profile] Successfully fetched profile: username={result.get('username')}, name={result.get('name')}")
+                return result
+        except httpx.HTTPStatusError as e:
+            error_text = e.response.text if e.response else str(e)
+            logger.error(f"[Instagram Profile] HTTP error for {igsid}: {e}")
+            logger.error(f"[Instagram Profile] Error response: {error_text}")
+            print(f"[Instagram Profile] HTTP Error: {error_text}", flush=True)
+            return None
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to fetch Instagram profile for {igsid}: {e}")
+            logger.warning(f"[Instagram Profile] Failed to fetch Instagram profile for {igsid}: {e}")
+            print(f"[Instagram Profile] Exception: {e}", flush=True)
             return None
     
     async def send_message(
@@ -164,13 +186,19 @@ class InstagramService(MessengerService):
             is_from_me=True,  # Відправлені повідомлення завжди від нас
         )
         
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             # Відправити через Meta Instagram Graph API
             page_id = self.config.get("page_id")
             access_token = self.config.get("access_token")
             
             if not page_id or not access_token:
-                raise ValueError("Instagram credentials not configured")
+                error_msg = "Instagram credentials not configured"
+                logger.error(f"[Instagram Send] {error_msg}")
+                print(f"[Instagram Send] ERROR: {error_msg}", flush=True)
+                raise ValueError(error_msg)
             
             # Instagram використовує той самий API що і Facebook Messenger
             url = f"{self.base_url}/{page_id}/messages"
@@ -180,14 +208,34 @@ class InstagramService(MessengerService):
             }
             
             payload = {
-                "recipient": {"id": conversation.external_id},  # Instagram User ID
+                "recipient": {"id": conversation.external_id},  # Instagram User ID (IGSID)
                 "message": {"text": content},
             }
             
+            logger.info(f"[Instagram Send] Sending message to IGSID: {conversation.external_id[:20]}...")
+            logger.info(f"[Instagram Send] URL: {url}")
+            logger.info(f"[Instagram Send] Payload: {payload}")
+            print(f"[Instagram Send] Sending to {conversation.external_id[:20]}...", flush=True)
+            
             async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
+                response = await client.post(url, json=payload, headers=headers, timeout=30.0)
+                
+                # Логуємо повну відповідь від Meta
+                response_text = response.text
+                logger.info(f"[Instagram Send] Response status: {response.status_code}")
+                logger.info(f"[Instagram Send] Full response: {response_text}")
+                print(f"[Instagram Send] Response ({response.status_code}): {response_text}", flush=True)
+                
+                # Обробка помилок з детальним логуванням
+                if response.status_code != 200:
+                    error_msg = f"Instagram API returned {response.status_code}: {response_text}"
+                    logger.error(f"[Instagram Send] {error_msg}")
+                    print(f"[Instagram Send] ERROR: {error_msg}", flush=True)
+                    response.raise_for_status()
+                
                 result = response.json()
+                logger.info(f"[Instagram Send] Success! Message ID: {result.get('message_id')}")
+                print(f"[Instagram Send] Success! Message ID: {result.get('message_id')}", flush=True)
             
             # Оновити статус
             message.status = MessageStatus.SENT
@@ -197,8 +245,20 @@ class InstagramService(MessengerService):
             metadata["instagram_message_id"] = result.get("message_id")
             message.meta_data = metadata
             self.db.commit()
+            logger.info(f"[Instagram Send] Message saved to DB with status SENT")
             
+        except httpx.HTTPStatusError as e:
+            error_text = e.response.text if e.response else str(e)
+            error_msg = f"HTTP {e.response.status_code if e.response else 'Unknown'}: {error_text}"
+            logger.error(f"[Instagram Send] HTTP error: {error_msg}")
+            print(f"[Instagram Send] HTTP ERROR: {error_msg}", flush=True)
+            message.status = MessageStatus.FAILED
+            self.db.commit()
+            raise Exception(error_msg) from e
         except Exception as e:
+            error_msg = f"Failed to send Instagram message: {e}"
+            logger.error(f"[Instagram Send] {error_msg}", exc_info=True)
+            print(f"[Instagram Send] EXCEPTION: {error_msg}", flush=True)
             message.status = MessageStatus.FAILED
             self.db.commit()
             raise
