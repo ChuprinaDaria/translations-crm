@@ -116,7 +116,7 @@ def save_message(db, conv_id: str, content: str, sender_name: str, external_id: 
     return msg_id
 
 
-async def download_media(client, message) -> dict:
+async def download_media(client, message, db, message_id) -> dict:
     """Download media from Telegram message and return attachment info."""
     try:
         if not message.media:
@@ -176,24 +176,39 @@ async def download_media(client, message) -> dict:
         if not ext:
             ext = ".bin"
         
-        filename = f"{file_id}{ext}"
-        file_path = UPLOADS_DIR / filename
+        # Download to temporary location first
+        temp_path = UPLOADS_DIR / f"temp_{uuid4()}{ext}"
+        await client.download_media(message, file=str(temp_path))
         
-        # Download the file
-        await client.download_media(message, file=str(file_path))
+        # Read file data
+        with open(temp_path, "rb") as f:
+            file_data = f.read()
         
-        # Get file size
-        file_size = file_path.stat().st_size if file_path.exists() else 0
+        # Remove temp file
+        temp_path.unlink()
         
-        logger.info(f"📎 Downloaded media: {original_name} ({file_size} bytes)")
+        # Save using new media utility
+        from modules.communications.utils.media import save_media_file
+        from uuid import UUID
+        
+        attachment = save_media_file(
+            db=db,
+            message_id=UUID(message_id),
+            file_data=file_data,
+            mime_type=mime_type,
+            original_name=original_name,
+            file_type=file_type,
+        )
+        
+        logger.info(f"📎 Downloaded and saved media: {original_name} ({attachment.file_size} bytes)")
         
         return {
-            "id": file_id,
+            "id": str(attachment.id),
             "type": file_type,
             "filename": original_name,
             "mime_type": mime_type,
-            "size": file_size,
-            "url": f"/api/v1/communications/files/{filename}",
+            "size": attachment.file_size,
+            "url": f"/media/{attachment.file_path.split('/')[-1]}",
         }
         
     except Exception as e:
@@ -283,29 +298,46 @@ async def run_listener_for_account(account: dict):
             attachments = []
             msg_type = "text"
             
-            # Check for media
-            if event.message.media:
-                attachment = await download_media(client, event.message)
-                if attachment:
-                    attachments.append(attachment)
-                    msg_type = attachment["type"]
-                    if not content:
-                        content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
-            
-            if not content and not attachments:
-                content = "[Пусте повідомлення]"
-            
-            logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
-            
-            # Save to database
+            # Save to database first to get message_id
             db = Session()
             try:
                 conv_id = get_or_create_conversation(db, external_id, sender_name)
+                
+                # Save message first (will update if media found)
+                temp_content = content or "[Медіа повідомлення]"
                 msg_id = save_message(
-                    db, conv_id, content, sender_name, external_id, 
-                    attachments=attachments if attachments else None,
+                    db, conv_id, temp_content, sender_name, external_id, 
+                    attachments=None,  # Will be updated after media download
                     msg_type=msg_type
                 )
+                
+                # Check for media and download
+                if event.message.media:
+                    attachment = await download_media(client, event.message, db, msg_id)
+                    if attachment:
+                        attachments.append(attachment)
+                        msg_type = attachment["type"]
+                        if not content:
+                            content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
+                        
+                        # Update message with attachment info
+                        import json
+                        db.execute(text("""
+                            UPDATE communications_messages 
+                            SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb)
+                            WHERE id = :msg_id
+                        """), {
+                            "content": content,
+                            "msg_type": msg_type,
+                            "attachments": json.dumps(attachments),
+                            "msg_id": msg_id
+                        })
+                        db.commit()
+                
+                if not content and not attachments:
+                    content = "[Пусте повідомлення]"
+                
+                logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
                 
                 # Notify WebSocket
                 await notify_websocket(

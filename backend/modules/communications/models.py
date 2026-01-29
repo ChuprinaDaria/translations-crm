@@ -88,4 +88,21 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages", lazy="joined")
+    attachment_objects: Mapped[list["Attachment"]] = relationship("Attachment", back_populates="message", lazy="selectin", cascade="all, delete-orphan")
+
+
+class Attachment(Base):
+    """Модель для зберігання медіа-файлів повідомлень."""
+    __tablename__ = "communications_attachments"
+    
+    id: Mapped[UUID] = mapped_column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    message_id: Mapped[UUID] = mapped_column(PostgresUUID(as_uuid=True), ForeignKey("communications_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    file_path: Mapped[str] = mapped_column(String, nullable=False)  # Локальний шлях до файлу в /app/media
+    file_type: Mapped[str] = mapped_column(String, nullable=False, index=True)  # image, document, audio, video
+    mime_type: Mapped[str] = mapped_column(String, nullable=False)
+    original_name: Mapped[str] = mapped_column(String, nullable=False)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Розмір файлу в байтах
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    message: Mapped["Message"] = relationship("Message", back_populates="attachment_objects", lazy="joined")
 

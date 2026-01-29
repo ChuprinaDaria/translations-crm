@@ -58,6 +58,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
       - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-60}
+    volumes:
+      - ./media:/app/media
     working_dir: /app
     command: python email_imap_listener.py
     depends_on:
@@ -81,6 +83,7 @@ services:
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
     volumes:
       - ./backend/uploads:/app/uploads
+      - ./media:/app/media
     working_dir: /app
     command: python telegram_listener.py
     depends_on:
@@ -111,6 +114,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/build:/usr/share/nginx/html:ro
+      - ./media:/app/media:ro
     depends_on:
       - backend
       - frontend
