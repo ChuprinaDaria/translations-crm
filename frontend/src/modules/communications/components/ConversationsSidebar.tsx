@@ -25,6 +25,7 @@ export interface Conversation {
   last_message?: string;
   last_message_at?: string;
   updated_at: string;
+  assigned_manager_id?: string;
 }
 
 interface ConversationsSidebarProps {

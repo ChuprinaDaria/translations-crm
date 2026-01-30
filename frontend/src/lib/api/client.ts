@@ -61,10 +61,18 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     let errorData;
+    // Використовуємо clone() щоб не читати body двічі
+    const responseClone = response.clone();
     try {
       errorData = await response.json();
     } catch {
-      errorData = { detail: response.statusText };
+      // Якщо не вдалося прочитати JSON, спробуємо прочитати текст
+      try {
+        const text = await responseClone.text();
+        errorData = { detail: text || response.statusText };
+      } catch {
+        errorData = { detail: response.statusText };
+      }
     }
     console.error('[API] Error response:', errorData);
     
@@ -88,6 +96,14 @@ export async function apiFetch<T>(
     // Log detailed validation errors for 422
     if (response.status === 422 && errorData.detail && Array.isArray(errorData.detail)) {
       console.error('[API] Validation errors:', JSON.stringify(errorData.detail, null, 2));
+    }
+    
+    // Handle 502 Bad Gateway - backend server is down
+    if (response.status === 502) {
+      console.error('[API] Backend server is not responding (502 Bad Gateway)');
+      errorData = { 
+        detail: 'Сервер тимчасово недоступний. Спробуйте пізніше або зверніться до адміністратора.' 
+      };
     }
     
     throw new ApiError(response.status, response.statusText, errorData);
@@ -126,13 +142,25 @@ export async function apiFetch<T>(
     return jsonData;
   } catch (jsonError) {
     // Якщо не вдалося розпарсити JSON, спробуємо прочитати текст для діагностики
-    const text = await response.text();
-    console.error('[API] Failed to parse JSON response. Response text:', text.substring(0, 500));
-    throw new ApiError(
-      response.status,
-      'Invalid JSON response',
-      { detail: `Сервер повернув невалідний JSON. Відповідь: ${text.substring(0, 200)}` }
-    );
+    // Використовуємо clone() щоб не читати body двічі (хоча це не повинно статися тут)
+    try {
+      const responseClone = response.clone();
+      const text = await responseClone.text();
+      console.error('[API] Failed to parse JSON response. Response text:', text.substring(0, 500));
+      throw new ApiError(
+        response.status,
+        'Invalid JSON response',
+        { detail: `Сервер повернув невалідний JSON. Відповідь: ${text.substring(0, 200)}` }
+      );
+    } catch (textError) {
+      // Якщо навіть текст не вдалося прочитати
+      console.error('[API] Failed to read response body:', textError);
+      throw new ApiError(
+        response.status,
+        'Invalid response',
+        { detail: 'Не вдалося прочитати відповідь сервера' }
+      );
+    }
   }
 }
 
@@ -171,12 +199,28 @@ export async function apiFetchMultipart<T>(
 
   if (!response.ok) {
     let errorData;
+    // Використовуємо clone() щоб не читати body двічі
+    const responseClone = response.clone();
     try {
       errorData = await response.json();
     } catch {
-      errorData = { detail: response.statusText };
+      // Якщо не вдалося прочитати JSON, спробуємо прочитати текст
+      try {
+        const text = await responseClone.text();
+        errorData = { detail: text || response.statusText };
+      } catch {
+        errorData = { detail: response.statusText };
+      }
     }
     console.error('[API] Error response:', errorData);
+    
+    // Handle 502 Bad Gateway - backend server is down
+    if (response.status === 502) {
+      console.error('[API] Backend server is not responding (502 Bad Gateway)');
+      errorData = { 
+        detail: 'Сервер тимчасово недоступний. Спробуйте пізніше або зверніться до адміністратора.' 
+      };
+    }
     
     throw new ApiError(response.status, response.statusText, errorData);
   }

@@ -48,7 +48,6 @@ const INBOX_SIDE_TABS: SideTab[] = [
 export function InboxPageEnhanced() {
   const queryClient = useQueryClient();
   const lastMessageCheckRef = useRef<Map<string, Date>>(new Map());
-  const processedMessageIdsRef = useRef<Set<string>>(new Set());
   
   // Нотифікації
   const { notifications, addNotification, removeNotification } = useNotifications({
@@ -394,7 +393,7 @@ export function InboxPageEnhanced() {
 
   // WebSocket for real-time updates
   const userId = getUserIdFromToken();
-  const { isConnected: wsConnected } = useMessagesWebSocket({
+  useMessagesWebSocket({
     userId: userId || 'current-user', // Fallback if no user ID found
     onNewMessage: handleWebSocketNewMessage,
     onConversationUpdate: handleWebSocketConversationUpdate,
@@ -416,6 +415,15 @@ export function InboxPageEnhanced() {
     window.addEventListener('resize', checkBreakpoint);
     return () => window.removeEventListener('resize', checkBreakpoint);
   }, []);
+
+  // Діагностика для aside
+  useEffect(() => {
+    console.log('🔍 Aside visibility check:', {
+      isMobile,
+      windowWidth: window.innerWidth,
+      shouldRender: !isMobile,
+    });
+  }, [isMobile]);
 
   // React Query автоматично оновлює conversations при зміні filters
 
@@ -1049,7 +1057,7 @@ export function InboxPageEnhanced() {
     }
   };
 
-  const handleOrderClick = (conversationId: string) => {
+  const handleOrderClick = (_conversationId: string) => {
     if (orders && orders.length > 0) {
       // Navigate to order page
       const orderId = orders[0].id;
@@ -1066,17 +1074,27 @@ export function InboxPageEnhanced() {
     }
   };
 
-  const handleDocumentsClick = (conversationId: string) => {
-    handleDownloadAllFiles();
+  const handleDocumentsClick = async (conversationId: string) => {
+    if (!conversationId) return;
+    await handleQuickAction(conversationId, 'download_files');
   };
 
   // Формуємо динамічні таби з disabled станом
-  const inboxTabs = useMemo<SideTab[]>(() => {
+  const inboxTabs = useMemo(() => {
     const conversationId = activeTabId || '';
     const hasClient = !!client;
     const hasOrders = orders.length > 0;
 
-    return INBOX_SIDE_TABS.map(tab => {
+    return INBOX_SIDE_TABS.filter(tab => {
+      // Приховуємо create-client або view-client залежно від наявності клієнта
+      if (tab.id === 'create-client' && hasClient) {
+        return false;
+      }
+      if (tab.id === 'view-client' && !hasClient) {
+        return false;
+      }
+      return true;
+    }).map(tab => {
       let disabled = false;
 
       switch (tab.id) {
@@ -1103,16 +1121,8 @@ export function InboxPageEnhanced() {
           break;
       }
 
-      // Приховуємо create-client або view-client залежно від наявності клієнта
-      if (tab.id === 'create-client' && hasClient) {
-        return null;
-      }
-      if (tab.id === 'view-client' && !hasClient) {
-        return null;
-      }
-
-      return { ...tab, disabled };
-    }).filter((tab): tab is SideTab => tab !== null);
+      return { ...tab, disabled } as SideTab;
+    });
   }, [activeTabId, client, orders]);
 
   // Обробник кліку на таб
@@ -1242,56 +1252,57 @@ export function InboxPageEnhanced() {
   const chatConversation = activeChat ? activeChat.conversation : null;
 
   return (
-    <CommunicationsErrorBoundary>
-      <CommunicationsLayout
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={handleToggleSidebar}
-        sidebar={
-          <ConversationsSidebar
-            conversations={sidebarConversations}
-            selectedId={activeTabId || undefined}
-            onSelect={handleOpenChat}
-            filters={filters}
-            onFilterChange={setFilters}
-            isLoading={isLoading}
-          />
-        }
-        contextPanel={undefined}
-        onSearch={handleSearch}
-      >
-        <ChatTabsArea
-          openChats={openChats}
-          activeTabId={activeTabId}
-          onTabChange={switchToChat}
-          onTabClose={(conversationId) => {
-            removeTab(conversationId);
-            closeChat(conversationId);
-          }}
-          onSendMessage={handleSendMessage}
-          onQuickAction={handleQuickAction}
-          isLoading={isSending}
+    <>
+      <CommunicationsErrorBoundary>
+        <CommunicationsLayout
           isSidebarOpen={isSidebarOpen}
-          getClientId={getClientIdForConversation}
-          getOrderId={getOrderIdForConversation}
-          getClientEmail={getClientEmailForConversation}
-          getClientPhone={getClientPhoneForConversation}
-          onAddEmail={handleAddEmail}
-          onAddPhone={handleAddPhone}
-          onAddFile={handleAddFile}
-          onAddFileAutoCreateOrder={handleAddFileAutoCreateOrder}
-          onAddAddress={handleAddAddress}
-          onPaymentClick={handlePaymentClick}
-          onTrackingClick={handleTrackingClick}
-          onClientClick={handleClientClick}
-          onOrderClick={handleOrderClick}
-          onDocumentsClick={handleDocumentsClick}
-          onDeleteMessage={handleDeleteMessage}
-        />
-      </CommunicationsLayout>
+          onToggleSidebar={handleToggleSidebar}
+          sidebar={
+            <ConversationsSidebar
+              conversations={sidebarConversations}
+              selectedId={activeTabId || undefined}
+              onSelect={handleOpenChat}
+              filters={filters}
+              onFilterChange={setFilters}
+              isLoading={isLoading}
+            />
+          }
+          contextPanel={undefined}
+          onSearch={handleSearch}
+        >
+          <ChatTabsArea
+            openChats={openChats}
+            activeTabId={activeTabId}
+            onTabChange={switchToChat}
+            onTabClose={(conversationId) => {
+              removeTab(conversationId);
+              closeChat(conversationId);
+            }}
+            onSendMessage={handleSendMessage}
+            onQuickAction={handleQuickAction}
+            isLoading={isSending}
+            isSidebarOpen={isSidebarOpen}
+            getClientId={getClientIdForConversation}
+            getOrderId={getOrderIdForConversation}
+            getClientEmail={getClientEmailForConversation}
+            getClientPhone={getClientPhoneForConversation}
+            onAddEmail={handleAddEmail}
+            onAddPhone={handleAddPhone}
+            onAddFile={handleAddFile}
+            onAddFileAutoCreateOrder={handleAddFileAutoCreateOrder}
+            onAddAddress={handleAddAddress}
+            onPaymentClick={handlePaymentClick}
+            onClientClick={handleClientClick}
+            onOrderClick={handleOrderClick}
+            onDocumentsClick={handleDocumentsClick}
+            onDeleteMessage={handleDeleteMessage}
+          />
+        </CommunicationsLayout>
+      </CommunicationsErrorBoundary>
 
-      {/* Права частина: Бокова панель з табами */}
+      {/* Права частина: Бокова панель з табами - ПОЗА ErrorBoundary */}
       {!isMobile && (
-        <aside className="fixed right-0 top-16 w-[64px] border-l bg-white flex flex-col items-center py-4 h-[calc(100vh-4rem)] z-[70]">
+        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center py-4 z-[100]">
           <SideTabs
             tabs={inboxTabs}
             activeTab={isSidebarOpen ? 'sidebar' : sidePanelTab}
@@ -1301,7 +1312,7 @@ export function InboxPageEnhanced() {
         </aside>
       )}
 
-      {/* SidePanel - Бокова панель з контентом */}
+      {/* SidePanel - Бокова панель з контентом - ПОЗА ErrorBoundary */}
       {!isMobile && activeTabId && sidePanelTab && (sidePanelTab === 'notes' || sidePanelTab === 'files') && (
         <SidePanel
           open={sidePanelTab !== null}
@@ -1324,11 +1335,6 @@ export function InboxPageEnhanced() {
                   <AttachmentPreview
                     key={attachment.id || idx}
                     attachment={attachment}
-                    onDownload={() => {
-                      if (attachment.url) {
-                        window.open(attachment.url, '_blank');
-                      }
-                    }}
                   />
                 ))}
               {activeChat.messages.flatMap((msg) => msg.attachments || []).filter((att) => att && att.url).length === 0 && (
@@ -1342,7 +1348,7 @@ export function InboxPageEnhanced() {
         </SidePanel>
       )}
 
-      {/* Smart Actions Dialogs */}
+      {/* Smart Actions Dialogs - всередині ErrorBoundary для обробки помилок */}
       {chatConversation && (
         <>
           <CreateClientDialog
@@ -1439,7 +1445,7 @@ export function InboxPageEnhanced() {
         </DialogContent>
       </Dialog>
 
-      {/* Нотифікації */}
+      {/* Нотифікації - ПОЗА ErrorBoundary */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         {notifications.map((notification) => (
           <NotificationToast
@@ -1450,7 +1456,7 @@ export function InboxPageEnhanced() {
           />
         ))}
       </div>
-    </CommunicationsErrorBoundary>
+    </>
   );
   }
 

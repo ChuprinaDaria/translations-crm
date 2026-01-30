@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -260,8 +260,30 @@ export function MessageBubble({
         return 'bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-500 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
       case 'email':
         return 'bg-gradient-to-r from-orange-50 to-amber-50 border-l-4 border-orange-500 border-r border-t border-b border-orange-200/50 text-gray-900 shadow-sm';
+      case 'instagram':
+        return 'bg-gradient-to-r from-fuchsia-50 to-pink-50 border-l-4 border-fuchsia-500 border-r border-t border-b border-fuchsia-200/50 text-gray-900 shadow-sm';
+      case 'facebook':
+        return 'bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-600 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
       default:
-        return 'bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-500 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
+        return 'bg-gradient-to-r from-gray-50 to-slate-50 border-l-4 border-gray-400 border-r border-t border-b border-gray-200/50 text-gray-900 shadow-sm';
+    }
+  };
+
+  // Стилі для вхідних повідомлень залежно від платформи
+  const getInboundMessageStyles = () => {
+    switch (platform) {
+      case 'telegram':
+        return 'bg-sky-50/70 border border-sky-300 text-gray-900';
+      case 'instagram':
+        return 'bg-fuchsia-50/70 border border-fuchsia-400 text-gray-900';
+      case 'email':
+        return 'bg-orange-50/70 border border-orange-300 text-gray-900';
+      case 'facebook':
+        return 'bg-blue-50/70 border border-blue-400 text-gray-900';
+      case 'whatsapp':
+        return 'bg-emerald-50/70 border border-emerald-300 text-gray-900';
+      default:
+        return 'bg-white border border-gray-200';
     }
   };
 
@@ -277,7 +299,7 @@ export function MessageBubble({
           'max-w-[70%] rounded-lg px-3 py-2 relative group',
           isOutbound
             ? getManagerMessageStyles()
-            : 'bg-white border border-gray-200',
+            : getInboundMessageStyles(),
           !isOutbound && 'pt-4'
         )}
       >
