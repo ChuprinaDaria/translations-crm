@@ -76,21 +76,33 @@ export async function apiFetch<T>(
     }
     console.error('[API] Error response:', errorData);
     
-    // Handle "User not found" error - clear all storage and force logout
+    // Handle authentication errors - clear all storage and force logout
+    // Логаут потрібен ТІЛЬКИ при помилках автентифікації, а не при будь-якій 404
     const errorDetail = errorData?.detail || '';
-    const isUserNotFound = 
-      typeof errorDetail === 'string' && 
-      (errorDetail.toLowerCase().includes('user not found') || 
-       errorDetail.toLowerCase().includes('user not found'));
+    const errorDetailLower = typeof errorDetail === 'string' ? errorDetail.toLowerCase() : '';
     
-    if (isUserNotFound || response.status === 404) {
-      console.error('[API] User not found - clearing all storage and forcing logout');
+    // Перевіряємо чи це помилка автентифікації
+    const isAuthError = 
+      errorDetailLower.includes('user not found') ||
+      errorDetailLower.includes('not authenticated') ||
+      errorDetailLower.includes('invalid token');
+    
+    // Логаут тільки при помилках автентифікації
+    if (response.status === 401 || 
+        (response.status === 403 && isAuthError) ||
+        (response.status === 404 && isAuthError)) {
+      console.error('[API] Authentication error - clearing all storage and forcing logout');
       // Clear all localStorage to remove old UUID tokens
       localStorage.clear();
       tokenManager.removeToken();
       // Dispatch logout event
       window.dispatchEvent(new CustomEvent('auth:logout'));
       window.dispatchEvent(new CustomEvent('auth:token-changed'));
+    }
+    
+    // Для інших 403 помилок (наприклад, Permission denied) - просто кидаємо помилку
+    if (response.status === 403 && !isAuthError) {
+      console.log('[API] Forbidden (403) - not an auth error, throwing error');
     }
     
     // Log detailed validation errors for 422
