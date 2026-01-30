@@ -321,7 +321,7 @@ export function MessageBubble({
     }
   };
 
-  // Отримати колір фону для inline styles (fallback)
+  // Отримати колір фону для inline styles (fallback) - вихідні повідомлення
   const getManagerMessageBgStyle = (): React.CSSProperties | undefined => {
     if (!isOutbound) return undefined;
     
@@ -334,6 +334,21 @@ export function MessageBubble({
     };
     
     return { backgroundColor: colors[platform] || 'rgb(243, 244, 246)' }; // gray-100
+  };
+
+  // Отримати колір фону для inline styles (fallback) - вхідні повідомлення
+  const getInboundMessageBgStyle = (): React.CSSProperties | undefined => {
+    if (isOutbound) return undefined;
+    
+    const colors: Record<string, string> = {
+      telegram: 'rgb(240, 249, 255)',    // sky-50
+      instagram: 'rgb(253, 244, 255)',    // fuchsia-50
+      email: 'rgb(255, 251, 235)',       // amber-50
+      facebook: 'rgb(239, 246, 255)',    // blue-50
+      whatsapp: 'rgb(236, 253, 245)',    // emerald-50
+    };
+    
+    return { backgroundColor: colors[platform] || 'rgb(255, 255, 255)' }; // white
   };
 
   // Стилі для повідомлень менеджера залежно від платформи
@@ -426,7 +441,10 @@ export function MessageBubble({
           borderLeftColor: getBorderLeftColor(),
           borderLeftStyle: 'solid',
           ...getManagerMessageBgStyle(),
-        } : undefined}
+        } : {
+          // Fallback: ensure background color is applied via inline style for inbound messages
+          ...getInboundMessageBgStyle(),
+        }}
         ref={(el) => {
           // Debug: log computed styles in development
           if (process.env.NODE_ENV === 'development' && el && typeof window !== 'undefined' && window.getComputedStyle) {
