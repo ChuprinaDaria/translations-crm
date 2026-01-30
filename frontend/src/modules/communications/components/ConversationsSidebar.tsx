@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Clock, Bell, Archive, MessageSquare, Mail, MessageCircle, Instagram, Facebook, X } from 'lucide-react';
+import { Search, Clock, Bell, Archive, MessageSquare, Mail, MessageCircle, Instagram, Facebook, X, Filter } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
 import { ConversationItem } from './ConversationItem';
 import { Skeleton } from '../../../components/ui/skeleton';
