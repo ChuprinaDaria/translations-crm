@@ -597,7 +597,7 @@ export function MessageBubble({
 
           {/* Attachments */}
           {message.attachments && message.attachments.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2 max-w-[280px]">
               {message.attachments.map((attachment, index) => {
                 const fileKey = attachment.url || attachment.id || `file-${index}`;
                 const isFileAdded = addedItems.has(fileKey);

@@ -23,9 +23,10 @@ import httpx
 
 # Імпортуємо моделі щоб SQLAlchemy знав про них для relationship
 from modules.auth.models import User  # noqa: F401
-from modules.crm.models import Client  # noqa: F401
+from modules.crm.models import Client, Office  # noqa: F401 - Office потребує AutobotSettings
 from modules.communications.models import Conversation, Message  # noqa: F401
 from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
+from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog  # noqa: F401 - для Office relationship
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")

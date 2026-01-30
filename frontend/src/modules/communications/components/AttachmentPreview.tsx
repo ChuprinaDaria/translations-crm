@@ -118,11 +118,13 @@ export function AttachmentPreview({
             'border border-gray-200 rounded-lg overflow-hidden',
             isPreview ? 'w-[120px] h-[120px]' : 'max-w-[200px] max-h-[200px]'
           )}
+          style={!isPreview ? { maxWidth: '200px', maxHeight: '200px', width: 'auto', height: 'auto' } : undefined}
           onClick={() => setIsZoomed(true)}
         >
           <img
             src={thumbnailUrl}
             alt={displayName}
+            style={!isPreview ? { maxWidth: '200px', maxHeight: '200px', width: 'auto', height: 'auto', objectFit: 'cover' } : undefined}
             className="w-full h-full object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
             onError={() => setImageError(true)}
           />

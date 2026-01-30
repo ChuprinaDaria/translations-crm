@@ -103,7 +103,13 @@ class Office(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     
     orders: Mapped[list["Order"]] = relationship("Order", back_populates="office", lazy="selectin")
-    autobot_settings: Mapped["AutobotSettings | None"] = relationship("AutobotSettings", back_populates="office", uselist=False, lazy="selectin")
+    # Relationship до AutobotSettings - використовуємо string reference для уникнення circular import
+    autobot_settings: Mapped["AutobotSettings | None"] = relationship(
+        "AutobotSettings", 
+        back_populates="office", 
+        uselist=False, 
+        lazy="selectin"
+    )
 
 
 class Order(Base):
