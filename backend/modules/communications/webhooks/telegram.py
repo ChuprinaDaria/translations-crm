@@ -253,7 +253,7 @@ async def handle_telegram_webhook(
                 "filename": attachment.original_name,
                 "mime_type": attachment.mime_type,
                 "size": attachment.file_size,
-                "url": f"/api/v1/communications/files/{attachment.id}",
+                "url": f"/api/v1/communications/media/{attachment.file_path}",
             })
             
             if "caption" in message_data:
@@ -292,7 +292,7 @@ async def handle_telegram_webhook(
                 "filename": attachment.original_name,
                 "mime_type": attachment.mime_type,
                 "size": attachment.file_size,
-                "url": f"/api/v1/communications/files/{attachment.id}",
+                "url": f"/api/v1/communications/media/{attachment.file_path}",
             })
             
             if "caption" in message_data:
@@ -330,7 +330,7 @@ async def handle_telegram_webhook(
                 "filename": attachment.original_name,
                 "mime_type": attachment.mime_type,
                 "size": attachment.file_size,
-                "url": f"/api/v1/communications/files/{attachment.id}",
+                "url": f"/api/v1/communications/media/{attachment.file_path}",
             })
     
     # Обробка стікерів
@@ -367,7 +367,7 @@ async def handle_telegram_webhook(
                 "filename": attachment.original_name,
                 "mime_type": attachment.mime_type,
                 "size": attachment.file_size,
-                "url": f"/api/v1/communications/files/{attachment.id}",
+                "url": f"/api/v1/communications/media/{attachment.file_path}",
             })
     
     # Оновити повідомлення з інформацією про вкладення

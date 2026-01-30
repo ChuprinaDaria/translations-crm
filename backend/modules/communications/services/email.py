@@ -200,32 +200,50 @@ class EmailService(MessengerService):
                             # Файл може бути в UPLOADS_DIR (тимчасовий) або в MEDIA_DIR (збережений)
                             filename_from_url = url_clean.split("/files/")[-1]
                             
-                            # Спочатку спробувати знайти в UPLOADS_DIR (тимчасові файли)
-                            from core.config import settings
-                            uploads_file_path = settings.UPLOADS_DIR / filename_from_url
-                            if uploads_file_path.exists():
-                                file_path = uploads_file_path
-                                logger.info(f"📁 Found file in UPLOADS_DIR: {file_path}")
-                            else:
-                                # Спробувати знайти в MEDIA_DIR
-                                media_file_path = MEDIA_DIR / filename_from_url
-                                if media_file_path.exists():
-                                    file_path = media_file_path
-                                    logger.info(f"📁 Found file in MEDIA_DIR: {file_path}")
-                                else:
-                                    # Спробувати знайти в БД за ID
+                            # Видалити розширення файлу, якщо воно є (наприклад, .jpg, .pdf)
+                            # Спробувати витягти UUID з filename (може бути з розширенням)
+                            file_id_str = filename_from_url
+                            if '.' in filename_from_url:
+                                # Спробувати знайти UUID перед розширенням
+                                parts = filename_from_url.rsplit('.', 1)
+                                if len(parts) == 2:
+                                    potential_uuid = parts[0]
                                     try:
-                                        file_uuid = UUID(filename_from_url)
-                                        attachment_obj = self.db.query(Attachment).filter(
-                                            Attachment.id == file_uuid
-                                        ).first()
-                                        if attachment_obj:
-                                            filename = attachment_obj.original_name
-                                            mime_type = attachment_obj.mime_type
-                                            # Склеюємо базовий шлях з тим, що зберігається в БД
-                                            file_path = MEDIA_DIR / attachment_obj.file_path
-                                            logger.info(f"✅ Found attachment via /files/ URL in DB: {file_path} (from DB path: {attachment_obj.file_path})")
-                                    except Exception as e:
+                                        # Перевірити, чи це валідний UUID
+                                        UUID(potential_uuid)
+                                        file_id_str = potential_uuid
+                                    except (ValueError, AttributeError):
+                                        pass  # Не UUID, залишаємо як є
+                            
+                            # Спочатку спробувати знайти в БД за ID (навіть якщо є розширення)
+                            try:
+                                file_uuid = UUID(file_id_str)
+                                attachment_obj = self.db.query(Attachment).filter(
+                                    Attachment.id == file_uuid
+                                ).first()
+                                if attachment_obj:
+                                    filename = attachment_obj.original_name
+                                    mime_type = attachment_obj.mime_type
+                                    # Склеюємо базовий шлях з тим, що зберігається в БД
+                                    file_path = MEDIA_DIR / attachment_obj.file_path
+                                    logger.info(f"✅ Found attachment via /files/ URL in DB: {file_path} (from DB path: {attachment_obj.file_path})")
+                            except (ValueError, AttributeError) as e:
+                                logger.warning(f"⚠️ Failed to parse file_id from URL or find in DB: {e}")
+                            
+                            # Якщо не знайдено в БД, спробувати знайти в файловій системі
+                            if not file_path:
+                                # Спочатку спробувати знайти в UPLOADS_DIR (тимчасові файли)
+                                from core.config import settings
+                                uploads_file_path = settings.UPLOADS_DIR / filename_from_url
+                                if uploads_file_path.exists():
+                                    file_path = uploads_file_path
+                                    logger.info(f"📁 Found file in UPLOADS_DIR: {file_path}")
+                                else:
+                                    # Спробувати знайти в MEDIA_DIR
+                                    media_file_path = MEDIA_DIR / filename_from_url
+                                    if media_file_path.exists():
+                                        file_path = media_file_path
+                                        logger.info(f"📁 Found file in MEDIA_DIR: {file_path}")
                                         logger.warning(f"⚠️ Failed to parse file_id from URL or find in DB: {e}")
                     
                     # Завантажити файл
