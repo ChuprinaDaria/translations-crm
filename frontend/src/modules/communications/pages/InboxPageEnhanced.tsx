@@ -87,7 +87,9 @@ export function InboxPageEnhanced() {
       search: filters.search,
       limit: 50,
     }),
-    staleTime: 1000 * 60 * 2, // 2 хвилини для inbox
+    staleTime: Infinity, // Дані вважаються свіжими всю сесію - оновлюються через WebSocket
+    gcTime: Infinity, // Кеш зберігається всю активну сесію
+    refetchOnMount: false, // Не перезавантажувати при монтуванні
   });
   
   const conversations = conversationsData?.conversations || [];
@@ -194,19 +196,52 @@ export function InboxPageEnhanced() {
     }
     
     if (existingChat) {
-      // Просто переключитись на існуючий таб
+      // Просто переключитись на існуючий таб - повідомлення вже завантажені, не завантажуємо знову
       switchToChat(conversationId);
       
-      // Оновити client/orders для context panel
-      if (existingChat.conversation.client_id) {
+      // Оновити client/orders для context panel (тільки якщо потрібно і не завантажували нещодавно)
+      // Використовуємо кеш для швидкого доступу
+      const cachedData = queryClient.getQueryData(['conversation', conversationId]) as { client?: Client, orders?: any[] } | undefined;
+      
+      if (cachedData?.client && cachedData?.orders) {
+        // Використовуємо кешовані дані - не завантажуємо знову
+        setClient(cachedData.client);
+        setOrders(cachedData.orders);
+      } else if (existingChat.conversation.client_id && (!client || client.id !== existingChat.conversation.client_id)) {
+        // Завантажуємо тільки якщо немає в кеші і потрібно оновити
         const { client: clientData, orders: ordersData } = await loadConversationData(conversationId);
         setClient(clientData);
         setOrders(ordersData);
+        // Кешуємо для наступного разу
+        queryClient.setQueryData(['conversation', conversationId], {
+          conversation: { id: conversationId } as ConversationWithMessages,
+          client: clientData,
+          orders: ordersData,
+        });
+      } else {
+        // Використовуємо поточні дані якщо вони вже встановлені
+        // Не завантажуємо нічого
       }
     } else {
       // Завантажити розмову та додати новий таб
+      // Використовуємо React Query для кешування повідомлень
       try {
-        const { conversation, client: clientData, orders: ordersData } = await loadConversationData(conversationId);
+        // Перевіряємо чи є кешовані повідомлення
+        const cachedData = queryClient.getQueryData(['conversation', conversationId]) as { conversation: ConversationWithMessages, client?: Client, orders: any[] } | undefined;
+        
+        let conversationData;
+        if (cachedData) {
+          // Використовуємо кешовані дані - не завантажуємо знову
+          conversationData = cachedData;
+          console.log('[InboxPage] Using cached conversation data for:', conversationId);
+        } else {
+          // Завантажуємо нові дані тільки якщо немає в кеші
+          conversationData = await loadConversationData(conversationId);
+          // Кешуємо дані для наступного разу
+          queryClient.setQueryData(['conversation', conversationId], conversationData);
+        }
+        
+        const { conversation, client: clientData, orders: ordersData } = conversationData;
         
         // Знайти conversation list item для додаткових даних
         const convListItem = conversations.find(c => c.id === conversationId);
@@ -234,6 +269,13 @@ export function InboxPageEnhanced() {
         });
         setClient(clientData);
         setOrders(ordersData);
+        
+        // Кешуємо дані розмови для швидкого доступу при переключенні
+        queryClient.setQueryData(['conversation', conversationId], {
+          conversation,
+          client: clientData,
+          orders: ordersData,
+        });
       } catch (error) {
         toast.error('Помилка завантаження розмови');
       }
@@ -249,6 +291,23 @@ export function InboxPageEnhanced() {
     if (chat) {
       updateChatMessages(conversationId, [...chat.messages, message]);
     }
+    
+    // Оновлюємо кеш повідомлень для цього діалогу (real-time оновлення через WebSocket)
+    queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+      if (!old?.conversation) return old;
+      // Перевіряємо чи повідомлення вже є (щоб уникнути дублікатів)
+      const existingMessage = old.conversation.messages?.find((m: InboxMessage) => m.id === message.id);
+      if (existingMessage) {
+        return old; // Повідомлення вже є, не додаємо дублікат
+      }
+      return {
+        ...old,
+        conversation: {
+          ...old.conversation,
+          messages: [...(old.conversation.messages || []), message],
+        },
+      };
+    });
     
     // Update conversations list через React Query
     queryClient.setQueryData(['conversations', filters], (old: any) => {
@@ -488,6 +547,18 @@ export function InboxPageEnhanced() {
       if (chat) {
         updateChatMessages(conversationId, [...chat.messages, newMessage]);
       }
+      
+      // Оновлюємо кеш повідомлень для цього діалогу
+      queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+        if (!old?.conversation) return old;
+        return {
+          ...old,
+          conversation: {
+            ...old.conversation,
+            messages: [...(old.conversation.messages || []), newMessage],
+          },
+        };
+      });
       
       // Refresh conversations list to update last message
       refreshConversations();
@@ -1009,6 +1080,10 @@ export function InboxPageEnhanced() {
       let disabled = false;
 
       switch (tab.id) {
+        case 'sidebar':
+          // Таб "sidebar" завжди активний, не disabled
+          disabled = false;
+          break;
         case 'create-client':
           disabled = !activeTabId;
           break;
@@ -1052,7 +1127,11 @@ export function InboxPageEnhanced() {
     // Обробка кліку на таб "sidebar"
     if (tabId === 'sidebar') {
       handleToggleSidebar();
-      setSidePanelTab(null);
+      // Якщо сайдбар вже відкритий - закриваємо, інакше відкриваємо
+      // activeTab буде автоматично оновлено через isSidebarOpen
+      if (isSidebarOpen) {
+        setSidePanelTab(null);
+      }
       return;
     }
 
@@ -1215,7 +1294,7 @@ export function InboxPageEnhanced() {
         <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-[70]">
           <SideTabs
             tabs={inboxTabs}
-            activeTab={sidePanelTab}
+            activeTab={isSidebarOpen ? 'sidebar' : sidePanelTab}
             onTabChange={handleTabChange}
             position="right"
           />
