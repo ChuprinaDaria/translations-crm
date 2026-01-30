@@ -101,17 +101,45 @@ def check_message_exists(db, sender_email: str, subject: str, message_date: date
 
 
 def get_or_create_conversation(db, external_id: str, subject: str = None, manager_smtp_account_id: int = None):
-    """Get or create conversation for email."""
-    # Check if conversation exists
-    result = db.execute(text("""
-        SELECT id FROM communications_conversations
-        WHERE platform = 'email' AND external_id = :external_id
-        AND (:subject IS NULL OR subject = :subject)
-    """), {"external_id": external_id, "subject": subject})
+    """Get or create conversation for email.
+    
+    Групує email conversations за парою sender/recipient (external_id + manager_smtp_account_id),
+    а не за subject, щоб весь діалог між менеджером та клієнтом був в одному чаті.
+    """
+    # Check if conversation exists - шукаємо за external_id та manager_smtp_account_id, БЕЗ subject
+    # Це дозволяє тримати весь діалог в одному чаті навіть якщо subject змінюється
+    if manager_smtp_account_id:
+        result = db.execute(text("""
+            SELECT id FROM communications_conversations
+            WHERE platform = 'email' 
+            AND external_id = :external_id
+            AND manager_smtp_account_id = :manager_smtp_account_id
+            ORDER BY created_at ASC
+            LIMIT 1
+        """), {"external_id": external_id, "manager_smtp_account_id": manager_smtp_account_id})
+    else:
+        # Якщо manager_smtp_account_id не вказано, шукаємо за external_id (для зворотної сумісності)
+        result = db.execute(text("""
+            SELECT id FROM communications_conversations
+            WHERE platform = 'email' 
+            AND external_id = :external_id
+            AND manager_smtp_account_id IS NULL
+            ORDER BY created_at ASC
+            LIMIT 1
+        """), {"external_id": external_id})
+    
     row = result.fetchone()
     
     if row:
         conv_id = str(row[0])
+        # Оновити subject якщо він змінився (наприклад, Re: або Fwd:)
+        if subject:
+            db.execute(text("""
+                UPDATE communications_conversations
+                SET subject = :subject, updated_at = :now
+                WHERE id = :id
+            """), {"id": conv_id, "subject": subject, "now": datetime.now(timezone.utc)})
+            db.commit()
         # Оновити manager_smtp_account_id якщо він не встановлений
         if manager_smtp_account_id:
             db.execute(text("""
@@ -139,7 +167,7 @@ def get_or_create_conversation(db, external_id: str, subject: str = None, manage
     })
     db.commit()
     
-    logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject})")
+    logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject}, manager_account: {manager_smtp_account_id})")
     return conv_id
 
 
@@ -178,6 +206,7 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
     
     # Зберегти вкладення у файлову систему та створити записи в БД
     attachment_ids = []
+    saved_attachments = []
     if attachments:
         for att in attachments:
             file_data = att.get("data")
@@ -186,6 +215,13 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
             
             if file_data and filename:
                 try:
+                    # Переконатися, що file_data - це bytes
+                    if isinstance(file_data, str):
+                        file_data = file_data.encode('utf-8')
+                    elif not isinstance(file_data, bytes):
+                        logger.warning(f"Attachment {filename} has unexpected data type: {type(file_data)}")
+                        continue
+                    
                     attachment = save_media_file(
                         db=db,
                         message_id=UUID(msg_id),
@@ -194,18 +230,19 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
                         original_name=filename,
                     )
                     attachment_ids.append(str(attachment.id))
+                    saved_attachments.append({
+                        "id": str(attachment.id),
+                        "filename": filename,
+                        "content_type": content_type,
+                        "size": len(file_data),
+                    })
+                    logger.info(f"✅ Saved attachment: {filename} ({len(file_data)} bytes) -> attachment_id: {attachment.id}")
                 except Exception as e:
-                    logger.error(f"Failed to save attachment {filename}: {e}")
+                    logger.error(f"❌ Failed to save attachment {filename}: {e}", exc_info=True)
         
         # Зберігаємо інформацію про attachments в meta_data для сумісності
-        meta_data['attachments'] = [
-            {
-                "filename": att.get("filename"),
-                "content_type": att.get("content_type"),
-                "size": len(att.get("data", b""))
-            }
-            for att in attachments
-        ]
+        if saved_attachments:
+            meta_data['attachments'] = saved_attachments
     
     db.execute(text("""
         INSERT INTO communications_messages 
@@ -246,8 +283,17 @@ async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name:
             'facebook': 'Facebook',
         }
         
+        # Використовуємо WEBSOCKET_NOTIFY_URL з env, але fallback на broadcast-message
+        broadcast_url = WEBSOCKET_NOTIFY_URL
+        # Якщо URL вказує на test-notification, замінюємо на broadcast-message
+        if "test-notification" in broadcast_url:
+            broadcast_url = broadcast_url.replace("test-notification", "broadcast-message")
+        elif not broadcast_url or "broadcast" not in broadcast_url:
+            # Якщо URL не вказано або не містить broadcast, використовуємо правильний endpoint
+            broadcast_url = "http://localhost:8000/api/v1/communications/broadcast-message"
+        
         async with httpx.AsyncClient() as client:
-            await client.post(WEBSOCKET_NOTIFY_URL, json={
+            response = await client.post(broadcast_url, json={
                 "type": "new_message",
                 "conversation_id": conv_id,
                 "platform": platform,  # Додаємо platform
@@ -264,12 +310,14 @@ async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name:
                 },
                 "conversation": {
                     "id": conv_id,
-                    "platform": "email",
+                    "platform": platform,
                     "external_id": external_id,
+                    "client_name": sender_name or external_id,
                 }
             }, timeout=5.0)
+            logger.info(f"WebSocket notification sent: {response.status_code} to {broadcast_url}")
     except Exception as e:
-        logger.warning(f"Failed to send WebSocket notification: {e}")
+        logger.warning(f"Failed to send WebSocket notification: {e}", exc_info=True)
 
 
 def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -417,8 +465,8 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                                         content = html.unescape(html_clean).strip()
                                 elif content_type == "text/plain" and not content:
                                     content = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                                elif part.get_content_disposition() == 'attachment':
-                                    # Обробити вкладення
+                                elif part.get_content_disposition() in ('attachment', 'inline'):
+                                    # Обробити вкладення (включаючи inline зображення)
                                     filename = part.get_filename()
                                     if filename:
                                         # Декодувати ім'я файлу
@@ -427,12 +475,37 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                                             part[0].decode(part[1] or 'utf-8', errors='ignore') if isinstance(part[0], bytes) else part[0]
                                             for part in filename_parts
                                         ])
-                                        file_data = part.get_payload(decode=True)
-                                        attachments.append({
-                                            "filename": decoded_filename,
-                                            "content_type": content_type,
-                                            "data": file_data,
-                                        })
+                                        try:
+                                            file_data = part.get_payload(decode=True)
+                                            if file_data:  # Перевірити, чи є дані
+                                                attachments.append({
+                                                    "filename": decoded_filename,
+                                                    "content_type": content_type,
+                                                    "data": file_data,
+                                                })
+                                                logger.info(f"📎 Found attachment: {decoded_filename} ({len(file_data)} bytes, type: {content_type})")
+                                        except Exception as e:
+                                            logger.warning(f"Failed to decode attachment {decoded_filename}: {e}")
+                                elif content_type.startswith('image/') and not part.get_content_disposition():
+                                    # Обробити inline зображення (які можуть не мати Content-Disposition)
+                                    content_id = part.get('Content-ID', '').strip('<>')
+                                    if content_id:
+                                        # Це inline зображення, можна пропустити або зберегти окремо
+                                        pass
+                                    else:
+                                        # Спробувати зберегти як вкладення
+                                        filename = part.get_filename() or f"image_{len(attachments)}.{content_type.split('/')[1]}"
+                                        try:
+                                            file_data = part.get_payload(decode=True)
+                                            if file_data:
+                                                attachments.append({
+                                                    "filename": filename,
+                                                    "content_type": content_type,
+                                                    "data": file_data,
+                                                })
+                                                logger.info(f"📷 Found inline image: {filename} ({len(file_data)} bytes)")
+                                        except Exception as e:
+                                            logger.warning(f"Failed to decode inline image: {e}")
                         else:
                             payload = email_message.get_payload(decode=True)
                             if payload:

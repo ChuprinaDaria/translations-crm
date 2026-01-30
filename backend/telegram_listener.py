@@ -226,11 +226,30 @@ async def download_media(client, message, db, message_id) -> dict:
 async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text"):
     """Notify WebSocket clients about new message."""
     try:
+        # Іконки та назви для різних платформ
+        platform_icons = {
+            'telegram': '✈️',
+            'whatsapp': '💬',
+            'email': '📧',
+            'instagram': '📷',
+            'facebook': '👥',
+        }
+        platform_names = {
+            'telegram': 'Telegram',
+            'whatsapp': 'WhatsApp',
+            'email': 'Email',
+            'instagram': 'Instagram',
+            'facebook': 'Facebook',
+        }
+        
         async with httpx.AsyncClient() as client:
             # Send to custom notification endpoint
             notification = {
                 "type": "new_message",
                 "conversation_id": conv_id,
+                "platform": "telegram",  # Додаємо platform
+                "platform_icon": platform_icons.get('telegram', '💬'),
+                "platform_name": platform_names.get('telegram', 'Telegram'),
                 "message": {
                     "id": msg_id,
                     "conversation_id": conv_id,
@@ -250,14 +269,20 @@ async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name:
             }
             
             # Post to broadcast endpoint (which broadcasts to all WebSocket clients)
+            # Використовуємо WEBSOCKET_NOTIFY_URL з env, але fallback на broadcast-message
+            broadcast_url = os.getenv("WEBSOCKET_NOTIFY_URL", "http://localhost:8000/api/v1/communications/broadcast-message")
+            # Якщо URL вказує на test-notification, замінюємо на broadcast-message
+            if "test-notification" in broadcast_url:
+                broadcast_url = broadcast_url.replace("test-notification", "broadcast-message")
+            
             response = await client.post(
-                "http://localhost:8000/api/v1/communications/broadcast-message",
+                broadcast_url,
                 json=notification,
                 timeout=5.0
             )
-            logger.info(f"WebSocket notification sent: {response.status_code}")
+            logger.info(f"WebSocket notification sent: {response.status_code} to {broadcast_url}")
     except Exception as e:
-        logger.warning(f"Failed to send WebSocket notification: {e}")
+        logger.warning(f"Failed to send WebSocket notification: {e}", exc_info=True)
 
 
 async def run_listener_for_account(account: dict):

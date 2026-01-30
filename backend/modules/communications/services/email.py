@@ -228,21 +228,40 @@ class EmailService(MessengerService):
         subject: Optional[str] = None,
         manager_smtp_account_id: Optional[int] = None,
     ) -> Conversation:
-        """Отримати або створити розмову."""
+        """Отримати або створити розмову.
         
-        # Шукаємо існуючу розмову
-        conversation = self.db.query(Conversation).filter(
+        Групує email conversations за парою sender/recipient (external_id + manager_smtp_account_id),
+        а не за subject, щоб весь діалог між менеджером та клієнтом був в одному чаті.
+        """
+        from datetime import datetime, timezone
+        
+        # Шукаємо існуючу розмову за external_id та manager_smtp_account_id, БЕЗ subject
+        # Це дозволяє тримати весь діалог в одному чаті навіть якщо subject змінюється
+        query = self.db.query(Conversation).filter(
             Conversation.platform == PlatformEnum.EMAIL,
             Conversation.external_id == external_id,
-            Conversation.subject == subject,
-        ).first()
+        )
+        
+        if manager_smtp_account_id:
+            query = query.filter(Conversation.manager_smtp_account_id == manager_smtp_account_id)
+        else:
+            query = query.filter(Conversation.manager_smtp_account_id.is_(None))
+        
+        conversation = query.order_by(Conversation.created_at.asc()).first()
         
         if conversation:
+            # Оновити subject якщо він змінився (наприклад, Re: або Fwd:)
+            if subject and conversation.subject != subject:
+                conversation.subject = subject
+                conversation.updated_at = datetime.now(timezone.utc)
             # Оновити manager_smtp_account_id якщо він не встановлений
             if not conversation.manager_smtp_account_id and manager_smtp_account_id:
                 conversation.manager_smtp_account_id = manager_smtp_account_id
-                self.db.commit()
-                self.db.refresh(conversation)
+            # Оновити client_id якщо він не встановлений
+            if not conversation.client_id and client_id:
+                conversation.client_id = client_id
+            self.db.commit()
+            self.db.refresh(conversation)
             return conversation
         
         # Створюємо нову розмову

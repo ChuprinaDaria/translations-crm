@@ -288,6 +288,23 @@ def get_conversation(
     # Get last message
     last_message = messages[-1] if messages else None
     
+    # Конвертувати повідомлення з правильними вкладеннями
+    message_reads = []
+    for m in messages:
+        # Використовуємо from_orm_with_attachments для правильного формату вкладень
+        if hasattr(schemas.MessageRead, 'from_orm_with_attachments'):
+            msg_read = schemas.MessageRead.from_orm_with_attachments(m)
+        else:
+            msg_read = schemas.MessageRead.model_validate(m)
+        message_reads.append(msg_read)
+    
+    last_message_read = None
+    if last_message:
+        if hasattr(schemas.MessageRead, 'from_orm_with_attachments'):
+            last_message_read = schemas.MessageRead.from_orm_with_attachments(last_message)
+        else:
+            last_message_read = schemas.MessageRead.model_validate(last_message)
+    
     return schemas.ConversationWithMessages(
         id=conversation.id,
         client_id=conversation.client_id,
@@ -296,9 +313,9 @@ def get_conversation(
         subject=conversation.subject,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        messages=[schemas.MessageRead.model_validate(m) for m in messages],
+        messages=message_reads,
         unread_count=unread_count,
-        last_message=schemas.MessageRead.model_validate(last_message) if last_message else None,
+        last_message=last_message_read,
     )
 
 
@@ -737,6 +754,31 @@ async def get_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     
     return FileResponse(file_path, filename=filename)
+
+
+@router.get("/media/{filename}")
+async def get_media_file(
+    filename: str,
+    db: Session = Depends(get_db),
+):
+    """Download a media file from communications_attachments."""
+    from modules.communications.models import Attachment
+    
+    # Шлях до медіа файлів
+    MEDIA_DIR = Path("/app/media")
+    file_path = MEDIA_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Media file not found")
+    
+    # Отримати інформацію про файл з БД для правильного імені
+    attachment = db.query(Attachment).filter(
+        Attachment.file_path.like(f"%/{filename}")
+    ).first()
+    
+    download_filename = attachment.original_name if attachment else filename
+    
+    return FileResponse(file_path, filename=download_filename)
 
 
 class PaymentLinkRequest(BaseModel):

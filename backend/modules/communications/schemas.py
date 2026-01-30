@@ -2,6 +2,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
+from pathlib import Path
 from pydantic import BaseModel, EmailStr, Field
 from modules.communications.models import (
     PlatformEnum,
@@ -60,6 +61,43 @@ class MessageRead(BaseModel):
     meta_data: Optional[Dict[str, Any]] = None
     sent_at: Optional[datetime] = None
     created_at: datetime
+    
+    @classmethod
+    def from_orm_with_attachments(cls, message):
+        """Створити MessageRead з повідомлення, включаючи attachment_objects."""
+        from modules.communications.utils.media import get_attachment_url
+        
+        # Конвертувати message в dict
+        data = {
+            "id": message.id,
+            "conversation_id": message.conversation_id,
+            "direction": message.direction,
+            "type": message.type,
+            "content": message.content,
+            "status": message.status,
+            "meta_data": message.meta_data,
+            "sent_at": message.sent_at,
+            "created_at": message.created_at,
+        }
+        
+        # Якщо є attachment_objects, використовуємо їх
+        if hasattr(message, 'attachment_objects') and message.attachment_objects:
+            attachments = []
+            for att_obj in message.attachment_objects:
+                attachments.append({
+                    "id": str(att_obj.id),
+                    "type": att_obj.file_type,
+                    "filename": att_obj.original_name,
+                    "mime_type": att_obj.mime_type,
+                    "size": att_obj.file_size,
+                    "url": f"/api/v1/communications/media/{Path(att_obj.file_path).name}",
+                })
+            data["attachments"] = attachments
+        elif message.attachments:
+            # Fallback на старий формат attachments (JSON)
+            data["attachments"] = message.attachments
+        
+        return cls(**data)
     
     class Config:
         from_attributes = True
