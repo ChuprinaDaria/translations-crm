@@ -99,7 +99,7 @@ export function ConversationsSidebar({
   const unreadTotal = conversations.reduce((sum, conv) => sum + conv.unread_count, 0);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Filter Tabs - Horizontal Segment Control */}
       <div className="p-1.5 border-b border-gray-200 flex-shrink-0 bg-white">
         <div className="flex bg-gray-100 rounded-full p-0 gap-0 w-full">
@@ -172,7 +172,13 @@ export function ConversationsSidebar({
       </div>
 
       {/* Conversations List */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div 
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+        onWheel={(e) => {
+          // Запобігаємо scroll propagation на основну сторінку
+          e.stopPropagation();
+        }}
+      >
         <div className="p-2">
           {isLoading ? (
             // Loading skeleton

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
 import { Menu, CreditCard, Package, UserPlus, User, StickyNote, FolderOpen, ClipboardList } from 'lucide-react';
 import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
@@ -26,6 +27,7 @@ import { toast } from 'sonner';
 import '../styles/animations.css';
 import { InternalNotes } from '../../crm/components/InternalNotes';
 import { AttachmentPreview } from '../components/AttachmentPreview';
+import { useTabsState } from '../../../hooks/useTabsState';
 
 // Конфігурація табів для Inbox
 const INBOX_SIDE_TABS: SideTab[] = [
@@ -44,7 +46,7 @@ const INBOX_SIDE_TABS: SideTab[] = [
  * Використовує CommunicationsLayout з 3-колонковою структурою
  */
 export function InboxPageEnhanced() {
-  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const queryClient = useQueryClient();
   const lastMessageCheckRef = useRef<Map<string, Date>>(new Map());
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
   
@@ -64,6 +66,7 @@ export function InboxPageEnhanced() {
     getStoredConversationIds,
     getStoredActiveTabId,
   } = useOpenChats();
+  const { openTabs, addTab, removeTab } = useTabsState();
   const [client, setClient] = useState<Client | undefined>(undefined);
   const [orders, setOrders] = useState<Array<{
     id: string;
@@ -73,8 +76,21 @@ export function InboxPageEnhanced() {
     total_amount?: number;
   }>>([]);
   const [filters, setFilters] = useState<FilterState>({ type: 'all' });
-  const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  
+  // React Query для conversations
+  const { data: conversationsData, isLoading } = useQuery({
+    queryKey: ['conversations', filters],
+    queryFn: () => inboxApi.getInbox({
+      filter: filters.type,
+      platform: filters.platform,
+      search: filters.search,
+      limit: 50,
+    }),
+    staleTime: 1000 * 60 * 2, // 2 хвилини для inbox
+  });
+  
+  const conversations = conversationsData?.conversations || [];
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -161,10 +177,16 @@ export function InboxPageEnhanced() {
     // Позначити як прочитане та оновити локальний стан
     try {
       await inboxApi.markConversationRead(conversationId);
-      // Оновити unread_count в списку розмов
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
-      ));
+      // Оновити unread_count в списку розмов через React Query
+      queryClient.setQueryData(['conversations', filters], (old: any) => {
+        if (!old?.conversations) return old;
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: ConversationListItem) => 
+            conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
+          ),
+        };
+      });
       // Оновити unread_count у відкритому табі
       markChatAsRead(conversationId);
     } catch (error) {
@@ -204,13 +226,19 @@ export function InboxPageEnhanced() {
         };
         
         openChat(chatConversation, conversation.messages || []);
+        // Зберігаємо таб в useTabsState
+        addTab({
+          conversationId: conversation.id,
+          platform: conversation.platform,
+          externalId: conversation.external_id,
+        });
         setClient(clientData);
         setOrders(ordersData);
       } catch (error) {
         toast.error('Помилка завантаження розмови');
       }
     }
-  }, [openChats, openChat, switchToChat, markChatAsRead, conversations, setClient, setOrders, setConversations]);
+  }, [openChats, openChat, switchToChat, markChatAsRead, conversations, setClient, setOrders, queryClient, filters]);
 
   // Handle new message from WebSocket
   const handleWebSocketNewMessage = useCallback((message: InboxMessage, conversationId: string) => {
@@ -222,9 +250,10 @@ export function InboxPageEnhanced() {
       updateChatMessages(conversationId, [...chat.messages, message]);
     }
     
-    // Update conversations list
-    setConversations(prev => {
-      const updated = [...prev];
+    // Update conversations list через React Query
+    queryClient.setQueryData(['conversations', filters], (old: any) => {
+      if (!old?.conversations) return old;
+      const updated = [...old.conversations];
       const convIndex = updated.findIndex(c => c.id === conversationId);
       if (convIndex >= 0) {
         updated[convIndex] = {
@@ -240,14 +269,18 @@ export function InboxPageEnhanced() {
         const [conv] = updated.splice(convIndex, 1);
         updated.unshift(conv);
       }
-      return updated;
+      return { ...old, conversations: updated };
     });
 
     // Show notification for inbound messages
     if (message.direction === 'inbound') {
       const conv = conversations.find(c => c.id === conversationId);
-      // Визначити platform з conversation або з WebSocket даних
-      const platform = conv?.platform || (message as any).conversation?.platform || 'telegram';
+      // Визначити platform з WebSocket даних (якщо є) або з conversation
+      const wsData = (message as any).wsData || {};
+      const platform = wsData.platform || conv?.platform || (message as any).conversation?.platform || 'telegram';
+      const platformIcon = wsData.platform_icon || '💬';
+      const platformName = wsData.platform_name || platform;
+      
       const channelMap: Record<string, 'telegram' | 'whatsapp' | 'instagram' | 'email'> = {
         'telegram': 'telegram',
         'whatsapp': 'whatsapp',
@@ -261,7 +294,7 @@ export function InboxPageEnhanced() {
         conversationId,
         clientName: conv?.client_name || conv?.external_id || 'Невідомий',
         channel: channel,
-        message: message.content.substring(0, 100),
+        message: `${platformIcon} ${platformName}: ${message.content.substring(0, 100)}`,
         timestamp: new Date(),
         onOpen: () => {
           // Open the conversation when clicking "Відповісти"
@@ -269,19 +302,25 @@ export function InboxPageEnhanced() {
         },
       });
     }
-  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat]);
+  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat, queryClient, filters]);
 
   // Handle conversation updates from WebSocket (e.g., manager assignment)
   const handleWebSocketConversationUpdate = useCallback((conversation: Partial<ConversationListItem>) => {
     console.log('[WebSocket] Conversation update received:', conversation);
     
-    // Update conversations list
+    // Update conversations list через React Query
     if (conversation.id) {
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversation.id 
-          ? { ...conv, ...conversation }
-          : conv
-      ));
+      queryClient.setQueryData(['conversations', filters], (old: any) => {
+        if (!old?.conversations) return old;
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: ConversationListItem) => 
+            conv.id === conversation.id 
+              ? { ...conv, ...conversation }
+              : conv
+          ),
+        };
+      });
       
       // Update open chat if it's open
       const chat = openChats.find(c => c.conversationId === conversation.id);
@@ -292,7 +331,7 @@ export function InboxPageEnhanced() {
         });
       }
     }
-  }, [openChats, updateChatMessages]);
+  }, [openChats, updateChatMessages, queryClient, filters]);
 
   // WebSocket for real-time updates
   const userId = getUserIdFromToken();
@@ -319,10 +358,7 @@ export function InboxPageEnhanced() {
     return () => window.removeEventListener('resize', checkBreakpoint);
   }, []);
 
-  // Load conversations
-  useEffect(() => {
-    loadConversations();
-  }, [filters]);
+  // React Query автоматично оновлює conversations при зміні filters
 
   // Відновити раніше відкриті чати з localStorage
   useEffect(() => {
@@ -397,25 +433,10 @@ export function InboxPageEnhanced() {
     },
   });
 
-  const loadConversations = async () => {
-    try {
-      console.log('[InboxPage] Loading conversations with filters:', filters);
-      setIsLoading(true);
-      const response = await inboxApi.getInbox({
-        filter: filters.type,
-        platform: filters.platform,
-        search: filters.search,
-        limit: 50,
-      });
-      console.log('[InboxPage] Conversations loaded:', response);
-      setConversations(response.conversations);
-    } catch (error) {
-      console.error('Error loading conversations:', error);
-      toast.error('Помилка завантаження розмов');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Функція для оновлення conversations через React Query
+  const refreshConversations = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  }, [queryClient]);
 
   const handleSendMessage = async (conversationId: string, content: string, attachments?: File[]) => {
     if (!conversationId) return;
@@ -469,7 +490,7 @@ export function InboxPageEnhanced() {
       }
       
       // Refresh conversations list to update last message
-      await loadConversations();
+      refreshConversations();
       
       toast.success('Повідомлення відправлено');
     } catch (error) {
@@ -510,7 +531,7 @@ export function InboxPageEnhanced() {
           const { client: newClient, orders: newOrders } = await loadConversationData(conversationId);
           setClient(newClient);
           setOrders(newOrders);
-          await loadConversations();
+          refreshConversations();
           break;
         
         case 'download_files':
@@ -577,12 +598,18 @@ export function InboxPageEnhanced() {
         });
       }
       
-      // 5. Оновлюємо список conversations
-      setConversations(prev => prev.map(conv => 
-        conv.id === activeTabId 
-          ? { ...conv, client_id: clientId, client_name: newClient.full_name }
-          : conv
-      ));
+      // 5. Оновлюємо список conversations через React Query
+      queryClient.setQueryData(['conversations', filters], (old: any) => {
+        if (!old?.conversations) return old;
+        return {
+          ...old,
+          conversations: old.conversations.map((conv: ConversationListItem) => 
+            conv.id === activeTabId 
+              ? { ...conv, client_id: clientId, client_name: newClient.full_name }
+              : conv
+          ),
+        };
+      });
       
       toast.success(`Клієнт ${newClient.full_name || 'створений'} прив'язаний до діалогу`);
     } catch (error) {
@@ -671,13 +698,19 @@ export function InboxPageEnhanced() {
       // Оновлюємо стан клієнта з новим email
       setClient(prev => prev ? { ...prev, email: result.email || email } : prev);
       
-      // Оновлюємо conversation в списку, якщо він прив'язаний
+      // Оновлюємо conversation в списку, якщо він прив'язаний через React Query
       if (result.conversation_linked) {
-        setConversations(prev => prev.map(conv => 
-          conv.id === conversationId 
-            ? { ...conv, client_id: client.id, client_name: client.full_name }
-            : conv
-        ));
+        queryClient.setQueryData(['conversations', filters], (old: any) => {
+          if (!old?.conversations) return old;
+          return {
+            ...old,
+            conversations: old.conversations.map((conv: ConversationListItem) => 
+              conv.id === conversationId 
+                ? { ...conv, client_id: client.id, client_name: client.full_name }
+                : conv
+            ),
+          };
+        });
         
         // Оновлюємо conversation в openChats
         const chat = openChats.find(c => c.conversationId === conversationId);
@@ -712,13 +745,19 @@ export function InboxPageEnhanced() {
       // Оновлюємо стан клієнта з новим телефоном
       setClient(prev => prev ? { ...prev, phone: result.phone || phone } : prev);
       
-      // Оновлюємо conversation в списку, якщо він прив'язаний
+      // Оновлюємо conversation в списку, якщо він прив'язаний через React Query
       if (result.conversation_linked) {
-        setConversations(prev => prev.map(conv => 
-          conv.id === conversationId 
-            ? { ...conv, client_id: client.id, client_name: client.full_name }
-            : conv
-        ));
+        queryClient.setQueryData(['conversations', filters], (old: any) => {
+          if (!old?.conversations) return old;
+          return {
+            ...old,
+            conversations: old.conversations.map((conv: ConversationListItem) => 
+              conv.id === conversationId 
+                ? { ...conv, client_id: client.id, client_name: client.full_name }
+                : conv
+            ),
+          };
+        });
         
         // Оновлюємо conversation в openChats
         const chat = openChats.find(c => c.conversationId === conversationId);
@@ -1145,7 +1184,10 @@ export function InboxPageEnhanced() {
           openChats={openChats}
           activeTabId={activeTabId}
           onTabChange={switchToChat}
-          onTabClose={closeChat}
+          onTabClose={(conversationId) => {
+            removeTab(conversationId);
+            closeChat(conversationId);
+          }}
           onSendMessage={handleSendMessage}
           onQuickAction={handleQuickAction}
           isLoading={isSending}
@@ -1164,7 +1206,6 @@ export function InboxPageEnhanced() {
           onClientClick={handleClientClick}
           onOrderClick={handleOrderClick}
           onDocumentsClick={handleDocumentsClick}
-          onToggleSidebar={handleToggleSidebar}
           onDeleteMessage={handleDeleteMessage}
         />
       </CommunicationsLayout>

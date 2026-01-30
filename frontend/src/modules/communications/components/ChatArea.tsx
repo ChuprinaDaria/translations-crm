@@ -10,7 +10,6 @@ import {
 import { MessageBubble } from './MessageBubble';
 import { MessageInput } from './MessageInput';
 import { EmptyStates } from './EmptyState';
-import { QuickActionsSidebar } from './QuickActionsSidebar';
 
 export interface Message {
   id: string;
@@ -64,7 +63,6 @@ interface ChatAreaProps {
   onClientClick?: () => void;
   onOrderClick?: () => void;
   onDocumentsClick?: () => void;
-  onToggleSidebar?: () => void;
   onDeleteMessage?: (messageId: string) => void;
 }
 
@@ -89,7 +87,6 @@ export function ChatArea({
   onClientClick,
   onOrderClick,
   onDocumentsClick,
-  onToggleSidebar,
   onDeleteMessage,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -118,7 +115,7 @@ export function ChatArea({
   }
 
   return (
-    <div className="h-full w-full flex overflow-hidden">
+    <div className="h-full w-full overflow-hidden">
       {/* Main Chat Column - use grid for stable layout */}
       <div 
         className="flex-1 min-w-0 overflow-hidden"
@@ -204,20 +201,6 @@ export function ChatArea({
         </div>
       </div>
 
-      {/* Quick Actions Sidebar - fixed width */}
-      <div className="flex-shrink-0 h-full">
-        <QuickActionsSidebar
-          isSidebarOpen={isSidebarOpen}
-          clientId={clientId}
-          orderId={orderId}
-          onPaymentClick={onPaymentClick || (() => {})}
-          onTrackingClick={onTrackingClick || (() => {})}
-          onClientClick={onClientClick || (() => {})}
-          onOrderClick={onOrderClick || (() => {})}
-          onDocumentsClick={onDocumentsClick || (() => {})}
-          onToggleSidebar={onToggleSidebar}
-        />
-      </div>
     </div>
   );
 }

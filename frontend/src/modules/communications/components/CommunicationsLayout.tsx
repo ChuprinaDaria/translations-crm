@@ -49,6 +49,27 @@ export function CommunicationsLayout({
     return () => window.removeEventListener('resize', checkBreakpoint);
   }, []);
 
+  // Блокуємо scroll body коли сайдбар відкритий
+  useEffect(() => {
+    if (isSidebarOpen) {
+      // Зберігаємо поточну позицію скролу
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Відновлюємо scroll при закритті
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isSidebarOpen]);
+
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
@@ -117,11 +138,23 @@ export function CommunicationsLayout({
           handleToggleSidebar();
         }}
       >
-        <SheetContent side="right" hideOverlay className="w-96 p-0 z-[60] shadow-2xl border-l border-gray-200 mr-[64px]">
-          <SheetHeader className="p-4 border-b">
+        <SheetContent 
+          side="right" 
+          hideOverlay 
+          className="w-96 p-0 z-[60] shadow-2xl border-l border-gray-200 mr-[64px] flex flex-col h-full overflow-hidden"
+          onWheel={(e) => {
+            // Запобігаємо scroll propagation на основну сторінку
+            e.stopPropagation();
+          }}
+          onPointerDown={(e) => {
+            // Запобігаємо scroll propagation при кліку
+            e.stopPropagation();
+          }}
+        >
+          <SheetHeader className="p-4 border-b flex-shrink-0">
             <SheetTitle>Розмови</SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {sidebar}
           </div>
         </SheetContent>

@@ -1,5 +1,7 @@
-
   import { createRoot } from "react-dom/client";
+  import { QueryClientProvider } from '@tanstack/react-query';
+  import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+  import { queryClient } from './lib/queryClient';
   import App from "./App.tsx";
   import "./index.css";
   import "./styles/languages.css";
@@ -10,7 +12,12 @@
       throw new Error("Root element not found");
     }
     const root = createRoot(rootElement);
-    root.render(<App />);
+    root.render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    );
   } catch (error) {
     console.error("Failed to render app:", error);
     document.body.innerHTML = `<div style="padding: 20px; color: red;">

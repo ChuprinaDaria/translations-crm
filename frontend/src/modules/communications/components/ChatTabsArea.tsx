@@ -33,7 +33,6 @@ interface ChatTabsAreaProps {
   onClientClick?: (conversationId: string) => void;
   onOrderClick?: (conversationId: string) => void;
   onDocumentsClick?: (conversationId: string) => void;
-  onToggleSidebar?: () => void;
   onDeleteMessage?: (messageId: string) => void;
 }
 
@@ -60,7 +59,6 @@ export function ChatTabsArea({
   onClientClick,
   onOrderClick,
   onDocumentsClick,
-  onToggleSidebar,
   onDeleteMessage,
 }: ChatTabsAreaProps) {
   if (openChats.length === 0) {
@@ -125,7 +123,6 @@ export function ChatTabsArea({
               onClientClick={onClientClick ? () => onClientClick(chat.conversationId) : undefined}
               onOrderClick={onOrderClick ? () => onOrderClick(chat.conversationId) : undefined}
               onDocumentsClick={onDocumentsClick ? () => onDocumentsClick(chat.conversationId) : undefined}
-              onToggleSidebar={onToggleSidebar}
               onDeleteMessage={onDeleteMessage}
             />
           </div>

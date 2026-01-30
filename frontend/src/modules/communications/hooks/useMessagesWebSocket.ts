@@ -101,7 +101,16 @@ export function useMessagesWebSocket({
           setLastMessage(data);
 
           if (data.type === 'new_message' && data.message && data.conversation_id) {
-            onNewMessageRef.current?.(data.message, data.conversation_id);
+            // Передаємо platform дані в message для використання в нотифікаціях
+            const messageWithPlatform = {
+              ...data.message,
+              wsData: {
+                platform: data.platform,
+                platform_icon: data.platform_icon,
+                platform_name: data.platform_name,
+              }
+            };
+            onNewMessageRef.current?.(messageWithPlatform, data.conversation_id);
           }
 
           if (data.type === 'conversation_update' && data.conversation) {
@@ -125,18 +134,29 @@ export function useMessagesWebSocket({
         setIsConnected(false);
         onDisconnectRef.current?.();
 
-        // Attempt to reconnect after 5 seconds (only if not a clean close)
-        if (event.code !== 1000 && !reconnectTimeoutRef.current) {
+        // Don't reconnect on clean close (1000) or if manually closed
+        if (event.code === 1000) {
+          return;
+        }
+
+        // For abnormal closures (1006, 1012), wait longer before reconnecting
+        // These usually indicate server issues
+        const isAbnormalClosure = event.code === 1006 || event.code === 1012;
+        const reconnectDelay = isAbnormalClosure ? 10000 : 5000; // 10s for abnormal, 5s for others
+
+        if (!reconnectTimeoutRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log('[WebSocket] Attempting to reconnect...');
             reconnectTimeoutRef.current = null;
             connect();
-          }, 5000);
+          }, reconnectDelay);
         }
       };
 
       wsRef.current.onerror = (error) => {
         console.error('[WebSocket] Error:', error);
+        // Error event doesn't provide much info, but we'll let onclose handle reconnection
+        // This is usually followed by an onclose event with code 1006
       };
     } catch (error) {
       console.error('[WebSocket] Failed to connect:', error);

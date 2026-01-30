@@ -20,6 +20,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import httpx
 
+# Імпортуємо моделі щоб SQLAlchemy знав про них для relationship
+from modules.auth.models import User  # noqa: F401
+from modules.crm.models import Client  # noqa: F401
+from modules.communications.models import Conversation, Message  # noqa: F401
+
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
 WEBSOCKET_NOTIFY_URL = os.getenv("WEBSOCKET_NOTIFY_URL", "http://localhost:8000/api/v1/communications/test-notification")
@@ -138,12 +143,23 @@ def get_or_create_conversation(db, external_id: str, subject: str = None, manage
     return conv_id
 
 
-def save_message(db, conv_id: str, content: str, sender_email: str, sender_name: str, subject: str, html_content: str = None, attachments: list = None):
-    """Save incoming email message to database."""
+def save_message(db, conv_id: str, content: str, sender_email: str, sender_name: str, subject: str, html_content: str = None, attachments: list = None, message_id: str = None):
+    """Save incoming email message to database, checking for duplicates by external_id."""
     from uuid import uuid4, UUID
     import json
     from modules.communications.utils.html_sanitizer import sanitize_html
     from modules.communications.utils.media import save_media_file
+    
+    # Перевірити чи вже є повідомлення з таким external_id
+    if message_id:
+        existing = db.execute(text("""
+            SELECT id FROM communications_messages
+            WHERE conversation_id = :conv_id AND external_id = :message_id
+        """), {"conv_id": conv_id, "message_id": message_id}).fetchone()
+        
+        if existing:
+            logger.info(f"Email with Message-ID {message_id} already exists in DB, skipping duplicate")
+            return None  # Не зберігаємо дублікат
     
     msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
@@ -193,8 +209,8 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
     
     db.execute(text("""
         INSERT INTO communications_messages 
-        (id, conversation_id, direction, type, content, status, created_at, meta_data, attachments)
-        VALUES (:id, :conversation_id, 'inbound', :type, :content, 'sent', :now, :meta_data, :attachments)
+        (id, conversation_id, direction, type, content, status, created_at, meta_data, attachments, external_id)
+        VALUES (:id, :conversation_id, 'inbound', :type, :content, 'sent', :now, :meta_data, :attachments, :external_id)
     """), {
         "id": msg_id,
         "conversation_id": conv_id,
@@ -202,6 +218,7 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
         "content": content,
         "meta_data": json.dumps(meta_data) if meta_data else None,
         "attachments": json.dumps(meta_data.get('attachments', [])) if meta_data.get('attachments') else None,
+        "external_id": message_id,  # Зберігаємо Message-ID
         "now": now
     })
     db.commit()
@@ -210,13 +227,32 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
     return msg_id
 
 
-async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name: str, external_id: str):
+async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name: str, external_id: str, platform: str = "email"):
     """Notify WebSocket about new message."""
     try:
+        # Іконки та назви для різних платформ
+        platform_icons = {
+            'telegram': '✈️',
+            'whatsapp': '💬',
+            'email': '📧',
+            'instagram': '📷',
+            'facebook': '👥',
+        }
+        platform_names = {
+            'telegram': 'Telegram',
+            'whatsapp': 'WhatsApp',
+            'email': 'Email',
+            'instagram': 'Instagram',
+            'facebook': 'Facebook',
+        }
+        
         async with httpx.AsyncClient() as client:
             await client.post(WEBSOCKET_NOTIFY_URL, json={
                 "type": "new_message",
                 "conversation_id": conv_id,
+                "platform": platform,  # Додаємо platform
+                "platform_icon": platform_icons.get(platform, '💬'),
+                "platform_name": platform_names.get(platform, platform.title()),
                 "message": {
                     "id": msg_id,
                     "conversation_id": conv_id,
@@ -339,6 +375,12 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                         subject_raw = email_message['Subject'] or "No Subject"
                         subject = decode_mime_header(subject_raw)
                         
+                        # Отримати Message-ID (унікальний ідентифікатор email)
+                        message_id = email_message.get('Message-ID', '').strip()
+                        if message_id:
+                            # Прибрати < > якщо є
+                            message_id = message_id.strip('<>')
+                        
                         to = email_message['To'] or ""
                         
                         # Витягнути email адреси з декодованого From
@@ -445,6 +487,7 @@ def fetch_emails_for_account(account: Dict[str, Any]) -> List[Dict[str, Any]]:
                             "account_id": account["id"],
                             "account_email": account["email"],
                             "email_date": email_date,
+                            "message_id": message_id,  # Message-ID для перевірки дублікатів
                         })
                         
                         # НЕ позначаємо як прочитане автоматично (інші клієнти можуть це робити)
@@ -483,7 +526,7 @@ async def process_account(account: Dict[str, Any]):
                     manager_smtp_account_id=account["id"],
                 )
                 
-                # Зберегти повідомлення
+                # Зберегти повідомлення (з перевіркою дублікатів через message_id)
                 msg_id = save_message(
                     db,
                     conv_id=conv_id,
@@ -493,7 +536,12 @@ async def process_account(account: Dict[str, Any]):
                     subject=email_data["subject"],
                     html_content=email_data.get("html_content"),
                     attachments=email_data.get("attachments", []),
+                    message_id=email_data.get("message_id"),  # Message-ID для перевірки дублікатів
                 )
+                
+                # Пропустити WebSocket нотифікацію якщо це дублікат
+                if msg_id is None:
+                    continue
                 
                 # Сповістити через WebSocket
                 await notify_websocket(
@@ -502,6 +550,7 @@ async def process_account(account: Dict[str, Any]):
                     content=email_data["content"][:100] + "..." if len(email_data["content"]) > 100 else email_data["content"],
                     sender_name=email_data["sender_name"],
                     external_id=email_data["sender_email"],
+                    platform="email",  # Додаємо platform
                 )
                 
                 logger.info(f"Processed email from {email_data['sender_email']} to {account['email']}")

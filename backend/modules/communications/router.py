@@ -1025,9 +1025,30 @@ async def add_address_to_order(
 async def notify_new_message(message: Message, conversation: Conversation):
     """Send WebSocket notification about new message."""
     try:
+        # Іконки та назви для різних платформ
+        platform_icons = {
+            'telegram': '✈️',
+            'whatsapp': '💬',
+            'email': '📧',
+            'instagram': '📷',
+            'facebook': '👥',
+        }
+        platform_names = {
+            'telegram': 'Telegram',
+            'whatsapp': 'WhatsApp',
+            'email': 'Email',
+            'instagram': 'Instagram',
+            'facebook': 'Facebook',
+        }
+        
+        platform_str = str(conversation.platform)
+        
         await messages_manager.broadcast({
             "type": "new_message",
             "conversation_id": str(conversation.id),
+            "platform": platform_str,  # Додаємо platform
+            "platform_icon": platform_icons.get(platform_str, '💬'),
+            "platform_name": platform_names.get(platform_str, platform_str.title()),
             "message": {
                 "id": str(message.id),
                 "conversation_id": str(message.conversation_id),
@@ -1041,7 +1062,7 @@ async def notify_new_message(message: Message, conversation: Conversation):
             },
             "conversation": {
                 "id": str(conversation.id),
-                "platform": str(conversation.platform),
+                "platform": platform_str,
                 "external_id": conversation.external_id,
                 "client_name": conversation.client.name if conversation.client else None,
             }

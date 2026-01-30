@@ -85,6 +85,7 @@ class Message(Base):
     )
     is_from_me: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None, index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    external_id: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)  # Message-ID для email, message_id для Telegram/WhatsApp
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages", lazy="joined")
