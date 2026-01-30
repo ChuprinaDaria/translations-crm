@@ -820,28 +820,44 @@ async def get_file(filename: str):
     return FileResponse(file_path, filename=filename)
 
 
-@router.get("/media/{filename}")
+@router.get("/media/{path:path}")
 async def get_media_file(
-    filename: str,
+    path: str,
     db: Session = Depends(get_db),
 ):
-    """Download a media file from communications_attachments."""
+    """
+    Download a media file from communications_attachments.
+    Підтримує шляхи з підпапками, наприклад: /media/attachments/filename.pdf
+    """
     from modules.communications.models import Attachment
     from modules.communications.utils.media import get_media_dir
     
-    # Шлях до медіа файлів
-    MEDIA_DIR = get_media_dir()
-    file_path = MEDIA_DIR / filename
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Media file not found")
-    
-    # Отримати інформацію про файл з БД для правильного імені
+    # Отримати інформацію про файл з БД за повним шляхом
     attachment = db.query(Attachment).filter(
-        Attachment.file_path.like(f"%/{filename}")
+        Attachment.file_path == path
     ).first()
     
-    download_filename = attachment.original_name if attachment else filename
+    # Якщо не знайдено за повним шляхом, спробувати знайти за ім'ям файлу (для сумісності)
+    if not attachment:
+        filename = Path(path).name
+        attachment = db.query(Attachment).filter(
+            Attachment.file_path.like(f"%/{filename}")
+        ).first()
+    
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found in database")
+    
+    # Базовий шлях до медіа файлів
+    MEDIA_DIR = get_media_dir()
+    # Склеюємо базовий шлях з тим, що зберігається в БД
+    # Якщо в БД: "attachments/filename.pdf", то шукаємо в /app/media/attachments/filename.pdf
+    file_path = MEDIA_DIR / attachment.file_path
+    
+    if not file_path.exists():
+        logger.error(f"File not found on disk: {file_path} (from DB: {attachment.file_path})")
+        raise HTTPException(status_code=404, detail="Media file not found on disk")
+    
+    download_filename = attachment.original_name if attachment.original_name else Path(path).name
     
     return FileResponse(file_path, filename=download_filename)
 

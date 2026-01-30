@@ -176,9 +176,9 @@ class EmailService(MessengerService):
                                 filename = attachment_obj.original_name
                                 mime_type = attachment_obj.mime_type
                                 
-                                # Обробити file_path - завжди зберігається як "media/{filename}"
-                                # Витягнути тільки ім'я файлу
-                                file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                                # Склеюємо базовий шлях з тим, що зберігається в БД
+                                # В БД зберігається як "attachments/filename.pdf"
+                                file_path = MEDIA_DIR / attachment_obj.file_path
                                 
                                 logger.info(f"📁 Constructed file path: {file_path} (from DB path: {attachment_obj.file_path})")
                             else:
@@ -192,9 +192,10 @@ class EmailService(MessengerService):
                         logger.info(f"🔍 Trying to find file by URL: {url_clean}")
                         
                         if "/media/" in url_clean:
-                            filename_from_url = url_clean.split("/media/")[-1]
-                            file_path = MEDIA_DIR / filename_from_url
-                            logger.info(f"📁 Constructed file path from /media/ URL: {file_path}")
+                            # Використовуємо повний шлях з URL (attachments/filename)
+                            file_path_str = url_clean.split("/media/")[-1]
+                            file_path = MEDIA_DIR / file_path_str
+                            logger.info(f"📁 Constructed file path from /media/ URL: {file_path} (path: {file_path_str})")
                         elif "/files/" in url_clean:
                             # Файл може бути в UPLOADS_DIR (тимчасовий) або в MEDIA_DIR (збережений)
                             filename_from_url = url_clean.split("/files/")[-1]
@@ -221,8 +222,8 @@ class EmailService(MessengerService):
                                         if attachment_obj:
                                             filename = attachment_obj.original_name
                                             mime_type = attachment_obj.mime_type
-                                            # file_path завжди зберігається як "media/{filename}"
-                                            file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                                            # Склеюємо базовий шлях з тим, що зберігається в БД
+                                            file_path = MEDIA_DIR / attachment_obj.file_path
                                             logger.info(f"✅ Found attachment via /files/ URL in DB: {file_path} (from DB path: {attachment_obj.file_path})")
                                     except Exception as e:
                                         logger.warning(f"⚠️ Failed to parse file_id from URL or find in DB: {e}")
@@ -242,8 +243,8 @@ class EmailService(MessengerService):
                             if attachment_obj:
                                 # Спробувати різні варіанти шляху
                                 possible_paths = [
-                                    MEDIA_DIR / Path(attachment_obj.file_path).name,
-                                    MEDIA_DIR / attachment_obj.file_path.replace("media/", ""),
+                                    MEDIA_DIR / attachment_obj.file_path,  # Правильний шлях: /app/media/attachments/filename
+                                    MEDIA_DIR / Path(attachment_obj.file_path).name,  # Fallback: тільки ім'я файлу
                                     Path(attachment_obj.file_path) if Path(attachment_obj.file_path).is_absolute() else None,
                                 ]
                                 for possible_path in possible_paths:

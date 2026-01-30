@@ -90,7 +90,7 @@ class MessageRead(BaseModel):
                     "filename": att_obj.original_name,
                     "mime_type": att_obj.mime_type,
                     "size": att_obj.file_size,
-                    "url": f"/api/v1/communications/media/{Path(att_obj.file_path).name}",
+                    "url": f"/api/v1/communications/media/{att_obj.file_path}",  # Використовуємо повний шлях: attachments/filename
                 })
             data["attachments"] = attachments
         elif message.attachments:

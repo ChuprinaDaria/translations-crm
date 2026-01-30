@@ -140,7 +140,10 @@ async def handle_instagram_webhook(
                         original_name = f"instagram_video_{sender_id[:10]}.mp4"
                     
                     if url:
-                        # Завантажити та зберегти
+                        # Завантажити та зберегти (Meta API потребує access_token в заголовках)
+                        access_token = service.config.get("access_token")
+                        headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
+                        
                         attachment = await download_and_save_media(
                             db=db,
                             message_id=UUID(str(temp_message.id)),
@@ -148,6 +151,7 @@ async def handle_instagram_webhook(
                             mime_type=mime_type,
                             original_name=original_name,
                             file_type=att_type,
+                            headers=headers,  # Передаємо access_token для Meta API
                         )
                         if attachment:
                             attachments.append({
@@ -156,7 +160,7 @@ async def handle_instagram_webhook(
                                 "filename": attachment.original_name,
                                 "mime_type": attachment.mime_type,
                                 "size": attachment.file_size,
-                                "url": f"/api/v1/communications/files/{attachment.id}",
+                                "url": f"/api/v1/communications/media/{attachment.file_path}",
                             })
                 
                 # Оновити повідомлення з інформацією про вкладення

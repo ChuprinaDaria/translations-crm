@@ -269,7 +269,8 @@ class InstagramService(MessengerService):
                             filename = attachment_obj.original_name
                             mime_type = attachment_obj.mime_type
                             att_type = attachment_obj.file_type
-                            file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                            # Склеюємо базовий шлях з тим, що зберігається в БД
+                            file_path = MEDIA_DIR / attachment_obj.file_path
                     except Exception as e:
                         logger.warning(f"[Instagram Send] Failed to load attachment by ID {att_id}: {e}")
                 
@@ -277,7 +278,9 @@ class InstagramService(MessengerService):
                 if not file_path and url_att:
                     url_clean = url_att.split("?")[0]
                     if "/media/" in url_clean:
-                        file_path = MEDIA_DIR / url_clean.split("/media/")[-1]
+                        # Використовуємо повний шлях з URL (attachments/filename)
+                        file_path_str = url_clean.split("/media/")[-1]
+                        file_path = MEDIA_DIR / file_path_str
                     elif "/files/" in url_clean:
                         file_id = url_clean.split("/files/")[-1]
                         try:
@@ -288,7 +291,8 @@ class InstagramService(MessengerService):
                                 filename = attachment_obj.original_name
                                 mime_type = attachment_obj.mime_type
                                 att_type = attachment_obj.file_type
-                                file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                                # Склеюємо базовий шлях з тим, що зберігається в БД
+                                file_path = MEDIA_DIR / attachment_obj.file_path
                         except:
                             pass
                 

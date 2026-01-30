@@ -213,7 +213,7 @@ async def handle_telegram_webhook(
                     "filename": attachment.original_name,
                     "mime_type": attachment.mime_type,
                     "size": attachment.file_size,
-                    "url": f"/api/v1/communications/files/{attachment.id}",
+                    "url": f"/api/v1/communications/media/{attachment.file_path}",
                 })
                 
                 # Якщо є caption — використовуємо як текст

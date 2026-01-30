@@ -217,7 +217,7 @@ async def download_media(client, message, db, message_id) -> dict:
             "filename": original_name,
             "mime_type": mime_type,
             "size": attachment.file_size,
-            "url": f"/media/{attachment.file_path.split('/')[-1]}",
+            "url": f"/media/{attachment.file_path}",  # Використовуємо повний шлях з БД: attachments/filename
         }
         
     except Exception as e:

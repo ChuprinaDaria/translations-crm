@@ -78,25 +78,26 @@ def save_media_file(
     ext = Path(original_name).suffix or ""
     filename = f"{file_id}{ext}"
     
-    # Зберегти файл
+    # Зберегти файл в підпапці attachments
     media_dir = get_media_dir()
+    attachments_dir = media_dir / "attachments"
     # Ensure directory exists before writing
     try:
-        media_dir.mkdir(parents=True, exist_ok=True)
+        attachments_dir.mkdir(parents=True, exist_ok=True)
     except (PermissionError, OSError) as e:
-        logger.error(f"Cannot create media directory {media_dir}: {e}")
+        logger.error(f"Cannot create attachments directory {attachments_dir}: {e}")
         raise
     
-    file_path = media_dir / filename
+    file_path = attachments_dir / filename
     with open(file_path, "wb") as f:
         f.write(file_data)
     
     file_size = len(file_data)
     
-    # Створити запис в БД
+    # Створити запис в БД - зберігаємо відносний шлях без префіксу media/
     attachment = Attachment(
         message_id=message_id,
-        file_path=f"media/{filename}",  # Відносний шлях для URL
+        file_path=f"attachments/{filename}",  # Відносний шлях: attachments/filename
         file_type=file_type,
         mime_type=mime_type,
         original_name=original_name,
@@ -119,6 +120,7 @@ async def download_and_save_media(
     mime_type: str,
     original_name: str,
     file_type: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
 ) -> Optional[Attachment]:
     """
     Завантажити медіа з URL та зберегти.
@@ -130,13 +132,14 @@ async def download_and_save_media(
         mime_type: MIME тип файлу
         original_name: Оригінальна назва файлу
         file_type: Тип файлу. Якщо None, визначається автоматично.
+        headers: Додаткові HTTP заголовки (наприклад, Authorization для Meta API)
         
     Returns:
         Attachment об'єкт або None якщо помилка
     """
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(url, headers=headers or {})
             response.raise_for_status()
             file_data = response.content
             
@@ -149,11 +152,13 @@ async def download_and_save_media(
             file_type=file_type,
         )
     except Exception as e:
-        logger.error(f"❌ Failed to download media from {url}: {e}")
+        logger.error(f"❌ Failed to download media from {url}: {e}", exc_info=True)
         return None
 
 
 def get_attachment_url(attachment: Attachment, base_url: str = "") -> str:
     """Отримати URL для доступу до файлу."""
-    return f"{base_url}/media/{Path(attachment.file_path).name}"
+    # Використовуємо повний шлях з БД (attachments/filename.pdf)
+    # URL буде: /media/attachments/filename.pdf
+    return f"{base_url}/media/{attachment.file_path}"
 

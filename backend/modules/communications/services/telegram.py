@@ -219,10 +219,11 @@ class TelegramService(MessengerService):
                                 Attachment.id == UUID(att_id)
                             ).first()
                             if attachment_obj:
-                                # file_path в БД зберігається як "media/{filename}"
-                                filename = Path(attachment_obj.file_path).name
-                                file_path = MEDIA_DIR / filename
-                                logger.info(f"📁 Found attachment in DB: {file_path}")
+                                # Склеюємо базовий шлях з тим, що зберігається в БД
+                                # В БД зберігається як "attachments/filename.pdf"
+                                filename = attachment_obj.original_name or Path(attachment_obj.file_path).name
+                                file_path = MEDIA_DIR / attachment_obj.file_path
+                                logger.info(f"📁 Found attachment in DB: {file_path} (from DB: {attachment_obj.file_path})")
                         except Exception as e:
                             logger.warning(f"⚠️ Failed to load attachment by ID {att_id}: {e}")
                     
@@ -231,7 +232,10 @@ class TelegramService(MessengerService):
                         # Extract filename from URL
                         url_clean = url.split("?")[0]
                         if "/media/" in url_clean:
-                            filename = url_clean.split("/media/")[-1]
+                            # Використовуємо повний шлях з URL (attachments/filename)
+                            file_path_str = url_clean.split("/media/")[-1]
+                            file_path = MEDIA_DIR / file_path_str
+                            logger.info(f"📁 Looking for file from /media/ URL: {file_path}")
                         elif "/files/" in url_clean:
                             # Якщо це /files/{id}, спробувати знайти за ID
                             file_id = url_clean.split("/files/")[-1]
@@ -246,10 +250,9 @@ class TelegramService(MessengerService):
                             except:
                                 filename = file_id
                         else:
-                            filename = url_clean.split("/")[-1]
-                        
-                        file_path = MEDIA_DIR / filename
-                        logger.info(f"📁 Looking for file from URL: {file_path}")
+                            # Якщо URL не містить /media/, спробувати як прямий шлях
+                            file_path = MEDIA_DIR / url_clean.lstrip("/")
+                            logger.info(f"📁 Looking for file from URL (direct path): {file_path}")
                     
                     if file_path and file_path.exists():
                         files.append(str(file_path))
