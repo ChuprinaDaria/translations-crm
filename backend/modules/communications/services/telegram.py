@@ -196,46 +196,65 @@ class TelegramService(MessengerService):
             # Якщо є вкладення, відправити файли
             if attachments:
                 from pathlib import Path
-                base_dir = Path(__file__).resolve().parent.parent.parent
-                uploads_dir = base_dir / "uploads" / "messages"
+                from modules.communications.models import Attachment
+                
+                MEDIA_DIR = Path("/app/media")
                 
                 logger.info(f"📎 Processing {len(attachments)} attachments for Telegram message")
                 logger.info(f"📎 Attachments data: {attachments}")
                 files = []
                 for att in attachments:
+                    att_id = att.get("id")
                     url = att.get("url", "")
-                    logger.info(f"📎 Processing attachment: {att}, URL: {url}")
-                    if url:
-                        # Extract filename from URL - handle both /api/v1/... and /files/... formats
-                        # Remove query parameters if any
+                    
+                    logger.info(f"📎 Processing attachment: {att}, ID: {att_id}, URL: {url}")
+                    
+                    file_path = None
+                    
+                    # Спробувати знайти файл за ID
+                    if att_id:
+                        try:
+                            attachment_obj = self.db.query(Attachment).filter(
+                                Attachment.id == UUID(att_id)
+                            ).first()
+                            if attachment_obj:
+                                # file_path в БД зберігається як "media/{filename}"
+                                filename = Path(attachment_obj.file_path).name
+                                file_path = MEDIA_DIR / filename
+                                logger.info(f"📁 Found attachment in DB: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to load attachment by ID {att_id}: {e}")
+                    
+                    # Якщо не знайдено за ID, спробувати за URL
+                    if not file_path and url:
+                        # Extract filename from URL
                         url_clean = url.split("?")[0]
-                        # Get filename from URL - handle /api/v1/communications/files/filename format
-                        if "/files/" in url_clean:
-                            filename = url_clean.split("/files/")[-1]
+                        if "/media/" in url_clean:
+                            filename = url_clean.split("/media/")[-1]
+                        elif "/files/" in url_clean:
+                            # Якщо це /files/{id}, спробувати знайти за ID
+                            file_id = url_clean.split("/files/")[-1]
+                            try:
+                                attachment_obj = self.db.query(Attachment).filter(
+                                    Attachment.id == UUID(file_id)
+                                ).first()
+                                if attachment_obj:
+                                    filename = Path(attachment_obj.file_path).name
+                                else:
+                                    filename = file_id
+                            except:
+                                filename = file_id
                         else:
                             filename = url_clean.split("/")[-1]
-                        file_path = uploads_dir / filename
                         
-                        logger.info(f"📁 Looking for file: {file_path} (from URL: {url}, extracted filename: {filename})")
-                        
-                        if file_path.exists():
-                            files.append(str(file_path))
-                            logger.info(f"✅ File found: {file_path}")
-                        else:
-                            logger.warning(f"⚠️ File not found: {file_path}")
-                            # Try alternative path - maybe file is in different location
-                            alt_path = base_dir / "uploads" / filename
-                            if alt_path.exists():
-                                files.append(str(alt_path))
-                                logger.info(f"✅ File found in alternative location: {alt_path}")
-                            else:
-                                logger.error(f"❌ File not found in any location: {filename}")
-                                logger.error(f"❌ Uploads dir exists: {uploads_dir.exists()}, path: {uploads_dir}")
-                                if uploads_dir.exists():
-                                    existing_files = list(uploads_dir.glob("*"))
-                                    logger.error(f"❌ Existing files in uploads_dir: {[f.name for f in existing_files[:10]]}")
+                        file_path = MEDIA_DIR / filename
+                        logger.info(f"📁 Looking for file from URL: {file_path}")
+                    
+                    if file_path and file_path.exists():
+                        files.append(str(file_path))
+                        logger.info(f"✅ File found: {file_path}")
                     else:
-                        logger.warning(f"⚠️ Attachment has no URL: {att}")
+                        logger.error(f"❌ File not found: {file_path}")
                 
                 if files:
                     logger.info(f"📤 Sending {len(files)} file(s) via Telegram")

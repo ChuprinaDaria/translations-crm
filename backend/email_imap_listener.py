@@ -232,9 +232,11 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
                     attachment_ids.append(str(attachment.id))
                     saved_attachments.append({
                         "id": str(attachment.id),
-                        "filename": filename,
-                        "content_type": content_type,
-                        "size": len(file_data),
+                        "type": attachment.file_type,
+                        "filename": attachment.original_name,
+                        "mime_type": attachment.mime_type,
+                        "size": attachment.file_size,
+                        "url": f"/api/v1/communications/files/{attachment.id}",
                     })
                     logger.info(f"✅ Saved attachment: {filename} ({len(file_data)} bytes) -> attachment_id: {attachment.id}")
                 except Exception as e:

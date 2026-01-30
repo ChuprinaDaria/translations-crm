@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from typing import Optional, List, Dict, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -136,14 +136,76 @@ class EmailService(MessengerService):
             
             # Додати вкладення
             if attachments:
+                from pathlib import Path
+                from modules.communications.models import Attachment
+                from email import encoders
+                
+                MEDIA_DIR = Path("/app/media")
+                
                 for att in attachments:
-                    attachment = MIMEBase('application', 'octet-stream')
-                    # Тут потрібно завантажити файл
-                    # attachment.set_payload(att["content"])
-                    # encoders.encode_base64(attachment)
-                    # attachment.add_header('Content-Disposition', f'attachment; filename= "{att["filename"]}"')
-                    # msg.attach(attachment)
-                    pass
+                    att_id = att.get("id")
+                    url = att.get("url", "")
+                    filename = att.get("filename", "attachment")
+                    mime_type = att.get("mime_type", "application/octet-stream")
+                    
+                    file_path = None
+                    file_data = None
+                    
+                    # Спробувати знайти файл за ID
+                    if att_id:
+                        try:
+                            attachment_obj = self.db.query(Attachment).filter(
+                                Attachment.id == UUID(att_id)
+                            ).first()
+                            if attachment_obj:
+                                filename = attachment_obj.original_name
+                                mime_type = attachment_obj.mime_type
+                                file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).warning(f"Failed to load attachment by ID {att_id}: {e}")
+                    
+                    # Якщо не знайдено за ID, спробувати за URL
+                    if not file_path and url:
+                        url_clean = url.split("?")[0]
+                        if "/media/" in url_clean:
+                            file_path = MEDIA_DIR / url_clean.split("/media/")[-1]
+                        elif "/files/" in url_clean:
+                            file_id = url_clean.split("/files/")[-1]
+                            try:
+                                attachment_obj = self.db.query(Attachment).filter(
+                                    Attachment.id == UUID(file_id)
+                                ).first()
+                                if attachment_obj:
+                                    filename = attachment_obj.original_name
+                                    mime_type = attachment_obj.mime_type
+                                    file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                            except:
+                                pass
+                    
+                    # Завантажити файл
+                    if file_path and file_path.exists():
+                        with open(file_path, "rb") as f:
+                            file_data = f.read()
+                    
+                    if file_data:
+                        # Визначити MIME тип
+                        maintype, subtype = mime_type.split('/', 1) if '/' in mime_type else ('application', 'octet-stream')
+                        
+                        attachment = MIMEBase(maintype, subtype)
+                        attachment.set_payload(file_data)
+                        encoders.encode_base64(attachment)
+                        attachment.add_header(
+                            'Content-Disposition',
+                            f'attachment; filename="{filename}"'
+                        )
+                        msg.attach(attachment)
+                        
+                        import logging
+                        logging.getLogger(__name__).info(f"✅ Added email attachment: {filename} ({len(file_data)} bytes)")
+                    else:
+                        import logging
+                        logging.getLogger(__name__).warning(f"⚠️ Could not load attachment: {att}")
             
             # Відправити через SMTP
             if smtp_port == 465:

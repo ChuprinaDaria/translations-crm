@@ -4,6 +4,7 @@ InstagramService - обробка Instagram Direct Messages через Meta Inst
 import hmac
 import hashlib
 import httpx
+import json
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -239,10 +240,152 @@ class InstagramService(MessengerService):
                     # Але це не спрацює, тому краще використати оригінальний external_id
                     logger.warning(f"[Instagram Send] IGSID not found in metadata, using external_id as-is")
             
-            payload = {
-                "recipient": {"id": recipient_id},  # Instagram User ID (IGSID)
-                "message": {"text": content},
-            }
+            # Обробити вкладення
+            if attachments and len(attachments) > 0:
+                # Instagram підтримує тільки один файл за раз
+                att = attachments[0]
+                att_id = att.get("id")
+                url_att = att.get("url", "")
+                filename = att.get("filename", "file")
+                mime_type = att.get("mime_type", "application/octet-stream")
+                att_type = att.get("type", "image")
+                
+                # Завантажити файл
+                from pathlib import Path
+                from modules.communications.models import Attachment
+                
+                MEDIA_DIR = Path("/app/media")
+                file_path = None
+                file_data = None
+                
+                # Спробувати знайти файл за ID
+                if att_id:
+                    try:
+                        attachment_obj = self.db.query(Attachment).filter(
+                            Attachment.id == UUID(att_id)
+                        ).first()
+                        if attachment_obj:
+                            filename = attachment_obj.original_name
+                            mime_type = attachment_obj.mime_type
+                            att_type = attachment_obj.file_type
+                            file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                    except Exception as e:
+                        logger.warning(f"[Instagram Send] Failed to load attachment by ID {att_id}: {e}")
+                
+                # Якщо не знайдено за ID, спробувати за URL
+                if not file_path and url_att:
+                    url_clean = url_att.split("?")[0]
+                    if "/media/" in url_clean:
+                        file_path = MEDIA_DIR / url_clean.split("/media/")[-1]
+                    elif "/files/" in url_clean:
+                        file_id = url_clean.split("/files/")[-1]
+                        try:
+                            attachment_obj = self.db.query(Attachment).filter(
+                                Attachment.id == UUID(file_id)
+                            ).first()
+                            if attachment_obj:
+                                filename = attachment_obj.original_name
+                                mime_type = attachment_obj.mime_type
+                                att_type = attachment_obj.file_type
+                                file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                        except:
+                            pass
+                
+                # Завантажити файл
+                if file_path and file_path.exists():
+                    with open(file_path, "rb") as f:
+                        file_data = f.read()
+                
+                if file_data:
+                    # Завантажити файл на Meta сервер через Instagram Media API
+                    upload_url = f"{self.base_url}/{page_id}/message_attachments"
+                    
+                    async with httpx.AsyncClient() as client:
+                        # Створюємо multipart/form-data запит
+                        files = {
+                            "message": (None, json.dumps({
+                                "attachment": {
+                                    "type": att_type,
+                                    "payload": {}
+                                }
+                            })),
+                            "filedata": (filename, file_data, mime_type),
+                        }
+                        
+                        # Завантажуємо файл
+                        upload_response = await client.post(
+                            upload_url,
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            files=files,
+                            timeout=60.0
+                        )
+                        upload_response.raise_for_status()
+                        upload_result = upload_response.json()
+                        attachment_id = upload_result.get("attachment_id")
+                        
+                        if attachment_id:
+                            # Відправляємо повідомлення з медіа
+                            if att_type == "image":
+                                payload = {
+                                    "recipient": {"id": recipient_id},
+                                    "message": {
+                                        "attachment": {
+                                            "type": "image",
+                                            "payload": {
+                                                "attachment_id": attachment_id
+                                            }
+                                        }
+                                    },
+                                }
+                                if content:
+                                    payload["message"]["text"] = content
+                            elif att_type == "video":
+                                payload = {
+                                    "recipient": {"id": recipient_id},
+                                    "message": {
+                                        "attachment": {
+                                            "type": "video",
+                                            "payload": {
+                                                "attachment_id": attachment_id
+                                            }
+                                        }
+                                    },
+                                }
+                                if content:
+                                    payload["message"]["text"] = content
+                            else:
+                                # Document або інші типи
+                                payload = {
+                                    "recipient": {"id": recipient_id},
+                                    "message": {
+                                        "attachment": {
+                                            "type": "file",
+                                            "payload": {
+                                                "attachment_id": attachment_id
+                                            }
+                                        }
+                                    },
+                                }
+                                if content:
+                                    payload["message"]["text"] = content
+                        else:
+                            # Якщо не вдалося завантажити, відправити тільки текст
+                            payload = {
+                                "recipient": {"id": recipient_id},
+                                "message": {"text": content or "File upload failed"},
+                            }
+                else:
+                    # Файл не знайдено, відправити тільки текст
+                    payload = {
+                        "recipient": {"id": recipient_id},
+                        "message": {"text": content or "File not found"},
+                    }
+            else:
+                # Немає вкладень, відправити тільки текст
+                payload = {
+                    "recipient": {"id": recipient_id},  # Instagram User ID (IGSID)
+                    "message": {"text": content},
+                }
             
             logger.info(f"[Instagram Send] Sending message to IGSID: {conversation.external_id[:20]}...")
             logger.info(f"[Instagram Send] URL: {url}")

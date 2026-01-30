@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { File, FileText, Video, Music, Download, X, ZoomIn, Play } from 'lucide-react';
+import { File, FileText, Video, Music, Download, X, ZoomIn, Play, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { cn } from '../../../components/ui/utils';
 

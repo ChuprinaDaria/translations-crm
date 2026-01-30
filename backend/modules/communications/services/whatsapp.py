@@ -136,17 +136,165 @@ class WhatsAppService(MessengerService):
                 "Content-Type": "application/json",
             }
             
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": conversation.external_id,  # Номер телефону
-                "type": "text",
-                "text": {"body": content},
-            }
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
-                result = response.json()
+            # Обробити вкладення
+            if attachments and len(attachments) > 0:
+                # WhatsApp підтримує тільки один файл за раз
+                att = attachments[0]
+                att_id = att.get("id")
+                url = att.get("url", "")
+                filename = att.get("filename", "file")
+                mime_type = att.get("mime_type", "application/octet-stream")
+                att_type = att.get("type", "document")
+                
+                # Завантажити файл
+                from pathlib import Path
+                from modules.communications.models import Attachment
+                
+                MEDIA_DIR = Path("/app/media")
+                file_path = None
+                file_data = None
+                
+                # Спробувати знайти файл за ID
+                if att_id:
+                    try:
+                        attachment_obj = self.db.query(Attachment).filter(
+                            Attachment.id == UUID(att_id)
+                        ).first()
+                        if attachment_obj:
+                            filename = attachment_obj.original_name
+                            mime_type = attachment_obj.mime_type
+                            att_type = attachment_obj.file_type
+                            file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to load attachment by ID {att_id}: {e}")
+                
+                # Якщо не знайдено за ID, спробувати за URL
+                if not file_path and url:
+                    url_clean = url.split("?")[0]
+                    if "/media/" in url_clean:
+                        file_path = MEDIA_DIR / url_clean.split("/media/")[-1]
+                    elif "/files/" in url_clean:
+                        file_id = url_clean.split("/files/")[-1]
+                        try:
+                            attachment_obj = self.db.query(Attachment).filter(
+                                Attachment.id == UUID(file_id)
+                            ).first()
+                            if attachment_obj:
+                                filename = attachment_obj.original_name
+                                mime_type = attachment_obj.mime_type
+                                att_type = attachment_obj.file_type
+                                file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                        except:
+                            pass
+                
+                # Завантажити файл
+                if file_path and file_path.exists():
+                    with open(file_path, "rb") as f:
+                        file_data = f.read()
+                
+                if file_data:
+                    # Завантажити файл на Meta сервер через WhatsApp Media API
+                    # Meta API вимагає multipart/form-data з правильними полями
+                    upload_url = f"{self.base_url}/{phone_number_id}/media"
+                    
+                    async with httpx.AsyncClient() as client:
+                        # Створюємо multipart/form-data запит
+                        files = {
+                            "file": (filename, file_data, mime_type),
+                            "messaging_product": (None, "whatsapp"),
+                            "type": (None, att_type),
+                        }
+                        
+                        # Завантажуємо файл
+                        upload_response = await client.post(
+                            upload_url,
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            files=files,
+                            timeout=60.0
+                        )
+                        upload_response.raise_for_status()
+                        upload_result = upload_response.json()
+                        media_id = upload_result.get("id")
+                        
+                        if media_id:
+                            # Відправляємо повідомлення з медіа
+                            if att_type == "image":
+                                payload = {
+                                    "messaging_product": "whatsapp",
+                                    "to": conversation.external_id,
+                                    "type": "image",
+                                    "image": {
+                                        "id": media_id,
+                                    },
+                                }
+                                if content:
+                                    payload["image"]["caption"] = content
+                            elif att_type == "video":
+                                payload = {
+                                    "messaging_product": "whatsapp",
+                                    "to": conversation.external_id,
+                                    "type": "video",
+                                    "video": {
+                                        "id": media_id,
+                                    },
+                                }
+                                if content:
+                                    payload["video"]["caption"] = content
+                            elif att_type == "audio":
+                                payload = {
+                                    "messaging_product": "whatsapp",
+                                    "to": conversation.external_id,
+                                    "type": "audio",
+                                    "audio": {
+                                        "id": media_id,
+                                    },
+                                }
+                            else:
+                                # Document
+                                payload = {
+                                    "messaging_product": "whatsapp",
+                                    "to": conversation.external_id,
+                                    "type": "document",
+                                    "document": {
+                                        "id": media_id,
+                                        "filename": filename,
+                                    },
+                                }
+                                if content:
+                                    payload["document"]["caption"] = content
+                            
+                            response = await client.post(url, json=payload, headers=headers)
+                            response.raise_for_status()
+                            result = response.json()
+                        else:
+                            raise ValueError("Failed to upload media to WhatsApp")
+                else:
+                    # Файл не знайдено, відправити тільки текст
+                    payload = {
+                        "messaging_product": "whatsapp",
+                        "to": conversation.external_id,
+                        "type": "text",
+                        "text": {"body": content},
+                    }
+                    
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(url, json=payload, headers=headers)
+                        response.raise_for_status()
+                        result = response.json()
+            else:
+                # Немає вкладень, відправити тільки текст
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": conversation.external_id,  # Номер телефону
+                    "type": "text",
+                    "text": {"body": content},
+                }
+                
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    result = response.json()
             
             # Оновити статус
             message.status = MessageStatus.SENT

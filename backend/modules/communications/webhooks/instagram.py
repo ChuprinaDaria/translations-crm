@@ -153,16 +153,32 @@ async def handle_instagram_webhook(
                             attachments.append({
                                 "id": str(attachment.id),
                                 "type": att_type,
-                                "url": f"/media/{attachment.file_path.split('/')[-1]}",
                                 "filename": attachment.original_name,
+                                "mime_type": attachment.mime_type,
+                                "size": attachment.file_size,
+                                "url": f"/api/v1/communications/files/{attachment.id}",
                             })
                 
                 # Оновити повідомлення з інформацією про вкладення
                 if attachments:
-                    if temp_message.meta_data is None:
-                        temp_message.meta_data = {}
-                    temp_message.meta_data["attachments"] = attachments
+                    import json
+                    from sqlalchemy import text
+                    
+                    # Якщо немає тексту і є attachments — не ставимо placeholder
+                    if not content:
+                        content = ""
+                    
+                    db.execute(text("""
+                        UPDATE communications_messages 
+                        SET content = :content, attachments = CAST(:attachments AS jsonb)
+                        WHERE id = :msg_id
+                    """), {
+                        "content": content,
+                        "attachments": json.dumps(attachments),
+                        "msg_id": str(temp_message.id)
+                    })
                     db.commit()
+                    db.refresh(temp_message)
                 
                 message = temp_message
             else:
