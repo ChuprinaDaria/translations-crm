@@ -136,12 +136,15 @@ class EmailService(MessengerService):
             
             # Додати вкладення
             if attachments:
+                import logging
+                logger = logging.getLogger(__name__)
                 from pathlib import Path
                 from modules.communications.models import Attachment
                 from email import encoders
                 from modules.communications.utils.media import get_media_dir
                 
                 MEDIA_DIR = get_media_dir()
+                logger.info(f"📎 Processing {len(attachments)} attachment(s) for email. MEDIA_DIR: {MEDIA_DIR}")
                 
                 for att in attachments:
                     att_id = att.get("id")
@@ -149,45 +152,110 @@ class EmailService(MessengerService):
                     filename = att.get("filename", "attachment")
                     mime_type = att.get("mime_type", "application/octet-stream")
                     
+                    logger.info(f"📎 Processing attachment: id={att_id}, url={url}, filename={filename}")
+                    
                     file_path = None
                     file_data = None
+                    attachment_obj = None
                     
                     # Спробувати знайти файл за ID
                     if att_id:
                         try:
+                            # Обробити як рядок, так і UUID
+                            if isinstance(att_id, str):
+                                att_uuid = UUID(att_id)
+                            else:
+                                att_uuid = att_id
+                            
                             attachment_obj = self.db.query(Attachment).filter(
-                                Attachment.id == UUID(att_id)
+                                Attachment.id == att_uuid
                             ).first()
+                            
                             if attachment_obj:
+                                logger.info(f"✅ Found attachment in DB: {attachment_obj.id}, file_path: {attachment_obj.file_path}")
                                 filename = attachment_obj.original_name
                                 mime_type = attachment_obj.mime_type
+                                
+                                # Обробити file_path - завжди зберігається як "media/{filename}"
+                                # Витягнути тільки ім'я файлу
                                 file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                                
+                                logger.info(f"📁 Constructed file path: {file_path} (from DB path: {attachment_obj.file_path})")
+                            else:
+                                logger.warning(f"⚠️ Attachment not found in DB for ID: {att_id}")
                         except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).warning(f"Failed to load attachment by ID {att_id}: {e}")
+                            logger.warning(f"⚠️ Failed to load attachment by ID {att_id}: {e}", exc_info=True)
                     
                     # Якщо не знайдено за ID, спробувати за URL
                     if not file_path and url:
                         url_clean = url.split("?")[0]
+                        logger.info(f"🔍 Trying to find file by URL: {url_clean}")
+                        
                         if "/media/" in url_clean:
-                            file_path = MEDIA_DIR / url_clean.split("/media/")[-1]
+                            filename_from_url = url_clean.split("/media/")[-1]
+                            file_path = MEDIA_DIR / filename_from_url
+                            logger.info(f"📁 Constructed file path from /media/ URL: {file_path}")
                         elif "/files/" in url_clean:
-                            file_id = url_clean.split("/files/")[-1]
-                            try:
-                                attachment_obj = self.db.query(Attachment).filter(
-                                    Attachment.id == UUID(file_id)
-                                ).first()
-                                if attachment_obj:
-                                    filename = attachment_obj.original_name
-                                    mime_type = attachment_obj.mime_type
-                                    file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
-                            except:
-                                pass
+                            # Файл може бути в UPLOADS_DIR (тимчасовий) або в MEDIA_DIR (збережений)
+                            filename_from_url = url_clean.split("/files/")[-1]
+                            
+                            # Спочатку спробувати знайти в UPLOADS_DIR (тимчасові файли)
+                            from core.config import settings
+                            uploads_file_path = settings.UPLOADS_DIR / filename_from_url
+                            if uploads_file_path.exists():
+                                file_path = uploads_file_path
+                                logger.info(f"📁 Found file in UPLOADS_DIR: {file_path}")
+                            else:
+                                # Спробувати знайти в MEDIA_DIR
+                                media_file_path = MEDIA_DIR / filename_from_url
+                                if media_file_path.exists():
+                                    file_path = media_file_path
+                                    logger.info(f"📁 Found file in MEDIA_DIR: {file_path}")
+                                else:
+                                    # Спробувати знайти в БД за ID
+                                    try:
+                                        file_uuid = UUID(filename_from_url)
+                                        attachment_obj = self.db.query(Attachment).filter(
+                                            Attachment.id == file_uuid
+                                        ).first()
+                                        if attachment_obj:
+                                            filename = attachment_obj.original_name
+                                            mime_type = attachment_obj.mime_type
+                                            # file_path завжди зберігається як "media/{filename}"
+                                            file_path = MEDIA_DIR / Path(attachment_obj.file_path).name
+                                            logger.info(f"✅ Found attachment via /files/ URL in DB: {file_path} (from DB path: {attachment_obj.file_path})")
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ Failed to parse file_id from URL or find in DB: {e}")
                     
                     # Завантажити файл
-                    if file_path and file_path.exists():
-                        with open(file_path, "rb") as f:
-                            file_data = f.read()
+                    if file_path:
+                        if file_path.exists():
+                            try:
+                                with open(file_path, "rb") as f:
+                                    file_data = f.read()
+                                logger.info(f"✅ Loaded file: {file_path} ({len(file_data)} bytes)")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to read file {file_path}: {e}", exc_info=True)
+                        else:
+                            logger.error(f"❌ File not found: {file_path}")
+                            # Спробувати знайти файл за ім'ям в MEDIA_DIR
+                            if attachment_obj:
+                                # Спробувати різні варіанти шляху
+                                possible_paths = [
+                                    MEDIA_DIR / Path(attachment_obj.file_path).name,
+                                    MEDIA_DIR / attachment_obj.file_path.replace("media/", ""),
+                                    Path(attachment_obj.file_path) if Path(attachment_obj.file_path).is_absolute() else None,
+                                ]
+                                for possible_path in possible_paths:
+                                    if possible_path and possible_path.exists():
+                                        logger.info(f"✅ Found file at alternative path: {possible_path}")
+                                        try:
+                                            with open(possible_path, "rb") as f:
+                                                file_data = f.read()
+                                            file_path = possible_path
+                                            break
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Failed to read alternative path {possible_path}: {e}")
                     
                     if file_data:
                         # Визначити MIME тип
@@ -202,11 +270,9 @@ class EmailService(MessengerService):
                         )
                         msg.attach(attachment)
                         
-                        import logging
-                        logging.getLogger(__name__).info(f"✅ Added email attachment: {filename} ({len(file_data)} bytes)")
+                        logger.info(f"✅ Added email attachment: {filename} ({len(file_data)} bytes, {mime_type})")
                     else:
-                        import logging
-                        logging.getLogger(__name__).warning(f"⚠️ Could not load attachment: {att}")
+                        logger.error(f"❌ Could not load attachment data. att={att}, file_path={file_path}, exists={file_path.exists() if file_path else False}")
             
             # Відправити через SMTP
             if smtp_port == 465:

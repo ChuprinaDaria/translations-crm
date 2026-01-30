@@ -24,6 +24,7 @@ import httpx
 from modules.auth.models import User  # noqa: F401
 from modules.crm.models import Client  # noqa: F401
 from modules.communications.models import Conversation, Message  # noqa: F401
+from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
