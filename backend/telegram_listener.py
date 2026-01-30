@@ -289,7 +289,7 @@ async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name:
 
 
 async def run_listener_for_account(account: dict):
-    """Run Telegram listener for a single account."""
+    """Run Telegram listener for a single account with auto-reconnect."""
     account_name = account["name"]
     session_string = account["session_string"]
     api_id = account["api_id"]
@@ -299,170 +299,204 @@ async def run_listener_for_account(account: dict):
         logger.error(f"Account {account_name}: missing api_id or api_hash")
         return
     
-    logger.info(f"Starting listener for account: {account_name}")
+    # Автоматичний перезапуск при відключенні
+    max_retries = 10  # Максимальна кількість спроб перезапуску
+    retry_count = 0
+    retry_delay = 5  # Початкова затримка в секундах
     
-    client = TelegramClient(
-        StringSession(session_string),
-        api_id,
-        api_hash
-    )
-    
-    @client.on(events.NewMessage(incoming=True))
-    async def handler(event):
-        """Handle incoming message."""
+    while retry_count < max_retries:
         try:
-            # Get chat and sender info
-            chat_id = event.chat_id
-            sender = await event.get_sender()
-            sender_name = None
-            user_id = None
-            username = None
-            phone = None
+            logger.info(f"Starting listener for account: {account_name} (attempt {retry_count + 1})")
             
-            # Determine if this is a group/channel (chat_id < 0, typically starts with -100)
-            is_group_or_channel = chat_id < 0
+            client = TelegramClient(
+                StringSession(session_string),
+                api_id,
+                api_hash
+            )
             
-            if sender:
-                first_name = getattr(sender, 'first_name', '') or ''
-                last_name = getattr(sender, 'last_name', '') or ''
-                sender_name = f"{first_name} {last_name}".strip()
-                user_id = getattr(sender, 'id', None)
-                username = getattr(sender, 'username', None)
-                phone = getattr(sender, 'phone', None)
-            
-            # Determine external_id based on chat type
-            if is_group_or_channel:
-                # For groups/channels: use chat_id as external_id (one conversation per group)
-                external_id = str(chat_id)
-                conversation_subject = None
-                
-                # Try multiple methods to get chat title
+            @client.on(events.NewMessage(incoming=True))
+            async def handler(event):
+                """Handle incoming message."""
                 try:
-                    # Method 1: Try to get from event.get_chat()
-                    chat = await event.get_chat()
-                    if hasattr(chat, 'title') and chat.title:
-                        conversation_subject = chat.title
-                    elif hasattr(chat, 'first_name') and chat.first_name:
-                        conversation_subject = chat.first_name
-                except Exception as e1:
-                    logger.debug(f"Failed to get chat via event.get_chat(): {e1}")
+                # Get chat and sender info
+                chat_id = event.chat_id
+                sender = await event.get_sender()
+                sender_name = None
+                user_id = None
+                username = None
+                phone = None
                 
-                # Method 2: Try to get from event.message.chat if available
-                if not conversation_subject:
-                    try:
-                        if hasattr(event.message, 'chat') and event.message.chat:
-                            if hasattr(event.message.chat, 'title') and event.message.chat.title:
-                                conversation_subject = event.message.chat.title
-                            elif hasattr(event.message.chat, 'first_name') and event.message.chat.first_name:
-                                conversation_subject = event.message.chat.first_name
-                    except Exception as e2:
-                        logger.debug(f"Failed to get chat from event.message.chat: {e2}")
+                # Determine if this is a group/channel (chat_id < 0, typically starts with -100)
+                is_group_or_channel = chat_id < 0
                 
-                # Method 3: Try to get from peer_id if available
-                if not conversation_subject:
-                    try:
-                        if hasattr(event.message, 'peer_id'):
-                            peer = event.message.peer_id
-                            if hasattr(peer, 'title') and peer.title:
-                                conversation_subject = peer.title
-                    except Exception as e3:
-                        logger.debug(f"Failed to get chat from peer_id: {e3}")
+                if sender:
+                    first_name = getattr(sender, 'first_name', '') or ''
+                    last_name = getattr(sender, 'last_name', '') or ''
+                    sender_name = f"{first_name} {last_name}".strip()
+                    user_id = getattr(sender, 'id', None)
+                    username = getattr(sender, 'username', None)
+                    phone = getattr(sender, 'phone', None)
                 
-                # Fallback: use chat_id if no title found
-                if not conversation_subject:
-                    conversation_subject = f"Група {chat_id}"
-                    logger.info(f"Could not get chat title for {chat_id}, using fallback")
-                else:
-                    logger.info(f"Got chat title: {conversation_subject} for chat_id: {chat_id}")
-            else:
-                # For private chats: use user_id (or phone/username if available)
-                if phone:
-                    external_id = f"+{phone}"
-                elif username:
-                    external_id = f"@{username}"
-                elif user_id:
-                    external_id = str(user_id)
-                else:
+                # Determine external_id based on chat type
+                if is_group_or_channel:
+                    # For groups/channels: use chat_id as external_id (one conversation per group)
                     external_id = str(chat_id)
-                conversation_subject = sender_name or external_id
+                    conversation_subject = None
+                    
+                    # Try multiple methods to get chat title
+                    try:
+                        # Method 1: Try to get from event.get_chat()
+                        chat = await event.get_chat()
+                        if hasattr(chat, 'title') and chat.title:
+                            conversation_subject = chat.title
+                        elif hasattr(chat, 'first_name') and chat.first_name:
+                            conversation_subject = chat.first_name
+                    except Exception as e1:
+                        logger.debug(f"Failed to get chat via event.get_chat(): {e1}")
+                    
+                    # Method 2: Try to get from event.message.chat if available
+                    if not conversation_subject:
+                        try:
+                            if hasattr(event.message, 'chat') and event.message.chat:
+                                if hasattr(event.message.chat, 'title') and event.message.chat.title:
+                                    conversation_subject = event.message.chat.title
+                                elif hasattr(event.message.chat, 'first_name') and event.message.chat.first_name:
+                                    conversation_subject = event.message.chat.first_name
+                        except Exception as e2:
+                            logger.debug(f"Failed to get chat from event.message.chat: {e2}")
+                    
+                    # Method 3: Try to get from peer_id if available
+                    if not conversation_subject:
+                        try:
+                            if hasattr(event.message, 'peer_id'):
+                                peer = event.message.peer_id
+                                if hasattr(peer, 'title') and peer.title:
+                                    conversation_subject = peer.title
+                        except Exception as e3:
+                            logger.debug(f"Failed to get chat from peer_id: {e3}")
+                    
+                    # Fallback: use chat_id if no title found
+                    if not conversation_subject:
+                        conversation_subject = f"Група {chat_id}"
+                        logger.info(f"Could not get chat title for {chat_id}, using fallback")
+                    else:
+                        logger.info(f"Got chat title: {conversation_subject} for chat_id: {chat_id}")
+                else:
+                    # For private chats: use user_id (or phone/username if available)
+                    if phone:
+                        external_id = f"+{phone}"
+                    elif username:
+                        external_id = f"@{username}"
+                    elif user_id:
+                        external_id = str(user_id)
+                    else:
+                        external_id = str(chat_id)
+                    conversation_subject = sender_name or external_id
+                
+                content = event.message.text or ""
+                attachments = []
+                msg_type = "text"
+                
+                # Prepare meta_data for message
+                meta_data = {
+                    "telegram_chat_id": chat_id,
+                    "is_group_message": is_group_or_channel,
+                }
+                if user_id:
+                    meta_data["telegram_user_id"] = user_id
+                if username:
+                    meta_data["telegram_username"] = username
+                if phone:
+                    meta_data["telegram_phone"] = phone
+                
+                # Save to database first to get message_id
+                db = Session()
+                try:
+                    conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject)
+                    
+                    # Save message first (will update if media found)
+                    temp_content = content or "[Медіа повідомлення]"
+                    msg_id = save_message(
+                        db, conv_id, temp_content, sender_name, external_id, 
+                        attachments=None,  # Will be updated after media download
+                        msg_type=msg_type,
+                        meta_data=meta_data
+                    )
+                    
+                    # Check for media and download
+                    if event.message.media:
+                        attachment = await download_media(client, event.message, db, msg_id)
+                        if attachment:
+                            attachments.append(attachment)
+                            msg_type = attachment["type"]
+                            if not content:
+                                content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
+                            
+                            # Update message with attachment info
+                            import json
+                            db.execute(text("""
+                                UPDATE communications_messages 
+                                SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
+                                WHERE id = :msg_id
+                            """), {
+                                "content": content,
+                                "msg_type": msg_type,
+                                "attachments": json.dumps(attachments),
+                                "meta_data": json.dumps(meta_data),
+                                "msg_id": msg_id
+                            })
+                            db.commit()
+                    
+                    if not content and not attachments:
+                        content = "[Пусте повідомлення]"
+                    
+                    logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
+                    
+                    # Notify WebSocket
+                    await notify_websocket(
+                        conv_id, msg_id, content, sender_name, external_id,
+                        attachments=attachments if attachments else None,
+                        msg_type=msg_type
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error handling message: {e}", exc_info=True)
+                finally:
+                    db.close()
             
-            content = event.message.text or ""
-            attachments = []
-            msg_type = "text"
+            await client.start()
+            logger.info(f"✅ Listener started for account: {account_name}")
             
-            # Prepare meta_data for message
-            meta_data = {
-                "telegram_chat_id": chat_id,
-                "is_group_message": is_group_or_channel,
-            }
-            if user_id:
-                meta_data["telegram_user_id"] = user_id
-            if username:
-                meta_data["telegram_username"] = username
-            if phone:
-                meta_data["telegram_phone"] = phone
+            # Скинути лічильник спроб при успішному підключенні
+            retry_count = 0
+            retry_delay = 5
             
-            # Save to database first to get message_id
-            db = Session()
-            try:
-                conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject)
-                
-                # Save message first (will update if media found)
-                temp_content = content or "[Медіа повідомлення]"
-                msg_id = save_message(
-                    db, conv_id, temp_content, sender_name, external_id, 
-                    attachments=None,  # Will be updated after media download
-                    msg_type=msg_type,
-                    meta_data=meta_data
-                )
-                
-                # Check for media and download
-                if event.message.media:
-                    attachment = await download_media(client, event.message, db, msg_id)
-                    if attachment:
-                        attachments.append(attachment)
-                        msg_type = attachment["type"]
-                        if not content:
-                            content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
-                        
-                        # Update message with attachment info
-                        import json
-                        db.execute(text("""
-                            UPDATE communications_messages 
-                            SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
-                            WHERE id = :msg_id
-                        """), {
-                            "content": content,
-                            "msg_type": msg_type,
-                            "attachments": json.dumps(attachments),
-                            "meta_data": json.dumps(meta_data),
-                            "msg_id": msg_id
-                        })
-                        db.commit()
-                
-                if not content and not attachments:
-                    content = "[Пусте повідомлення]"
-                
-                logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
-                
-                # Notify WebSocket
-                await notify_websocket(
-                    conv_id, msg_id, content, sender_name, external_id,
-                    attachments=attachments if attachments else None,
-                    msg_type=msg_type
-                )
-                
-            finally:
-                db.close()
-                
+            # Keep running
+            await client.run_until_disconnected()
+            
+            logger.warning(f"⚠️ Telegram client disconnected for account: {account_name}")
+            
         except Exception as e:
-            logger.error(f"Error handling message: {e}")
+            retry_count += 1
+            logger.error(f"❌ Error in Telegram listener for {account_name}: {e}", exc_info=True)
+            
+            if retry_count < max_retries:
+                logger.info(f"🔄 Reconnecting in {retry_delay} seconds... (attempt {retry_count}/{max_retries})")
+                await asyncio.sleep(retry_delay)
+                # Збільшити затримку для наступної спроби (exponential backoff)
+                retry_delay = min(retry_delay * 2, 60)  # Максимум 60 секунд
+            else:
+                logger.error(f"❌ Max retries reached for account {account_name}. Stopping listener.")
+                break
+        
+        # Закрити клієнт якщо він ще відкритий
+        try:
+            if 'client' in locals() and client.is_connected():
+                await client.disconnect()
+        except:
+            pass
     
-    await client.start()
-    logger.info(f"✅ Listener started for account: {account_name}")
-    
-    # Keep running
-    await client.run_until_disconnected()
+    logger.error(f"❌ Telegram listener stopped for account: {account_name}")
 
 
 async def main():

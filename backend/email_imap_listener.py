@@ -180,19 +180,19 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
     import json
     from modules.communications.utils.html_sanitizer import sanitize_html
     from modules.communications.utils.media import save_media_file
+    from modules.communications.models import Message
     
     # Перевірити чи вже є повідомлення з таким external_id
     if message_id:
-        existing = db.execute(text("""
-            SELECT id FROM communications_messages
-            WHERE conversation_id = :conv_id AND external_id = :message_id
-        """), {"conv_id": conv_id, "message_id": message_id}).fetchone()
+        existing = db.query(Message).filter(
+            Message.conversation_id == UUID(conv_id),
+            Message.external_id == message_id
+        ).first()
         
         if existing:
             logger.info(f"Email with Message-ID {message_id} already exists in DB, skipping duplicate")
             return None  # Не зберігаємо дублікат
     
-    msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
     
     # Визначити тип повідомлення
@@ -207,66 +207,83 @@ def save_message(db, conv_id: str, content: str, sender_email: str, sender_name:
     if html_content:
         meta_data['html_content'] = html_content
     
-    # Зберегти вкладення у файлову систему та створити записи в БД
-    attachment_ids = []
+    # Обробка вкладень - зберігаємо їх після flush() повідомлення
     saved_attachments = []
-    if attachments:
-        for att in attachments:
-            file_data = att.get("data")
-            filename = att.get("filename")
-            content_type = att.get("content_type", "application/octet-stream")
-            
-            if file_data and filename:
-                try:
-                    # Переконатися, що file_data - це bytes
-                    if isinstance(file_data, str):
-                        file_data = file_data.encode('utf-8')
-                    elif not isinstance(file_data, bytes):
-                        logger.warning(f"Attachment {filename} has unexpected data type: {type(file_data)}")
-                        continue
-                    
-                    attachment = save_media_file(
-                        db=db,
-                        message_id=UUID(msg_id),
-                        file_data=file_data,
-                        mime_type=content_type,
-                        original_name=filename,
-                    )
-                    attachment_ids.append(str(attachment.id))
-                    saved_attachments.append({
-                        "id": str(attachment.id),
-                        "type": attachment.file_type,
-                        "filename": attachment.original_name,
-                        "mime_type": attachment.mime_type,
-                        "size": attachment.file_size,
-                        "url": f"/api/v1/communications/files/{attachment.id}",
-                    })
-                    logger.info(f"✅ Saved attachment: {filename} ({len(file_data)} bytes) -> attachment_id: {attachment.id}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to save attachment {filename}: {e}", exc_info=True)
+    
+    try:
+        # Крок 1: Створити об'єкт повідомлення та додати до сесії
+        message = Message(
+            id=uuid4(),
+            conversation_id=UUID(conv_id),
+            direction='inbound',
+            type=message_type,
+            content=content,
+            status='sent',
+            meta_data=meta_data if meta_data else None,
+            attachments=None,  # Буде оновлено після збереження вкладень
+            external_id=message_id,
+            created_at=now,
+        )
         
-        # Зберігаємо інформацію про attachments в meta_data для сумісності
+        db.add(message)
+        db.flush()  # Flush щоб згенерувати message.id і зробити його видимим для foreign key
+        
+        msg_id = str(message.id)
+        logger.info(f"✅ Flushed message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)})")
+        
+        # Крок 2: Зберегти вкладення ПІСЛЯ flush() повідомлення
+        if attachments:
+            for att in attachments:
+                file_data = att.get("data")
+                filename = att.get("filename")
+                content_type = att.get("content_type", "application/octet-stream")
+                
+                if file_data and filename:
+                    try:
+                        # Переконатися, що file_data - це bytes
+                        if isinstance(file_data, str):
+                            file_data = file_data.encode('utf-8')
+                        elif not isinstance(file_data, bytes):
+                            logger.warning(f"Attachment {filename} has unexpected data type: {type(file_data)}")
+                            continue
+                        
+                        attachment = save_media_file(
+                            db=db,
+                            message_id=message.id,  # Використовуємо UUID об'єкта, не рядок
+                            file_data=file_data,
+                            mime_type=content_type,
+                            original_name=filename,
+                        )
+                        saved_attachments.append({
+                            "id": str(attachment.id),
+                            "type": attachment.file_type,
+                            "filename": attachment.original_name,
+                            "mime_type": attachment.mime_type,
+                            "size": attachment.file_size,
+                            "url": f"/api/v1/communications/media/{attachment.file_path}",
+                        })
+                        logger.info(f"✅ Saved attachment: {filename} ({len(file_data)} bytes) -> attachment_id: {attachment.id}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to save attachment {filename}: {e}", exc_info=True)
+                        # Продовжуємо обробку інших вкладень навіть якщо одне не вдалося
+                        continue
+        
+        # Крок 3: Оновити повідомлення з інформацією про attachments в meta_data
         if saved_attachments:
             meta_data['attachments'] = saved_attachments
-    
-    db.execute(text("""
-        INSERT INTO communications_messages 
-        (id, conversation_id, direction, type, content, status, created_at, meta_data, attachments, external_id)
-        VALUES (:id, :conversation_id, 'inbound', :type, :content, 'sent', :now, :meta_data, :attachments, :external_id)
-    """), {
-        "id": msg_id,
-        "conversation_id": conv_id,
-        "type": message_type,
-        "content": content,
-        "meta_data": json.dumps(meta_data) if meta_data else None,
-        "attachments": json.dumps(meta_data.get('attachments', [])) if meta_data.get('attachments') else None,
-        "external_id": message_id,  # Зберігаємо Message-ID
-        "now": now
-    })
-    db.commit()
-    
-    logger.info(f"Saved message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)}, has_attachments: {len(attachment_ids)})")
-    return msg_id
+            message.meta_data = meta_data
+            message.attachments = saved_attachments
+        
+        # Крок 4: Фінальний commit - все разом
+        db.commit()
+        
+        logger.info(f"✅ Committed message {msg_id} in conversation {conv_id} (type: {message_type}, has_html: {bool(html_content)}, has_attachments: {len(saved_attachments)})")
+        return msg_id
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to save message: {e}", exc_info=True)
+        db.rollback()  # Обов'язковий rollback при помилці
+        raise
 
 
 async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name: str, external_id: str, platform: str = "email"):

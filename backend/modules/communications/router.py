@@ -828,14 +828,26 @@ async def get_media_file(
     """
     Download a media file from communications_attachments.
     Підтримує шляхи з підпапками, наприклад: /media/attachments/filename.pdf
+    Також підтримує UUID для зворотної сумісності: /media/{uuid}
     """
     from modules.communications.models import Attachment
     from modules.communications.utils.media import get_media_dir
+    from uuid import UUID
     
-    # Отримати інформацію про файл з БД за повним шляхом
-    attachment = db.query(Attachment).filter(
-        Attachment.file_path == path
-    ).first()
+    attachment = None
+    
+    # Спробувати знайти за UUID (для зворотної сумісності)
+    try:
+        attachment_id = UUID(path)
+        attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
+    except (ValueError, TypeError):
+        pass
+    
+    # Якщо не знайдено за UUID, спробувати за повним шляхом
+    if not attachment:
+        attachment = db.query(Attachment).filter(
+            Attachment.file_path == path
+        ).first()
     
     # Якщо не знайдено за повним шляхом, спробувати знайти за ім'ям файлу (для сумісності)
     if not attachment:

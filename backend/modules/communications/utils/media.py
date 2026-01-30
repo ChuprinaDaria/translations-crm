@@ -104,9 +104,9 @@ def save_media_file(
         file_size=file_size,
     )
     
+    # Додати до сесії, але НЕ робити commit - це зробить викликаючий код
     db.add(attachment)
-    db.commit()
-    db.refresh(attachment)
+    db.flush()  # Flush щоб отримати ID, але не commit
     
     logger.info(f"💾 Saved media file: {original_name} ({file_size} bytes) -> {file_path}")
     
