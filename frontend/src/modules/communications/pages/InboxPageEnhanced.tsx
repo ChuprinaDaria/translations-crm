@@ -77,21 +77,35 @@ export function InboxPageEnhanced() {
   const [filters, setFilters] = useState<FilterState>({ type: 'all' });
   const [isSending, setIsSending] = useState(false);
   
+  // State for pagination
+  const [offset, setOffset] = useState(0);
+
   // React Query для conversations
   const { data: conversationsData, isLoading } = useQuery({
-    queryKey: ['conversations', filters],
+    queryKey: ['conversations', filters, offset],
     queryFn: () => inboxApi.getInbox({
       filter: filters.type,
       platform: filters.platform,
       search: filters.search,
       limit: 50,
+      offset: offset,
     }),
-    staleTime: Infinity, // Дані вважаються свіжими всю сесію - оновлюються через WebSocket
-    gcTime: Infinity, // Кеш зберігається всю активну сесію
-    refetchOnMount: false, // Не перезавантажувати при монтуванні
+    staleTime: 5 * 60 * 1000, // 5 хвилин
+    gcTime: 30 * 60 * 1000,   // 30 хвилин
   });
   
   const conversations = conversationsData?.conversations || [];
+  const hasMore = conversationsData?.has_more || false;
+  const total = conversationsData?.total || 0;
+
+  // Reset offset when filters change
+  useEffect(() => {
+    setOffset(0);
+  }, [filters.type, filters.platform]);
+
+  const handleLoadMore = () => {
+    setOffset(prev => prev + 50);
+  };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -1265,6 +1279,9 @@ export function InboxPageEnhanced() {
               filters={filters}
               onFilterChange={setFilters}
               isLoading={isLoading}
+              total={total}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
             />
           }
           contextPanel={undefined}

@@ -149,8 +149,9 @@ class WhatsAppService(MessengerService):
                 # Завантажити файл
                 from pathlib import Path
                 from modules.communications.models import Attachment
+                from modules.communications.utils.media import get_media_dir
                 
-                MEDIA_DIR = Path("/app/media")
+                MEDIA_DIR = get_media_dir()
                 file_path = None
                 file_data = None
                 

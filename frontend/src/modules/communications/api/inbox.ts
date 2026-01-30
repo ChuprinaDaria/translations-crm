@@ -17,12 +17,14 @@ export interface ConversationListItem {
   updated_at: string;
   assigned_manager_id?: string;
   needs_attention?: boolean; // True якщо менеджер не відповідав 10+ хвилин
+  is_archived?: boolean; // Чи діалог архівований
 }
 
 export interface InboxResponse {
   conversations: ConversationListItem[];
   total: number;
   unread_total: number;
+  has_more?: boolean; // Чи є ще діалоги для завантаження
 }
 
 export interface ConversationWithMessages {
@@ -59,9 +61,12 @@ export interface FileAttachment {
   thumbnail_url?: string;
 }
 
+export type InboxFilter = 'all' | 'new' | 'archived';
+export type Platform = 'telegram' | 'whatsapp' | 'email' | 'facebook' | 'instagram';
+
 export interface InboxQueryParams {
-  filter?: 'all' | 'new' | 'in_progress' | 'needs_reply' | 'archived';
-  platform?: 'telegram' | 'whatsapp' | 'email' | 'facebook' | 'instagram';
+  filter?: InboxFilter;
+  platform?: Platform;
   search?: string;
   limit?: number;
   offset?: number;
@@ -254,6 +259,24 @@ export const inboxApi = {
   async deleteMessage(messageId: string): Promise<{ status: string; message_id: string }> {
     return apiFetch(`/communications/messages/${messageId}`, {
       method: 'DELETE',
+    });
+  },
+
+  /**
+   * Archive conversation
+   */
+  async archiveConversation(conversationId: string): Promise<{ status: string; conversation_id: string; is_archived: boolean }> {
+    return apiFetch(`/communications/conversations/${conversationId}/archive`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Unarchive conversation
+   */
+  async unarchiveConversation(conversationId: string): Promise<{ status: string; conversation_id: string; is_archived: boolean }> {
+    return apiFetch(`/communications/conversations/${conversationId}/unarchive`, {
+      method: 'POST',
     });
   },
 };

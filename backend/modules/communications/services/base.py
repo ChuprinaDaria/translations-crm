@@ -4,7 +4,7 @@ Base MessengerService - абстракція для всіх сервісів п
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from modules.communications.models import (
@@ -162,10 +162,24 @@ class MessengerService(ABC):
             status=status,
             attachments=attachments,
             meta_data=metadata,
-            sent_at=sent_at or datetime.utcnow(),
+            sent_at=sent_at or datetime.now(timezone.utc),
             is_from_me=is_from_me,
         )
         self.db.add(message)
+        
+        # Оновити conversation: розархівувати та оновити last_message_at
+        conversation = self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if conversation:
+            # Автоматичне розархівування при новому повідомленні
+            if conversation.is_archived:
+                conversation.is_archived = False
+                logger.info(f"Auto-unarchived conversation {conversation_id} due to new message")
+            
+            # Оновити last_message_at
+            message_time = sent_at or datetime.now(timezone.utc)
+            conversation.last_message_at = message_time
+            conversation.updated_at = message_time
+        
         self.db.commit()
         self.db.refresh(message)
         return message

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, Clock, Bell, Archive, MessageSquare, Mail, MessageCircle, Instagram, Facebook, X } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
 import { ConversationItem } from './ConversationItem';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { cn } from '../../../components/ui/utils';
 
-export type FilterType = 'all' | 'new' | 'in_progress' | 'needs_reply' | 'archived';
+export type FilterType = 'all' | 'new' | 'archived';
 
 export interface FilterState {
   type: FilterType;
@@ -35,6 +35,9 @@ interface ConversationsSidebarProps {
   filters: FilterState;
   onFilterChange: (filters: FilterState) => void;
   isLoading?: boolean;
+  total?: number;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 /**
@@ -52,6 +55,9 @@ export function ConversationsSidebar({
   filters,
   onFilterChange,
   isLoading = false,
+  total,
+  hasMore,
+  onLoadMore,
 }: ConversationsSidebarProps) {
   const [localSearch, setLocalSearch] = useState('');
 
@@ -65,6 +71,23 @@ export function ConversationsSidebar({
     onFilterChange({ ...filters, search: value });
   };
 
+  // Main filters with icons
+  const mainFilters = [
+    { id: 'all' as FilterType, icon: Clock, label: 'Останні', count: null },
+    { id: 'new' as FilterType, icon: Bell, label: 'Нові', count: conversations.filter(c => c.unread_count > 0).length || null },
+    { id: 'archived' as FilterType, icon: Archive, label: 'Архів', count: null },
+  ];
+
+  // Platform filters with icons
+  const platformFilters = [
+    { id: 'telegram' as const, icon: MessageSquare, label: 'Telegram', color: 'text-sky-500' },
+    { id: 'email' as const, icon: Mail, label: 'Email', color: 'text-orange-500' },
+    { id: 'whatsapp' as const, icon: MessageCircle, label: 'WhatsApp', color: 'text-green-500' },
+    { id: 'instagram' as const, icon: Instagram, label: 'Instagram', color: 'text-fuchsia-500' },
+    { id: 'facebook' as const, icon: Facebook, label: 'Facebook', color: 'text-blue-600' },
+  ];
+
+  // Filter conversations locally (server already filters, but we do it here for search)
   const filteredConversations = conversations.filter((conv) => {
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
@@ -79,95 +102,91 @@ export function ConversationsSidebar({
       return false;
     }
 
-    switch (filters.type) {
-      case 'new':
-        return conv.unread_count > 0;
-      case 'in_progress':
-        // TODO: Implement logic based on conversation status
-        return true;
-      case 'needs_reply':
-        // TODO: Implement logic - last message is inbound and not replied
-        return conv.unread_count > 0;
-      case 'archived':
-        // TODO: Implement archived logic
-        return false;
-      default:
-        return true;
-    }
+    return true; // Server already filters by type
   });
-
-  // Calculate unread total
-  const unreadTotal = conversations.reduce((sum, conv) => sum + conv.unread_count, 0);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Filter Tabs - Horizontal Segment Control */}
-      <div className="p-1.5 border-b border-gray-200 flex-shrink-0 bg-white">
-        <div className="flex bg-gray-100 rounded-full p-0 gap-0 w-full">
-          <button
-            onClick={() => handleFilterChange('all')}
-            className={cn(
-              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0',
-              filters.type === 'all'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'bg-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            Всі
-          </button>
-          <button
-            onClick={() => handleFilterChange('new')}
-            className={cn(
-              'px-0 py-0 rounded-full text-[5px] font-medium transition-all relative flex-1 min-w-0',
-              filters.type === 'new'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'bg-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            <span className="truncate">Нові</span>
-            {unreadTotal > 0 && (
-              <span className="ml-0.5 px-0.5 py-0 bg-red-500 text-white text-[4px] rounded-full leading-none">
-                {unreadTotal}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => handleFilterChange('in_progress')}
-            className={cn(
-              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0 truncate',
-              filters.type === 'in_progress'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'bg-transparent text-gray-500 hover:text-gray-700'
-            )}
-            title="В роботі"
-          >
-            В роботі
-          </button>
-          <button
-            onClick={() => handleFilterChange('needs_reply')}
-            className={cn(
-              'px-0 py-0 rounded-full text-[5px] font-medium transition-all flex-1 min-w-0 truncate',
-              filters.type === 'needs_reply'
-                ? 'bg-white shadow-sm text-gray-900'
-                : 'bg-transparent text-gray-500 hover:text-gray-700'
-            )}
-            title="Потребують відповіді"
-          >
-            Потрібна відповідь
-          </button>
+      {/* Header з фільтрами */}
+      <div className="p-3 border-b space-y-3 flex-shrink-0 bg-white">
+        {/* Основні фільтри — іконки в ряд */}
+        <div className="flex items-center gap-1">
+          {mainFilters.map((f) => {
+            const Icon = f.icon;
+            const isActive = filters.type === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => handleFilterChange(f.id)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                  isActive 
+                    ? 'bg-gray-900 text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{f.label}</span>
+                {f.count !== null && f.count > 0 && (
+                  <span className={cn(
+                    'ml-1 px-1.5 py-0.5 rounded-full text-xs',
+                    isActive ? 'bg-white/20' : 'bg-red-500 text-white'
+                  )}>
+                    {f.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </div>
-
-      {/* Search Input */}
-      <div className="p-3 border-b border-gray-200 flex-shrink-0 bg-white">
+        
+        {/* Фільтр по платформі — іконки */}
+        <div className="flex items-center gap-1">
+          {platformFilters.map((p) => {
+            const Icon = p.icon;
+            const isActive = filters.platform === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => onFilterChange({ 
+                  ...filters, 
+                  platform: isActive ? undefined : p.id
+                })}
+                title={p.label}
+                className={cn(
+                  'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+                  isActive 
+                    ? 'bg-gray-200 ring-2 ring-gray-400' 
+                    : 'hover:bg-gray-100',
+                  p.color
+                )}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            );
+          })}
+          
+          {/* Clear platform filter */}
+          {filters.platform && (
+            <button
+              onClick={() => onFilterChange({ ...filters, platform: undefined })}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+              title="Очистити фільтр"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        
+        {/* Пошук */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             type="text"
             placeholder="Пошук..."
             value={localSearch}
             onChange={handleSearchChange}
-            className="pl-8 h-8 text-sm bg-gray-50 border-gray-200 focus:bg-white"
+            className="pl-9 pr-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300"
           />
         </div>
       </div>
@@ -206,24 +225,47 @@ export function ConversationsSidebar({
             </div>
           ) : filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-              <Filter className="w-12 h-12 text-gray-300 mb-3" />
-              <p className="text-sm text-gray-500">Нічого не знайдено</p>
+              <Archive className="w-12 h-12 text-gray-300 mb-3" />
+              <p className="text-sm text-gray-500">
+                {filters.type === 'archived' ? 'Архів порожній' : 'Нічого не знайдено'}
+              </p>
               <p className="text-xs text-gray-400 mt-1">
-                За поточними фільтрами розмов немає
+                {filters.type === 'archived' 
+                  ? 'Немає архівованих діалогів' 
+                  : 'За поточними фільтрами розмов немає'}
               </p>
             </div>
           ) : (
-            filteredConversations.map((conversation) => (
-              <ConversationItem
-                key={conversation.id}
-                conversation={conversation}
-                isSelected={selectedId === conversation.id}
-                onClick={() => onSelect(conversation.id)}
-              />
-            ))
+            <>
+              {filteredConversations.map((conversation) => (
+                <ConversationItem
+                  key={conversation.id}
+                  conversation={conversation}
+                  isSelected={selectedId === conversation.id}
+                  onClick={() => onSelect(conversation.id)}
+                />
+              ))}
+              
+              {/* Load More */}
+              {hasMore && onLoadMore && (
+                <button
+                  onClick={onLoadMore}
+                  className="w-full py-3 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  Завантажити ще...
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
+      
+      {/* Footer з кількістю */}
+      {total !== undefined && (
+        <div className="p-2 border-t text-center text-xs text-gray-400 flex-shrink-0">
+          Показано {conversations.length} з {total}
+        </div>
+      )}
     </div>
   );
 }

@@ -149,6 +149,7 @@ class ConversationListItem(BaseModel):
     updated_at: datetime
     assigned_manager_id: Optional[UUID] = None
     needs_attention: bool = False  # True якщо менеджер не відповідав 10+ хвилин
+    is_archived: bool = False  # Чи діалог архівований
     
     class Config:
         from_attributes = True
@@ -159,6 +160,7 @@ class InboxResponse(BaseModel):
     conversations: List[ConversationListItem]
     total: int
     unread_total: int
+    has_more: bool = False  # Чи є ще діалоги для завантаження
 
 
 # ========== Filter Schemas ==========

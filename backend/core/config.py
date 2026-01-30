@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     UPLOADS_DIR: Path = BASE_DIR / "uploads"
     
+    def get_media_dir(self) -> Path:
+        """Get media directory path, defaulting to /app/media in Docker or ./media locally."""
+        media_dir_env = os.getenv("MEDIA_DIR")
+        if media_dir_env:
+            return Path(media_dir_env)
+        # Default to /app/media if /app exists (Docker), otherwise use relative path
+        if Path("/app").exists():
+            return Path("/app/media")
+        return self.BASE_DIR / "media"
+    
     # Email
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))

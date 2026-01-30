@@ -10,12 +10,19 @@ import httpx
 import logging
 
 from modules.communications.models import Attachment, Message
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Шлях до папки з медіа
-MEDIA_DIR = Path("/app/media")
-MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+def get_media_dir() -> Path:
+    """Get media directory path, creating it if necessary."""
+    media_dir = settings.get_media_dir()
+    # Try to create directory, but don't fail if we can't (e.g., in CI)
+    try:
+        media_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError) as e:
+        logger.warning(f"Could not create media directory {media_dir}: {e}. Will attempt to create on first use.")
+    return media_dir
 
 
 def determine_file_type(mime_type: str, filename: str = "") -> str:
@@ -72,7 +79,15 @@ def save_media_file(
     filename = f"{file_id}{ext}"
     
     # Зберегти файл
-    file_path = MEDIA_DIR / filename
+    media_dir = get_media_dir()
+    # Ensure directory exists before writing
+    try:
+        media_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError) as e:
+        logger.error(f"Cannot create media directory {media_dir}: {e}")
+        raise
+    
+    file_path = media_dir / filename
     with open(file_path, "wb") as f:
         f.write(file_data)
     

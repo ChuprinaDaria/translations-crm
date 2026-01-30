@@ -130,12 +130,21 @@ def get_inbox(
         Conversation.updated_at,
         Conversation.assigned_manager_id,
         Conversation.last_manager_response_at,
+        Conversation.is_archived,
+        Conversation.last_message_at,
         func.count(Message.id).filter(
             Message.status != MessageStatus.READ, 
             Message.direction == MessageDirection.INBOUND
         ).label('unread_count'),
         func.max(Message.created_at).label('last_message_time'),
     ).outerjoin(Message, Message.conversation_id == Conversation.id)
+    
+    # Apply archive filter
+    if filter == 'archived':
+        query = query.filter(Conversation.is_archived == True)
+    else:
+        # For 'all' and 'new' - show only non-archived
+        query = query.filter(Conversation.is_archived == False)
     
     # Add Client join if search is needed
     if search:
@@ -170,6 +179,8 @@ def get_inbox(
         Conversation.updated_at,
         Conversation.assigned_manager_id,
         Conversation.last_manager_response_at,
+        Conversation.is_archived,
+        Conversation.last_message_at,
     ]
     if search:
         group_by_cols.extend([Client.id, Client.name, Client.full_name])
@@ -189,8 +200,11 @@ def get_inbox(
     total_subquery = query.statement.alias()
     total = db.query(func.count()).select_from(total_subquery).scalar() or 0
     
-    # Order by last message time (nulls last)
-    query = query.order_by(desc('last_message_time'))
+    # Order by last_message_at (preferred) or last_message_time (fallback), nulls last
+    query = query.order_by(
+        desc(Conversation.last_message_at),
+        desc('last_message_time')
+    )
     
     # Apply pagination
     results = query.offset(offset).limit(limit).all()
@@ -236,6 +250,11 @@ def get_inbox(
             if last_message and last_message.direction == MessageDirection.INBOUND:
                 needs_attention = True
         
+        # Use last_message_at from conversation if available, otherwise from message
+        last_message_at_value = row.last_message_at if hasattr(row, 'last_message_at') and row.last_message_at else (last_message.created_at if last_message else None)
+        
+        is_archived_value = row.is_archived if hasattr(row, 'is_archived') else False
+        
         conversations.append(schemas.ConversationListItem(
             id=row.id,
             platform=row.platform,
@@ -245,17 +264,22 @@ def get_inbox(
             client_name=client_name,
             unread_count=row.unread_count or 0,
             last_message=last_message.content if last_message else None,
-            last_message_at=last_message.created_at if last_message else None,
+            last_message_at=last_message_at_value,
             updated_at=row.updated_at,
             assigned_manager_id=row.assigned_manager_id,
             needs_attention=needs_attention,
+            is_archived=is_archived_value,
         ))
         unread_total += row.unread_count or 0
+    
+    # Check if there are more results
+    has_more = offset + limit < total
     
     return schemas.InboxResponse(
         conversations=conversations,
         total=total,
         unread_total=unread_total,
+        has_more=has_more,
     )
 
 
@@ -495,6 +519,46 @@ def mark_conversation_read(
     db.commit()
     
     return {"status": "ok"}
+
+
+@router.post("/conversations/{conversation_id}/archive")
+def archive_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Archive a conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    conversation.is_archived = True
+    db.commit()
+    
+    logger.info(f"Conversation {conversation_id} archived by user {user.id}")
+    
+    return {"status": "ok", "conversation_id": str(conversation_id), "is_archived": True}
+
+
+@router.post("/conversations/{conversation_id}/unarchive")
+def unarchive_conversation(
+    conversation_id: UUID,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """Unarchive a conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    conversation.is_archived = False
+    db.commit()
+    
+    logger.info(f"Conversation {conversation_id} unarchived by user {user.id}")
+    
+    return {"status": "ok", "conversation_id": str(conversation_id), "is_archived": False}
 
 
 @router.delete("/messages/{message_id}")
@@ -763,9 +827,10 @@ async def get_media_file(
 ):
     """Download a media file from communications_attachments."""
     from modules.communications.models import Attachment
+    from modules.communications.utils.media import get_media_dir
     
     # Шлях до медіа файлів
-    MEDIA_DIR = Path("/app/media")
+    MEDIA_DIR = get_media_dir()
     file_path = MEDIA_DIR / filename
     
     if not file_path.exists():

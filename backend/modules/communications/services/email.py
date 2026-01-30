@@ -139,8 +139,9 @@ class EmailService(MessengerService):
                 from pathlib import Path
                 from modules.communications.models import Attachment
                 from email import encoders
+                from modules.communications.utils.media import get_media_dir
                 
-                MEDIA_DIR = Path("/app/media")
+                MEDIA_DIR = get_media_dir()
                 
                 for att in attachments:
                     att_id = att.get("id")

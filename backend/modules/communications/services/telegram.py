@@ -197,8 +197,9 @@ class TelegramService(MessengerService):
             if attachments:
                 from pathlib import Path
                 from modules.communications.models import Attachment
+                from modules.communications.utils.media import get_media_dir
                 
-                MEDIA_DIR = Path("/app/media")
+                MEDIA_DIR = get_media_dir()
                 
                 logger.info(f"📎 Processing {len(attachments)} attachments for Telegram message")
                 logger.info(f"📎 Attachments data: {attachments}")
