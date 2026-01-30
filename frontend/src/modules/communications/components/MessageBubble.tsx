@@ -250,42 +250,93 @@ export function MessageBubble({
 
   const timeStr = formatTime(message.sent_at || message.created_at);
 
+  // Отримати колір border-l для inline styles (fallback)
+  const getBorderLeftColor = (): string | undefined => {
+    if (!isOutbound) return undefined;
+    
+    switch (platform) {
+      case 'whatsapp':
+        return '#10b981'; // green-500
+      case 'telegram':
+        return '#0ea5e9'; // sky-500
+      case 'email':
+        return '#f97316'; // orange-500
+      case 'instagram':
+        return '#d946ef'; // fuchsia-500
+      case 'facebook':
+        return '#2563eb'; // blue-600
+      default:
+        return '#9ca3af'; // gray-400
+    }
+  };
+
   // Стилі для повідомлень менеджера залежно від платформи
   const getManagerMessageStyles = () => {
     if (!isOutbound) return '';
     
+    let styles = '';
     switch (platform) {
       case 'whatsapp':
-        return 'bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 border-r border-t border-b border-green-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-green-100 border-l-[4px] border-l-green-500 text-gray-900 shadow-sm';
+        break;
       case 'telegram':
-        return 'bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-500 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-sky-100 border-l-[4px] border-l-sky-500 text-gray-900 shadow-sm';
+        break;
       case 'email':
-        return 'bg-gradient-to-r from-orange-50 to-amber-50 border-l-4 border-orange-500 border-r border-t border-b border-orange-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-orange-100 border-l-[4px] border-l-orange-500 text-gray-900 shadow-sm';
+        break;
       case 'instagram':
-        return 'bg-gradient-to-r from-fuchsia-50 to-pink-50 border-l-4 border-fuchsia-500 border-r border-t border-b border-fuchsia-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-fuchsia-100 border-l-[4px] border-l-fuchsia-500 text-gray-900 shadow-sm';
+        break;
       case 'facebook':
-        return 'bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-600 border-r border-t border-b border-blue-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-blue-100 border-l-[4px] border-l-blue-600 text-gray-900 shadow-sm';
+        break;
       default:
-        return 'bg-gradient-to-r from-gray-50 to-slate-50 border-l-4 border-gray-400 border-r border-t border-b border-gray-200/50 text-gray-900 shadow-sm';
+        styles = 'bg-gray-100 border-l-[4px] border-l-gray-400 text-gray-900 shadow-sm';
     }
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎨 MessageBubble outbound styles:', { 
+        platform, 
+        isOutbound, 
+        styles,
+        borderColor: getBorderLeftColor()
+      });
+    }
+    
+    return styles;
   };
 
   // Стилі для вхідних повідомлень залежно від платформи
   const getInboundMessageStyles = () => {
+    let styles = '';
     switch (platform) {
       case 'telegram':
-        return 'bg-sky-50/70 border border-sky-300 text-gray-900';
+        styles = 'bg-sky-50 border border-sky-300 text-gray-900';
+        break;
       case 'instagram':
-        return 'bg-fuchsia-50/70 border border-fuchsia-400 text-gray-900';
+        styles = 'bg-fuchsia-50 border border-fuchsia-300 text-gray-900';
+        break;
       case 'email':
-        return 'bg-orange-50/70 border border-orange-300 text-gray-900';
+        styles = 'bg-amber-50 border border-amber-300 text-gray-900';
+        break;
       case 'facebook':
-        return 'bg-blue-50/70 border border-blue-400 text-gray-900';
+        styles = 'bg-blue-50 border border-blue-300 text-gray-900';
+        break;
       case 'whatsapp':
-        return 'bg-emerald-50/70 border border-emerald-300 text-gray-900';
+        styles = 'bg-emerald-50 border border-emerald-300 text-gray-900';
+        break;
       default:
-        return 'bg-white border border-gray-200';
+        styles = 'bg-white border border-gray-200';
     }
+    
+    // Debug logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎨 MessageBubble inbound styles:', { platform, isOutbound, styles });
+    }
+    
+    return styles;
   };
 
   return (
@@ -303,6 +354,26 @@ export function MessageBubble({
             : getInboundMessageStyles(),
           !isOutbound && 'pt-4'
         )}
+        style={isOutbound ? {
+          // Fallback: ensure border-l color is applied via inline style
+          borderLeftWidth: '4px',
+          borderLeftColor: getBorderLeftColor(),
+          borderLeftStyle: 'solid',
+        } : undefined}
+        ref={(el) => {
+          // Debug: log computed styles in development
+          if (process.env.NODE_ENV === 'development' && el && typeof window !== 'undefined' && window.getComputedStyle) {
+            const computed = window.getComputedStyle(el);
+            console.log('🎨 MessageBubble computed styles:', {
+              platform,
+              isOutbound,
+              backgroundColor: computed.backgroundColor,
+              borderLeftWidth: computed.borderLeftWidth,
+              borderLeftColor: computed.borderLeftColor,
+              borderLeftStyle: computed.borderLeftStyle,
+            });
+          }
+        }}
       >
         {/* Platform icon for inbound messages */}
         {!isOutbound && (
