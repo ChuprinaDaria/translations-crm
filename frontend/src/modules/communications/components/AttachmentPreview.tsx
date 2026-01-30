@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { File, FileText, Video, Music, Download, X, ZoomIn, Play, Image as ImageIcon } from 'lucide-react';
+import { File, FileText, Video, Music, Download, X, ZoomIn, Play, FileImage } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { cn } from '../../../components/ui/utils';
 
@@ -37,7 +37,7 @@ export function AttachmentPreview({
   const [isZoomed, setIsZoomed] = useState(false);
 
   const getFileIcon = (type?: string, mimeType?: string) => {
-    if (mimeType?.startsWith('image/') || type === 'image') return ImageIcon;
+    if (mimeType?.startsWith('image/') || type === 'image') return FileImage;
     if (mimeType?.startsWith('video/') || type === 'video') return Video;
     if (mimeType?.startsWith('audio/') || type === 'audio' || type === 'voice') return Music;
     return File;
