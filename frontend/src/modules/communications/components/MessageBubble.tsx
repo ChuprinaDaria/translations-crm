@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -6,6 +6,7 @@ import { cn } from '../../../components/ui/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { parseEmailToHtml } from '../utils/emailParser';
+import { parseMessageToHtml, hasMarkdown } from '../utils/messageParser';
 
 export interface Message {
   id: string;
@@ -135,20 +136,70 @@ export function MessageBubble({
         });
       }
 
-      // Phone detection (Polish format: +48 or 9 digits)
-      const phoneRegex = /(\+48\s?)?(\d{3}[\s-]?\d{3}[\s-]?\d{3}|\d{9})/g;
-      const phones = message.content.match(phoneRegex);
-      if (phones) {
-        phones.forEach(phone => {
-          const normalized = phone.replace(/[\s-]/g, '');
-          const formatted = normalized.startsWith('+48') ? normalized : `+48${normalized}`;
-          detected.push({ 
-            type: 'phone', 
-            value: formatted,
-            original: phone 
+      // Phone detection - міжнародні формати (ЄС, Україна, Білорусь, Росія, Азія)
+      // Міжнародні формати телефонів
+      const phonePatterns = [
+        // Польща: +48 або 48, потім 9 цифр
+        /(?:\+48|48)[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
+        // Україна: +380, потім 9 цифр
+        /\+380[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+        // Білорусь: +375, потім 9 цифр
+        /\+375[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+        // Росія: +7, потім 10 цифр
+        /\+7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+        // Німеччина: +49
+        /\+49[\s-]?\d{3,4}[\s-]?\d{6,8}/g,
+        // Франція: +33
+        /\+33[\s-]?\d[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}/g,
+        // Італія: +39
+        /\+39[\s-]?\d{2,3}[\s-]?\d{6,8}/g,
+        // Іспанія: +34
+        /\+34[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
+        // UK: +44
+        /\+44[\s-]?\d{4}[\s-]?\d{6}/g,
+        // Загальний міжнародний: + і 10-15 цифр (але не починається з 0)
+        /\+\d{1,3}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{0,4}/g,
+      ];
+
+      // Збираємо всі знайдені телефони
+      const phones: string[] = [];
+      phonePatterns.forEach(pattern => {
+        const matches = message.content.match(pattern);
+        if (matches) {
+          matches.forEach(phone => {
+            // Нормалізуємо і перевіряємо довжину (мінімум 10 цифр з кодом країни)
+            const digits = phone.replace(/[\s\-\(\)]/g, '');
+            // Перевіряємо що це дійсно телефон (мінімум 10 цифр, максимум 15)
+            // І що він починається з + або коду країни
+            if (digits.length >= 10 && digits.length <= 15 && (digits.startsWith('+') || /^[1-9]\d{1,2}/.test(digits))) {
+              phones.push(phone);
+            }
           });
+        }
+      });
+
+      // Унікальні телефони та нормалізація
+      const uniquePhones = [...new Set(phones)];
+      uniquePhones.forEach(phone => {
+        const normalized = phone.replace(/[\s-]/g, '');
+        // Якщо телефон починається з коду країни без +, додаємо +
+        let formatted = normalized;
+        if (normalized.startsWith('48') && !normalized.startsWith('+')) {
+          formatted = `+${normalized}`;
+        } else if (!normalized.startsWith('+') && /^[1-9]\d{1,2}/.test(normalized)) {
+          // Якщо починається з коду країни без +, додаємо +
+          formatted = `+${normalized}`;
+        } else if (!normalized.startsWith('+')) {
+          // Пропускаємо телефони без коду країни
+          return;
+        }
+        
+        detected.push({ 
+          type: 'phone', 
+          value: formatted,
+          original: phone 
         });
-      }
+      });
 
       // Amount detection (Polish zł format)
       const amountRegex = /(\d+)\s*(zł|zl|złotych|pln)/gi;
@@ -270,6 +321,21 @@ export function MessageBubble({
     }
   };
 
+  // Отримати колір фону для inline styles (fallback)
+  const getManagerMessageBgStyle = (): React.CSSProperties | undefined => {
+    if (!isOutbound) return undefined;
+    
+    const colors: Record<string, string> = {
+      whatsapp: 'rgb(220, 252, 231)',    // green-100
+      telegram: 'rgb(224, 242, 254)',    // sky-100
+      email: 'rgb(255, 237, 213)',       // orange-100
+      instagram: 'rgb(250, 232, 255)',   // fuchsia-100
+      facebook: 'rgb(219, 234, 254)',    // blue-100
+    };
+    
+    return { backgroundColor: colors[platform] || 'rgb(243, 244, 246)' }; // gray-100
+  };
+
   // Стилі для повідомлень менеджера залежно від платформи
   const getManagerMessageStyles = () => {
     if (!isOutbound) return '';
@@ -355,10 +421,11 @@ export function MessageBubble({
           !isOutbound && 'pt-4'
         )}
         style={isOutbound ? {
-          // Fallback: ensure border-l color is applied via inline style
+          // Fallback: ensure border-l color and background are applied via inline style
           borderLeftWidth: '4px',
           borderLeftColor: getBorderLeftColor(),
           borderLeftStyle: 'solid',
+          ...getManagerMessageBgStyle(),
         } : undefined}
         ref={(el) => {
           // Debug: log computed styles in development
@@ -420,10 +487,14 @@ export function MessageBubble({
           
           {/* Text content - hide placeholder text for media messages */}
           {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
-            platform === 'email' ? (
+            (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) ? (
               <div 
                 className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all"
-                dangerouslySetInnerHTML={{ __html: parseEmailToHtml(message.content) }}
+                dangerouslySetInnerHTML={{ 
+                  __html: platform === 'email' 
+                    ? parseEmailToHtml(message.content)
+                    : parseMessageToHtml(message.content, platform)
+                }}
               />
             ) : (
               <p className="text-sm whitespace-pre-wrap break-words">

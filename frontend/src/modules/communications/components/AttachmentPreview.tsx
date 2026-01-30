@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { File, Image as ImageIcon, Video, Music, Download, X, ZoomIn } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { File, FileText, Video, Music, Download, X, ZoomIn, Play } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
-import { Dialog, DialogContent } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
 
 interface AttachmentPreviewProps {
@@ -106,51 +105,32 @@ export function AttachmentPreview({
 
   // Image preview with zoom - compact thumbnail in chat
   if (isImage && imageUrl && !imageError) {
+    // Use thumbnail_url if available, otherwise use full image
+    const thumbnailUrl = attachment?.thumbnail_url || imageUrl;
+    const fullImageUrl = attachment?.url || imageUrl;
+
     return (
       <>
-        {/* Мініатюра */}
+        {/* Thumbnail - маленьке превью */}
         <div 
           className={cn(
-            'relative rounded-lg overflow-hidden group cursor-pointer',
-            'border border-gray-200 shadow-sm',
-            isPreview ? 'w-[120px] h-[120px]' : 'max-w-[200px]'
+            'relative group cursor-pointer',
+            'border border-gray-200 rounded-lg overflow-hidden',
+            isPreview ? 'w-[120px] h-[120px]' : 'max-w-[200px] max-h-[200px]'
           )}
           onClick={() => setIsZoomed(true)}
         >
           <img
-            src={imageUrl}
+            src={thumbnailUrl}
             alt={displayName}
-            className="w-full h-auto max-h-[200px] object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
+            className="w-full h-full object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
             onError={() => setImageError(true)}
           />
           
-          {/* Overlay з іконками при hover */}
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 pointer-events-none">
-            <button 
-              className="p-2 bg-white/90 rounded-full hover:bg-white transition-colors pointer-events-auto"
-              title="Збільшити"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsZoomed(true);
-              }}
-            >
-              <ZoomIn className="w-4 h-4 text-gray-700" />
-            </button>
-            <button 
-              onClick={handleDownload}
-              className="p-2 bg-white/90 rounded-full hover:bg-white transition-colors pointer-events-auto"
-              title="Завантажити"
-            >
-              <Download className="w-4 h-4 text-gray-700" />
-            </button>
+          {/* Overlay on hover */}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all rounded-lg flex items-center justify-center">
+            <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-
-          {/* Назва файлу під зображенням */}
-          {displayName && displayName !== 'Файл' && (
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
-              <span className="text-xs text-white truncate block">{displayName}</span>
-            </div>
-          )}
 
           {/* Remove button for preview mode */}
           {isPreview && onRemove && (
@@ -168,39 +148,53 @@ export function AttachmentPreview({
           )}
         </div>
 
-        {/* Lightbox - повнорозмірне зображення */}
-        <Dialog open={isZoomed} onOpenChange={setIsZoomed}>
-          <DialogContent 
-            className="max-w-[90vw] max-h-[90vh] p-0 bg-transparent border-none"
-            hideClose={true}
+        {/* Lightbox - повнорозмірне зображення на весь екран */}
+        {isZoomed && (
+          <div 
+            className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setIsZoomed(false)}
           >
-            <div className="relative">
-              {/* Кнопка закрити */}
-              <button 
-                onClick={() => setIsZoomed(false)}
-                className="absolute top-2 right-2 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-              
-              {/* Кнопка завантажити */}
-              <button 
-                onClick={handleDownload}
-                className="absolute top-2 right-14 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
-                title="Завантажити"
-              >
-                <Download className="w-5 h-5 text-white" />
-              </button>
-              
-              {/* Повнорозмірне зображення */}
-              <img 
-                src={imageUrl} 
-                alt={displayName}
-                className="max-w-full max-h-[85vh] object-contain mx-auto rounded-lg"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+            {/* Close button */}
+            <button 
+              className="absolute top-4 right-4 text-white hover:text-gray-300 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
+              onClick={() => setIsZoomed(false)}
+            >
+              <X className="w-8 h-8" />
+            </button>
+            
+            {/* Download button */}
+            <button 
+              className="absolute top-4 right-16 text-white hover:text-gray-300 z-10 p-2 bg-black/50 rounded-full hover:bg-black/70 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownload();
+              }}
+              title="Завантажити"
+            >
+              <Download className="w-7 h-7" />
+            </button>
+
+            {/* Full size image */}
+            <img
+              src={fullImageUrl}
+              alt={displayName}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            
+            {/* Filename */}
+            {displayName && displayName !== 'Файл' && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded">
+                {displayName}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Prevent body scroll when lightbox is open */}
+        {isZoomed && (
+          <ScrollLock />
+        )}
       </>
     );
   }
@@ -210,14 +204,22 @@ export function AttachmentPreview({
     return (
       <div className={cn(
         'relative rounded-lg overflow-hidden border border-gray-200 shadow-sm',
-        isPreview ? 'w-[140px]' : 'w-[200px]'
+        isPreview ? 'w-[140px]' : 'max-w-[250px]'
       )}>
         <video
           src={attachment.url}
-          className="w-full h-auto rounded-lg"
+          className="w-full h-auto max-h-[200px] rounded-lg"
           controls
           preload="metadata"
         />
+        {/* Download button overlay */}
+        <button
+          onClick={handleDownload}
+          className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+          title="Завантажити"
+        >
+          <Download className="w-4 h-4" />
+        </button>
         {isPreview && onRemove && (
           <Button
             variant="ghost"
@@ -232,23 +234,33 @@ export function AttachmentPreview({
     );
   }
 
-  // Audio preview
+  // Audio/Voice preview
   if (isAudio && attachment?.url) {
     return (
       <div className={cn(
-        'flex items-center gap-3 p-3 rounded-lg border',
-        'bg-gray-50 border-gray-200',
+        'flex items-center gap-3 p-3 rounded-lg border max-w-[280px]',
+        isInbound ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200',
         isPreview && 'bg-white border-gray-300'
       )}>
         <div className={cn(
           'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-          'bg-gray-200 text-gray-600'
+          'bg-purple-100 text-purple-600'
         )}>
           <Music className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
           <audio src={attachment.url} controls className="w-full h-8" preload="metadata" />
+          {displayName && displayName !== 'Файл' && (
+            <p className="text-xs text-gray-500 truncate mt-1">{displayName}</p>
+          )}
         </div>
+        <button 
+          onClick={handleDownload} 
+          className="p-1.5 hover:bg-gray-200 rounded transition-colors shrink-0"
+          title="Завантажити"
+        >
+          <Download className="w-4 h-4 text-gray-600" />
+        </button>
         {isPreview && onRemove && (
           <Button
             variant="ghost"
@@ -267,19 +279,20 @@ export function AttachmentPreview({
   return (
     <div
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg border',
-        'bg-gray-50 border-gray-200',
+        'flex items-center gap-3 p-3 rounded-lg border max-w-[280px] cursor-pointer hover:bg-gray-50 transition-colors',
+        isInbound ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-200',
         isPreview && 'bg-white border-gray-300'
       )}
+      onClick={handleDownload}
     >
       {/* Icon */}
       <div
         className={cn(
-          'w-10 h-10 rounded flex items-center justify-center shrink-0',
-          'bg-gray-200 text-gray-600'
+          'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+          'bg-blue-100 text-blue-600'
         )}
       >
-        <Icon className="w-5 h-5" />
+        <FileText className="w-5 h-5" />
       </div>
 
       {/* File info */}
@@ -290,30 +303,35 @@ export function AttachmentPreview({
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        {!isPreview && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
-          >
-            <Download className="w-4 h-4" />
-          </Button>
-        )}
-        {isPreview && onRemove && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRemove}
-            className="h-8 w-8 p-0 text-gray-500 hover:text-red-500"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        )}
-      </div>
+      {/* Download icon */}
+      <Download className="w-4 h-4 text-gray-400 shrink-0" />
+      
+      {/* Remove button for preview mode */}
+      {isPreview && onRemove && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="h-8 w-8 p-0 text-gray-500 hover:text-red-500"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   );
+}
+
+// Component to prevent body scroll when lightbox is open
+function ScrollLock() {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+  return null;
 }
 
