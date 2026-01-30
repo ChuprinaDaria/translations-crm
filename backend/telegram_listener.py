@@ -72,7 +72,7 @@ def get_telegram_accounts():
         db.close()
 
 
-def get_or_create_conversation(db, external_id: str, sender_name: str = None):
+def get_or_create_conversation(db, external_id: str, sender_name: str = None, subject: str = None):
     """Get or create conversation for external_id."""
     # Check if conversation exists
     result = db.execute(text("""
@@ -88,31 +88,33 @@ def get_or_create_conversation(db, external_id: str, sender_name: str = None):
     conv_id = str(uuid4())
     now = datetime.utcnow()
     db.execute(text("""
-        INSERT INTO communications_conversations (id, platform, external_id, created_at, updated_at)
-        VALUES (:id, 'telegram', :external_id, :now, :now)
-    """), {"id": conv_id, "external_id": external_id, "now": now})
+        INSERT INTO communications_conversations (id, platform, external_id, subject, created_at, updated_at)
+        VALUES (:id, 'telegram', :external_id, :subject, :now, :now)
+    """), {"id": conv_id, "external_id": external_id, "subject": subject, "now": now})
     db.commit()
     
-    logger.info(f"Created new conversation: {conv_id} for {external_id}")
+    logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject})")
     return conv_id
 
 
-def save_message(db, conv_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text"):
+def save_message(db, conv_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text", meta_data: dict = None):
     """Save incoming message to database."""
     msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
     
     attachments_json = json.dumps(attachments) if attachments else None
+    meta_data_json = json.dumps(meta_data) if meta_data else None
     
     db.execute(text("""
-        INSERT INTO communications_messages (id, conversation_id, direction, type, content, status, attachments, created_at)
-        VALUES (:id, :conv_id, 'inbound', :msg_type, :content, 'sent', CAST(:attachments AS jsonb), :now)
+        INSERT INTO communications_messages (id, conversation_id, direction, type, content, status, attachments, meta_data, created_at)
+        VALUES (:id, :conv_id, 'inbound', :msg_type, :content, 'sent', CAST(:attachments AS jsonb), CAST(:meta_data AS jsonb), :now)
     """), {
         "id": msg_id, 
         "conv_id": conv_id, 
         "content": content, 
         "msg_type": msg_type,
         "attachments": attachments_json,
+        "meta_data": meta_data_json,
         "now": now
     })
     db.commit()
@@ -281,39 +283,109 @@ async def run_listener_for_account(account: dict):
     async def handler(event):
         """Handle incoming message."""
         try:
-            # Get sender info
+            # Get chat and sender info
+            chat_id = event.chat_id
             sender = await event.get_sender()
             sender_name = None
-            external_id = str(event.chat_id)
+            user_id = None
+            username = None
+            phone = None
+            
+            # Determine if this is a group/channel (chat_id < 0, typically starts with -100)
+            is_group_or_channel = chat_id < 0
             
             if sender:
                 first_name = getattr(sender, 'first_name', '') or ''
                 last_name = getattr(sender, 'last_name', '') or ''
                 sender_name = f"{first_name} {last_name}".strip()
-                
-                # Use phone or username as external_id if available
-                phone = getattr(sender, 'phone', None)
+                user_id = getattr(sender, 'id', None)
                 username = getattr(sender, 'username', None)
+                phone = getattr(sender, 'phone', None)
+            
+            # Determine external_id based on chat type
+            if is_group_or_channel:
+                # For groups/channels: use chat_id as external_id (one conversation per group)
+                external_id = str(chat_id)
+                conversation_subject = None
+                
+                # Try multiple methods to get chat title
+                try:
+                    # Method 1: Try to get from event.get_chat()
+                    chat = await event.get_chat()
+                    if hasattr(chat, 'title') and chat.title:
+                        conversation_subject = chat.title
+                    elif hasattr(chat, 'first_name') and chat.first_name:
+                        conversation_subject = chat.first_name
+                except Exception as e1:
+                    logger.debug(f"Failed to get chat via event.get_chat(): {e1}")
+                
+                # Method 2: Try to get from event.message.chat if available
+                if not conversation_subject:
+                    try:
+                        if hasattr(event.message, 'chat') and event.message.chat:
+                            if hasattr(event.message.chat, 'title') and event.message.chat.title:
+                                conversation_subject = event.message.chat.title
+                            elif hasattr(event.message.chat, 'first_name') and event.message.chat.first_name:
+                                conversation_subject = event.message.chat.first_name
+                    except Exception as e2:
+                        logger.debug(f"Failed to get chat from event.message.chat: {e2}")
+                
+                # Method 3: Try to get from peer_id if available
+                if not conversation_subject:
+                    try:
+                        if hasattr(event.message, 'peer_id'):
+                            peer = event.message.peer_id
+                            if hasattr(peer, 'title') and peer.title:
+                                conversation_subject = peer.title
+                    except Exception as e3:
+                        logger.debug(f"Failed to get chat from peer_id: {e3}")
+                
+                # Fallback: use chat_id if no title found
+                if not conversation_subject:
+                    conversation_subject = f"Група {chat_id}"
+                    logger.info(f"Could not get chat title for {chat_id}, using fallback")
+                else:
+                    logger.info(f"Got chat title: {conversation_subject} for chat_id: {chat_id}")
+            else:
+                # For private chats: use user_id (or phone/username if available)
                 if phone:
                     external_id = f"+{phone}"
                 elif username:
                     external_id = f"@{username}"
+                elif user_id:
+                    external_id = str(user_id)
+                else:
+                    external_id = str(chat_id)
+                conversation_subject = sender_name or external_id
             
             content = event.message.text or ""
             attachments = []
             msg_type = "text"
             
+            # Prepare meta_data for message
+            meta_data = {
+                "telegram_chat_id": chat_id,
+                "is_group_message": is_group_or_channel,
+            }
+            if user_id:
+                meta_data["telegram_user_id"] = user_id
+            if username:
+                meta_data["telegram_username"] = username
+            if phone:
+                meta_data["telegram_phone"] = phone
+            
             # Save to database first to get message_id
             db = Session()
             try:
-                conv_id = get_or_create_conversation(db, external_id, sender_name)
+                conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject)
                 
                 # Save message first (will update if media found)
                 temp_content = content or "[Медіа повідомлення]"
                 msg_id = save_message(
                     db, conv_id, temp_content, sender_name, external_id, 
                     attachments=None,  # Will be updated after media download
-                    msg_type=msg_type
+                    msg_type=msg_type,
+                    meta_data=meta_data
                 )
                 
                 # Check for media and download
@@ -329,12 +401,13 @@ async def run_listener_for_account(account: dict):
                         import json
                         db.execute(text("""
                             UPDATE communications_messages 
-                            SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb)
+                            SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
                             WHERE id = :msg_id
                         """), {
                             "content": content,
                             "msg_type": msg_type,
                             "attachments": json.dumps(attachments),
+                            "meta_data": json.dumps(meta_data),
                             "msg_id": msg_id
                         })
                         db.commit()

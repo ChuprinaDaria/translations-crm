@@ -5,6 +5,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { cn } from '../../../components/ui/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
+import { parseEmailToHtml } from '../utils/emailParser';
 
 export interface Message {
   id: string;
@@ -335,11 +336,29 @@ export function MessageBubble({
             </div>
           )}
           
+          {/* Author name for group messages (inbound) */}
+          {!isOutbound && message.meta_data?.is_group_message && (
+            <div className="text-xs font-medium text-gray-600 mb-1">
+              {message.meta_data.telegram_username ? (
+                <>@{message.meta_data.telegram_username}</>
+              ) : message.meta_data.telegram_user_id ? (
+                <>User {message.meta_data.telegram_user_id}</>
+              ) : null}
+            </div>
+          )}
+          
           {/* Text content - hide placeholder text for media messages */}
           {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+            platform === 'email' ? (
+              <div 
+                className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all"
+                dangerouslySetInnerHTML={{ __html: parseEmailToHtml(message.content) }}
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
+            )
           )}
 
           {/* Detected email/phone/address buttons (only for inbound) */}

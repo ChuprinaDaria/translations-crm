@@ -3,4 +3,5 @@
  */
 export * from './formatTimestamp';
 export * from './constants';
+export * from './emailParser';
 

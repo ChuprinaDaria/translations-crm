@@ -275,6 +275,7 @@ class TelegramService(MessengerService):
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         is_from_me: Optional[bool] = None,
+        subject: Optional[str] = None,
     ) -> MessageModel:
         """Обробити вхідне повідомлення з Telegram."""
         
@@ -282,6 +283,7 @@ class TelegramService(MessengerService):
         conversation = await self.get_or_create_conversation(
             external_id=external_id,
             client_id=None,  # Буде знайдено або створено клієнта
+            subject=subject,
         )
         
         # Створити повідомлення
@@ -320,6 +322,18 @@ class TelegramService(MessengerService):
         ).first()
         
         if conversation:
+            # Оновлюємо subject якщо він переданий і відрізняється від поточного
+            # (особливо корисно для груп, де назва може бути отримана пізніше)
+            if subject and subject != conversation.subject:
+                # Не оновлюємо якщо поточний subject не є fallback (не містить "Група -100")
+                is_fallback = conversation.subject and (
+                    conversation.subject.startswith("Група ") or 
+                    conversation.subject.startswith("Group ")
+                )
+                if is_fallback or not conversation.subject:
+                    conversation.subject = subject
+                    self.db.commit()
+                    self.db.refresh(conversation)
             return conversation
         
         # Створюємо нову розмову
