@@ -10,12 +10,60 @@ from pydantic import BaseModel
 
 from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
+from fastapi import Header, status
 from modules.crm import models, schemas
 from modules.crm.services import timeline as timeline_service
 from modules.crm import crud_languages
 from modules.auth import models as auth_models
 
 router = APIRouter(tags=["crm"])
+
+
+# Dependency для альтернативної авторизації (X-RAG-TOKEN або JWT) для CRM endpoints
+def get_current_user_or_rag_crm(
+    x_rag_token: Optional[str] = Header(None, alias="X-RAG-TOKEN"),
+    db: Session = Depends(get_db),
+) -> Optional[auth_models.User]:
+    """
+    Отримати поточного користувача через X-RAG-TOKEN або JWT для CRM endpoints.
+    Аналогічно до communications, але для CRM модуля.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Спочатку перевіряємо X-RAG-TOKEN
+    if x_rag_token:
+        try:
+            # Перевіряємо RAG токен напряму
+            from modules.ai_integration.models import AISettings
+            ai_settings = db.query(AISettings).first()
+            
+            if ai_settings and ai_settings.rag_token and x_rag_token == ai_settings.rag_token:
+                logger.info("✅ Авторизація через X-RAG-TOKEN успішна (CRM)")
+                return None  # RAG авторизація - user=None
+            else:
+                # Невірний RAG токен
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: Invalid RAG Token"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Помилка перевірки RAG токену: {e}")
+            # Якщо помилка перевірки RAG токену, продовжуємо до JWT
+    
+    # Якщо немає X-RAG-TOKEN, використовуємо JWT
+    try:
+        return get_current_user_db(db=db)
+    except HTTPException as jwt_error:
+        # Якщо JWT невалідний і немає RAG токену - помилка
+        if not x_rag_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
+            )
+        raise jwt_error
 
 
 @router.get("/clients", response_model=List[schemas.ClientRead])
@@ -40,7 +88,7 @@ def get_clients(
 def create_client(
     client_in: schemas.ClientCreate,
     db: Session = Depends(get_db),
-    user: auth_models.User = Depends(get_current_user_db),
+    user: Optional[auth_models.User] = Depends(get_current_user_or_rag_crm),
 ):
     """Create a new client. Checks for duplicates by phone/email/telegram external_id."""
     from modules.communications.models import Conversation, PlatformEnum
@@ -160,7 +208,7 @@ def create_client(
 def search_client_by_phone(
     phone: str,
     db: Session = Depends(get_db),
-    user: auth_models.User = Depends(get_current_user_db),
+    user: Optional[auth_models.User] = Depends(get_current_user_or_rag_crm),
 ):
     """Search client by phone number."""
     # Clean phone number for search
