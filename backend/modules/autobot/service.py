@@ -535,9 +535,57 @@ class AutobotService:
     
     async def _send_auto_reply(self, message: Message, reply_text: str):
         """Надіслати автоматичну відповідь"""
-        # TODO: Інтеграція з communication модулем
-        # Потрібно створити нове повідомлення з direction=OUTBOUND
-        pass
+        from modules.communications.models import Message as CommMessage, MessageDirection
+        from modules.communications.services.telegram import TelegramService
+        from modules.communications.services.instagram import InstagramService
+        from modules.communications.services.whatsapp import WhatsAppService
+        from modules.communications.services.facebook import FacebookService
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            conversation = message.conversation
+            if not conversation:
+                logger.warning(f"No conversation found for message {message.id}")
+                return
+            
+            platform = conversation.platform.value if hasattr(conversation.platform, 'value') else str(conversation.platform)
+            
+            # Відправити повідомлення через відповідний сервіс
+            if platform == "telegram":
+                service = TelegramService(self.db)
+                await service.send_message(
+                    conversation_id=conversation.id,
+                    content=reply_text
+                )
+            elif platform == "instagram":
+                service = InstagramService(self.db)
+                await service.send_message(
+                    conversation_id=conversation.id,
+                    content=reply_text
+                )
+            elif platform == "whatsapp":
+                service = WhatsAppService(self.db)
+                await service.send_message(
+                    conversation_id=conversation.id,
+                    content=reply_text
+                )
+            elif platform == "facebook":
+                service = FacebookService(self.db)
+                await service.send_message(
+                    conversation_id=conversation.id,
+                    content=reply_text
+                )
+            else:
+                logger.warning(f"Unsupported platform for auto-reply: {platform}")
+                return
+            
+            logger.info(f"Auto-reply sent to conversation {conversation.id} via {platform}")
+            
+        except Exception as e:
+            logger.error(f"Error sending auto-reply: {e}", exc_info=True)
+            raise
     
     def _log_action(
         self,
