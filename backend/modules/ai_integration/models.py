@@ -27,8 +27,8 @@ class AISettings(Base):
         nullable=False, 
         default="https://api.adme-ai.com/v1"
     )
-    rag_api_key: Mapped[str] = mapped_column(String(255), nullable=True, default="")
-    rag_token: Mapped[str] = mapped_column(
+    rag_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True, default="")
+    rag_token: Mapped[str | None] = mapped_column(
         String(255), 
         nullable=True, 
         default="adme_rag_secret_987654321",

@@ -1,6 +1,7 @@
 """
 AI Integration Schemas - Pydantic models for API
 """
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
@@ -34,11 +35,19 @@ class AISettingsBase(BaseModel):
         description="Активні канали для AI (telegram, whatsapp, email, instagram, facebook)"
     )
     
-    @field_validator('active_channels')
+    @field_validator('rag_api_key', 'rag_token', mode='before')
+    @classmethod
+    def validate_optional_strings(cls, v):
+        """Обробка optional полів - залишаємо як є (може бути порожній рядок або None)"""
+        return v
+    
+    @field_validator('active_channels', mode='before')
     @classmethod
     def validate_channels(cls, v):
         """Валідація каналів"""
         valid_channels = ['telegram', 'whatsapp', 'email', 'instagram', 'facebook']
+        if v is None:
+            return []
         if not isinstance(v, list):
             return []
         return [ch for ch in v if ch in valid_channels]
@@ -94,6 +103,14 @@ class AISettingsResponse(AISettingsBase):
     webhook_secret: str
     created_at: str
     updated_at: str
+    
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
+    def convert_datetime_to_string(cls, v):
+        """Конвертує datetime в ISO string"""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
     
     class Config:
         from_attributes = True
