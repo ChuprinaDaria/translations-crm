@@ -21,6 +21,7 @@ export interface AutobotSettings {
   auto_create_client: boolean;
   auto_create_order: boolean;
   auto_save_files: boolean;
+  use_ai_reply: boolean;
   created_at: string;
   updated_at: string;
 }

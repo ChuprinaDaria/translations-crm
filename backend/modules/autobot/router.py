@@ -195,6 +195,7 @@ def _settings_to_response(settings: AutobotSettings) -> AutobotSettingsResponse:
         auto_create_client=settings.auto_create_client,
         auto_create_order=settings.auto_create_order,
         auto_save_files=settings.auto_save_files,
+        use_ai_reply=settings.use_ai_reply,
         created_at=settings.created_at.isoformat(),
         updated_at=settings.updated_at.isoformat()
     )

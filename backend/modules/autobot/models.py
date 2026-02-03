@@ -64,6 +64,9 @@ https://www.tlumaczeniamt.pl/cennik/
     auto_create_order: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auto_save_files: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     
+    # AI відповіді
+    use_ai_reply: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="Використовувати AI для генерації відповідей замість статичного повідомлення")
+    
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

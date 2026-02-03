@@ -38,6 +38,7 @@ class AutobotService:
             auto_create_client=settings_data.auto_create_client,
             auto_create_order=settings_data.auto_create_order,
             auto_save_files=settings_data.auto_save_files,
+            use_ai_reply=settings_data.use_ai_reply,
         )
         
         # Встановлюємо робочі години для кожного дня
@@ -82,6 +83,8 @@ class AutobotService:
             db_settings.auto_create_order = settings_data.auto_create_order
         if settings_data.auto_save_files is not None:
             db_settings.auto_save_files = settings_data.auto_save_files
+        if settings_data.use_ai_reply is not None:
+            db_settings.use_ai_reply = settings_data.use_ai_reply
         
         # Оновлюємо робочі години
         day_mapping = {
@@ -248,10 +251,57 @@ class AutobotService:
         
         # Неробочий час - активуємо бота
         
-        # 1. Надіслати автовідповідь
-        if settings.auto_reply_message:
+        # 1. Надіслати автовідповідь (статичне повідомлення або AI)
+        if settings.use_ai_reply:
+            # Використовуємо AI для генерації відповіді
             try:
-                # TODO: Інтеграція з communication модулем для відправки
+                reply_text = await self._generate_ai_reply(message, sender_info, office_id)
+                if reply_text:
+                    await self._send_auto_reply(message, reply_text)
+                    result["auto_reply_sent"] = True
+                    
+                    self._log_action(
+                        settings_id=settings.id,
+                        office_id=office_id,
+                        message_id=str(message.id),
+                        action_taken="ai_reply",
+                        success=True,
+                        meta_data={"ai_generated": True}
+                    )
+                else:
+                    # Якщо AI не згенерував відповідь, використовуємо статичне повідомлення як fallback
+                    if settings.auto_reply_message:
+                        await self._send_auto_reply(message, settings.auto_reply_message)
+                        result["auto_reply_sent"] = True
+                        
+                        self._log_action(
+                            settings_id=settings.id,
+                            office_id=office_id,
+                            message_id=str(message.id),
+                            action_taken="auto_reply",
+                            success=True,
+                            meta_data={"ai_fallback": True}
+                        )
+            except Exception as e:
+                # Якщо помилка AI, використовуємо статичне повідомлення як fallback
+                if settings.auto_reply_message:
+                    try:
+                        await self._send_auto_reply(message, settings.auto_reply_message)
+                        result["auto_reply_sent"] = True
+                    except:
+                        pass
+                
+                self._log_action(
+                    settings_id=settings.id,
+                    office_id=office_id,
+                    message_id=str(message.id),
+                    action_taken="ai_reply",
+                    success=False,
+                    error_message=str(e)
+                )
+        elif settings.auto_reply_message:
+            # Використовуємо статичне повідомлення
+            try:
                 await self._send_auto_reply(message, settings.auto_reply_message)
                 result["auto_reply_sent"] = True
                 
@@ -427,6 +477,61 @@ class AutobotService:
                 print(f"Error saving attachment: {e}")
         
         return saved_count
+    
+    async def _generate_ai_reply(
+        self,
+        message: Message,
+        sender_info: dict,
+        office_id: int
+    ) -> Optional[str]:
+        """Згенерувати відповідь через AI"""
+        try:
+            from modules.ai_integration.service import AIService
+            
+            # Отримати conversation для визначення platform
+            conversation = message.conversation
+            if not conversation:
+                return None
+            
+            # Визначити platform
+            platform = conversation.platform.value if hasattr(conversation.platform, 'value') else str(conversation.platform)
+            
+            # Перевірити чи AI активний для цього каналу
+            ai_service = AIService(self.db)
+            if not ai_service.is_channel_active(platform):
+                return None
+            
+            # Отримати office_id з conversation або settings
+            conversation_office_id = None
+            if conversation.client and conversation.client.office_id:
+                conversation_office_id = conversation.client.office_id
+            
+            # Створити контекст для AI
+            context = {
+                "office_id": conversation_office_id or office_id,
+                "sender_name": sender_info.get("name"),
+                "sender_email": sender_info.get("email"),
+                "sender_phone": sender_info.get("phone"),
+            }
+            
+            # Викликати AI для генерації відповіді
+            response = await ai_service.send_to_rag(
+                message=message.content or "",
+                conversation_id=str(conversation.id),
+                platform=platform,
+                context=context
+            )
+            
+            if response and response.reply:
+                return response.reply
+            
+            return None
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error generating AI reply: {e}", exc_info=True)
+            return None
     
     async def _send_auto_reply(self, message: Message, reply_text: str):
         """Надіслати автоматичну відповідь"""

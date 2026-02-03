@@ -15,7 +15,8 @@ import {
   Power,
   CheckCircle2,
   XCircle,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import { WorkingHoursEditor } from '../components/WorkingHoursEditor';
 import { HolidaysCalendar } from '../components/HolidaysCalendar';
@@ -108,6 +109,7 @@ https://www.tlumaczeniamt.pl/cennik/
         auto_create_client: true,
         auto_create_order: true,
         auto_save_files: true,
+        use_ai_reply: false,
       };
       const created = await autobotApi.createSettings(defaultSettings);
       setSettings(created);
@@ -324,6 +326,29 @@ https://www.tlumaczeniamt.pl/cennik/
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
+              <div>
+                <Label className="text-base font-semibold text-purple-900">Використовувати AI для відповідей</Label>
+                <p className="text-sm text-purple-700 mt-1">
+                  Замість статичного повідомлення, AI буде генерувати індивідуальні відповіді на основі контексту розмови
+                </p>
+                {settings.use_ai_reply && (
+                  <p className="text-xs text-purple-600 mt-2 italic">
+                    ⚠️ Переконайтеся, що AI інтеграція налаштована та активна в налаштуваннях системи
+                  </p>
+                )}
+              </div>
+            </div>
+            <Switch
+              checked={settings.use_ai_reply ?? false}
+              onCheckedChange={(checked) => 
+                setSettings({ ...settings, use_ai_reply: checked })
+              }
+            />
+          </div>
+
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-base font-semibold">Автоматично створювати клієнта</Label>

@@ -30,6 +30,9 @@ class AutobotSettingsBase(BaseModel):
     auto_create_client: bool = True
     auto_create_order: bool = True
     auto_save_files: bool = True
+    
+    # AI відповіді
+    use_ai_reply: bool = False
 
 
 class AutobotSettingsCreate(AutobotSettingsBase):
@@ -49,6 +52,7 @@ class AutobotSettingsUpdate(BaseModel):
     auto_create_client: Optional[bool] = None
     auto_create_order: Optional[bool] = None
     auto_save_files: Optional[bool] = None
+    use_ai_reply: Optional[bool] = None
 
 
 class AutobotSettingsResponse(AutobotSettingsBase):
