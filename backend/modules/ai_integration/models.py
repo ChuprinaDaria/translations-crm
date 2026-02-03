@@ -32,7 +32,7 @@ class AISettings(Base):
         String(255), 
         nullable=True, 
         default="adme_rag_secret_987654321",
-        description="Токен для авторизації вхідних запитів від RAG (X-RAG-TOKEN)"
+        comment="Токен для авторизації вхідних запитів від RAG (X-RAG-TOKEN)"
     )
     
     # Enable/Disable
