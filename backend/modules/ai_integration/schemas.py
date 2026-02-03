@@ -15,6 +15,10 @@ class AISettingsBase(BaseModel):
         default="",
         description="API ключ для RAG сервісу"
     )
+    rag_token: Optional[str] = Field(
+        default="adme_rag_secret_987654321",
+        description="Токен для авторизації вхідних запитів від RAG (X-RAG-TOKEN)"
+    )
     is_enabled: bool = Field(
         default=False,
         description="Чи увімкнено AI інтеграцію"
@@ -57,6 +61,7 @@ class AISettingsUpdate(BaseModel):
     """Схема для оновлення налаштувань AI"""
     rag_api_url: Optional[str] = None
     rag_api_key: Optional[str] = None
+    rag_token: Optional[str] = None
     is_enabled: Optional[bool] = None
     trigger_delay_seconds: Optional[int] = Field(None, ge=0, le=300)
     active_channels: Optional[List[str]] = None

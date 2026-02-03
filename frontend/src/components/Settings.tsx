@@ -224,6 +224,7 @@ export function Settings() {
             id: 0,
             rag_api_url: "https://api.adme-ai.com/v1",
             rag_api_key: "",
+            rag_token: "adme_rag_secret_987654321",
             is_enabled: false,
             trigger_delay_seconds: 10,
             active_channels: [],
@@ -1630,6 +1631,7 @@ export function Settings() {
                             id: 0,
                             rag_api_url: e.target.value,
                             rag_api_key: "",
+                            rag_token: "adme_rag_secret_987654321",
                             is_enabled: false,
                             trigger_delay_seconds: 10,
                             active_channels: [],
@@ -1657,6 +1659,7 @@ export function Settings() {
                             id: 0,
                             rag_api_url: "https://api.adme-ai.com/v1",
                             rag_api_key: e.target.value,
+                            rag_token: "adme_rag_secret_987654321",
                             is_enabled: false,
                             trigger_delay_seconds: 10,
                             active_channels: [],
@@ -1668,6 +1671,37 @@ export function Settings() {
                       }}
                       placeholder="Введіть API ключ"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rag-token">RAG Token (X-RAG-TOKEN)</Label>
+                    <Input
+                      id="rag-token"
+                      type="text"
+                      value={aiSettings?.rag_token || ""}
+                      onChange={(e) => {
+                        if (aiSettings) {
+                          setAiSettings({ ...aiSettings, rag_token: e.target.value });
+                        } else {
+                          setAiSettings({
+                            id: 0,
+                            rag_api_url: "https://api.adme-ai.com/v1",
+                            rag_api_key: "",
+                            rag_token: e.target.value,
+                            is_enabled: false,
+                            trigger_delay_seconds: 10,
+                            active_channels: [],
+                            webhook_secret: "",
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          });
+                        }
+                      }}
+                      placeholder="adme_rag_secret_987654321"
+                    />
+                    <p className="text-sm text-gray-500">
+                      Токен для авторизації вхідних запитів від RAG. Використовується в заголовку X-RAG-TOKEN.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1763,6 +1797,7 @@ export function Settings() {
                           const update: AISettingsUpdate = {
                             rag_api_url: aiSettings.rag_api_url,
                             rag_api_key: aiSettings.rag_api_key,
+                            rag_token: aiSettings.rag_token,
                             is_enabled: aiSettings.is_enabled,
                             trigger_delay_seconds: aiSettings.trigger_delay_seconds,
                             active_channels: aiSettings.active_channels,

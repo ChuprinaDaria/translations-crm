@@ -1218,6 +1218,29 @@ export interface InPostConfig {
   api_key: string;
 }
 
+// AI Integration Types
+export interface AISettings {
+  id: number;
+  rag_api_url: string;
+  rag_api_key: string;
+  rag_token: string;
+  is_enabled: boolean;
+  trigger_delay_seconds: number;
+  active_channels: string[];
+  webhook_secret: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AISettingsUpdate {
+  rag_api_url?: string;
+  rag_api_key?: string;
+  rag_token?: string;
+  is_enabled?: boolean;
+  trigger_delay_seconds?: number;
+  active_channels?: string[];
+}
+
 export interface ManagerSmtpAccount {
   id: number;
   name: string;
@@ -1626,6 +1649,20 @@ export const settingsApi = {
     const formData = new FormData();
     formData.append("api_key", data.api_key);
     return apiFetchMultipart<{ status: string }>("/settings/inpost-config", formData, "POST");
+  },
+
+  // AI Integration API
+  async getAISettings(): Promise<AISettings> {
+    return apiFetch<AISettings>("/ai/settings");
+  },
+  async updateAISettings(data: AISettingsUpdate): Promise<AISettings> {
+    return apiFetch<AISettings>("/ai/settings", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  async getWebhookSecret(): Promise<{ webhook_secret: string }> {
+    return apiFetch<{ webhook_secret: string }>("/ai/settings/webhook-secret");
   },
 };
 

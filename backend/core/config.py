@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_ENABLED: bool = os.getenv("TELEGRAM_ENABLED", "false").lower() == "true"
     
+    # RAG Integration
+    RAG_TOKEN: str = os.getenv("RAG_TOKEN", "adme_rag_secret_987654321")
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

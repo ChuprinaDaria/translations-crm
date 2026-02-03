@@ -28,6 +28,12 @@ class AISettings(Base):
         default="https://api.adme-ai.com/v1"
     )
     rag_api_key: Mapped[str] = mapped_column(String(255), nullable=True, default="")
+    rag_token: Mapped[str] = mapped_column(
+        String(255), 
+        nullable=True, 
+        default="adme_rag_secret_987654321",
+        description="Токен для авторизації вхідних запитів від RAG (X-RAG-TOKEN)"
+    )
     
     # Enable/Disable
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
