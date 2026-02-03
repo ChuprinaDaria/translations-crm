@@ -187,7 +187,7 @@ class InboxQueryParams(BaseModel):
 
 class ClientFromConversation(BaseModel):
     """Схема для створення клієнта з розмови."""
-    conversation_id: UUID
+    # conversation_id НЕ ТРЕБА - він приходить з path параметру!
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
