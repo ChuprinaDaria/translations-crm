@@ -336,12 +336,20 @@ def get_inbox(
 
 @router.get("/conversations/{conversation_id}", response_model=schemas.ConversationWithMessages)
 def get_conversation(
-    conversation_id: UUID,
+    conversation_id: str,  # Приймаємо string для підтримки як UUID так і custom ID
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Get conversation with all messages."""
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    # Спробуємо конвертувати conversation_id в UUID
+    from uuid import UUID as UUID_type
+    try:
+        conv_uuid = UUID_type(conversation_id)
+        conversation = db.query(Conversation).filter(Conversation.id == conv_uuid).first()
+    except (ValueError, TypeError):
+        # Якщо не UUID, шукаємо по external_id
+        logger.info(f"conversation_id '{conversation_id}' не є UUID, шукаємо по external_id")
+        conversation = db.query(Conversation).filter(Conversation.external_id == conversation_id).first()
     
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -396,13 +404,21 @@ def get_conversation(
 
 @router.post("/conversations/{conversation_id}/messages", response_model=schemas.MessageRead)
 async def send_message(
-    conversation_id: UUID,
+    conversation_id: str,  # Приймаємо string для підтримки як UUID так і custom ID
     request: schemas.MessageSendRequest,
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Send a message in a conversation."""
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    # Спробуємо конвертувати conversation_id в UUID
+    from uuid import UUID as UUID_type
+    try:
+        conv_uuid = UUID_type(conversation_id)
+        conversation = db.query(Conversation).filter(Conversation.id == conv_uuid).first()
+    except (ValueError, TypeError):
+        # Якщо не UUID, шукаємо по external_id
+        logger.info(f"conversation_id '{conversation_id}' не є UUID, шукаємо по external_id")
+        conversation = db.query(Conversation).filter(Conversation.external_id == conversation_id).first()
     
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -697,13 +713,21 @@ async def assign_manager_to_conversation(
 
 @router.post("/conversations/{conversation_id}/create-client")
 def create_client_from_conversation(
-    conversation_id: UUID,
+    conversation_id: str,  # Приймаємо string для підтримки як UUID так і custom ID від RAG
     data: Optional[schemas.ClientFromConversation] = None,
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Create a client from conversation."""
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    # Спробуємо конвертувати conversation_id в UUID
+    from uuid import UUID as UUID_type
+    try:
+        conv_uuid = UUID_type(conversation_id)
+        conversation = db.query(Conversation).filter(Conversation.id == conv_uuid).first()
+    except (ValueError, TypeError):
+        # Якщо не UUID, шукаємо по external_id (для RAG може бути custom ID)
+        logger.info(f"conversation_id '{conversation_id}' не є UUID, шукаємо по external_id")
+        conversation = db.query(Conversation).filter(Conversation.external_id == conversation_id).first()
     
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
