@@ -1,7 +1,7 @@
 """
 Communications routes - unified inbox endpoints for Telegram, Email, etc.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request, Header, status
 from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, distinct
@@ -16,6 +16,8 @@ import os
 
 from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
+from modules.integrations.dependencies import verify_rag_token
+from fastapi import Header
 from modules.communications.models import (
     Conversation, 
     Message, 
@@ -96,6 +98,55 @@ class MessagesConnectionManager:
 messages_manager = MessagesConnectionManager()
 
 
+# Dependency для альтернативної авторизації (X-RAG-TOKEN або JWT)
+def get_current_user_or_rag(
+    x_rag_token: Optional[str] = Header(None, alias="X-RAG-TOKEN"),
+    db: Session = Depends(get_db),
+    # Використовуємо get_current_user_db як dependency, але обробляємо помилки
+    _jwt_user: Optional[models.User] = Depends(lambda db=Depends(get_db): None),
+) -> Optional[models.User]:
+    """
+    Отримати поточного користувача через X-RAG-TOKEN або JWT.
+    Якщо є валідний X-RAG-TOKEN - повертає None (RAG авторизація).
+    Якщо немає X-RAG-TOKEN - використовує JWT через get_current_user_db.
+    """
+    # Спочатку перевіряємо X-RAG-TOKEN
+    if x_rag_token:
+        try:
+            # Перевіряємо RAG токен напряму
+            from modules.ai_integration.models import AISettings
+            ai_settings = db.query(AISettings).first()
+            
+            if ai_settings and ai_settings.rag_token and x_rag_token == ai_settings.rag_token:
+                logger.info("✅ Авторизація через X-RAG-TOKEN успішна")
+                return None  # RAG авторизація - user=None
+            else:
+                # Невірний RAG токен
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: Invalid RAG Token"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Помилка перевірки RAG токену: {e}")
+            # Якщо помилка перевірки RAG токену, продовжуємо до JWT
+    
+    # Якщо немає X-RAG-TOKEN, використовуємо JWT
+    # Використовуємо get_current_user_db, але обробляємо помилки
+    try:
+        return get_current_user_db(db=db)
+    except HTTPException as jwt_error:
+        # Якщо JWT невалідний і немає RAG токену - помилка
+        if not x_rag_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
+            )
+        # Якщо є RAG токен, але він невалідний, повертаємо помилку RAG токену
+        raise jwt_error
+
+
 # WebSocket endpoint is defined in main.py to avoid middleware issues
 
 
@@ -107,7 +158,7 @@ def get_inbox(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """
     Get unified inbox conversations.
@@ -287,7 +338,7 @@ def get_inbox(
 def get_conversation(
     conversation_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Get conversation with all messages."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -348,7 +399,7 @@ async def send_message(
     conversation_id: UUID,
     request: schemas.MessageSendRequest,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Send a message in a conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -357,30 +408,40 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Conversation not found")
     
     # Формуємо ім'я автора для ідентифікації менеджера
-    if user.first_name and user.last_name:
-        author_name = f"{user.first_name} {user.last_name}"
-    elif user.first_name:
-        author_name = user.first_name
+    # Якщо user=None (RAG авторизація), використовуємо дефолтні значення
+    if user:
+        if user.first_name and user.last_name:
+            author_name = f"{user.first_name} {user.last_name}"
+        elif user.first_name:
+            author_name = user.first_name
+        else:
+            author_name = user.email
+        
+        # Додаємо роль до імені для ідентифікації
+        user_role_str = user.role or "MANAGER"
+        try:
+            from modules.auth.models import UserRole
+            user_role = UserRole(user_role_str.upper())
+            role_label = {
+                UserRole.OWNER: "Власник",
+                UserRole.ACCOUNTANT: "Бухгалтер",
+                UserRole.MANAGER: "Менеджер"
+            }.get(user_role, "Менеджер")
+            author_display = f"{author_name} ({role_label})"
+        except (ValueError, ImportError):
+            author_display = f"{author_name} (Менеджер)"
+        
+        user_id_str = str(user.id)
     else:
-        author_name = user.email
-    
-    # Додаємо роль до імені для ідентифікації
-    user_role_str = user.role or "MANAGER"
-    try:
-        from modules.auth.models import UserRole
-        user_role = UserRole(user_role_str.upper())
-        role_label = {
-            UserRole.OWNER: "Власник",
-            UserRole.ACCOUNTANT: "Бухгалтер",
-            UserRole.MANAGER: "Менеджер"
-        }.get(user_role, "Менеджер")
-        author_display = f"{author_name} ({role_label})"
-    except (ValueError, ImportError):
-        author_display = f"{author_name} (Менеджер)"
+        # RAG авторизація - використовуємо дефолтні значення
+        author_name = "AI Assistant"
+        author_display = "AI Assistant (RAG)"
+        user_role_str = "AI"
+        user_id_str = "ai-rag-system"
     
     # Створюємо meta_data з інформацією про автора
     meta_data = {
-        "author_id": str(user.id),
+        "author_id": user_id_str,
         "author_name": author_name,
         "author_display": author_display,
         "author_role": user_role_str,
@@ -388,9 +449,9 @@ async def send_message(
     if request.meta_data:
         meta_data.update(request.meta_data)
     
-    # Автоматично призначаємо менеджера при першій відповіді
+    # Автоматично призначаємо менеджера при першій відповіді (тільки для user, не для RAG)
     from datetime import datetime, timezone
-    if not conversation.assigned_manager_id:
+    if user and not conversation.assigned_manager_id:
         conversation.assigned_manager_id = user.id
         logger.info(f"Assigned manager {user.id} to conversation {conversation_id}")
     
@@ -507,7 +568,7 @@ async def send_message(
 def mark_conversation_read(
     conversation_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Mark all messages in conversation as read."""
     db.query(Message).filter(
@@ -525,7 +586,7 @@ def mark_conversation_read(
 def archive_conversation(
     conversation_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Archive a conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -536,7 +597,10 @@ def archive_conversation(
     conversation.is_archived = True
     db.commit()
     
-    logger.info(f"Conversation {conversation_id} archived by user {user.id}")
+    if user:
+        logger.info(f"Conversation {conversation_id} archived by user {user.id}")
+    else:
+        logger.info(f"Conversation {conversation_id} archived by RAG")
     
     return {"status": "ok", "conversation_id": str(conversation_id), "is_archived": True}
 
@@ -545,7 +609,7 @@ def archive_conversation(
 def unarchive_conversation(
     conversation_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Unarchive a conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -556,7 +620,10 @@ def unarchive_conversation(
     conversation.is_archived = False
     db.commit()
     
-    logger.info(f"Conversation {conversation_id} unarchived by user {user.id}")
+    if user:
+        logger.info(f"Conversation {conversation_id} unarchived by user {user.id}")
+    else:
+        logger.info(f"Conversation {conversation_id} unarchived by RAG")
     
     return {"status": "ok", "conversation_id": str(conversation_id), "is_archived": False}
 
@@ -565,7 +632,7 @@ def unarchive_conversation(
 async def delete_message(
     message_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Delete a message by ID."""
     message = db.query(Message).filter(Message.id == message_id).first()
@@ -579,7 +646,10 @@ async def delete_message(
     db.delete(message)
     db.commit()
     
-    logger.info(f"Message {message_id} deleted by user {user.id}")
+    if user:
+        logger.info(f"Message {message_id} deleted by user {user.id}")
+    else:
+        logger.info(f"Message {message_id} deleted by RAG")
     
     # Notify via WebSocket
     await notify_message_deleted(message_id, conversation_id)
@@ -591,7 +661,7 @@ async def delete_message(
 async def assign_manager_to_conversation(
     conversation_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Assign current user as manager to conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -621,7 +691,7 @@ async def assign_manager_to_conversation(
     return {
         "status": "ok",
         "assigned_manager_id": str(conversation.assigned_manager_id),
-        "assigned": conversation.assigned_manager_id == user.id,
+        "assigned": conversation.assigned_manager_id == user.id if user else False,
     }
 
 
@@ -630,7 +700,7 @@ def create_client_from_conversation(
     conversation_id: UUID,
     data: Optional[schemas.ClientFromConversation] = None,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Create a client from conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -673,7 +743,7 @@ def link_client_to_conversation(
     conversation_id: UUID,
     client_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Link an existing client to conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -699,7 +769,7 @@ def quick_action(
     conversation_id: UUID,
     request: schemas.QuickActionRequest,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Handle quick actions on conversation."""
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -762,7 +832,7 @@ ALLOWED_TYPES = {
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Upload a file attachment for messages."""
     # Validate content type
@@ -884,7 +954,7 @@ async def create_payment_link(
     order_id: UUID,
     request: PaymentLinkRequest,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Create Stripe payment link for order."""
     from modules.crm.models import Order
@@ -957,7 +1027,7 @@ async def create_payment_link(
 async def get_tracking(
     order_id: UUID,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Get InPost tracking number for order."""
     from modules.crm.models import Order
@@ -1023,7 +1093,7 @@ async def update_client_contact(
     client_id: UUID,
     data: dict = Body(...),
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Update client email or phone and optionally link conversation."""
     from modules.crm.models import Client
@@ -1079,7 +1149,7 @@ async def add_file_to_order(
     order_id: UUID,
     request: AddFileRequest,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Add file to order."""
     from modules.crm.models import Order
@@ -1116,7 +1186,7 @@ async def add_address_to_order(
     order_id: UUID,
     request: AddAddressRequest,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user_db),
+    user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Add address or paczkomat to order."""
     from modules.crm.models import Order
