@@ -19,6 +19,23 @@ services:
     networks:
       - crm_translations_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: crm_translations_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - crm_translations_redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    networks:
+      - crm_translations_network
+
   backend:
     build: ./backend
     container_name: crm_translations_backend
@@ -39,6 +56,8 @@ services:
       - ./backend/uploads:/app/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -93,6 +112,68 @@ services:
       retries: 3
       start_period: 10s
 
+  celery_worker:
+    build: ./backend
+    container_name: crm_translations_celery_worker
+    networks:
+      - crm_translations_network
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - APP_ENV=${APP_ENV:-prod}
+      - REDIS_URL=${REDIS_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    working_dir: /app
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  celery_beat:
+    build: ./backend
+    container_name: crm_translations_celery_beat
+    networks:
+      - crm_translations_network
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - APP_ENV=${APP_ENV:-prod}
+      - REDIS_URL=${REDIS_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    working_dir: /app
+    command: celery -A tasks.celery_app beat --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep '[c]elery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   nginx:
     image: nginx:alpine
     container_name: crm_translations_nginx
@@ -109,6 +190,7 @@ services:
 
 volumes:
   crm_translations_postgres_data:
+  crm_translations_redis_data:
 
 networks:
   crm_translations_network:

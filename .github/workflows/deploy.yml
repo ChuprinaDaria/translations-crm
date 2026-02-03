@@ -146,6 +146,14 @@ jobs:
               
               # Додаємо нові змінні якщо їх немає
               grep -q "^APP_ENV=" .env || echo "APP_ENV=prod" >> .env
+              [ -n "${{ secrets.REDIS_URL }}" ] && grep -q "^REDIS_URL=" .env || echo "REDIS_URL=${{ secrets.REDIS_URL }}" >> .env || true
+              [ -n "${{ secrets.FRONTEND_URL }}" ] && grep -q "^FRONTEND_URL=" .env || echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env || true
+              [ -n "${{ secrets.OPENAI_API_KEY }}" ] && grep -q "^OPENAI_API_KEY=" .env || echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env || true
+              [ -n "${{ secrets.ENCRYPTION_KEY }}" ] && grep -q "^ENCRYPTION_KEY=" .env || echo "ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}" >> .env || true
+              [ -n "${{ secrets.WHATSAPP_API_TOKEN }}" ] && grep -q "^WHATSAPP_API_TOKEN=" .env || echo "WHATSAPP_API_TOKEN=${{ secrets.WHATSAPP_API_TOKEN }}" >> .env || true
+              [ -n "${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}" ] && grep -q "^WHATSAPP_PHONE_NUMBER_ID=" .env || echo "WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}" >> .env || true
+              [ -n "${{ secrets.STRIPE_SECRET_KEY }}" ] && grep -q "^STRIPE_SECRET_KEY=" .env || echo "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" >> .env || true
+              [ -n "${{ secrets.STRIPE_PUBLISHABLE_KEY }}" ] && grep -q "^STRIPE_PUBLISHABLE_KEY=" .env || echo "STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}" >> .env || true
             else
               echo "Creating new .env file from GitHub Secrets..."
               cat > .env << EOF
@@ -158,6 +166,11 @@ jobs:
           REDIS_URL=${{ secrets.REDIS_URL }}
           FRONTEND_URL=${{ secrets.FRONTEND_URL }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+          WHATSAPP_API_TOKEN=${{ secrets.WHATSAPP_API_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID=${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
           EOF
             fi
           ENV_SCRIPT
