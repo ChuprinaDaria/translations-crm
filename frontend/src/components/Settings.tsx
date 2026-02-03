@@ -1,5 +1,5 @@
 import React, { useEffect, useState, ChangeEvent } from "react";
-import { UploadCloud, Building2, Plus, Trash2, MapPin, Star, Loader2, Image as ImageIcon, MessageSquare, Mail } from "lucide-react";
+import { UploadCloud, Building2, Plus, Trash2, MapPin, Star, Loader2, Image as ImageIcon, MessageSquare, Mail, Bot } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -23,6 +23,8 @@ import {
   type FacebookConfig,
   type StripeConfig,
   type InPostConfig,
+  type AISettings,
+  type AISettingsUpdate,
 } from "../lib/api";
 import { officesApi, type Office, type OfficeCreate } from "../modules/crm/api/offices";
 
@@ -112,6 +114,11 @@ export function Settings() {
   });
   const [isSavingInPost, setIsSavingInPost] = useState(false);
 
+  // AI Integration state
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isSavingAI, setIsSavingAI] = useState(false);
+
   // Offices state
   const [offices, setOffices] = useState<Office[]>([]);
   const [isLoadingOffices, setIsLoadingOffices] = useState(false);
@@ -187,6 +194,7 @@ export function Settings() {
           facebookConfig,
           stripeConfig,
           inpostConfig,
+          aiSettingsData,
         ] = await Promise.all([
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
@@ -197,6 +205,7 @@ export function Settings() {
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
+          settingsApi.getAISettings().catch(() => null),
         ]);
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
@@ -207,6 +216,22 @@ export function Settings() {
         setFacebook(facebookConfig);
         setStripe(stripeConfig);
         setInpost(inpostConfig);
+        if (aiSettingsData) {
+          setAiSettings(aiSettingsData);
+        } else {
+          // Ініціалізуємо порожні налаштування якщо не знайдено
+          setAiSettings({
+            id: 0,
+            rag_api_url: "https://api.adme-ai.com/v1",
+            rag_api_key: "",
+            is_enabled: false,
+            trigger_delay_seconds: 10,
+            active_channels: [],
+            webhook_secret: "",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
       } catch (error) {
         console.error(error);
       }
@@ -281,7 +306,7 @@ export function Settings() {
       <h1 className="text-2xl text-gray-900">Налаштування</h1>
 
       <Tabs defaultValue="branding" className="w-full">
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 overflow-x-auto flex-nowrap">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <ImageIcon className="w-4 h-4" />
             Брендинг та лого
@@ -317,6 +342,10 @@ export function Settings() {
           <TabsTrigger value="inpost" className="flex items-center gap-2">
             <MapPin className="w-4 h-4" />
             InPost
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="flex items-center gap-2">
+            <Bot className="w-4 h-4" />
+            AI Integration
           </TabsTrigger>
         </TabsList>
 
@@ -1550,6 +1579,217 @@ export function Settings() {
                   {isSavingInPost ? "Збереження..." : "Зберегти InPost"}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* AI Integration Tab */}
+        <TabsContent value="ai" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>AI RAG Integration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingAI ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="ai-enabled"
+                        checked={aiSettings?.is_enabled || false}
+                        onCheckedChange={(checked) => {
+                          if (aiSettings) {
+                            setAiSettings({ ...aiSettings, is_enabled: checked as boolean });
+                          }
+                        }}
+                      />
+                      <Label htmlFor="ai-enabled" className="font-medium">
+                        Увімкнути AI інтеграцію
+                      </Label>
+                    </div>
+                    <p className="text-sm text-gray-500 ml-6">
+                      Дозволити AI автоматично відповідати на повідомлення клієнтів
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rag-api-url">RAG API URL</Label>
+                    <Input
+                      id="rag-api-url"
+                      type="url"
+                      value={aiSettings?.rag_api_url || ""}
+                      onChange={(e) => {
+                        if (aiSettings) {
+                          setAiSettings({ ...aiSettings, rag_api_url: e.target.value });
+                        } else {
+                          setAiSettings({
+                            id: 0,
+                            rag_api_url: e.target.value,
+                            rag_api_key: "",
+                            is_enabled: false,
+                            trigger_delay_seconds: 10,
+                            active_channels: [],
+                            webhook_secret: "",
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          });
+                        }
+                      }}
+                      placeholder="https://api.adme-ai.com/v1"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rag-api-key">RAG API Key</Label>
+                    <Input
+                      id="rag-api-key"
+                      type="password"
+                      value={aiSettings?.rag_api_key || ""}
+                      onChange={(e) => {
+                        if (aiSettings) {
+                          setAiSettings({ ...aiSettings, rag_api_key: e.target.value });
+                        } else {
+                          setAiSettings({
+                            id: 0,
+                            rag_api_url: "https://api.adme-ai.com/v1",
+                            rag_api_key: e.target.value,
+                            is_enabled: false,
+                            trigger_delay_seconds: 10,
+                            active_channels: [],
+                            webhook_secret: "",
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                          });
+                        }
+                      }}
+                      placeholder="Введіть API ключ"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="trigger-delay">Затримка перед відповіддю (секунди)</Label>
+                    <Input
+                      id="trigger-delay"
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={aiSettings?.trigger_delay_seconds || 10}
+                      onChange={(e) => {
+                        if (aiSettings) {
+                          setAiSettings({ ...aiSettings, trigger_delay_seconds: parseInt(e.target.value) || 10 });
+                        }
+                      }}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Час очікування перед відправкою запиту до AI (щоб дозволити менеджеру втрутитися)
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Активні канали</Label>
+                    <div className="space-y-2">
+                      {['telegram', 'whatsapp', 'email', 'instagram', 'facebook'].map((channel) => (
+                        <div key={channel} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`channel-${channel}`}
+                            checked={aiSettings?.active_channels?.includes(channel) || false}
+                            onCheckedChange={(checked) => {
+                              if (aiSettings) {
+                                const channels = aiSettings.active_channels || [];
+                                if (checked) {
+                                  setAiSettings({ ...aiSettings, active_channels: [...channels, channel] });
+                                } else {
+                                  setAiSettings({ ...aiSettings, active_channels: channels.filter(c => c !== channel) });
+                                }
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`channel-${channel}`} className="capitalize">
+                            {channel}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {aiSettings?.webhook_secret && (
+                    <div className="space-y-2">
+                      <Label>Webhook Secret</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          value={aiSettings.webhook_secret}
+                          readOnly
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const { webhook_secret } = await settingsApi.getWebhookSecret();
+                              if (aiSettings) {
+                                setAiSettings({ ...aiSettings, webhook_secret });
+                              }
+                              toast.success("Webhook secret оновлено");
+                            } catch (error) {
+                              toast.error("Не вдалося отримати webhook secret");
+                            }
+                          }}
+                        >
+                          Оновити
+                        </Button>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        Використовується для верифікації webhook запитів від RAG сервісу
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-4">
+                    <Button
+                      type="button"
+                      className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                      disabled={isSavingAI || !aiSettings}
+                      onClick={async () => {
+                        if (!aiSettings) return;
+                        setIsSavingAI(true);
+                        try {
+                          const update: AISettingsUpdate = {
+                            rag_api_url: aiSettings.rag_api_url,
+                            rag_api_key: aiSettings.rag_api_key,
+                            is_enabled: aiSettings.is_enabled,
+                            trigger_delay_seconds: aiSettings.trigger_delay_seconds,
+                            active_channels: aiSettings.active_channels,
+                          };
+                          const updated = await settingsApi.updateAISettings(update);
+                          setAiSettings(updated);
+                          toast.success("AI налаштування збережено");
+                        } catch (error) {
+                          console.error(error);
+                          toast.error("Не вдалося зберегти AI налаштування");
+                        } finally {
+                          setIsSavingAI(false);
+                        }
+                      }}
+                    >
+                      {isSavingAI ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Збереження...
+                        </>
+                      ) : (
+                        "Зберегти налаштування"
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

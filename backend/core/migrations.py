@@ -27,6 +27,7 @@ async def create_missing_tables():
         from modules.communications.models import Conversation, Message
         from modules.notifications.models import Notification, NotificationSettings
         from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog
+        from modules.ai_integration.models import AISettings
         
         # Отримуємо список всіх таблиць з метаданих
         all_tables = Base.metadata.tables.keys()
