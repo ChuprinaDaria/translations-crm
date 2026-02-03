@@ -15,7 +15,7 @@ class LeadData(BaseModel):
     company_name: Optional[str] = Field(None, description="Назва компанії")
     message: Optional[str] = Field(None, description="Повідомлення від клієнта")
     source: Optional[str] = Field(None, description="Джерело ліда")
-    conversation_id: Optional[UUID] = Field(None, description="ID діалогу, якщо є")
+    conversation_id: Optional[str] = Field(None, description="ID діалогу, якщо є (може бути UUID або string)")
     platform: Optional[str] = Field(None, description="Платформа (telegram, whatsapp, email, etc.)")
     external_id: Optional[str] = Field(None, description="Зовнішній ID (Telegram username/phone/chat_id)")
     

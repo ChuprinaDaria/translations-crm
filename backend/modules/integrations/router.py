@@ -105,13 +105,34 @@ async def receive_lead_from_rag(
                 from modules.communications.models import Conversation, PlatformEnum
                 
                 if lead_data.conversation_id:
-                    conversation = db.query(Conversation).filter(
-                        Conversation.id == lead_data.conversation_id
-                    ).first()
-                    if conversation:
-                        conversation.client_id = client.id
-                        db.commit()
-                        logger.info(f"Прив'язано діалог {lead_data.conversation_id} до клієнта {client.id}")
+                    # conversation_id може бути string або UUID
+                    # Спробуємо конвертувати в UUID, якщо це можливо
+                    from uuid import UUID
+                    try:
+                        conversation_uuid = UUID(lead_data.conversation_id) if isinstance(lead_data.conversation_id, str) else lead_data.conversation_id
+                        conversation = db.query(Conversation).filter(
+                            Conversation.id == conversation_uuid
+                        ).first()
+                        if conversation:
+                            conversation.client_id = client.id
+                            db.commit()
+                            logger.info(f"Прив'язано діалог {lead_data.conversation_id} до клієнта {client.id}")
+                    except (ValueError, TypeError) as e:
+                        # Якщо conversation_id не є валідним UUID, шукаємо по external_id + platform
+                        logger.debug(f"conversation_id '{lead_data.conversation_id}' не є валідним UUID, шукаємо по external_id: {e}")
+                        if lead_data.platform and lead_data.external_id:
+                            try:
+                                platform_enum = PlatformEnum(lead_data.platform.lower())
+                                conversation = db.query(Conversation).filter(
+                                    Conversation.platform == platform_enum,
+                                    Conversation.external_id == lead_data.external_id
+                                ).first()
+                                if conversation:
+                                    conversation.client_id = client.id
+                                    db.commit()
+                                    logger.info(f"Прив'язано діалог {lead_data.external_id} ({lead_data.platform}) до клієнта {client.id}")
+                            except ValueError:
+                                pass
                 elif lead_data.platform and lead_data.external_id:
                     try:
                         platform_enum = PlatformEnum(lead_data.platform.lower())
