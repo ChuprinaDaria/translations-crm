@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 import logging
 
-from core.db import get_db
+from core.database import get_db  # Використовуємо синхронну версію для InPostService
 from modules.auth.dependencies import get_current_user_db
 from modules.auth import models as auth_models
 from modules.postal_services.service import InPostService
