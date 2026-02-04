@@ -87,20 +87,42 @@ class AutobotService:
             db_settings.use_ai_reply = settings_data.use_ai_reply
         
         # Оновлюємо робочі години
-        day_mapping = {
-            'monday': settings_data.monday,
-            'tuesday': settings_data.tuesday,
-            'wednesday': settings_data.wednesday,
-            'thursday': settings_data.thursday,
-            'friday': settings_data.friday,
-            'saturday': settings_data.saturday,
-            'sunday': settings_data.sunday,
-        }
+        # Отримуємо поля які були явно передані (exclude_unset=True)
+        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
         
-        for day_name, working_hours in day_mapping.items():
-            if working_hours is not None:
-                setattr(db_settings, f"{day_name}_start", working_hours.start)
-                setattr(db_settings, f"{day_name}_end", working_hours.end)
+        # Отримуємо dict з переданими полями
+        try:
+            passed_fields = settings_data.model_dump(exclude_unset=True)
+        except AttributeError:
+            # Для старіших версій Pydantic
+            passed_fields = settings_data.dict(exclude_unset=True)
+        
+        for day_name in day_names:
+            # Перевіряємо чи поле було явно передано в запиті
+            if day_name in passed_fields:
+                working_hours = passed_fields[day_name]
+                
+                if working_hours is None:
+                    # Неробочий день - очищаємо години
+                    setattr(db_settings, f"{day_name}_start", None)
+                    setattr(db_settings, f"{day_name}_end", None)
+                elif isinstance(working_hours, dict):
+                    # Робочий день - встановлюємо години
+                    if working_hours.get('is_working_day', True) is False:
+                        # Явно вказано що неробочий день
+                        setattr(db_settings, f"{day_name}_start", None)
+                        setattr(db_settings, f"{day_name}_end", None)
+                    else:
+                        setattr(db_settings, f"{day_name}_start", working_hours.get('start'))
+                        setattr(db_settings, f"{day_name}_end", working_hours.get('end'))
+                else:
+                    # WorkingHours об'єкт
+                    if getattr(working_hours, 'is_working_day', True) is False:
+                        setattr(db_settings, f"{day_name}_start", None)
+                        setattr(db_settings, f"{day_name}_end", None)
+                    else:
+                        setattr(db_settings, f"{day_name}_start", working_hours.start)
+                        setattr(db_settings, f"{day_name}_end", working_hours.end)
         
         self.db.commit()
         self.db.refresh(db_settings)
