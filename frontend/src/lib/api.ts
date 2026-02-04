@@ -1215,7 +1215,15 @@ export interface StripeConfig {
 }
 
 export interface InPostConfig {
-  api_key: string;
+  api_key?: string;
+  sandbox_mode?: boolean;
+  sandbox_api_key?: string;
+  webhook_url?: string;
+  webhook_secret?: string;
+  default_sender_email?: string;
+  default_sender_phone?: string;
+  default_sender_name?: string;
+  is_enabled?: boolean;
 }
 
 // AI Integration Types
@@ -1643,12 +1651,13 @@ export const settingsApi = {
 
   // InPost API
   async getInPostConfig(): Promise<InPostConfig> {
-    return apiFetch<InPostConfig>("/settings/inpost-config");
+    return apiFetch<InPostConfig>("/postal-services/inpost/settings");
   },
-  async updateInPostConfig(data: InPostConfig): Promise<{ status: string }> {
-    const formData = new FormData();
-    formData.append("api_key", data.api_key);
-    return apiFetchMultipart<{ status: string }>("/settings/inpost-config", formData, "POST");
+  async updateInPostConfig(data: InPostConfig): Promise<InPostConfig> {
+    return apiFetch<InPostConfig>("/postal-services/inpost/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   },
 
   // AI Integration API

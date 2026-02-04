@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from modules.communications.models import Conversation
     from modules.finance.models import Transaction
     from modules.autobot.models import AutobotSettings
+    from modules.postal_services.models import InPostShipment
 
 
 class OrderStatus(str, Enum):
@@ -144,6 +145,7 @@ class Order(Base):
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     timeline_steps: Mapped[list["TimelineStep"]] = relationship("TimelineStep", back_populates="order", lazy="selectin", cascade="all, delete-orphan", order_by="TimelineStep.created_at")
     translation_requests: Mapped[list["TranslationRequest"]] = relationship("TranslationRequest", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
+    inpost_shipments: Mapped[list["InPostShipment"]] = relationship("InPostShipment", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
 
 
 class InternalNote(Base):

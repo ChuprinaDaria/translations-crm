@@ -111,8 +111,17 @@ export function Settings() {
   // InPost state
   const [inpost, setInpost] = useState<InPostConfig>({
     api_key: "",
+    sandbox_mode: false,
+    sandbox_api_key: "",
+    webhook_url: `${API_BASE_URL}/postal-services/inpost/webhook`,
+    webhook_secret: "",
+    default_sender_email: "",
+    default_sender_phone: "",
+    default_sender_name: "",
+    is_enabled: false,
   });
   const [isSavingInPost, setIsSavingInPost] = useState(false);
+  const [isLoadingInPost, setIsLoadingInPost] = useState(false);
 
   // AI Integration state
   const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
@@ -204,7 +213,17 @@ export function Settings() {
           settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: false as boolean, app_secret: "", verify_token: "", page_id: "", page_name: "", business_id: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
-          settingsApi.getInPostConfig().catch(() => ({ api_key: "" })),
+          settingsApi.getInPostConfig().catch(() => ({
+            api_key: "",
+            sandbox_mode: false,
+            sandbox_api_key: "",
+            webhook_url: `${API_BASE_URL}/postal-services/inpost/webhook`,
+            webhook_secret: "",
+            default_sender_email: "",
+            default_sender_phone: "",
+            default_sender_name: "",
+            is_enabled: false,
+          })),
           settingsApi.getAISettings().catch(() => null),
         ]);
         setBranding(brandingData);
@@ -215,7 +234,10 @@ export function Settings() {
         setInstagram(instagramConfig);
         setFacebook(facebookConfig);
         setStripe(stripeConfig);
-        setInpost(inpostConfig);
+        setInpost({
+          ...inpostConfig,
+          webhook_url: inpostConfig.webhook_url || `${API_BASE_URL}/postal-services/inpost/webhook`,
+        });
         if (aiSettingsData) {
           setAiSettings(aiSettingsData);
         } else {
@@ -1548,18 +1570,163 @@ export function Settings() {
           <Card>
             <CardHeader>
               <CardTitle>InPost API налаштування</CardTitle>
+              <p className="text-sm text-gray-500 mt-2">
+                Налаштування інтеграції з InPost для автоматичного створення та відстеження відправлень
+              </p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Enable/Disable */}
               <div className="space-y-2">
-                <Label htmlFor="inpost-api-key">API Key</Label>
-                <Input
-                  id="inpost-api-key"
-                  type="password"
-                  value={inpost.api_key}
-                  onChange={(e) => setInpost({ ...inpost, api_key: e.target.value })}
-                />
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="inpost-enabled"
+                    checked={inpost.is_enabled || false}
+                    onCheckedChange={(checked) => setInpost({ ...inpost, is_enabled: checked as boolean })}
+                  />
+                  <Label htmlFor="inpost-enabled" className="font-medium">
+                    Увімкнути InPost інтеграцію
+                  </Label>
+                </div>
+                <p className="text-sm text-gray-500 ml-6">
+                  Дозволити створення та відстеження відправлень через InPost API
+                </p>
               </div>
-              <div className="flex justify-end">
+
+              {/* API Configuration */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-sm font-semibold">API налаштування</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-api-key">
+                    Production API Key (Organization Token)
+                  </Label>
+                  <Input
+                    id="inpost-api-key"
+                    type="password"
+                    placeholder="Введіть ваш InPost API ключ"
+                    value={inpost.api_key || ""}
+                    onChange={(e) => setInpost({ ...inpost, api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Отримайте ключ у вашому InPost Organization панелі
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="inpost-sandbox"
+                      checked={inpost.sandbox_mode || false}
+                      onCheckedChange={(checked) => setInpost({ ...inpost, sandbox_mode: checked as boolean })}
+                    />
+                    <Label htmlFor="inpost-sandbox">
+                      Використовувати Sandbox режим (тестування)
+                    </Label>
+                  </div>
+                </div>
+
+                {inpost.sandbox_mode && (
+                  <div className="space-y-2 ml-6">
+                    <Label htmlFor="inpost-sandbox-key">
+                      Sandbox API Key
+                    </Label>
+                    <Input
+                      id="inpost-sandbox-key"
+                      type="password"
+                      placeholder="Введіть ваш Sandbox API ключ"
+                      value={inpost.sandbox_api_key || ""}
+                      onChange={(e) => setInpost({ ...inpost, sandbox_api_key: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Webhook Configuration */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-sm font-semibold">Webhook налаштування</h3>
+                <p className="text-sm text-gray-500">
+                  Налаштуйте webhook для отримання оновлень статусу відправлень в реальному часі
+                </p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-webhook-url">
+                    Webhook URL
+                  </Label>
+                  <Input
+                    id="inpost-webhook-url"
+                    type="url"
+                    placeholder="https://your-domain.com/api/v1/postal-services/inpost/webhook"
+                    value={inpost.webhook_url || ""}
+                    onChange={(e) => setInpost({ ...inpost, webhook_url: e.target.value })}
+                    disabled
+                  />
+                  <p className="text-xs text-gray-500">
+                    Використовуйте цей URL у налаштуваннях InPost Organization
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-webhook-secret">
+                    Webhook Secret
+                  </Label>
+                  <Input
+                    id="inpost-webhook-secret"
+                    type="password"
+                    placeholder="Секретний ключ для перевірки webhook"
+                    value={inpost.webhook_secret || ""}
+                    onChange={(e) => setInpost({ ...inpost, webhook_secret: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Default Sender Information */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-sm font-semibold">Відправник за замовчуванням</h3>
+                <p className="text-sm text-gray-500">
+                  Ці дані будуть використані як відправник для всіх відправлень
+                </p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-sender-name">
+                    Ім'я відправника
+                  </Label>
+                  <Input
+                    id="inpost-sender-name"
+                    type="text"
+                    placeholder="Назва компанії або ім'я"
+                    value={inpost.default_sender_name || ""}
+                    onChange={(e) => setInpost({ ...inpost, default_sender_name: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-sender-email">
+                    Email відправника
+                  </Label>
+                  <Input
+                    id="inpost-sender-email"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={inpost.default_sender_email || ""}
+                    onChange={(e) => setInpost({ ...inpost, default_sender_email: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="inpost-sender-phone">
+                    Телефон відправника
+                  </Label>
+                  <Input
+                    id="inpost-sender-phone"
+                    type="tel"
+                    placeholder="+48123456789"
+                    value={inpost.default_sender_phone || ""}
+                    onChange={(e) => setInpost({ ...inpost, default_sender_phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t pt-4">
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
@@ -1577,7 +1744,7 @@ export function Settings() {
                     }
                   }}
                 >
-                  {isSavingInPost ? "Збереження..." : "Зберегти InPost"}
+                  {isSavingInPost ? "Збереження..." : "Зберегти InPost налаштування"}
                 </Button>
               </div>
             </CardContent>

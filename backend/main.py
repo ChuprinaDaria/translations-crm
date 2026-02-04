@@ -27,6 +27,8 @@ from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog
 from modules.ai_integration.router import router as ai_router
 from modules.ai_integration.models import AISettings
 from modules.integrations.router import router as integrations_router
+from modules.postal_services.router import router as postal_services_router
+from modules.postal_services.models import InPostShipment, InPostSettings
 from routes import router as legacy_router
 # Імпортуємо моделі з routes для автоматичного створення таблиць
 import models  # noqa: F401
@@ -125,6 +127,7 @@ app.include_router(audio_notes_router, prefix="/api/v1")
 app.include_router(autobot_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
+app.include_router(postal_services_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
 
 
