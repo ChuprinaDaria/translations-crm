@@ -127,12 +127,19 @@ export function MessageBubble({
     if (!isOutbound && message.content) {
       const detected: DetectedData[] = [];
 
-      // Email detection
+      // Email detection - з дедуплікацією (lowercase)
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
       const emails = message.content.match(emailRegex);
       if (emails) {
+        const uniqueEmails = new Map<string, string>(); // lowercase -> original
         emails.forEach(email => {
-          detected.push({ type: 'email', value: email });
+          const lower = email.toLowerCase();
+          if (!uniqueEmails.has(lower)) {
+            uniqueEmails.set(lower, email);
+          }
+        });
+        uniqueEmails.forEach((original) => {
+          detected.push({ type: 'email', value: original });
         });
       }
 
@@ -161,43 +168,42 @@ export function MessageBubble({
         /\+\d{1,3}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{0,4}/g,
       ];
 
-      // Збираємо всі знайдені телефони
-      const phones: string[] = [];
+      // Збираємо всі знайдені телефони з нормалізацією
+      const normalizedPhones = new Map<string, string>(); // normalized -> original
       phonePatterns.forEach(pattern => {
         const matches = message.content.match(pattern);
         if (matches) {
           matches.forEach(phone => {
-            // Нормалізуємо і перевіряємо довжину (мінімум 10 цифр з кодом країни)
-            const digits = phone.replace(/[\s\-\(\)]/g, '');
+            // Нормалізуємо: видаляємо всі символи крім цифр та +
+            let normalized = phone.replace(/[\s\-\(\)]/g, '');
+            const digits = normalized.replace(/\+/g, '');
+            
             // Перевіряємо що це дійсно телефон (мінімум 10 цифр, максимум 15)
-            // І що він починається з + або коду країни
-            if (digits.length >= 10 && digits.length <= 15 && (digits.startsWith('+') || /^[1-9]\d{1,2}/.test(digits))) {
-              phones.push(phone);
+            if (digits.length < 10 || digits.length > 15) return;
+            
+            // Форматуємо: додаємо + якщо потрібно
+            if (!normalized.startsWith('+')) {
+              if (/^[1-9]\d{1,2}/.test(normalized)) {
+                normalized = `+${normalized}`;
+              } else {
+                return; // Пропускаємо телефони без коду країни
+              }
+            }
+            
+            // Зберігаємо тільки унікальні нормалізовані номери
+            if (!normalizedPhones.has(normalized)) {
+              normalizedPhones.set(normalized, phone);
             }
           });
         }
       });
 
-      // Унікальні телефони та нормалізація
-      const uniquePhones = [...new Set(phones)];
-      uniquePhones.forEach(phone => {
-        const normalized = phone.replace(/[\s-]/g, '');
-        // Якщо телефон починається з коду країни без +, додаємо +
-        let formatted = normalized;
-        if (normalized.startsWith('48') && !normalized.startsWith('+')) {
-          formatted = `+${normalized}`;
-        } else if (!normalized.startsWith('+') && /^[1-9]\d{1,2}/.test(normalized)) {
-          // Якщо починається з коду країни без +, додаємо +
-          formatted = `+${normalized}`;
-        } else if (!normalized.startsWith('+')) {
-          // Пропускаємо телефони без коду країни
-          return;
-        }
-        
+      // Додаємо унікальні телефони до detected
+      normalizedPhones.forEach((original, formatted) => {
         detected.push({ 
           type: 'phone', 
           value: formatted,
-          original: phone 
+          original: original 
         });
       });
 
@@ -505,7 +511,15 @@ export function MessageBubble({
           
           {/* Text content - hide placeholder text for media messages */}
           {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
-            (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) ? (
+            // Для email з HTML контентом в meta_data - рендеримо HTML напряму
+            platform === 'email' && message.meta_data?.html_content ? (
+              <div 
+                className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all email-html-content"
+                dangerouslySetInnerHTML={{ 
+                  __html: message.meta_data.html_content
+                }}
+              />
+            ) : (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) ? (
               <div 
                 className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all"
                 dangerouslySetInnerHTML={{ 

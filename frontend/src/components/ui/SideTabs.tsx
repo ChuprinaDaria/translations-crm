@@ -67,71 +67,63 @@ export function SideTabs({
         className
       )}
     >
-      {/* Контейнер на всю висоту */}
-      <div className="h-full w-full flex flex-col">
-        
-        {/* Таби та Quick Actions — починаються зверху, йдуть вниз */}
-        <div className="flex flex-col gap-1 p-1 pt-2 shrink-0">
-          {/* Основні таби */}
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            const colors = getTabColors();
-            const Icon = tab.icon;
-            const isDisabled = tab.disabled;
+      {/* Контейнер - таби вгорі */}
+      <div className="flex flex-col gap-1 p-1 pt-0">
+        {/* Основні таби */}
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const colors = getTabColors();
+          const Icon = tab.icon;
+          const isDisabled = tab.disabled;
 
-            return (
-              <button
-                key={tab.id}
-                onClick={() => !isDisabled && handleTabClick(tab.id)}
-                disabled={isDisabled}
-                title={tab.label}
-                className={cn(
-                  'w-12 h-12 flex items-center justify-center',
-                  'transition-all duration-200 ease-out',
-                  'rounded-lg',
-                  isDisabled ? 'cursor-not-allowed' : 'cursor-pointer',
-                  isActive ? colors.bgActive : colors.bg,
-                  colors.text,
-                  isActive && 'shadow-md',
-                  !isActive && !isDisabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
-                  isDisabled && 'opacity-50'
-                )}
-              >
-                <Icon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
-              </button>
-            );
-          })}
+          return (
+            <button
+              key={tab.id}
+              onClick={() => !isDisabled && handleTabClick(tab.id)}
+              disabled={isDisabled}
+              title={tab.label}
+              className={cn(
+                'w-12 h-12 flex items-center justify-center',
+                'transition-all duration-200 ease-out',
+                'rounded-lg',
+                isDisabled ? 'cursor-not-allowed' : 'cursor-pointer',
+                isActive ? colors.bgActive : colors.bg,
+                colors.text,
+                isActive && 'shadow-md',
+                !isActive && !isDisabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
+                isDisabled && 'opacity-50'
+              )}
+            >
+              <Icon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
+            </button>
+          );
+        })}
 
-          {/* Quick Actions — в тому ж списку, як інші таби */}
-          {quickActions && quickActions.length > 0 && quickActions.map((action) => {
-            const ActionIcon = action.icon;
-            return (
-              <button
-                key={action.id}
-                type="button"
-                title={action.label}
-                onClick={action.onClick}
-                disabled={action.disabled}
-                className={cn(
-                  'w-12 h-12 flex items-center justify-center',
-                  'transition-all duration-200 ease-out',
-                  'rounded-lg',
-                  'bg-white hover:bg-gray-50',
-                  'text-gray-600',
-                  'cursor-pointer',
-                  !action.disabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-              >
-                <ActionIcon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
-              </button>
-            );
-          })}
-        </div>
-        
-        {/* Пустий простір — заповнює решту висоти */}
-        <div className="flex-1" />
-        
+        {/* Quick Actions — в тому ж списку, як інші таби */}
+        {quickActions && quickActions.length > 0 && quickActions.map((action) => {
+          const ActionIcon = action.icon;
+          return (
+            <button
+              key={action.id}
+              type="button"
+              title={action.label}
+              onClick={action.onClick}
+              disabled={action.disabled}
+              className={cn(
+                'w-12 h-12 flex items-center justify-center',
+                'transition-all duration-200 ease-out',
+                'rounded-lg',
+                'bg-white hover:bg-gray-50',
+                'text-gray-600',
+                'cursor-pointer',
+                !action.disabled && (position === 'right' ? 'hover:-translate-x-1' : 'hover:translate-x-1'),
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+            >
+              <ActionIcon className="w-5 h-5" style={{ color: 'rgb(55, 65, 81)' }} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );

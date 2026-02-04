@@ -176,3 +176,50 @@
   transition: background-color 100ms ease, box-shadow 100ms ease;
 }
 
+/* Email HTML content styles */
+.email-html-content {
+  max-width: 100%;
+  overflow-x: auto;
+  word-break: break-word;
+}
+
+.email-html-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-html-content table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.email-html-content td,
+.email-html-content th {
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.email-html-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.email-html-content a:hover {
+  color: #1d4ed8;
+}
+
+.email-html-content blockquote {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #6b7280;
+}
+
+.email-html-content pre,
+.email-html-content code {
+  background-color: #f3f4f6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.875em;
+}
+
