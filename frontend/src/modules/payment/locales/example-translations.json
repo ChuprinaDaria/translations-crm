@@ -1,0 +1,76 @@
+{
+  "payment": {
+    "settings": {
+      "title": "Payment Settings",
+      "description": "Configure Stripe and Przelewy24 integration",
+      "configuration": "Configuration",
+      "general": "General",
+      "generalSettings": "General Settings",
+      "generalDescription": "Default currency and common settings",
+      "stripeDescription": "Configure Stripe for international payments",
+      "p24Description": "Configure Przelewy24 for Polish market",
+      "publicKey": "Public Key",
+      "secretKey": "Secret Key",
+      "webhookSecret": "Webhook Secret",
+      "merchantId": "Merchant ID",
+      "posId": "POS ID",
+      "crcKey": "CRC Key",
+      "apiKey": "API Key",
+      "reportKey": "Report Key (klucz do raportów)",
+      "useSandbox": "Use Sandbox Mode",
+      "sandboxMode": "⚠️ Sandbox mode is enabled - test environment",
+      "productionMode": "✅ Production mode - live transactions",
+      "defaultCurrency": "Default Currency",
+      "currencyHint": "ISO 4217 currency code (e.g., PLN, EUR, USD)",
+      "testConnection": "Test Connection",
+      "connected": "Connected",
+      "notConnected": "Not Connected",
+      "connectionSuccess": "Successfully connected to {{provider}}",
+      "connectionFailed": "Failed to connect to {{provider}}",
+      "updated": "Payment settings updated successfully",
+      "updateError": "Failed to update payment settings"
+    },
+    "modal": {
+      "title": "Create Payment",
+      "description": "Generate payment link for customer",
+      "amount": "Amount",
+      "provider": "Payment Provider",
+      "selectProvider": "Select Payment Provider",
+      "description": "Description",
+      "descriptionPlaceholder": "Payment description...",
+      "customer": "Customer",
+      "email": "Email",
+      "created": "Payment created successfully",
+      "redirecting": "Redirecting to payment page...",
+      "error": "Failed to create payment",
+      "invalidAmount": "Amount must be greater than 0",
+      "noProvidersEnabled": "No payment providers are enabled. Please configure payment settings first.",
+      "stripeInfo": "Customer will be redirected to Stripe Checkout",
+      "p24Info": "Customer will be redirected to Przelewy24 payment page",
+      "createPayment": "Create Payment"
+    },
+    "sendLink": {
+      "button": "Send Payment Link",
+      "title": "Generate Payment Link",
+      "description": "Create payment link to send to customer",
+      "generate": "Generate Link",
+      "created": "Payment link created",
+      "copyOrSend": "Copy link or send it to customer",
+      "error": "Failed to create payment link",
+      "generatedLink": "Payment Link",
+      "copyToClipboard": "Copy to clipboard",
+      "copied": "Link copied to clipboard",
+      "copyError": "Failed to copy link",
+      "success": "Payment link generated successfully!",
+      "shareInstructions": "Share this link with customer via email, messenger, or any other channel.",
+      "openLink": "Open Link"
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "optional": "optional"
+  }
+}
+

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from modules.finance.models import Transaction
     from modules.autobot.models import AutobotSettings
     from modules.postal_services.models import InPostShipment
+    from modules.payment.models import PaymentTransaction
 
 
 class OrderStatus(str, Enum):
@@ -143,6 +144,7 @@ class Order(Base):
     manager: Mapped["User"] = relationship("User", back_populates="orders", lazy="joined")
     office: Mapped["Office | None"] = relationship("Office", back_populates="orders", lazy="joined")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
+    payment_transactions: Mapped[list["PaymentTransaction"]] = relationship("PaymentTransaction", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     timeline_steps: Mapped[list["TimelineStep"]] = relationship("TimelineStep", back_populates="order", lazy="selectin", cascade="all, delete-orphan", order_by="TimelineStep.created_at")
     translation_requests: Mapped[list["TranslationRequest"]] = relationship("TranslationRequest", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     inpost_shipments: Mapped[list["InPostShipment"]] = relationship("InPostShipment", back_populates="order", lazy="selectin", cascade="all, delete-orphan")

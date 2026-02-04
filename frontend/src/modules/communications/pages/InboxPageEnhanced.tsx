@@ -1319,7 +1319,7 @@ export function InboxPageEnhanced() {
 
       {/* Права частина: Бокова панель з табами - ПОЗА ErrorBoundary */}
       {!isMobile && (
-        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center py-4 z-[100]">
+        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
           <SideTabs
             tabs={inboxTabs}
             activeTab={isSidebarOpen ? 'sidebar' : sidePanelTab}

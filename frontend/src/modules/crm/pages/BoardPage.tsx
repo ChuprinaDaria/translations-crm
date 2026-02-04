@@ -602,9 +602,9 @@ export function BoardPage() {
 
       </main>
 
-      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      {/* Права частина: Бокова панель (від header до footer) */}
       {selectedOrder && (
-        <aside className="fixed right-0 top-0 w-[64px] border-l bg-white flex flex-col items-center py-4 h-screen z-[70]">
+        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
           <SideTabs
             tabs={ORDER_SIDE_TABS}
             activeTab={sidePanelTab}

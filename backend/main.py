@@ -12,6 +12,8 @@ from modules.crm.router import router as crm_router
 from modules.crm.models import Client, Order, InternalNote, TimelineStep, Translator, TranslatorLanguage, TranslationRequest, Office, Language, Specialization, TranslatorLanguageRate
 from modules.finance.router import router as finance_router
 from modules.finance.models import Transaction
+from modules.payment.router import router as payment_router
+from modules.payment.models import PaymentSettings, PaymentTransaction, PaymentLink
 from modules.communications.router import router as communications_router, messages_manager
 from modules.communications.router_telegram_webhook import router as telegram_webhook_router
 from modules.communications.models import Conversation, Message
@@ -118,6 +120,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_router, prefix="/auth")
 app.include_router(crm_router, prefix="/api/v1/crm")
 app.include_router(finance_router, prefix="/api/v1/finance")
+app.include_router(payment_router, prefix="/api/v1")
 app.include_router(communications_router, prefix="/api/v1/communications")
 app.include_router(telegram_webhook_router, prefix="/api/v1/communications")
 app.include_router(notifications_router, prefix="/api/v1/notifications")

@@ -1,4 +1,39 @@
 /**
+ * Санітизує HTML email контент
+ * Видаляє <style>, <script> теги та їх вміст
+ * Залишає тільки безпечний HTML для рендерингу
+ */
+export function sanitizeEmailHtml(html: string): string {
+  if (!html) return '';
+  
+  let sanitized = html;
+  
+  // Видаляємо <style>...</style> теги разом з вмістом
+  sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  
+  // Видаляємо <script>...</script> теги разом з вмістом
+  sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  
+  // Видаляємо коментарі <!--...--> (часто містять CSS для Outlook)
+  sanitized = sanitized.replace(/<!--[\s\S]*?-->/g, '');
+  
+  // Видаляємо inline style атрибути з mso-* (Microsoft Office стилі)
+  sanitized = sanitized.replace(/mso-[^;:"']+:[^;:"']+;?/gi, '');
+  
+  // Видаляємо атрибути xmlns (XML namespace)
+  sanitized = sanitized.replace(/\sxmlns[^=]*="[^"]*"/gi, '');
+  
+  // Видаляємо <o:p> та інші Office теги
+  sanitized = sanitized.replace(/<\/?o:[^>]*>/gi, '');
+  sanitized = sanitized.replace(/<\/?v:[^>]*>/gi, '');
+  
+  // Видаляємо порожні теги що залишились
+  sanitized = sanitized.replace(/<(\w+)[^>]*>\s*<\/\1>/gi, '');
+  
+  return sanitized;
+}
+
+/**
  * Конвертує plain text email в HTML
  * Обробляє:
  * - **жирний текст** → <strong>

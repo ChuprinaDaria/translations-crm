@@ -2,7 +2,7 @@
 Postal Services Models - InPost shipments and tracking.
 """
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from sqlalchemy import String, Boolean, Integer, Text, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.types import JSON
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
@@ -12,6 +12,9 @@ from uuid import UUID, uuid4
 import enum
 
 from core.db import Base
+
+if TYPE_CHECKING:
+    from modules.crm.models import Order
 
 
 class ShipmentStatus(str, enum.Enum):
@@ -54,7 +57,7 @@ class InPostShipment(Base):
     # Order reference
     order_id: Mapped[Optional[UUID]] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("orders.id", ondelete="CASCADE"),
+        ForeignKey("crm_orders.id", ondelete="CASCADE"),
         nullable=True,
         index=True
     )

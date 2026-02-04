@@ -67,7 +67,7 @@ export function SideTabs({
         className
       )}
     >
-      {/* Контейнер - таби вгорі */}
+      {/* Контейнер - таби вгорі, одразу під header */}
       <div className="flex flex-col gap-1 p-1 pt-0">
         {/* Основні таби */}
         {tabs.map((tab) => {

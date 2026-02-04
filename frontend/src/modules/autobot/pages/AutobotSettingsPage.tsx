@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Switch } from '../../../components/ui/switch';
@@ -24,12 +24,36 @@ import { MessageEditor } from '../components/MessageEditor';
 import { autobotApi, type AutobotSettings, type AutobotStatus } from '../api/autobot.api';
 import { officesApi } from '../../crm/api/offices';
 
+// Debounce hook для автозбереження
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export function AutobotSettingsPage() {
   const [officeId, setOfficeId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AutobotSettings | null>(null);
   const [status, setStatus] = useState<AutobotStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // Для відстеження чи це перше завантаження (щоб не зберігати при ініціалізації)
+  const isInitialLoad = useRef(true);
+  
+  // Debounced settings для автозбереження (1 секунда затримки)
+  const debouncedSettings = useDebounce(settings, 1000);
 
   useEffect(() => {
     loadDefaultOffice();
@@ -55,6 +79,37 @@ export function AutobotSettingsPage() {
       loadData();
     }
   }, [officeId]);
+
+  // Автозбереження при зміні налаштувань (з debounce)
+  useEffect(() => {
+    // Пропускаємо перше завантаження
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+    
+    // Автозберігаємо тільки якщо є зміни та є settings
+    if (debouncedSettings && officeId && hasUnsavedChanges) {
+      autoSave();
+    }
+  }, [debouncedSettings]);
+
+  const autoSave = async () => {
+    if (!settings || !officeId) return;
+    
+    setIsSaving(true);
+    try {
+      await autobotApi.updateSettings(officeId, settings);
+      setHasUnsavedChanges(false);
+      // Тихе збереження - без toast щоб не дратувати
+      console.log('Autobot settings auto-saved');
+    } catch (error: any) {
+      console.error('Auto-save failed:', error);
+      toast.error('Помилка автозбереження');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const loadData = async () => {
     if (!officeId) return;
@@ -124,12 +179,19 @@ https://www.tlumaczeniamt.pl/cennik/
     }
   };
 
+  // Функція для оновлення settings з позначенням незбережених змін
+  const updateSettings = useCallback((newSettings: AutobotSettings) => {
+    setSettings(newSettings);
+    setHasUnsavedChanges(true);
+  }, []);
+
   const handleSave = async () => {
     if (!settings || !officeId) return;
 
     setIsSaving(true);
     try {
       await autobotApi.updateSettings(officeId, settings);
+      setHasUnsavedChanges(false);
       toast.success('Налаштування збережено!');
       loadData(); // Оновити статус
     } catch (error: any) {
@@ -261,18 +323,23 @@ https://www.tlumaczeniamt.pl/cennik/
           {/* Зберегти */}
           <Button 
             onClick={handleSave}
-            disabled={isSaving}
-            className="bg-orange-500 hover:bg-orange-600"
+            disabled={isSaving || !hasUnsavedChanges}
+            className={hasUnsavedChanges ? "bg-orange-500 hover:bg-orange-600" : "bg-emerald-500 hover:bg-emerald-600"}
           >
             {isSaving ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Збереження...
               </>
-            ) : (
+            ) : hasUnsavedChanges ? (
               <>
                 <Save className="w-4 h-4 mr-2" />
                 Зберегти
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Збережено
               </>
             )}
           </Button>
@@ -299,7 +366,7 @@ https://www.tlumaczeniamt.pl/cennik/
         <TabsContent value="hours">
           <WorkingHoursEditor
             settings={settings}
-            onChange={setSettings}
+            onChange={updateSettings}
           />
         </TabsContent>
 
@@ -312,7 +379,7 @@ https://www.tlumaczeniamt.pl/cennik/
         <TabsContent value="message">
           <MessageEditor
             message={settings.auto_reply_message}
-            onChange={(message) => setSettings({ ...settings, auto_reply_message: message })}
+            onChange={(message) => updateSettings({ ...settings, auto_reply_message: message })}
           />
         </TabsContent>
       </Tabs>
@@ -344,7 +411,7 @@ https://www.tlumaczeniamt.pl/cennik/
             <Switch
               checked={settings.use_ai_reply ?? false}
               onCheckedChange={(checked) => 
-                setSettings({ ...settings, use_ai_reply: checked })
+                updateSettings({ ...settings, use_ai_reply: checked })
               }
             />
           </div>
@@ -359,7 +426,7 @@ https://www.tlumaczeniamt.pl/cennik/
             <Switch
               checked={settings.auto_create_client}
               onCheckedChange={(checked) => 
-                setSettings({ ...settings, auto_create_client: checked })
+                updateSettings({ ...settings, auto_create_client: checked })
               }
             />
           </div>
@@ -374,7 +441,7 @@ https://www.tlumaczeniamt.pl/cennik/
             <Switch
               checked={settings.auto_create_order}
               onCheckedChange={(checked) => 
-                setSettings({ ...settings, auto_create_order: checked })
+                updateSettings({ ...settings, auto_create_order: checked })
               }
             />
           </div>
@@ -389,7 +456,7 @@ https://www.tlumaczeniamt.pl/cennik/
             <Switch
               checked={settings.auto_save_files}
               onCheckedChange={(checked) => 
-                setSettings({ ...settings, auto_save_files: checked })
+                updateSettings({ ...settings, auto_save_files: checked })
               }
             />
           </div>

@@ -5,7 +5,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { cn } from '../../../components/ui/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
-import { parseEmailToHtml } from '../utils/emailParser';
+import { parseEmailToHtml, sanitizeEmailHtml } from '../utils/emailParser';
 import { parseMessageToHtml, hasMarkdown } from '../utils/messageParser';
 
 export interface Message {
@@ -516,7 +516,7 @@ export function MessageBubble({
               <div 
                 className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all email-html-content"
                 dangerouslySetInnerHTML={{ 
-                  __html: message.meta_data.html_content
+                  __html: sanitizeEmailHtml(message.meta_data.html_content)
                 }}
               />
             ) : (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) ? (
