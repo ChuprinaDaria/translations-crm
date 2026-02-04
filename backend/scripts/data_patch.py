@@ -21,7 +21,7 @@ from core.database import SessionLocal
 from modules.crm.models import Client
 from modules.communications.models import Conversation, Message, PlatformEnum
 from modules.communications.services.instagram import InstagramService
-from modules.communications.utils.html_sanitizer import html_to_text
+from modules.communications.utils.html_sanitizer import html_to_text, sanitize_html
 import logging
 
 logging.basicConfig(
@@ -179,7 +179,7 @@ def fix_email_messages(db: Session):
                         updated = True
                         logger.debug(f"  Декодовано sender_email: {original[:50]}... -> {decoded[:50]}...")
             
-            # Очистити HTML контент
+            # Очистити HTML контент в message.content
             if msg.content and "<" in msg.content:
                 original_content = msg.content
                 cleaned_content = html_to_text(msg.content)
@@ -187,6 +187,16 @@ def fix_email_messages(db: Session):
                     msg.content = cleaned_content
                     updated = True
                     logger.debug(f"  Очищено HTML контент (довжина: {len(original_content)} -> {len(cleaned_content)})")
+            
+            # Очистити HTML контент в meta_data.html_content (видалити CSS/style теги)
+            if msg.meta_data and "html_content" in msg.meta_data:
+                original_html = msg.meta_data["html_content"]
+                if original_html and ("<style" in original_html.lower() or "<script" in original_html.lower() or "<head" in original_html.lower()):
+                    cleaned_html = sanitize_html(original_html)
+                    if cleaned_html != original_html:
+                        msg.meta_data["html_content"] = cleaned_html
+                        updated = True
+                        logger.debug(f"  Очищено meta_data.html_content (довжина: {len(original_html)} -> {len(cleaned_html)})")
             
             if updated:
                 fixed_count += 1

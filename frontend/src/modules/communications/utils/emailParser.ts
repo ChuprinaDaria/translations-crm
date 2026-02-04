@@ -8,14 +8,29 @@ export function sanitizeEmailHtml(html: string): string {
   
   let sanitized = html;
   
-  // Видаляємо <style>...</style> теги разом з вмістом
+  // Видаляємо <head>...</head> разом з вмістом (там зазвичай стилі)
+  sanitized = sanitized.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+  
+  // Видаляємо <style>...</style> теги разом з вмістом (глобальний пошук)
+  // Використовуємо цикл для видалення всіх вкладених style тегів
+  while (/<style[^>]*>[\s\S]*?<\/style>/gi.test(sanitized)) {
   sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  }
   
   // Видаляємо <script>...</script> теги разом з вмістом
+  while (/<script[^>]*>[\s\S]*?<\/script>/gi.test(sanitized)) {
   sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  }
   
   // Видаляємо коментарі <!--...--> (часто містять CSS для Outlook)
   sanitized = sanitized.replace(/<!--[\s\S]*?-->/g, '');
+  
+  // Видаляємо CSS правила що могли залишитись як текст (наприклад #outlook a { ... })
+  // Це патерн для CSS селекторів з блоками
+  sanitized = sanitized.replace(/[#.\w\-\[\]="',\s]+\{[^}]*\}/g, '');
+  
+  // Видаляємо @media queries та інші @ правила
+  sanitized = sanitized.replace(/@[a-z-]+[^{]*\{[^}]*(\{[^}]*\}[^}]*)*\}/gi, '');
   
   // Видаляємо inline style атрибути з mso-* (Microsoft Office стилі)
   sanitized = sanitized.replace(/mso-[^;:"']+:[^;:"']+;?/gi, '');
@@ -30,7 +45,10 @@ export function sanitizeEmailHtml(html: string): string {
   // Видаляємо порожні теги що залишились
   sanitized = sanitized.replace(/<(\w+)[^>]*>\s*<\/\1>/gi, '');
   
-  return sanitized;
+  // Видаляємо зайві пробіли та переноси рядків
+  sanitized = sanitized.replace(/\n\s*\n\s*\n/g, '\n\n');
+  
+  return sanitized.trim();
 }
 
 /**
