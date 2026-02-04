@@ -167,35 +167,13 @@ def get_inbox(
     - platform: 'telegram', 'whatsapp', 'email', 'facebook', 'instagram'
     - search: search in client name or message content
     
-    ОПТИМІЗОВАНО: Використовує window functions для отримання останнього повідомлення
-    без N+1 запитів.
+    ОПТИМІЗОВАНО: Batch loading клієнтів та останніх повідомлень.
     """
     from sqlalchemy.orm import lazyload
-    from sqlalchemy import text, literal_column
+    from sqlalchemy import text
     from datetime import datetime, timezone, timedelta
     
-    # ========== ОПТИМІЗАЦІЯ: Один запит замість N+1 ==========
-    # Використовуємо підзапит для отримання останнього повідомлення кожної розмови
-    last_message_subquery = db.query(
-        Message.conversation_id,
-        Message.content.label('last_message_content'),
-        Message.direction.label('last_message_direction'),
-        Message.created_at.label('last_message_created_at'),
-        func.row_number().over(
-            partition_by=Message.conversation_id,
-            order_by=desc(Message.created_at)
-        ).label('rn')
-    ).subquery()
-    
-    # Фільтруємо тільки останні повідомлення (rn = 1)
-    last_messages = db.query(
-        last_message_subquery.c.conversation_id,
-        last_message_subquery.c.last_message_content,
-        last_message_subquery.c.last_message_direction,
-        last_message_subquery.c.last_message_created_at,
-    ).filter(last_message_subquery.c.rn == 1).subquery()
-    
-    # Build base query with joins - включаємо останнє повідомлення
+    # Build base query with joins
     query = db.query(
         Conversation.id,
         Conversation.client_id,
@@ -213,15 +191,7 @@ def get_inbox(
             Message.direction == MessageDirection.INBOUND
         ).label('unread_count'),
         func.max(Message.created_at).label('last_message_time'),
-        # Додаємо дані останнього повідомлення з підзапиту
-        last_messages.c.last_message_content,
-        last_messages.c.last_message_direction,
-        last_messages.c.last_message_created_at,
-    ).outerjoin(
-        Message, Message.conversation_id == Conversation.id
-    ).outerjoin(
-        last_messages, last_messages.c.conversation_id == Conversation.id
-    )
+    ).outerjoin(Message, Message.conversation_id == Conversation.id)
     
     # Apply archive filter
     if filter == 'archived':
@@ -265,10 +235,6 @@ def get_inbox(
         Conversation.last_manager_response_at,
         Conversation.is_archived,
         Conversation.last_message_at,
-        # Додаємо колонки останнього повідомлення до GROUP BY
-        last_messages.c.last_message_content,
-        last_messages.c.last_message_direction,
-        last_messages.c.last_message_created_at,
     ]
     if search:
         group_by_cols.extend([Client.id, Client.name, Client.full_name])
@@ -301,14 +267,35 @@ def get_inbox(
     conversations = []
     unread_total = 0
     
-    # Get client IDs for batch loading - ОПТИМІЗОВАНО: один запит для всіх клієнтів
+    # ОПТИМІЗАЦІЯ: Batch loading клієнтів
     client_ids = [r.client_id for r in results if r.client_id]
     clients_map = {}
     if client_ids:
         clients = db.query(Client).filter(Client.id.in_(client_ids)).all()
         clients_map = {c.id: c for c in clients}
     
+    # ОПТИМІЗАЦІЯ: Batch loading останніх повідомлень (один запит замість N)
+    conversation_ids = [r.id for r in results]
+    last_messages_map = {}
+    if conversation_ids:
+        # Використовуємо DISTINCT ON для PostgreSQL - отримуємо останнє повідомлення для кожної розмови
+        from sqlalchemy import text
+        last_messages_query = db.query(Message).filter(
+            Message.conversation_id.in_(conversation_ids)
+        ).order_by(
+            Message.conversation_id,
+            desc(Message.created_at)
+        ).all()
+        
+        # Групуємо по conversation_id, беремо перше (останнє за датою)
+        for msg in last_messages_query:
+            if msg.conversation_id not in last_messages_map:
+                last_messages_map[msg.conversation_id] = msg
+    
     for row in results:
+        # Get last message from map
+        last_message = last_messages_map.get(row.id)
+        
         # Get client name from map
         client_name = None
         if row.client_id and row.client_id in clients_map:
@@ -316,26 +303,22 @@ def get_inbox(
             client_name = getattr(client, 'name', None) or getattr(client, 'full_name', None)
         
         # Перевірка спливючого чату (10 хв без відповіді менеджера)
-        # ОПТИМІЗОВАНО: використовуємо дані з підзапиту замість окремого запиту
         needs_attention = False
-        last_msg_direction = row.last_message_direction
-        last_msg_created_at = row.last_message_created_at
-        
         if row.assigned_manager_id and row.last_manager_response_at:
             # Якщо є остання відповідь менеджера, перевіряємо чи пройшло 10+ хвилин
             time_since_response = datetime.now(timezone.utc) - row.last_manager_response_at
             if time_since_response >= timedelta(minutes=10):
                 # Перевіряємо чи є нові вхідні повідомлення після останньої відповіді
-                if last_msg_direction == MessageDirection.INBOUND.value or last_msg_direction == MessageDirection.INBOUND:
-                    if last_msg_created_at and last_msg_created_at > row.last_manager_response_at:
+                if last_message and last_message.direction == MessageDirection.INBOUND:
+                    if last_message.created_at > row.last_manager_response_at:
                         needs_attention = True
         elif row.assigned_manager_id and not row.last_manager_response_at:
             # Якщо менеджер призначений, але ніколи не відповідав, і є нові повідомлення
-            if last_msg_direction == MessageDirection.INBOUND.value or last_msg_direction == MessageDirection.INBOUND:
+            if last_message and last_message.direction == MessageDirection.INBOUND:
                 needs_attention = True
         
         # Use last_message_at from conversation if available, otherwise from message
-        last_message_at_value = row.last_message_at if hasattr(row, 'last_message_at') and row.last_message_at else last_msg_created_at
+        last_message_at_value = row.last_message_at if hasattr(row, 'last_message_at') and row.last_message_at else (last_message.created_at if last_message else None)
         
         is_archived_value = row.is_archived if hasattr(row, 'is_archived') else False
         
@@ -347,7 +330,7 @@ def get_inbox(
             client_id=row.client_id,
             client_name=client_name,
             unread_count=row.unread_count or 0,
-            last_message=row.last_message_content,  # ОПТИМІЗОВАНО: з підзапиту
+            last_message=last_message.content if last_message else None,
             last_message_at=last_message_at_value,
             updated_at=row.updated_at,
             assigned_manager_id=row.assigned_manager_id,
