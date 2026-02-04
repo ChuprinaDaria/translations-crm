@@ -108,6 +108,16 @@ export function Settings() {
   });
   const [isSavingStripe, setIsSavingStripe] = useState(false);
 
+  // Przelewy24 state
+  const [przelewy24, setPrzelewy24] = useState({
+    merchant_id: "",
+    pos_id: "",
+    crc: "",
+    api_key: "",
+    sandbox: true,
+  });
+  const [isSavingPrzelewy24, setIsSavingPrzelewy24] = useState(false);
+
   // InPost state
   const [inpost, setInpost] = useState<InPostConfig>({
     api_key: "",
@@ -361,6 +371,10 @@ export function Settings() {
           <TabsTrigger value="stripe" className="flex items-center gap-2">
             <Star className="w-4 h-4" />
             Stripe
+          </TabsTrigger>
+          <TabsTrigger value="przelewy24" className="flex items-center gap-2">
+            <Star className="w-4 h-4" />
+            Przelewy24
           </TabsTrigger>
           <TabsTrigger value="inpost" className="flex items-center gap-2">
             <MapPin className="w-4 h-4" />
@@ -1559,6 +1573,123 @@ export function Settings() {
                   }}
                 >
                   {isSavingStripe ? "Збереження..." : "Зберегти Stripe"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Przelewy24 Tab */}
+        <TabsContent value="przelewy24" className="mt-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Przelewy24 API налаштування</CardTitle>
+              <p className="text-sm text-gray-500 mt-2">
+                Налаштування інтеграції з польською платіжною системою Przelewy24
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="p24-sandbox"
+                    checked={przelewy24.sandbox}
+                    onCheckedChange={(checked) => setPrzelewy24({ ...przelewy24, sandbox: checked as boolean })}
+                  />
+                  <Label htmlFor="p24-sandbox" className="font-medium">
+                    Sandbox режим (тестування)
+                  </Label>
+                </div>
+                <p className="text-sm text-gray-500 ml-6">
+                  Використовувати тестове середовище sandbox.przelewy24.pl
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="p24-merchant-id">Merchant ID</Label>
+                  <Input
+                    id="p24-merchant-id"
+                    type="text"
+                    placeholder="Ваш Merchant ID"
+                    value={przelewy24.merchant_id}
+                    onChange={(e) => setPrzelewy24({ ...przelewy24, merchant_id: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    ID магазину з панелі Przelewy24
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="p24-pos-id">POS ID</Label>
+                  <Input
+                    id="p24-pos-id"
+                    type="text"
+                    placeholder="Ваш POS ID (зазвичай = Merchant ID)"
+                    value={przelewy24.pos_id}
+                    onChange={(e) => setPrzelewy24({ ...przelewy24, pos_id: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    ID точки продажу (за замовчуванням = Merchant ID)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="p24-crc">CRC Key</Label>
+                  <Input
+                    id="p24-crc"
+                    type="password"
+                    placeholder="Ваш CRC ключ"
+                    value={przelewy24.crc}
+                    onChange={(e) => setPrzelewy24({ ...przelewy24, crc: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Ключ CRC для підпису транзакцій (Moje dane → Dane API)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="p24-api-key">API Key (Secret ID)</Label>
+                  <Input
+                    id="p24-api-key"
+                    type="password"
+                    placeholder="Ваш API ключ"
+                    value={przelewy24.api_key}
+                    onChange={(e) => setPrzelewy24({ ...przelewy24, api_key: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Ключ API для авторизації (Moje dane → Klucz do raportów)
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
+                <p className="font-medium mb-2">📋 Як отримати дані:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Увійдіть в <a href="https://panel.przelewy24.pl" target="_blank" rel="noopener noreferrer" className="underline">panel.przelewy24.pl</a></li>
+                  <li>Перейдіть в "Moje konto" → "Moje dane" → "Dane API i konfiguracja"</li>
+                  <li>Скопіюйте Merchant ID, CRC та API Key</li>
+                  <li>Для тестування використовуйте <a href="https://sandbox.przelewy24.pl" target="_blank" rel="noopener noreferrer" className="underline">sandbox.przelewy24.pl</a></li>
+                </ol>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                  disabled={isSavingPrzelewy24}
+                  onClick={async () => {
+                    setIsSavingPrzelewy24(true);
+                    try {
+                      // TODO: Implement API call when backend endpoint is ready
+                      // await settingsApi.updatePrzelewy24Config(przelewy24);
+                      toast.success("Przelewy24 налаштування збережено");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося зберегти Przelewy24 налаштування");
+                    } finally {
+                      setIsSavingPrzelewy24(false);
+                    }
+                  }}
+                >
+                  {isSavingPrzelewy24 ? "Збереження..." : "Зберегти Przelewy24"}
                 </Button>
               </div>
             </CardContent>
