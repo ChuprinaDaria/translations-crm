@@ -16,7 +16,7 @@ import { TermsOfService } from "./pages/TermsOfService";
 import { GDPRPolicy } from "./pages/GDPRPolicy";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi, settingsApi } from "./lib/api";
-import { I18nProvider } from "./lib/i18n";
+import { I18nProvider, useI18n } from "./lib/i18n";
 import { initFacebookSDK, logFacebookPageView } from "./lib/facebook-sdk";
 import {
   Sheet,
@@ -344,27 +344,6 @@ function App() {
     return roleLabels[role] || role;
   };
 
-  const getBreadcrumbs = () => {
-    const breadcrumbMap: Record<
-      string,
-      { label: string; href?: string }[]
-    > = {
-      inbox: [{ label: "Inbox" }],
-      crm: [{ label: "Замовлення" }],
-      finance: [{ label: "Finance" }],
-      clients: [{ label: "Clients" }],
-      translators: [{ label: "Translators" }],
-      languages: [{ label: "Мови" }],
-      analytics: [{ label: "Analytics" }],
-      users: [{ label: "Users" }],
-      settings: [{ label: "Settings" }],
-    };
-
-    return (
-      breadcrumbMap[activeItem] || [{ label: "Analytics" }]
-    );
-  };
-
   const renderContent = () => {
     // Перевірка чи це сторінка з документацією (не потребує sidebar)
     if (currentPath === "/terms" || currentPath === "/gdpr") {
@@ -462,51 +441,76 @@ function App() {
     );
   }
 
-  return (
-    <I18nProvider>
+  // Inner component that uses i18n
+  function AppContent() {
+    const { t } = useI18n();
+
+    const getBreadcrumbs = () => {
+      const breadcrumbMap: Record<
+        string,
+        { label: string; href?: string }[]
+      > = {
+        inbox: [{ label: t("breadcrumbs.inbox") }],
+        crm: [{ label: t("breadcrumbs.crm") }],
+        finance: [{ label: t("breadcrumbs.finance") }],
+        clients: [{ label: t("breadcrumbs.clients") }],
+        translators: [{ label: t("breadcrumbs.translators") }],
+        languages: [{ label: t("breadcrumbs.languages") }],
+        analytics: [{ label: t("breadcrumbs.analytics") }],
+        users: [{ label: t("breadcrumbs.users") }],
+        autobot: [{ label: t("breadcrumbs.autobot") }],
+        settings: [{ label: t("breadcrumbs.settings") }],
+      };
+
+      return (
+        breadcrumbMap[activeItem] || [{ label: t("breadcrumbs.analytics") }]
+      );
+    };
+
+    return (
       <div className="min-h-screen bg-gray-50">
-      {/* Desktop Sidebar */}
-      {!isMobile && (
-        <Sidebar
-          activeItem={activeItem}
-          onItemClick={handleMenuItemClick}
-          userRole={userRole}
-          isAdmin={isAdmin}
-          onLogout={handleLogout}
-        />
-      )}
+        {/* Desktop Sidebar */}
+        {!isMobile && (
+          <Sidebar
+            activeItem={activeItem}
+            onItemClick={handleMenuItemClick}
+            userRole={userRole}
+            isAdmin={isAdmin}
+            onLogout={handleLogout}
+          />
+        )}
 
-      {/* Mobile Sidebar */}
-      {isMobile && (
-        <Sheet
-          open={mobileMenuOpen}
-          onOpenChange={setMobileMenuOpen}
-        >
-          <SheetContent side="left" className="p-0 w-[260px] h-full max-h-screen flex flex-col overflow-hidden">
-            <SheetTitle className="sr-only">
-              Навігаційне меню
-            </SheetTitle>
-            <SheetDescription className="sr-only">
-              Оберіть розділ для навігації по системі
-            </SheetDescription>
-            <Sidebar
-              activeItem={activeItem}
-              onItemClick={handleMenuItemClick}
-              userRole={userRole}
-              isAdmin={isAdmin}
-              isMobile={true}
-              onLogout={handleLogout}
-            />
-          </SheetContent>
-        </Sheet>
-      )}
+        {/* Mobile Sidebar */}
+        {isMobile && (
+          <Sheet
+            open={mobileMenuOpen}
+            onOpenChange={setMobileMenuOpen}
+          >
+            <SheetContent side="left" className="p-0 w-[260px] h-full max-h-screen flex flex-col overflow-hidden">
+              <SheetTitle className="sr-only">
+                Навігаційне меню
+              </SheetTitle>
+              <SheetDescription className="sr-only">
+                Оберіть розділ для навігації по системі
+              </SheetDescription>
+              <Sidebar
+                activeItem={activeItem}
+                onItemClick={handleMenuItemClick}
+                userRole={userRole}
+                isAdmin={isAdmin}
+                isMobile={true}
+                onLogout={handleLogout}
+              />
+            </SheetContent>
+          </Sheet>
+        )}
 
-      <div className="transition-all duration-300 lg:ml-[260px] flex flex-col min-h-screen">
-        <Header
-          breadcrumbs={getBreadcrumbs()}
-          onMobileMenuClick={() => setMobileMenuOpen(true)}
-          isMobile={isMobile}
-        />
+        <div className="transition-all duration-300 lg:ml-[260px] flex flex-col min-h-screen">
+          <Header
+            breadcrumbs={getBreadcrumbs()}
+            onMobileMenuClick={() => setMobileMenuOpen(true)}
+            isMobile={isMobile}
+          />
 
         <main className="pt-16 flex-1">
           <div className={activeItem === 'inbox' ? '' : 'p-4 md:p-6'}>{renderContent()}</div>
@@ -565,7 +569,14 @@ function App() {
           onOpenChange={commandPalette.setOpen}
         />
       )} */}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <I18nProvider>
+      <AppContent />
     </I18nProvider>
   );
 }

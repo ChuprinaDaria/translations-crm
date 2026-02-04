@@ -18,12 +18,13 @@ import {
   Settings,
 } from "lucide-react";
 import { SideTabs, SidePanel, type SideTab, type QuickAction } from "../../../components/ui";
+import { useI18n } from "../../../lib/i18n";
 
 // Конфігурація табів для Translators
-const TRANSLATORS_SIDE_TABS: SideTab[] = [
-  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
-  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+const getTranslatorsSideTabs = (t: (key: string) => string): SideTab[] => [
+  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
+  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
 ];
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
@@ -89,11 +90,14 @@ const STATUS_LABELS = {
 };
 
 export function TranslatorsPage() {
+  const { t } = useI18n();
   const [translators, setTranslators] = useState<Translator[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
+  
+  const TRANSLATORS_SIDE_TABS = getTranslatorsSideTabs(t);
   
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1011,7 +1015,7 @@ export function TranslatorsPage() {
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={TRANSLATORS_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        title={TRANSLATORS_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (

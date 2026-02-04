@@ -24,12 +24,13 @@ import {
   Globe,
 } from "lucide-react";
 import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+import { useI18n } from "../../../lib/i18n";
 
 // Конфігурація табів для Orders List
-const ORDERS_LIST_SIDE_TABS: SideTab[] = [
-  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
-  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+const getOrdersListSideTabs = (t: (key: string) => string): SideTab[] => [
+  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
+  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
 ];
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
@@ -292,9 +293,12 @@ const parseOrderDetails = (text: string | null | undefined) => {
 };
 
 export function OrdersListPage() {
+  const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  const ORDERS_LIST_SIDE_TABS = getOrdersListSideTabs(t);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showOnlyOverdue, setShowOnlyOverdue] = useState(false);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
@@ -812,7 +816,7 @@ export function OrdersListPage() {
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={ORDERS_LIST_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        title={ORDERS_LIST_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Plus, Edit, Trash2, Loader2, FileText, StickyNote, Settings } from 'lucide-react';
 import { SideTabs, SidePanel, type SideTab, type QuickAction } from '../../../components/ui';
+import { useI18n } from '../../../lib/i18n';
 
 // Конфігурація табів для Languages
-const LANGUAGES_SIDE_TABS: SideTab[] = [
-  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
-  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
+const getLanguagesSideTabs = (t: (key: string) => string): SideTab[] => [
+  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
+  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
 ];
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -24,11 +25,14 @@ import { toast } from 'sonner';
 import { languagesApi, type Language, type LanguageCreate } from '../api/languages';
 
 export function LanguagesPage() {
+  const { t } = useI18n();
   const [languages, setLanguages] = useState<Language[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState<Language | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const LANGUAGES_SIDE_TABS = getLanguagesSideTabs(t);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [formData, setFormData] = useState<LanguageCreate>({
     name_pl: '',
@@ -318,7 +322,7 @@ export function LanguagesPage() {
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={LANGUAGES_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        title={LANGUAGES_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (

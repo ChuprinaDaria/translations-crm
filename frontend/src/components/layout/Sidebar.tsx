@@ -18,6 +18,7 @@ import {
 import { InfoTooltip } from "../InfoTooltip";
 import { cn } from "../ui/utils";
 import { Button } from "../ui/button";
+import { useI18n } from "../../lib/i18n";
 
 interface SidebarProps {
   activeItem: string;
@@ -44,71 +45,72 @@ interface MenuSection {
 
 export function Sidebar({ activeItem, onItemClick, userRole, isAdmin = false, isMobile = false, onLogout }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { t } = useI18n();
 
   const menuSections: MenuSection[] = [
     {
-      title: "Основні",
+      title: t("sidebar.sections.main"),
       items: [
         {
           id: "inbox",
-          label: "Inbox",
+          label: t("sidebar.menu.inbox"),
           icon: <MessageCircle className="w-5 h-5" />,
-          tooltip: "Уніфікована поштова скринька та повідомлення",
+          tooltip: t("sidebar.menu.inboxTooltip"),
         },
         {
           id: "crm",
-          label: "Zlecenia",
+          label: t("sidebar.menu.crm"),
           icon: <Kanban className="w-5 h-5" />,
-          tooltip: "Zarządzanie zleceniami i tablica Kanban",
+          tooltip: t("sidebar.menu.crmTooltip"),
         },
         {
           id: "finance",
-          label: "Finance",
+          label: t("sidebar.menu.finance"),
           icon: <Wallet className="w-5 h-5" />,
-          tooltip: "Транзакції, рахунки та фінансовий облік",
+          tooltip: t("sidebar.menu.financeTooltip"),
         },
         {
           id: "clients",
-          label: "Clients",
+          label: t("sidebar.menu.clients"),
           icon: <Users className="w-5 h-5" />,
-          tooltip: "База клієнтів та управління контактами",
+          tooltip: t("sidebar.menu.clientsTooltip"),
         },
         {
           id: "translators",
-          label: "Translators",
+          label: t("sidebar.menu.translators"),
           icon: <Languages className="w-5 h-5" />,
-          tooltip: "Перекладачі: додати, редагувати, деактивувати",
+          tooltip: t("sidebar.menu.translatorsTooltip"),
         },
         {
           id: "languages",
-          label: "Мови",
+          label: t("sidebar.menu.languages"),
           icon: <Globe className="w-5 h-5" />,
-          tooltip: "Управління мовами та базовими цінами",
+          tooltip: t("sidebar.menu.languagesTooltip"),
         },
         {
           id: "analytics",
-          label: "Analytics",
+          label: t("sidebar.menu.analytics"),
           icon: <BarChart3 className="w-5 h-5" />,
-          tooltip: "Дашборди, звіти та аналітика",
+          tooltip: t("sidebar.menu.analyticsTooltip"),
         },
         {
           id: "users",
-          label: "Users",
+          label: t("sidebar.menu.users"),
           icon: <UserCog className="w-5 h-5" />,
-          tooltip: "Управління користувачами та ролями",
+          tooltip: t("sidebar.menu.usersTooltip"),
           roles: ["OWNER"], // Тільки для адміністраторів (OWNER)
         },
         {
           id: "autobot",
-          label: "Autobot",
+          label: t("sidebar.menu.autobot"),
           icon: <Bot className="w-5 h-5" />,
-          tooltip: "Налаштування автобота для Inbox",
+          tooltip: t("sidebar.menu.autobotTooltip"),
         },
         {
           id: "settings",
-          label: "Settings",
+          label: t("sidebar.menu.settings"),
           icon: <Settings className="w-5 h-5" />,
-          tooltip: "Налаштування системи",
+          tooltip: t("sidebar.menu.settingsTooltip"),
         },
       ],
     },
@@ -190,7 +192,7 @@ export function Sidebar({ activeItem, onItemClick, userRole, isAdmin = false, is
       )}
     >
       <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
-        {!isCollapsed && <span className="font-semibold text-gray-900">CRM Platform</span>}
+        {!isCollapsed && <span className="font-semibold text-gray-900">{t("sidebar.title")}</span>}
         {!isMobile && (
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -220,11 +222,11 @@ export function Sidebar({ activeItem, onItemClick, userRole, isAdmin = false, is
             "w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer",
             isCollapsed && "justify-center px-0"
           )}
-          title={isCollapsed ? "Вийти" : undefined}
+          title={isCollapsed ? t("sidebar.logout") : undefined}
           onClick={onLogout}
         >
           <LogOut className="w-5 h-5" />
-          {!isCollapsed && <span className="ml-3 font-medium">Вийти</span>}
+          {!isCollapsed && <span className="ml-3 font-medium">{t("sidebar.logout")}</span>}
         </Button>
       </div>
     </div>

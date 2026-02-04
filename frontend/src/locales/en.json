@@ -234,6 +234,53 @@
       "addNewNote": "Add New Note",
       "addNote": "Add Note"
     }
+  },
+  "sidebar": {
+    "title": "CRM Platform",
+    "sections": {
+      "main": "Main"
+    },
+    "menu": {
+      "inbox": "Inbox",
+      "inboxTooltip": "Unified inbox and messages",
+      "crm": "Orders",
+      "crmTooltip": "Order management and Kanban board",
+      "finance": "Finance",
+      "financeTooltip": "Transactions, invoices and financial accounting",
+      "clients": "Clients",
+      "clientsTooltip": "Client database and contact management",
+      "translators": "Translators",
+      "translatorsTooltip": "Translators: add, edit, deactivate",
+      "languages": "Languages",
+      "languagesTooltip": "Language and base price management",
+      "analytics": "Analytics",
+      "analyticsTooltip": "Dashboards, reports and analytics",
+      "users": "Users",
+      "usersTooltip": "User and role management",
+      "autobot": "Autobot",
+      "autobotTooltip": "Autobot settings for Inbox",
+      "settings": "Settings",
+      "settingsTooltip": "System settings"
+    },
+    "logout": "Logout"
+  },
+  "breadcrumbs": {
+    "inbox": "Inbox",
+    "crm": "Orders",
+    "finance": "Finance",
+    "clients": "Clients",
+    "translators": "Translators",
+    "languages": "Languages",
+    "analytics": "Analytics",
+    "users": "Users",
+    "autobot": "Autobot",
+    "settings": "Settings"
+  },
+  "tabs": {
+    "info": "Information",
+    "notes": "Notes",
+    "settings": "Settings",
+    "export": "Export"
   }
 }
 

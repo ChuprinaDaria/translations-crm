@@ -234,6 +234,53 @@
       "addNewNote": "Dodaj nową notatkę",
       "addNote": "Dodaj notatkę"
     }
+  },
+  "sidebar": {
+    "title": "Platforma CRM",
+    "sections": {
+      "main": "Główne"
+    },
+    "menu": {
+      "inbox": "Inbox",
+      "inboxTooltip": "Zunifikowana skrzynka odbiorcza i wiadomości",
+      "crm": "Zlecenia",
+      "crmTooltip": "Zarządzanie zleceniami i tablica Kanban",
+      "finance": "Finanse",
+      "financeTooltip": "Transakcje, faktury i księgowość finansowa",
+      "clients": "Klienci",
+      "clientsTooltip": "Baza klientów i zarządzanie kontaktami",
+      "translators": "Tłumacze",
+      "translatorsTooltip": "Tłumacze: dodaj, edytuj, dezaktywuj",
+      "languages": "Języki",
+      "languagesTooltip": "Zarządzanie językami i cenami bazowymi",
+      "analytics": "Analityka",
+      "analyticsTooltip": "Pulpity nawigacyjne, raporty i analityka",
+      "users": "Użytkownicy",
+      "usersTooltip": "Zarządzanie użytkownikami i rolami",
+      "autobot": "Autobot",
+      "autobotTooltip": "Ustawienia autobota dla Inbox",
+      "settings": "Ustawienia",
+      "settingsTooltip": "Ustawienia systemu"
+    },
+    "logout": "Wyloguj się"
+  },
+  "breadcrumbs": {
+    "inbox": "Inbox",
+    "crm": "Zlecenia",
+    "finance": "Finanse",
+    "clients": "Klienci",
+    "translators": "Tłumacze",
+    "languages": "Języki",
+    "analytics": "Analityka",
+    "users": "Użytkownicy",
+    "autobot": "Autobot",
+    "settings": "Ustawienia"
+  },
+  "tabs": {
+    "info": "Informacja",
+    "notes": "Notatki",
+    "settings": "Ustawienia",
+    "export": "Eksport"
   }
 }
 

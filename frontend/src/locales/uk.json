@@ -234,6 +234,53 @@
       "addNewNote": "Додати нову примітку",
       "addNote": "Додати примітку"
     }
+  },
+  "sidebar": {
+    "title": "CRM Платформа",
+    "sections": {
+      "main": "Основні"
+    },
+    "menu": {
+      "inbox": "Inbox",
+      "inboxTooltip": "Уніфікована поштова скринька та повідомлення",
+      "crm": "Замовлення",
+      "crmTooltip": "Управління замовленнями та дошка Kanban",
+      "finance": "Фінанси",
+      "financeTooltip": "Транзакції, рахунки та фінансовий облік",
+      "clients": "Клієнти",
+      "clientsTooltip": "База клієнтів та управління контактами",
+      "translators": "Перекладачі",
+      "translatorsTooltip": "Перекладачі: додати, редагувати, деактивувати",
+      "languages": "Мови",
+      "languagesTooltip": "Управління мовами та базовими цінами",
+      "analytics": "Аналітика",
+      "analyticsTooltip": "Дашборди, звіти та аналітика",
+      "users": "Користувачі",
+      "usersTooltip": "Управління користувачами та ролями",
+      "autobot": "Autobot",
+      "autobotTooltip": "Налаштування автобота для Inbox",
+      "settings": "Налаштування",
+      "settingsTooltip": "Налаштування системи"
+    },
+    "logout": "Вийти"
+  },
+  "breadcrumbs": {
+    "inbox": "Inbox",
+    "crm": "Замовлення",
+    "finance": "Фінанси",
+    "clients": "Клієнти",
+    "translators": "Перекладачі",
+    "languages": "Мови",
+    "analytics": "Аналітика",
+    "users": "Користувачі",
+    "autobot": "Autobot",
+    "settings": "Налаштування"
+  },
+  "tabs": {
+    "info": "Інформація",
+    "notes": "Нотатки",
+    "settings": "Налаштування",
+    "export": "Експорт"
   }
 }
 

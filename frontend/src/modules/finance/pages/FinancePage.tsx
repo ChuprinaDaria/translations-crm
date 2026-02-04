@@ -12,11 +12,11 @@ import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
 import { Button } from "../../../components/ui/button";
 
 // Конфігурація табів для Finance
-const FINANCE_SIDE_TABS: SideTab[] = [
-  { id: 'info', icon: FileText, label: 'Інформація', color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'green' },
-  { id: 'settings', icon: Settings, label: 'Налаштування', color: 'gray' },
-  { id: 'export', icon: Download, label: 'Експорт', color: 'orange' },
+const getFinanceSideTabs = (t: (key: string) => string): SideTab[] => [
+  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
+  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
+  { id: 'export', icon: Download, label: t('tabs.export'), color: 'orange' },
 ];
 
 // Використовувати мокові дані для тестування (встановіть в true для розробки)
@@ -26,6 +26,8 @@ export function FinancePage() {
   const { t } = useI18n();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [orderProfits, setOrderProfits] = useState<OrderProfit[]>([]);
+  
+  const FINANCE_SIDE_TABS = getFinanceSideTabs(t);
   const [loading, setLoading] = useState(true);
   const [loadingProfits, setLoadingProfits] = useState(true);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
@@ -212,7 +214,7 @@ export function FinancePage() {
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={FINANCE_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+        title={FINANCE_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (
