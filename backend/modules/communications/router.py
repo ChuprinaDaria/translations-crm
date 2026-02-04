@@ -100,16 +100,18 @@ messages_manager = MessagesConnectionManager()
 
 # Dependency для альтернативної авторизації (X-RAG-TOKEN або JWT)
 def get_current_user_or_rag(
+    request: Request,
     x_rag_token: Optional[str] = Header(None, alias="X-RAG-TOKEN"),
     db: Session = Depends(get_db),
-    # Використовуємо get_current_user_db як dependency, але обробляємо помилки
-    _jwt_user: Optional[models.User] = Depends(lambda db=Depends(get_db): None),
 ) -> Optional[models.User]:
     """
     Отримати поточного користувача через X-RAG-TOKEN або JWT.
     Якщо є валідний X-RAG-TOKEN - повертає None (RAG авторизація).
     Якщо немає X-RAG-TOKEN - використовує JWT через get_current_user_db.
     """
+    from core.security import get_current_user_payload
+    import crud_user
+    
     # Спочатку перевіряємо X-RAG-TOKEN
     if x_rag_token:
         try:
@@ -133,18 +135,46 @@ def get_current_user_or_rag(
             # Якщо помилка перевірки RAG токену, продовжуємо до JWT
     
     # Якщо немає X-RAG-TOKEN, використовуємо JWT
-    # Використовуємо get_current_user_db, але обробляємо помилки
+    # Отримуємо payload з токена вручну
     try:
-        return get_current_user_db(db=db)
-    except HTTPException as jwt_error:
-        # Якщо JWT невалідний і немає RAG токену - помилка
-        if not x_rag_token:
+        # Отримуємо токен з заголовка Authorization
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
             )
-        # Якщо є RAG токен, але він невалідний, повертаємо помилку RAG токену
-        raise jwt_error
+        
+        token = auth_header.replace("Bearer ", "")
+        
+        # Декодуємо токен
+        from core.security import decode_access_token
+        user_payload = decode_access_token(token)
+        
+        if not user_payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+        
+        user_id_str = user_payload.get("sub")
+        if not user_id_str:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = crud_user.get_user_by_id(db, user_id_str)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"JWT авторизація не вдалася: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
+        )
 
 
 # WebSocket endpoint is defined in main.py to avoid middleware issues
