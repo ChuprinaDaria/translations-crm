@@ -104,9 +104,9 @@ class PaymentTransaction(Base):
     customer_email: Mapped[str] = mapped_column(String(255), nullable=False)
     customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     
-    # Metadata
+    # Extra data
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
+    extra_data: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string for additional metadata
     
     # Error handling
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
