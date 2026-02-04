@@ -569,7 +569,6 @@ function App() {
           onOpenChange={commandPalette.setOpen}
         />
       )} */}
-        </div>
       </div>
     );
   }
