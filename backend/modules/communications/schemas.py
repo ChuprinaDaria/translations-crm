@@ -131,6 +131,9 @@ class ConversationWithMessages(ConversationRead):
     messages: List[MessageRead] = []
     unread_count: int = 0
     last_message: Optional[MessageRead] = None
+    # Поля для пагінації повідомлень
+    total_messages: Optional[int] = None
+    has_more_messages: bool = False
 
 
 # ========== Inbox Schemas ==========

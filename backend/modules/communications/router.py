@@ -1,7 +1,7 @@
 """
 Communications routes - unified inbox endpoints for Telegram, Email, etc.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, UploadFile, File, Body, Request, Header, status, Response
 from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, distinct
@@ -166,11 +166,36 @@ def get_inbox(
     - filter: 'all', 'new' (unread), 'in_progress', 'needs_reply', 'archived'
     - platform: 'telegram', 'whatsapp', 'email', 'facebook', 'instagram'
     - search: search in client name or message content
+    
+    ОПТИМІЗОВАНО: Використовує window functions для отримання останнього повідомлення
+    без N+1 запитів.
     """
     from sqlalchemy.orm import lazyload
-    from sqlalchemy import text
+    from sqlalchemy import text, literal_column
+    from datetime import datetime, timezone, timedelta
     
-    # Build base query with joins
+    # ========== ОПТИМІЗАЦІЯ: Один запит замість N+1 ==========
+    # Використовуємо підзапит для отримання останнього повідомлення кожної розмови
+    last_message_subquery = db.query(
+        Message.conversation_id,
+        Message.content.label('last_message_content'),
+        Message.direction.label('last_message_direction'),
+        Message.created_at.label('last_message_created_at'),
+        func.row_number().over(
+            partition_by=Message.conversation_id,
+            order_by=desc(Message.created_at)
+        ).label('rn')
+    ).subquery()
+    
+    # Фільтруємо тільки останні повідомлення (rn = 1)
+    last_messages = db.query(
+        last_message_subquery.c.conversation_id,
+        last_message_subquery.c.last_message_content,
+        last_message_subquery.c.last_message_direction,
+        last_message_subquery.c.last_message_created_at,
+    ).filter(last_message_subquery.c.rn == 1).subquery()
+    
+    # Build base query with joins - включаємо останнє повідомлення
     query = db.query(
         Conversation.id,
         Conversation.client_id,
@@ -188,7 +213,15 @@ def get_inbox(
             Message.direction == MessageDirection.INBOUND
         ).label('unread_count'),
         func.max(Message.created_at).label('last_message_time'),
-    ).outerjoin(Message, Message.conversation_id == Conversation.id)
+        # Додаємо дані останнього повідомлення з підзапиту
+        last_messages.c.last_message_content,
+        last_messages.c.last_message_direction,
+        last_messages.c.last_message_created_at,
+    ).outerjoin(
+        Message, Message.conversation_id == Conversation.id
+    ).outerjoin(
+        last_messages, last_messages.c.conversation_id == Conversation.id
+    )
     
     # Apply archive filter
     if filter == 'archived':
@@ -232,6 +265,10 @@ def get_inbox(
         Conversation.last_manager_response_at,
         Conversation.is_archived,
         Conversation.last_message_at,
+        # Додаємо колонки останнього повідомлення до GROUP BY
+        last_messages.c.last_message_content,
+        last_messages.c.last_message_direction,
+        last_messages.c.last_message_created_at,
     ]
     if search:
         group_by_cols.extend([Client.id, Client.name, Client.full_name])
@@ -264,22 +301,14 @@ def get_inbox(
     conversations = []
     unread_total = 0
     
-    # Get client IDs for batch loading
+    # Get client IDs for batch loading - ОПТИМІЗОВАНО: один запит для всіх клієнтів
     client_ids = [r.client_id for r in results if r.client_id]
     clients_map = {}
     if client_ids:
         clients = db.query(Client).filter(Client.id.in_(client_ids)).all()
         clients_map = {c.id: c for c in clients}
     
-    from datetime import datetime, timezone, timedelta
-    
     for row in results:
-        # Get last message
-        last_message = db.query(Message)\
-            .filter(Message.conversation_id == row.id)\
-            .order_by(desc(Message.created_at))\
-            .first()
-        
         # Get client name from map
         client_name = None
         if row.client_id and row.client_id in clients_map:
@@ -287,22 +316,26 @@ def get_inbox(
             client_name = getattr(client, 'name', None) or getattr(client, 'full_name', None)
         
         # Перевірка спливючого чату (10 хв без відповіді менеджера)
+        # ОПТИМІЗОВАНО: використовуємо дані з підзапиту замість окремого запиту
         needs_attention = False
+        last_msg_direction = row.last_message_direction
+        last_msg_created_at = row.last_message_created_at
+        
         if row.assigned_manager_id and row.last_manager_response_at:
             # Якщо є остання відповідь менеджера, перевіряємо чи пройшло 10+ хвилин
             time_since_response = datetime.now(timezone.utc) - row.last_manager_response_at
             if time_since_response >= timedelta(minutes=10):
                 # Перевіряємо чи є нові вхідні повідомлення після останньої відповіді
-                if last_message and last_message.direction == MessageDirection.INBOUND:
-                    if last_message.created_at > row.last_manager_response_at:
+                if last_msg_direction == MessageDirection.INBOUND.value or last_msg_direction == MessageDirection.INBOUND:
+                    if last_msg_created_at and last_msg_created_at > row.last_manager_response_at:
                         needs_attention = True
         elif row.assigned_manager_id and not row.last_manager_response_at:
             # Якщо менеджер призначений, але ніколи не відповідав, і є нові повідомлення
-            if last_message and last_message.direction == MessageDirection.INBOUND:
+            if last_msg_direction == MessageDirection.INBOUND.value or last_msg_direction == MessageDirection.INBOUND:
                 needs_attention = True
         
         # Use last_message_at from conversation if available, otherwise from message
-        last_message_at_value = row.last_message_at if hasattr(row, 'last_message_at') and row.last_message_at else (last_message.created_at if last_message else None)
+        last_message_at_value = row.last_message_at if hasattr(row, 'last_message_at') and row.last_message_at else last_msg_created_at
         
         is_archived_value = row.is_archived if hasattr(row, 'is_archived') else False
         
@@ -314,7 +347,7 @@ def get_inbox(
             client_id=row.client_id,
             client_name=client_name,
             unread_count=row.unread_count or 0,
-            last_message=last_message.content if last_message else None,
+            last_message=row.last_message_content,  # ОПТИМІЗОВАНО: з підзапиту
             last_message_at=last_message_at_value,
             updated_at=row.updated_at,
             assigned_manager_id=row.assigned_manager_id,
@@ -337,12 +370,23 @@ def get_inbox(
 @router.get("/conversations/{conversation_id}", response_model=schemas.ConversationWithMessages)
 def get_conversation(
     conversation_id: str,  # Приймаємо string для підтримки як UUID так і custom ID
+    limit: int = Query(100, ge=1, le=500, description="Кількість повідомлень (пагінація)"),
+    offset: int = Query(0, ge=0, description="Зміщення для пагінації"),
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """Get conversation with all messages."""
-    # Спробуємо конвертувати conversation_id в UUID
+    """
+    Get conversation with messages.
+    
+    ОПТИМІЗОВАНО:
+    - Пагінація повідомлень (limit/offset) для швидшого завантаження
+    - Eager loading для attachments
+    - Один запит для unread_count
+    """
     from uuid import UUID as UUID_type
+    from sqlalchemy.orm import joinedload, selectinload
+    
+    # Спробуємо конвертувати conversation_id в UUID
     try:
         conv_uuid = UUID_type(conversation_id)
         conversation = db.query(Conversation).filter(Conversation.id == conv_uuid).first()
@@ -354,16 +398,25 @@ def get_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    # Get messages ordered by created_at
-    messages = db.query(Message)\
-        .filter(Message.conversation_id == conversation_id)\
-        .order_by(Message.created_at)\
-        .all()
+    # ОПТИМІЗОВАНО: Отримуємо повідомлення з eager loading для attachments
+    # Використовуємо conversation.id (UUID) замість string conversation_id
+    messages_query = db.query(Message)\
+        .options(selectinload(Message.attachment_objects))\
+        .filter(Message.conversation_id == conversation.id)\
+        .order_by(desc(Message.created_at))
     
-    # Count unread
+    # Загальна кількість повідомлень
+    total_messages = messages_query.count()
+    
+    # Застосовуємо пагінацію та отримуємо повідомлення
+    # Сортуємо DESC для пагінації (останні спочатку), потім реверсуємо для відображення
+    messages = messages_query.offset(offset).limit(limit).all()
+    messages = list(reversed(messages))  # Реверсуємо для хронологічного порядку
+    
+    # ОПТИМІЗОВАНО: Count unread в одному запиті
     unread_count = db.query(func.count(Message.id))\
         .filter(
-            Message.conversation_id == conversation_id,
+            Message.conversation_id == conversation.id,
             Message.status != MessageStatus.READ,
             Message.direction == MessageDirection.INBOUND
         ).scalar() or 0
@@ -399,6 +452,9 @@ def get_conversation(
         messages=message_reads,
         unread_count=unread_count,
         last_message=last_message_read,
+        # Додаємо інформацію про пагінацію
+        total_messages=total_messages,
+        has_more_messages=offset + limit < total_messages,
     )
 
 
@@ -904,29 +960,55 @@ async def upload_file(
 
 
 @router.get("/files/{filename}")
-async def get_file(filename: str):
-    """Download a file attachment."""
+async def get_file(filename: str, response: Response):
+    """
+    Download a file attachment.
+    
+    ОПТИМІЗОВАНО: Додано кешування заголовки.
+    """
     file_path = UPLOADS_DIR / filename
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
-    return FileResponse(file_path, filename=filename)
+    # Визначаємо MIME тип для правильного кешування
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    
+    # Кешування на 1 день для статичних файлів
+    headers = {
+        "Cache-Control": "public, max-age=86400, immutable",
+        "X-Content-Type-Options": "nosniff",
+    }
+    
+    return FileResponse(
+        file_path, 
+        filename=filename,
+        media_type=mime_type,
+        headers=headers
+    )
 
 
 @router.get("/media/{path:path}")
 async def get_media_file(
     path: str,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     """
     Download a media file from communications_attachments.
     Підтримує шляхи з підпапками, наприклад: /media/attachments/filename.pdf
     Також підтримує UUID для зворотної сумісності: /media/{uuid}
+    
+    ОПТИМІЗОВАНО:
+    - Кешування на рівні HTTP (Cache-Control)
+    - ETag для умовних запитів
+    - Оптимізований пошук в БД
     """
     from modules.communications.models import Attachment
     from modules.communications.utils.media import get_media_dir
     from uuid import UUID
+    import hashlib
     
     attachment = None
     
@@ -965,7 +1047,22 @@ async def get_media_file(
     
     download_filename = attachment.original_name if attachment.original_name else Path(path).name
     
-    return FileResponse(file_path, filename=download_filename)
+    # ОПТИМІЗАЦІЯ: Генеруємо ETag на основі ID та розміру файлу
+    etag = hashlib.md5(f"{attachment.id}-{attachment.file_size}".encode()).hexdigest()
+    
+    # Кешування заголовки - файли не змінюються, можна кешувати довго
+    headers = {
+        "Cache-Control": "public, max-age=604800, immutable",  # 7 днів
+        "ETag": f'"{etag}"',
+        "X-Content-Type-Options": "nosniff",
+    }
+    
+    return FileResponse(
+        file_path, 
+        filename=download_filename,
+        media_type=attachment.mime_type,
+        headers=headers
+    )
 
 
 class PaymentLinkRequest(BaseModel):
