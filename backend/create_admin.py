@@ -12,8 +12,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sqlalchemy.orm import Session
 from core.database import SessionLocal
 from core.security import hash_password
-from modules.auth.models import User, UserRole
 import pyotp
+
+# Import ALL models to ensure SQLAlchemy relationships are configured
+from modules.auth.models import User, UserRole
+from modules.crm.models import Client, Order, Office, InternalNote, TimelineStep, Translator, TranslatorLanguage, TranslationRequest, Language, Specialization, TranslatorLanguageRate  # noqa: F401
+from modules.communications.models import Conversation, Message  # noqa: F401
+from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
+from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog  # noqa: F401
+from modules.finance.models import Transaction  # noqa: F401
+from modules.payment.models import PaymentTransaction, PaymentLink, PaymentSettings  # noqa: F401
+from modules.postal_services.models import InPostShipment, InPostSettings  # noqa: F401
+from modules.ai_integration.models import AISettings  # noqa: F401
+import models  # noqa: F401 - legacy models
 
 
 def create_admin_user(
