@@ -28,6 +28,8 @@ from modules.communications.models import Conversation, Message  # noqa: F401
 from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
 from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog  # noqa: F401 - для Office relationship
 from modules.finance.models import Transaction  # noqa: F401 - для Order relationship
+from modules.payment.models import PaymentTransaction  # noqa: F401 - для Order.payment_transactions relationship
+from modules.postal_services.models import InPostShipment  # noqa: F401 - для Order.inpost_shipments relationship
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
