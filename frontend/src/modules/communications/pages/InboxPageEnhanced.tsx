@@ -90,8 +90,9 @@ export function InboxPageEnhanced() {
       limit: 50,
       offset: offset,
     }),
-    staleTime: 5 * 60 * 1000, // 5 хвилин
-    gcTime: 30 * 60 * 1000,   // 30 хвилин
+    staleTime: 15 * 1000,      // 15 секунд — швидше оновлення inbox
+    gcTime: 30 * 60 * 1000,    // 30 хвилин
+    refetchInterval: 15 * 1000, // Автоматичне оновлення кожні 15 секунд (fallback якщо WebSocket не працює)
   });
   
   const conversations = conversationsData?.conversations || [];
@@ -323,10 +324,11 @@ export function InboxPageEnhanced() {
     });
     
     // Update conversations list через React Query
-    queryClient.setQueryData(['conversations', filters], (old: any) => {
+    // Використовуємо повний ключ з offset для правильного оновлення кешу
+    queryClient.setQueryData(['conversations', filters, offset], (old: any) => {
       if (!old?.conversations) return old;
       const updated = [...old.conversations];
-      const convIndex = updated.findIndex(c => c.id === conversationId);
+      const convIndex = updated.findIndex((c: any) => c.id === conversationId);
       if (convIndex >= 0) {
         updated[convIndex] = {
           ...updated[convIndex],
@@ -343,6 +345,9 @@ export function InboxPageEnhanced() {
       }
       return { ...old, conversations: updated };
     });
+    
+    // Також інвалідуємо всі conversations кеші для гарантованого оновлення
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
 
     // Show notification for inbound messages
     if (message.direction === 'inbound') {
@@ -374,7 +379,7 @@ export function InboxPageEnhanced() {
         },
       });
     }
-  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat, queryClient, filters]);
+  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat, queryClient, filters, offset]);
 
   // Handle conversation updates from WebSocket (e.g., manager assignment)
   const handleWebSocketConversationUpdate = useCallback((conversation: Partial<ConversationListItem>) => {
@@ -382,7 +387,7 @@ export function InboxPageEnhanced() {
     
     // Update conversations list через React Query
     if (conversation.id) {
-      queryClient.setQueryData(['conversations', filters], (old: any) => {
+      queryClient.setQueryData(['conversations', filters, offset], (old: any) => {
         if (!old?.conversations) return old;
         return {
           ...old,

@@ -84,19 +84,25 @@ export function useMessagesWebSocket({
 
       wsRef.current.onmessage = (event) => {
         // Handle ping/pong для keep-alive з'єднання
+        // Сервер може надсилати як рядок 'ping', так і JSON {"type":"ping"}
         if (event.data === 'ping') {
           wsRef.current?.send('pong');
-          console.log('[WebSocket] Received ping, sent pong');
           return;
         }
         
         if (event.data === 'pong') {
-          console.log('[WebSocket] Received pong');
           return;
         }
         
         try {
-          const data: WebSocketMessage = JSON.parse(event.data);
+          const data = JSON.parse(event.data);
+          
+          // Handle JSON ping from server: {"type": "ping"}
+          if (data.type === 'ping') {
+            wsRef.current?.send(JSON.stringify({ type: 'pong' }));
+            return;
+          }
+          
           console.log('[WebSocket] Message received:', data);
           setLastMessage(data);
 

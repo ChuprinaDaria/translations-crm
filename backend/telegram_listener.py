@@ -228,6 +228,250 @@ async def download_media(client, message, db, message_id) -> dict:
         return None
 
 
+async def process_autobot(client, db, conv_id: str, msg_id: str, external_id: str, sender_name: str, content: str):
+    """Process autobot auto-reply for incoming message if outside working hours."""
+    try:
+        import pytz
+        from datetime import time as dt_time
+        
+        # Find enabled autobot settings
+        result = db.execute(text("""
+            SELECT s.id, s.office_id, s.enabled, s.auto_reply_message, s.use_ai_reply,
+                   s.monday_start, s.monday_end,
+                   s.tuesday_start, s.tuesday_end,
+                   s.wednesday_start, s.wednesday_end,
+                   s.thursday_start, s.thursday_end,
+                   s.friday_start, s.friday_end,
+                   s.saturday_start, s.saturday_end,
+                   s.sunday_start, s.sunday_end
+            FROM autobot_settings s
+            WHERE s.enabled = true
+            LIMIT 1
+        """))
+        row = result.fetchone()
+        
+        if not row:
+            logger.debug("🤖 No active autobot settings found")
+            return
+        
+        settings_id = row[0]
+        office_id = row[1]
+        auto_reply_message = row[3]
+        use_ai_reply = row[4]
+        
+        # Day schedule: (start, end) tuples indexed by weekday (0=Mon)
+        day_schedules = [
+            (row[5], row[6]),    # Monday
+            (row[7], row[8]),    # Tuesday
+            (row[9], row[10]),   # Wednesday
+            (row[11], row[12]),  # Thursday
+            (row[13], row[14]),  # Friday
+            (row[15], row[16]),  # Saturday
+            (row[17], row[18]),  # Sunday
+        ]
+        
+        # Check current time in Warsaw timezone
+        now = datetime.now(pytz.timezone('Europe/Warsaw'))
+        weekday = now.weekday()  # 0 = Monday
+        current_time = now.time()
+        current_date = now.date()
+        
+        # Check if today is a holiday
+        holiday_result = db.execute(text("""
+            SELECT id FROM autobot_holidays 
+            WHERE settings_id = :settings_id AND date = :today
+            LIMIT 1
+        """), {"settings_id": settings_id, "today": current_date})
+        is_holiday = holiday_result.fetchone() is not None
+        
+        if not is_holiday:
+            # Check recurring holidays (same day and month)
+            recurring_result = db.execute(text("""
+                SELECT id FROM autobot_holidays 
+                WHERE settings_id = :settings_id 
+                  AND is_recurring = true
+                  AND EXTRACT(MONTH FROM date) = :month
+                  AND EXTRACT(DAY FROM date) = :day
+                LIMIT 1
+            """), {"settings_id": settings_id, "month": current_date.month, "day": current_date.day})
+            is_holiday = recurring_result.fetchone() is not None
+        
+        # Determine if currently working hours
+        is_working = False
+        
+        if is_holiday:
+            is_working = False
+            logger.info(f"🤖 Today is a holiday, autobot active")
+        else:
+            start_time, end_time = day_schedules[weekday]
+            if start_time and end_time:
+                if start_time <= current_time <= end_time:
+                    is_working = True
+            # If no schedule for today → non-working day
+        
+        if is_working:
+            logger.debug(f"🤖 Working hours ({now.strftime('%H:%M')}), autobot skipped")
+            return
+        
+        logger.info(f"🤖 Non-working hours ({now.strftime('%A %H:%M')}), activating autobot for {external_id}")
+        
+        # Check if we already sent an auto-reply to this conversation recently (within 2 hours)
+        recent_reply = db.execute(text("""
+            SELECT id FROM autobot_logs
+            WHERE settings_id = :settings_id
+              AND action_taken = 'auto_reply'
+              AND success = true
+              AND meta_data->>'conversation_id' = :conv_id
+              AND created_at > NOW() - INTERVAL '2 hours'
+            LIMIT 1
+        """), {"settings_id": settings_id, "conv_id": conv_id})
+        
+        if recent_reply.fetchone():
+            logger.info(f"🤖 Auto-reply already sent to {external_id} recently, skipping")
+            return
+        
+        # Determine reply text
+        reply_text = None
+        ai_generated = False
+        
+        if use_ai_reply:
+            # Try AI reply via backend HTTP call
+            try:
+                backend_url = os.getenv("WEBSOCKET_NOTIFY_URL", "http://localhost:8000/api/v1/communications/test-notification")
+                # Derive base URL
+                base_url = backend_url.split("/api/v1/")[0] if "/api/v1/" in backend_url else "http://backend:8000"
+                
+                async with httpx.AsyncClient(timeout=15.0) as http_client:
+                    ai_response = await http_client.post(
+                        f"{base_url}/api/v1/ai/generate-reply",
+                        json={
+                            "message": content,
+                            "conversation_id": conv_id,
+                            "platform": "telegram",
+                            "context": {
+                                "sender_name": sender_name,
+                                "office_id": office_id,
+                                "autobot": True,
+                            }
+                        },
+                        timeout=15.0
+                    )
+                    if ai_response.status_code == 200:
+                        ai_data = ai_response.json()
+                        if ai_data.get("reply"):
+                            reply_text = ai_data["reply"]
+                            ai_generated = True
+                            logger.info(f"🤖 AI generated reply for {external_id}")
+            except Exception as e:
+                logger.warning(f"🤖 AI reply failed, using static message: {e}")
+        
+        # Fallback to static auto-reply message
+        if not reply_text and auto_reply_message:
+            reply_text = auto_reply_message
+        
+        if not reply_text:
+            logger.warning(f"🤖 No reply text available for autobot")
+            return
+        
+        # Send the auto-reply using the existing Telegram client
+        try:
+            entity = None
+            if external_id.startswith('@'):
+                entity = await client.get_entity(external_id)
+            elif external_id.startswith('+'):
+                entity = await client.get_entity(external_id)
+            else:
+                try:
+                    entity = await client.get_entity(int(external_id))
+                except (ValueError, TypeError):
+                    entity = await client.get_entity(external_id)
+            
+            if entity:
+                await client.send_message(entity, reply_text)
+                logger.info(f"🤖 Auto-reply sent to {external_id}")
+                
+                # Save auto-reply message to DB
+                reply_msg_id = str(uuid4())
+                now_utc = datetime.now(timezone.utc)
+                meta_data = json.dumps({
+                    "autobot": True, 
+                    "auto_reply": True,
+                    "ai_generated": ai_generated,
+                    "author_name": "Автобот",
+                    "author_display": "Автобот (Автовідповідь)",
+                })
+                
+                db.execute(text("""
+                    INSERT INTO communications_messages 
+                        (id, conversation_id, direction, type, content, status, meta_data, created_at, sent_at)
+                    VALUES 
+                        (:id, :conv_id, 'outbound', 'text', :content, 'sent', 
+                         CAST(:meta_data AS jsonb), :now, :now)
+                """), {
+                    "id": reply_msg_id,
+                    "conv_id": conv_id,
+                    "content": reply_text,
+                    "meta_data": meta_data,
+                    "now": now_utc,
+                })
+                db.commit()
+                
+                # Notify WebSocket about the auto-reply
+                await notify_websocket(
+                    conv_id, reply_msg_id, reply_text,
+                    "Автобот", external_id
+                )
+                
+                # Log the action
+                log_meta = json.dumps({
+                    "conversation_id": conv_id,
+                    "ai_generated": ai_generated,
+                    "external_id": external_id,
+                })
+                db.execute(text("""
+                    INSERT INTO autobot_logs 
+                        (settings_id, office_id, message_id, action_taken, success, meta_data, created_at)
+                    VALUES 
+                        (:settings_id, :office_id, :message_id, 'auto_reply', true, 
+                         CAST(:meta_data AS jsonb), :now)
+                """), {
+                    "settings_id": settings_id,
+                    "office_id": office_id,
+                    "message_id": msg_id,
+                    "meta_data": log_meta,
+                    "now": now_utc,
+                })
+                db.commit()
+                
+                logger.info(f"🤖 Autobot complete for {external_id}")
+            else:
+                logger.error(f"🤖 Could not resolve entity for {external_id}")
+                
+        except Exception as e:
+            logger.error(f"🤖 Failed to send auto-reply to {external_id}: {e}", exc_info=True)
+            # Log failure
+            try:
+                now_utc = datetime.now(timezone.utc)
+                db.execute(text("""
+                    INSERT INTO autobot_logs 
+                        (settings_id, office_id, message_id, action_taken, success, error_message, created_at)
+                    VALUES 
+                        (:settings_id, :office_id, :message_id, 'auto_reply', false, :error, :now)
+                """), {
+                    "settings_id": settings_id,
+                    "office_id": office_id,
+                    "message_id": msg_id,
+                    "error": str(e),
+                    "now": now_utc,
+                })
+                db.commit()
+            except:
+                pass
+                
+    except Exception as e:
+        logger.error(f"🤖 Autobot error: {e}", exc_info=True)
+
+
 async def notify_websocket(conv_id: str, msg_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text"):
     """Notify WebSocket clients about new message."""
     try:
@@ -425,7 +669,17 @@ async def run_listener_for_account(account: dict):
                             meta_data=meta_data
                         )
                         
-                        # Check for media and download
+                        logger.info(f"📩 New message from {sender_name or external_id}: {temp_content[:50]}...")
+                        
+                        # 🚀 Notify WebSocket IMMEDIATELY (before media download!)
+                        # This ensures the message appears in the CRM instantly
+                        await notify_websocket(
+                            conv_id, msg_id, temp_content, sender_name, external_id,
+                            attachments=None,
+                            msg_type=msg_type
+                        )
+                        
+                        # Check for media and download (can take 10-30s)
                         if event.message.media:
                             attachment = await download_media(client, event.message, db, msg_id)
                             if attachment:
@@ -448,18 +702,26 @@ async def run_listener_for_account(account: dict):
                                     "msg_id": msg_id
                                 })
                                 db.commit()
+                                
+                                # 🚀 Send SECOND notification with attachments
+                                await notify_websocket(
+                                    conv_id, msg_id, content, sender_name, external_id,
+                                    attachments=attachments,
+                                    msg_type=msg_type
+                                )
                         
                         if not content and not attachments:
                             content = "[Пусте повідомлення]"
                         
-                        logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
-                        
-                        # Notify WebSocket
-                        await notify_websocket(
-                            conv_id, msg_id, content, sender_name, external_id,
-                            attachments=attachments if attachments else None,
-                            msg_type=msg_type
-                        )
+                        # Process autobot (auto-reply outside working hours)
+                        try:
+                            await process_autobot(
+                                client, db, conv_id, msg_id, 
+                                external_id, sender_name, 
+                                content or ""
+                            )
+                        except Exception as autobot_err:
+                            logger.error(f"🤖 Autobot processing error: {autobot_err}", exc_info=True)
                         
                     except Exception as e:
                         logger.error(f"Error handling message: {e}", exc_info=True)
