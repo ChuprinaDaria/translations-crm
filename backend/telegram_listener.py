@@ -228,7 +228,7 @@ async def download_media(client, message, db, message_id) -> dict:
         return None
 
 
-async def process_autobot(client, db, conv_id: str, msg_id: str, external_id: str, sender_name: str, content: str):
+async def process_autobot(client, db, conv_id: str, msg_id: str, external_id: str, sender_name: str, content: str, chat_id: int = None):
     """Process autobot auto-reply for incoming message if outside working hours."""
     try:
         import pytz
@@ -376,15 +376,36 @@ async def process_autobot(client, db, conv_id: str, msg_id: str, external_id: st
         # Send the auto-reply using the existing Telegram client
         try:
             entity = None
-            if external_id.startswith('@'):
-                entity = await client.get_entity(external_id)
-            elif external_id.startswith('+'):
-                entity = await client.get_entity(external_id)
-            else:
+            
+            # Спочатку пробуємо за chat_id (найнадійніший спосіб)
+            if chat_id:
                 try:
-                    entity = await client.get_entity(int(external_id))
-                except (ValueError, TypeError):
+                    entity = await client.get_entity(chat_id)
+                    logger.info(f"🤖 Found entity by chat_id: {chat_id}")
+                except Exception as e:
+                    logger.warning(f"🤖 Failed to get entity by chat_id {chat_id}: {e}")
+            
+            # Якщо не вдалось за chat_id, пробуємо за external_id
+            if not entity:
+                if external_id.startswith('@'):
                     entity = await client.get_entity(external_id)
+                    logger.info(f"🤖 Found entity by username: {external_id}")
+                elif external_id.startswith('+'):
+                    # Для номера телефону шукаємо в діалогах
+                    phone_digits = external_id.replace('+', '').replace(' ', '').replace('-', '')
+                    async for dialog in client.iter_dialogs():
+                        if hasattr(dialog.entity, 'phone') and dialog.entity.phone:
+                            dialog_phone = dialog.entity.phone.replace(' ', '').replace('-', '')
+                            if dialog_phone == phone_digits or dialog_phone.endswith(phone_digits[-9:]):
+                                entity = dialog.entity
+                                logger.info(f"🤖 Found entity in dialogs by phone: {external_id}")
+                                break
+                else:
+                    try:
+                        entity = await client.get_entity(int(external_id))
+                        logger.info(f"🤖 Found entity by numeric ID: {external_id}")
+                    except (ValueError, TypeError):
+                        entity = await client.get_entity(external_id)
             
             if entity:
                 await client.send_message(entity, reply_text)
@@ -718,7 +739,8 @@ async def run_listener_for_account(account: dict):
                             await process_autobot(
                                 client, db, conv_id, msg_id, 
                                 external_id, sender_name, 
-                                content or ""
+                                content or "",
+                                chat_id=chat_id  # Передаємо chat_id для надійної відправки
                             )
                         except Exception as autobot_err:
                             logger.error(f"🤖 Autobot processing error: {autobot_err}", exc_info=True)
