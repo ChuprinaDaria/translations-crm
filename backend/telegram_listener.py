@@ -77,28 +77,44 @@ def get_telegram_accounts():
         db.close()
 
 
-def get_or_create_conversation(db, external_id: str, sender_name: str = None, subject: str = None):
+def get_or_create_conversation(db, external_id: str, sender_name: str = None, subject: str = None, chat_id: int = None):
     """Get or create conversation for external_id."""
     # Check if conversation exists
     result = db.execute(text("""
-        SELECT id FROM communications_conversations
+        SELECT id, meta_data FROM communications_conversations
         WHERE platform = 'telegram' AND external_id = :external_id
     """), {"external_id": external_id})
     row = result.fetchone()
     
     if row:
-        return str(row[0])
+        conv_id = str(row[0])
+        # Update meta_data with chat_id if not already set
+        if chat_id:
+            existing_meta = row[1] if row[1] else {}
+            if isinstance(existing_meta, str):
+                existing_meta = json.loads(existing_meta)
+            if not existing_meta.get('telegram_chat_id'):
+                existing_meta['telegram_chat_id'] = chat_id
+                db.execute(text("""
+                    UPDATE communications_conversations 
+                    SET meta_data = CAST(:meta_data AS jsonb)
+                    WHERE id = :conv_id
+                """), {"conv_id": conv_id, "meta_data": json.dumps(existing_meta)})
+                db.commit()
+                logger.info(f"Updated conversation {conv_id} with chat_id: {chat_id}")
+        return conv_id
     
-    # Create new conversation
+    # Create new conversation with chat_id in meta_data
     conv_id = str(uuid4())
     now = datetime.utcnow()
+    meta_data = {"telegram_chat_id": chat_id} if chat_id else {}
     db.execute(text("""
-        INSERT INTO communications_conversations (id, platform, external_id, subject, created_at, updated_at)
-        VALUES (:id, 'telegram', :external_id, :subject, :now, :now)
-    """), {"id": conv_id, "external_id": external_id, "subject": subject, "now": now})
+        INSERT INTO communications_conversations (id, platform, external_id, subject, meta_data, created_at, updated_at)
+        VALUES (:id, 'telegram', :external_id, :subject, CAST(:meta_data AS jsonb), :now, :now)
+    """), {"id": conv_id, "external_id": external_id, "subject": subject, "meta_data": json.dumps(meta_data), "now": now})
     db.commit()
     
-    logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject})")
+    logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject}, chat_id: {chat_id})")
     return conv_id
 
 
@@ -679,7 +695,7 @@ async def run_listener_for_account(account: dict):
                     # Save to database first to get message_id
                     db = Session()
                     try:
-                        conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject)
+                        conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject, chat_id=chat_id)
                         
                         # Save message first (will update if media found)
                         temp_content = content or "[Медіа повідомлення]"

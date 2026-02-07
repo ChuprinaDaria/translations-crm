@@ -140,47 +140,62 @@ class TelegramService(MessengerService):
             logger = logging.getLogger(__name__)
             
             # Try different methods to get entity
+            # First, try to get chat_id from conversation meta_data (most reliable)
+            chat_id_from_meta = None
+            if conversation.meta_data and isinstance(conversation.meta_data, dict):
+                chat_id_from_meta = conversation.meta_data.get('telegram_chat_id') or conversation.meta_data.get('chat_id')
+            
             try:
-                if external_id.startswith('+'):
-                    # Phone number - try direct lookup first
+                # Method 1: Use chat_id from meta_data (most reliable)
+                if chat_id_from_meta:
                     try:
-                        entity = await client.get_entity(external_id)
-                        logger.info(f"Found entity by phone: {external_id}")
-                    except Exception:
-                        # If direct lookup fails, search in dialogs
-                        logger.info(f"Direct lookup failed for {external_id}, searching in dialogs...")
-                        phone_digits = external_id.replace('+', '').replace(' ', '').replace('-', '')
-                        async for dialog in client.iter_dialogs():
-                            if hasattr(dialog.entity, 'phone'):
-                                dialog_phone = dialog.entity.phone.replace(' ', '').replace('-', '')
-                                if dialog_phone == phone_digits or dialog_phone.endswith(phone_digits[-9:]):
-                                    entity = dialog.entity
-                                    logger.info(f"Found entity in dialogs by phone: {external_id}")
-                                    break
-                elif external_id.startswith('@'):
-                    # Username
-                    entity = await client.get_entity(external_id)
-                    logger.info(f"Found entity by username: {external_id}")
-                else:
-                    # Try as chat_id (integer) first
-                    try:
-                        chat_id = int(external_id)
-                        entity = await client.get_entity(chat_id)
-                        logger.info(f"Found entity by chat_id: {chat_id}")
-                    except (ValueError, TypeError):
-                        # If not a number, try as string (username without @)
+                        entity = await client.get_entity(int(chat_id_from_meta))
+                        logger.info(f"Found entity by chat_id from meta: {chat_id_from_meta}")
+                    except Exception as e:
+                        logger.warning(f"Failed to get entity by chat_id {chat_id_from_meta}: {e}")
+                
+                # Method 2: Try by external_id
+                if entity is None:
+                    if external_id.startswith('+'):
+                        # Phone number - try direct lookup first
                         try:
                             entity = await client.get_entity(external_id)
+                            logger.info(f"Found entity by phone: {external_id}")
                         except Exception:
-                            # Last resort: try with @ prefix
-                            entity = await client.get_entity(f"@{external_id}")
+                            # If direct lookup fails, search in dialogs
+                            logger.info(f"Direct lookup failed for {external_id}, searching in dialogs...")
+                            phone_digits = external_id.replace('+', '').replace(' ', '').replace('-', '')
+                            async for dialog in client.iter_dialogs():
+                                if hasattr(dialog.entity, 'phone') and dialog.entity.phone:
+                                    dialog_phone = dialog.entity.phone.replace(' ', '').replace('-', '')
+                                    if dialog_phone == phone_digits or dialog_phone.endswith(phone_digits[-9:]):
+                                        entity = dialog.entity
+                                        logger.info(f"Found entity in dialogs by phone: {external_id}")
+                                        break
+                    elif external_id.startswith('@'):
+                        # Username
+                        entity = await client.get_entity(external_id)
+                        logger.info(f"Found entity by username: {external_id}")
+                    else:
+                        # Try as chat_id (integer) first
+                        try:
+                            chat_id = int(external_id)
+                            entity = await client.get_entity(chat_id)
+                            logger.info(f"Found entity by chat_id: {chat_id}")
+                        except (ValueError, TypeError):
+                            # If not a number, try as string (username without @)
+                            try:
+                                entity = await client.get_entity(external_id)
+                            except Exception:
+                                # Last resort: try with @ prefix
+                                entity = await client.get_entity(f"@{external_id}")
             except Exception as e:
                 logger.error(f"Failed to get Telegram entity for {external_id}: {e}")
                 # Last attempt: search in dialogs by ID
                 try:
                     async for dialog in client.iter_dialogs():
                         dialog_id_str = str(dialog.id)
-                        if dialog_id_str == external_id or dialog_id_str == external_id.replace('+', ''):
+                        if dialog_id_str == external_id or (external_id and dialog_id_str == external_id.replace('+', '')):
                             entity = dialog.entity
                             logger.info(f"Found entity in dialogs by ID: {external_id}")
                             break
