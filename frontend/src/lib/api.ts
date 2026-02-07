@@ -1675,6 +1675,16 @@ export const settingsApi = {
   },
 };
 
+// Communications API (danger zone)
+export const communicationsApi = {
+  async deleteAllConversations(): Promise<{ status: string; deleted: { conversations: number; messages: number; attachments: number } }> {
+    return apiFetch<{ status: string; deleted: { conversations: number; messages: number; attachments: number } }>("/communications/conversations/all", {
+      method: "DELETE",
+      body: JSON.stringify({ confirm: true }),
+    });
+  },
+};
+
 // Users API
 export const usersApi = {
   async getUsers(): Promise<User[]> {

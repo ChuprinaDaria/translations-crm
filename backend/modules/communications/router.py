@@ -2496,3 +2496,70 @@ async def instagram_select_page(
     except Exception as e:
         logger.error(f"Error selecting Instagram page: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Помилка при збереженні сторінки: {str(e)}")
+
+
+# ============================================================================
+# Danger Zone - Delete ALL conversations
+# ============================================================================
+
+class DeleteAllConversationsRequest(BaseModel):
+    confirm: bool = False
+
+@router.delete("/conversations/all")
+async def delete_all_conversations(
+    body: DeleteAllConversationsRequest = Body(...),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user_db),
+):
+    """
+    Видалити ВСІ переписки (email, telegram, whatsapp, instagram, facebook).
+    Потрібне підтвердження confirm=true.
+    Тільки для авторизованих користувачів.
+    """
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Потрібне підтвердження: confirm=true")
+    
+    try:
+        from modules.communications.models import Attachment
+        
+        # 1. Видалити всі attachments (файли)
+        attachments = db.query(Attachment).all()
+        attachment_count = len(attachments)
+        for att in attachments:
+            # Видалити фізичний файл
+            try:
+                file_path = Path("/app/media") / att.file_path
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception as e:
+                logger.warning(f"Failed to delete file {att.file_path}: {e}")
+            db.delete(att)
+        
+        # 2. Видалити всі повідомлення
+        message_count = db.query(Message).count()
+        db.query(Message).delete()
+        
+        # 3. Видалити всі conversations
+        conversation_count = db.query(Conversation).count()
+        db.query(Conversation).delete()
+        
+        db.commit()
+        
+        logger.info(
+            f"🗑️ ALL conversations deleted by user {user.id}: "
+            f"{conversation_count} conversations, {message_count} messages, {attachment_count} attachments"
+        )
+        
+        return {
+            "status": "success",
+            "deleted": {
+                "conversations": conversation_count,
+                "messages": message_count,
+                "attachments": attachment_count,
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete all conversations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Помилка при видаленні: {str(e)}")

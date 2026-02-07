@@ -1,5 +1,5 @@
 import React, { useEffect, useState, ChangeEvent } from "react";
-import { UploadCloud, Building2, Plus, Trash2, MapPin, Star, Loader2, Image as ImageIcon, MessageSquare, Mail, Bot } from "lucide-react";
+import { UploadCloud, Building2, Plus, Trash2, MapPin, Star, Loader2, Image as ImageIcon, MessageSquare, Mail, Bot, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { toast } from "sonner";
 import {
   settingsApi,
+  communicationsApi,
   getImageUrl,
   API_BASE_URL,
   type BrandingSettings,
@@ -137,6 +138,10 @@ export function Settings() {
   const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isSavingAI, setIsSavingAI] = useState(false);
+
+  // Danger zone state
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Offices state
   const [offices, setOffices] = useState<Office[]>([]);
@@ -383,6 +388,10 @@ export function Settings() {
           <TabsTrigger value="ai" className="flex items-center gap-2">
             <Bot className="w-4 h-4" />
             AI Integration
+          </TabsTrigger>
+          <TabsTrigger value="danger" className="flex items-center gap-2 text-red-600 data-[state=active]:text-red-700">
+            <AlertTriangle className="w-4 h-4" />
+            Danger Zone
           </TabsTrigger>
         </TabsList>
 
@@ -2123,6 +2132,72 @@ export function Settings() {
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Danger Zone Tab */}
+        <TabsContent value="danger" className="mt-0">
+          <Card className="border-red-200">
+            <CardHeader>
+              <CardTitle className="text-red-700 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                Небезпечна зона
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-4">
+                <div>
+                  <h3 className="font-semibold text-red-800">Видалити всі переписки</h3>
+                  <p className="text-sm text-red-600 mt-1">
+                    Видаляє <strong>всі</strong> розмови та повідомлення з усіх каналів: Email, Telegram, WhatsApp, Instagram, Facebook. 
+                    Ця дія <strong>незворотна</strong>. Всі вкладення також будуть видалені.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="delete-confirm" className="text-sm text-red-700">
+                    Введіть <code className="px-1 py-0.5 bg-red-100 rounded text-xs font-bold">ВИДАЛИТИ</code> для підтвердження:
+                  </Label>
+                  <Input
+                    id="delete-confirm"
+                    value={deleteConfirmText}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setDeleteConfirmText(e.target.value)}
+                    placeholder="ВИДАЛИТИ"
+                    className="max-w-xs border-red-300 focus:border-red-500"
+                  />
+                </div>
+                <Button
+                  variant="destructive"
+                  disabled={deleteConfirmText !== "ВИДАЛИТИ" || isDeletingAll}
+                  onClick={async () => {
+                    setIsDeletingAll(true);
+                    try {
+                      const result = await communicationsApi.deleteAllConversations();
+                      toast.success(
+                        `Видалено: ${result.deleted.conversations} переписок, ${result.deleted.messages} повідомлень, ${result.deleted.attachments} вкладень`
+                      );
+                      setDeleteConfirmText("");
+                    } catch (error) {
+                      console.error(error);
+                      toast.error("Не вдалося видалити переписки");
+                    } finally {
+                      setIsDeletingAll(false);
+                    }
+                  }}
+                >
+                  {isDeletingAll ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Видалення...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Видалити всі переписки
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
