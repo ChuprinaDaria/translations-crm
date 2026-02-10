@@ -350,8 +350,10 @@ export async function loginWithFacebookForBusinessFromSettings(
     // Якщо використовуємо системний токен, код буде в authResponse.code
     if (useSystemUserToken && response.authResponse) {
       const code = (response.authResponse as any).code;
+      // Для WhatsApp Business Messaging може бути redirect_uri в authResponse
+      const redirectUri = (response.authResponse as any).redirect_uri;
       if (code) {
-        return { ...response, code };
+        return { ...response, code, redirect_uri: redirectUri };
       }
     }
 

@@ -33,7 +33,7 @@ class WhatsAppService(MessengerService):
         if config is None:
             config = self._load_config()
         super().__init__(db, config)
-        self.base_url = "https://graph.facebook.com/v18.0"
+        self.base_url = "https://graph.facebook.com/v22.0"  # Оновлено до v22.0
     
     def get_platform(self) -> PlatformEnum:
         return PlatformEnum.WHATSAPP
@@ -129,6 +129,12 @@ class WhatsAppService(MessengerService):
             
             if not phone_number_id or not access_token:
                 raise ValueError("WhatsApp credentials not configured")
+            
+            # Валідація phone_number_id: має бути тільки цифри
+            if not phone_number_id.isdigit():
+                import logging
+                logging.getLogger(__name__).error(f"Invalid phone_number_id format (not numeric): '{phone_number_id}'. Phone Number ID must contain only digits.")
+                raise ValueError(f"Invalid phone_number_id format: must contain only digits, got '{phone_number_id}'")
             
             url = f"{self.base_url}/{phone_number_id}/messages"
             headers = {

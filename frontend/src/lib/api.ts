@@ -1606,7 +1606,7 @@ export const settingsApi = {
   },
   
   // WhatsApp OAuth - підключення через Facebook Login for Business
-  async connectWhatsApp(code: string, appId: string, appSecret: string): Promise<{
+  async connectWhatsApp(code: string, appId: string, appSecret: string, redirectUri?: string): Promise<{
     status: string;
     access_token: string;
     phone_number_id?: string;
@@ -1631,7 +1631,12 @@ export const settingsApi = {
       }>;
     }>("/communications/webhooks/whatsapp/connect", {
       method: "POST",
-      body: JSON.stringify({ code, app_id: appId, app_secret: appSecret }),
+      body: JSON.stringify({ 
+        code, 
+        app_id: appId, 
+        app_secret: appSecret,
+        redirect_uri: redirectUri  // Передаємо redirect_uri якщо він є
+      }),
     });
   },
   
@@ -1674,6 +1679,26 @@ export const settingsApi = {
     formData.append("verify_token", data.verify_token);
     formData.append("page_id", data.page_id || "");
     return apiFetchMultipart<{ status: string }>("/settings/instagram-config", formData, "POST");
+  },
+  
+  // Instagram OAuth - статус та відключення
+  async getInstagramStatus(): Promise<{
+    connected: boolean;
+    has_page_id: boolean;
+    has_business_id: boolean;
+  }> {
+    return apiFetch<{
+      connected: boolean;
+      has_page_id: boolean;
+      has_business_id: boolean;
+    }>("/communications/webhooks/instagram/status");
+  },
+  
+  // Instagram відключення
+  async disconnectInstagram(): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>("/communications/webhooks/instagram/disconnect", {
+      method: "POST",
+    });
   },
 
   // Facebook API

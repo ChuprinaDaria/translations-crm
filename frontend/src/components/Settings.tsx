@@ -1,4 +1,4 @@
-import React, { useEffect, useState, ChangeEvent } from "react";
+import React, { useEffect, useState, ChangeEvent, useCallback } from "react";
 import { UploadCloud, Building2, Plus, Trash2, MapPin, Star, Loader2, Image as ImageIcon, MessageSquare, Mail, Bot, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -102,6 +102,15 @@ export function Settings() {
     business_id: "",
   });
   const [isSavingInstagram, setIsSavingInstagram] = useState(false);
+  const [instagramStatus, setInstagramStatus] = useState<{
+    connected: boolean;
+    has_page_id: boolean;
+    has_business_id: boolean;
+  }>({
+    connected: false,
+    has_page_id: false,
+    has_business_id: false,
+  });
 
   // Facebook state
   const [facebook, setFacebook] = useState<FacebookConfig>({
@@ -110,6 +119,7 @@ export function Settings() {
     app_secret: "",
     verify_token: "",
     page_id: "",
+    config_id: "",
   });
   const [isSavingFacebook, setIsSavingFacebook] = useState(false);
 
@@ -215,6 +225,25 @@ export function Settings() {
     is_default: false,
   });
 
+  // Функції для оновлення статусів
+  const refreshWhatsAppStatus = useCallback(async () => {
+    try {
+      const status = await settingsApi.getWhatsAppStatus();
+      setWhatsappStatus(status);
+    } catch (error) {
+      console.error("Failed to refresh WhatsApp status:", error);
+    }
+  }, []);
+
+  const refreshInstagramStatus = useCallback(async () => {
+    try {
+      const status = await settingsApi.getInstagramStatus();
+      setInstagramStatus(status);
+    } catch (error) {
+      console.error("Failed to refresh Instagram status:", error);
+    }
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -236,7 +265,7 @@ export function Settings() {
           settingsApi.getManagerSmtpAccounts().catch(() => []),
           settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
           settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: false as boolean, app_secret: "", verify_token: "", page_id: "", page_name: "", business_id: "" })),
-          settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "" })),
+          settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "", config_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({
             api_key: "",
@@ -255,17 +284,32 @@ export function Settings() {
         setTelegramAccounts(tgAccounts);
         setSmtp(smtpSettings);
         setManagerSmtpAccounts(managerSmtpAccountsData);
-        setWhatsapp(whatsappConfig);
+        // Очищаємо phone_number_id від email або інших нецифрових символів
+        const cleanPhoneNumberId = whatsappConfig.phone_number_id 
+          ? whatsappConfig.phone_number_id.replace(/[^0-9]/g, '')
+          : "";
         
-        // Перевіряємо статус WhatsApp
+        setWhatsapp({
+          ...whatsappConfig,
+          phone_number_id: cleanPhoneNumberId
+        });
+        setInstagram(instagramConfig);
+        
+        // Перевіряємо статуси
         try {
-          const status = await settingsApi.getWhatsAppStatus();
-          setWhatsappStatus(status);
+          const whatsappStatus = await settingsApi.getWhatsAppStatus();
+          setWhatsappStatus(whatsappStatus);
         } catch (error) {
           console.error("Failed to get WhatsApp status:", error);
         }
         
-        setInstagram(instagramConfig);
+        try {
+          const instagramStatus = await settingsApi.getInstagramStatus();
+          setInstagramStatus(instagramStatus);
+        } catch (error) {
+          console.error("Failed to get Instagram status:", error);
+        }
+        
         setFacebook(facebookConfig);
         setStripe(stripeConfig);
         setInpost({
@@ -1306,10 +1350,10 @@ export function Settings() {
                   <Button
                     type="button"
                     className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                    disabled={isConnectingWhatsApp || !facebook.app_id || !facebook.config_id}
+                    disabled={isConnectingWhatsApp || !facebook.app_id || !facebook.config_id || !facebook.app_secret}
                     onClick={async () => {
-                      if (!facebook.app_id || !facebook.config_id) {
-                        toast.error("Спочатку налаштуйте Facebook App ID та Config ID в Settings → Facebook");
+                      if (!facebook.app_id || !facebook.config_id || !facebook.app_secret) {
+                        toast.error("Спочатку налаштуйте Facebook App ID, Config ID та App Secret в Settings → Facebook");
                         return;
                       }
                       
@@ -1329,10 +1373,13 @@ export function Settings() {
                         
                         if (loginResponse.code) {
                           // Обмінюємо code на токен (передаємо app_id та app_secret з налаштувань)
+                          // Також передаємо redirect_uri якщо він є (для WhatsApp Business Messaging)
+                          const redirectUri = (loginResponse as any).redirect_uri;
                           const result = await settingsApi.connectWhatsApp(
                             loginResponse.code,
                             facebook.app_id,
-                            facebook.app_secret
+                            facebook.app_secret,
+                            redirectUri
                           );
                           
                           // Оновлюємо налаштування
@@ -1362,6 +1409,64 @@ export function Settings() {
                 )}
               </div>
               
+              {/* Підказка якщо кнопка неактивна */}
+              {!whatsappStatus.connected && (!facebook.app_id || !facebook.config_id || !facebook.app_secret) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    <strong>Увага:</strong> Для підключення WhatsApp необхідно спочатку налаштувати <strong>Facebook App ID</strong>, <strong>Config ID</strong> та <strong>App Secret</strong> в розділі <strong>Settings → Facebook</strong>.
+                    <div className="mt-2 space-y-1">
+                      {!facebook.app_id && <span className="block">• Facebook App ID не вказано</span>}
+                      {!facebook.config_id && <span className="block">• Config ID не вказано</span>}
+                      {!facebook.app_secret && <span className="block">• App Secret не вказано</span>}
+                    </div>
+                  </p>
+                </div>
+              )}
+              
+              {/* Попередження про неправильний Phone Number ID */}
+              {whatsapp.phone_number_id && (whatsapp.phone_number_id.includes('@') || !/^[0-9]+$/.test(whatsapp.phone_number_id)) && !whatsappStatus.connected && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    <strong>Помилка:</strong> Phone Number ID містить некоректні дані (email або нецифрові символи). 
+                    <br />
+                    <span className="text-xs mt-1 block">Поле буде автоматично очищено. Для підключення через OAuth це поле не потрібно заповнювати вручну - воно отримається автоматично.</span>
+                  </p>
+                </div>
+              )}
+              
+              {/* Кнопка для відкриття встроенной регистрації WhatsApp */}
+              {facebook.app_id && facebook.config_id && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">
+                        Встроенная регистрация WhatsApp Business
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Відкрийте діалогове вікно для створення або вибору акаунту WhatsApp Business, додавання телефонного номера та його підтвердження.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                      onClick={async () => {
+                        try {
+                          const { openWhatsAppOnboarding } = await import('../lib/facebook-sdk');
+                          await openWhatsAppOnboarding(['marketing_messages_lite', 'app_only_install']);
+                        } catch (error: any) {
+                          console.error(error);
+                          toast.error(error.message || "Не вдалося відкрити WhatsApp onboarding");
+                        }
+                      }}
+                    >
+                      <ImageIcon className="w-4 h-4 mr-2" />
+                      Відкрити встроенную регистрацию
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp-access-token">Access Token</Label>
@@ -1380,12 +1485,27 @@ export function Settings() {
                   <Label htmlFor="whatsapp-phone-number-id">Phone Number ID</Label>
                   <Input
                     id="whatsapp-phone-number-id"
+                    type="text"
+                    pattern="[0-9]*"
+                    inputMode="numeric"
                     value={whatsapp.phone_number_id}
-                    onChange={(e) => setWhatsapp({ ...whatsapp, phone_number_id: e.target.value })}
+                    onChange={(e) => {
+                      // Валідація: тільки цифри
+                      const value = e.target.value.replace(/[^0-9]/g, '');
+                      setWhatsapp({ ...whatsapp, phone_number_id: value });
+                    }}
+                    placeholder="Введіть цифровий ID (наприклад: 123456789012345)"
                     disabled={whatsappStatus.connected}
+                    className={whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id) ? "border-red-500" : ""}
                   />
+                  {whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id) && (
+                    <p className="text-xs text-red-500">Phone Number ID має містити тільки цифри</p>
+                  )}
                   {whatsappStatus.connected && (
                     <p className="text-xs text-gray-500">ID отримано автоматично через OAuth</p>
+                  )}
+                  {!whatsappStatus.connected && !whatsapp.phone_number_id && (
+                    <p className="text-xs text-gray-500">Введіть цифровий ID (зазвичай 15 цифр) або отримайте автоматично через OAuth</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -1410,11 +1530,25 @@ export function Settings() {
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                  disabled={isSavingWhatsApp}
+                  disabled={isSavingWhatsApp || (whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id))}
                   onClick={async () => {
+                    // Валідація Phone Number ID перед збереженням
+                    if (whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id)) {
+                      toast.error("Phone Number ID має містити тільки цифри. Перевірте введене значення.");
+                      return;
+                    }
+                    
                     setIsSavingWhatsApp(true);
                     try {
-                      await settingsApi.updateWhatsAppConfig(whatsapp);
+                      // Очищаємо phone_number_id якщо він не є цифровим
+                      const cleanPhoneNumberId = whatsapp.phone_number_id && /^[0-9]+$/.test(whatsapp.phone_number_id) 
+                        ? whatsapp.phone_number_id 
+                        : "";
+                      
+                      await settingsApi.updateWhatsAppConfig({
+                        ...whatsapp,
+                        phone_number_id: cleanPhoneNumberId
+                      });
                       toast.success("WhatsApp налаштування збережено");
                     } catch (error) {
                       console.error(error);
@@ -1435,22 +1569,71 @@ export function Settings() {
         <TabsContent value="instagram" className="mt-0">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Instagram API налаштування</CardTitle>
-                {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? (
-                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                    ✓ Підключено
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
-                    ✗ Не підключено
-                  </Badge>
-                )}
-              </div>
+              <CardTitle>Instagram API налаштування</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Статус підключення та інформація про сторінку */}
-              {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) && instagram.page_id && (
+              {/* Статус підключення */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${instagramStatus.connected ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <div>
+                    <p className="font-medium">
+                      {instagramStatus.connected ? 'Підключено' : 'Не підключено'}
+                    </p>
+                    {instagramStatus.connected && (
+                      <p className="text-sm text-gray-500">
+                        {instagramStatus.has_page_id ? 'Page ID налаштовано' : 'Page ID не налаштовано'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {instagramStatus.connected ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await settingsApi.disconnectInstagram();
+                        setInstagram({ 
+                          ...instagram, 
+                          access_token: "", 
+                          page_id: "",
+                          page_name: "",
+                          business_id: ""
+                        });
+                        await refreshInstagramStatus();
+                        toast.success("Instagram відключено");
+                      } catch (error) {
+                        console.error(error);
+                        toast.error("Не вдалося відключити Instagram");
+                      }
+                    }}
+                  >
+                    Відключити
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!instagram.app_id}
+                    onClick={() => {
+                      if (!instagram.app_id) {
+                        toast.error("Спочатку введіть Instagram App ID");
+                        return;
+                      }
+                      // Відкриваємо OAuth URL
+                      const oauthUrl = `${API_BASE_URL}/communications/instagram/auth`;
+                      window.location.href = oauthUrl;
+                    }}
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    Підключити Instagram
+                  </Button>
+                )}
+              </div>
+              
+              {/* Інформація про сторінку */}
+              {instagramStatus.connected && instagram.page_id && (
                 <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-2 border">
                   <p className="text-sm">
                     <span className="font-medium">Сторінка:</span> {instagram.page_name || 'Невідомо'}
@@ -1529,24 +1712,7 @@ export function Settings() {
                   )}
                 </div>
               </div>
-              <div className="flex justify-between items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!instagram.app_id}
-                  onClick={() => {
-                    if (!instagram.app_id) {
-                      toast.error("Спочатку введіть Instagram App ID");
-                      return;
-                    }
-                    // Відкриваємо OAuth URL
-                    const oauthUrl = `${API_BASE_URL}/communications/instagram/auth`;
-                    window.location.href = oauthUrl;
-                  }}
-                >
-                  <ImageIcon className="w-4 h-4 mr-2" />
-                  {(instagram.access_token === true || (typeof instagram.access_token === "string" && instagram.access_token.length > 0)) ? "Переподключити Instagram" : "Підключити Instagram"}
-                </Button>
+              <div className="flex justify-end">
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
@@ -1555,6 +1721,7 @@ export function Settings() {
                     setIsSavingInstagram(true);
                     try {
                       await settingsApi.updateInstagramConfig(instagram);
+                      await refreshInstagramStatus();
                       toast.success("Instagram налаштування збережено");
                     } catch (error) {
                       console.error(error);

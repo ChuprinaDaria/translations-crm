@@ -2185,9 +2185,16 @@ def update_telegram_config(
 def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
     """Повертає налаштування WhatsApp API."""
     settings = crud.get_whatsapp_settings(db)
+    phone_number_id = settings.get("whatsapp_phone_number_id") or ""
+    # Валідація: повертаємо тільки якщо це цифри
+    if phone_number_id and not phone_number_id.isdigit():
+        import logging
+        logging.getLogger(__name__).warning(f"Invalid phone_number_id format in DB: '{phone_number_id}'")
+        phone_number_id = ''.join(filter(str.isdigit, phone_number_id)) if phone_number_id else ""
+    
     return {
         "access_token": settings.get("whatsapp_access_token") or "",
-        "phone_number_id": settings.get("whatsapp_phone_number_id") or "",
+        "phone_number_id": phone_number_id,
         "app_secret": settings.get("whatsapp_app_secret") or "",
         "verify_token": settings.get("whatsapp_verify_token") or "",
     }
@@ -2204,6 +2211,16 @@ def update_whatsapp_config(
 ):
     """Оновлює налаштування WhatsApp API."""
     crud.set_setting(db, "whatsapp_access_token", access_token)
+    
+    # Валідація phone_number_id: має бути тільки цифри
+    if phone_number_id:
+        # Видаляємо всі нецифрові символи
+        phone_number_id_clean = ''.join(filter(str.isdigit, phone_number_id))
+        if phone_number_id_clean != phone_number_id:
+            import logging
+            logging.getLogger(__name__).warning(f"Phone Number ID очищено від нецифрових символів: '{phone_number_id}' -> '{phone_number_id_clean}'")
+        phone_number_id = phone_number_id_clean if phone_number_id_clean else ""
+    
     crud.set_setting(db, "whatsapp_phone_number_id", phone_number_id)
     crud.set_setting(db, "whatsapp_app_secret", app_secret)
     crud.set_setting(db, "whatsapp_verify_token", verify_token)

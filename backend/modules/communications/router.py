@@ -619,9 +619,28 @@ async def send_message(
         db.refresh(message)
         
         # Broadcast to WebSocket
+        # Додаємо platform та platform_name для правильної обробки на фронтенді
+        platform_icons = {
+            PlatformEnum.TELEGRAM: '✈️',
+            PlatformEnum.WHATSAPP: '💬',
+            PlatformEnum.EMAIL: '📧',
+            PlatformEnum.INSTAGRAM: '📷',
+            PlatformEnum.FACEBOOK: '👥',
+        }
+        platform_names = {
+            PlatformEnum.TELEGRAM: 'Telegram',
+            PlatformEnum.WHATSAPP: 'WhatsApp',
+            PlatformEnum.EMAIL: 'Email',
+            PlatformEnum.INSTAGRAM: 'Instagram',
+            PlatformEnum.FACEBOOK: 'Facebook',
+        }
+        
         await messages_manager.broadcast({
             "type": "new_message",
             "conversation_id": str(conversation_id),
+            "platform": str(conversation.platform.value) if hasattr(conversation.platform, 'value') else str(conversation.platform),
+            "platform_name": platform_names.get(conversation.platform, str(conversation.platform)),
+            "platform_icon": platform_icons.get(conversation.platform, '💬'),
             "message": {
                 "id": str(message.id),
                 "conversation_id": str(message.conversation_id),
@@ -1516,6 +1535,7 @@ async def whatsapp_connect(
         code = body.get("code")
         app_id = body.get("app_id")
         app_secret = body.get("app_secret")
+        redirect_uri = body.get("redirect_uri")  # Опціональний redirect_uri
         
         if not code:
             raise HTTPException(status_code=400, detail="Code не вказано")
@@ -1525,6 +1545,7 @@ async def whatsapp_connect(
             raise HTTPException(status_code=400, detail="App Secret не вказано")
         
         # Обмінюємо code на access_token (використовуємо v22.0)
+        # Використовуємо POST замість GET, як рекомендовано для WhatsApp Business Messaging
         token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
         token_params = {
             "client_id": app_id,
@@ -1533,12 +1554,31 @@ async def whatsapp_connect(
             "code": code,
         }
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(token_url, params=token_params)
-            response.raise_for_status()
-            token_data = response.json()
+        # Додаємо redirect_uri якщо він переданий (потрібен для WhatsApp Business Messaging)
+        # Для WhatsApp Business Messaging з встроенной регистрацией redirect_uri обов'язковий
+        if redirect_uri:
+            token_params["redirect_uri"] = redirect_uri
+            logger.info(f"Using redirect_uri for WhatsApp Business Messaging: {redirect_uri[:100]}...")
+        else:
+            # Для стандартного OAuth flow redirect_uri може не бути потрібним
+            logger.info("redirect_uri not provided, using standard OAuth flow")
         
-        access_token = token_data.get("access_token")
+        logger.info(f"Exchanging authorization code for access token (app_id: {app_id})")
+        
+        async with httpx.AsyncClient() as client:
+            # Використовуємо POST з JSON body (як у прикладі curl для WhatsApp Business Messaging)
+            # Meta приймає як form-data, так і JSON, але для WhatsApp Business Messaging краще використовувати JSON
+            response = await client.post(
+                token_url, 
+                json=token_params,  # Використовуємо json= замість data= для JSON body
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            token_response = response.json()
+            
+            logger.info("Successfully exchanged authorization code for access token")
+        
+        access_token = token_response.get("access_token")
         if not access_token:
             raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
         
@@ -1570,10 +1610,25 @@ async def whatsapp_connect(
                         waba_response.raise_for_status()
                         phone_numbers_data = waba_response.json()
                         
-                        if phone_numbers_data.get("data"):
+                        if phone_numbers_data.get("data") and len(phone_numbers_data["data"]) > 0:
                             phone_number_id = phone_numbers_data["data"][0].get("id")
+                            # Валідація: phone_number_id має бути цифровим ID
+                            if phone_number_id and not phone_number_id.isdigit():
+                                logger.warning(f"Invalid phone_number_id format (not numeric): {phone_number_id}")
+                                phone_number_id = None
+                            logger.info(f"Retrieved phone_number_id: {phone_number_id} for WABA: {waba_id}")
+                        else:
+                            logger.warning(f"No phone numbers found for WABA: {waba_id}")
+                except httpx.HTTPStatusError as e:
+                    error_detail = f"HTTP {e.response.status_code}"
+                    try:
+                        error_data = e.response.json()
+                        error_detail = error_data.get("error", {}).get("message", error_detail)
+                    except:
+                        pass
+                    logger.warning(f"Failed to get phone_number_id for WABA {waba_id}: {error_detail}")
                 except Exception as e:
-                    logger.warning(f"Failed to get phone_number_id: {e}")
+                    logger.warning(f"Failed to get phone_number_id for WABA {waba_id}: {e}")
                 
                 whatsapp_accounts.append({
                     "waba_id": waba_id,
@@ -2224,6 +2279,44 @@ async def facebook_exchange_code(
     except Exception as e:
         logger.error(f"Facebook code exchange error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Помилка обміну коду: {str(e)}")
+
+
+# ============================================================================
+# Instagram OAuth endpoints (status and disconnect)
+# ============================================================================
+
+@router.get("/webhooks/instagram/status")
+async def instagram_status(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Перевірка статусу підключення Instagram."""
+    settings = crud.get_instagram_settings(db)
+    access_token = settings.get("instagram_access_token")
+    
+    return {
+        "connected": bool(access_token),
+        "has_page_id": bool(settings.get("instagram_page_id")),
+        "has_business_id": bool(settings.get("instagram_business_id")),
+    }
+
+
+@router.post("/webhooks/instagram/disconnect")
+async def instagram_disconnect(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Відключення Instagram - видаляє токени з бази даних."""
+    # Видаляємо токени та налаштування
+    crud.set_setting(db, "instagram_access_token", "")
+    crud.set_setting(db, "instagram_page_id", "")
+    crud.set_setting(db, "instagram_page_name", "")
+    crud.set_setting(db, "instagram_business_id", "")
+    crud.set_setting(db, "instagram_page_access_token", "")
+    
+    logger.info("Instagram disconnected")
+    
+    return {"status": "removed"}
 
 
 # ============================================================================
