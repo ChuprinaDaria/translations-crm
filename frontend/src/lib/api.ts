@@ -1208,6 +1208,7 @@ export interface FacebookConfig {
   app_secret: string;
   verify_token: string;
   page_id: string;
+  config_id?: string;  // Facebook Login for Business configuration ID
 }
 
 export interface StripeConfig {
@@ -1603,6 +1604,56 @@ export const settingsApi = {
     formData.append("verify_token", data.verify_token);
     return apiFetchMultipart<{ status: string }>("/settings/whatsapp-config", formData, "POST");
   },
+  
+  // WhatsApp OAuth - підключення через Facebook Login for Business
+  async connectWhatsApp(code: string, appId: string, appSecret: string): Promise<{
+    status: string;
+    access_token: string;
+    phone_number_id?: string;
+    waba_id?: string;
+    whatsapp_accounts: Array<{
+      waba_id: string;
+      page_id: string;
+      page_name: string;
+      phone_number_id?: string;
+    }>;
+  }> {
+    return apiFetch<{
+      status: string;
+      access_token: string;
+      phone_number_id?: string;
+      waba_id?: string;
+      whatsapp_accounts: Array<{
+        waba_id: string;
+        page_id: string;
+        page_name: string;
+        phone_number_id?: string;
+      }>;
+    }>("/communications/webhooks/whatsapp/connect", {
+      method: "POST",
+      body: JSON.stringify({ code, app_id: appId, app_secret: appSecret }),
+    });
+  },
+  
+  // WhatsApp статус
+  async getWhatsAppStatus(): Promise<{
+    connected: boolean;
+    has_phone_number_id: boolean;
+    has_waba_id: boolean;
+  }> {
+    return apiFetch<{
+      connected: boolean;
+      has_phone_number_id: boolean;
+      has_waba_id: boolean;
+    }>("/communications/webhooks/whatsapp/status");
+  },
+  
+  // WhatsApp відключення
+  async disconnectWhatsApp(): Promise<{ status: string }> {
+    return apiFetch<{ status: string }>("/communications/webhooks/whatsapp/disconnect", {
+      method: "POST",
+    });
+  },
 
   // Instagram API
   async getInstagramConfig(): Promise<InstagramConfig> {
@@ -1636,7 +1687,42 @@ export const settingsApi = {
     formData.append("app_secret", data.app_secret);
     formData.append("verify_token", data.verify_token);
     formData.append("page_id", data.page_id);
+    if (data.config_id) {
+      formData.append("config_id", data.config_id);
+    }
     return apiFetchMultipart<{ status: string }>("/settings/facebook-config", formData, "POST");
+  },
+
+  // Facebook OAuth - обмін коду на токен
+  async exchangeFacebookCode(code: string): Promise<{
+    access_token: string;
+    pages: Array<{
+      page_id: string;
+      page_name: string;
+      page_access_token: string;
+    }>;
+    whatsapp_accounts: Array<{
+      waba_id: string;
+      page_id: string;
+      page_name: string;
+    }>;
+  }> {
+    return apiFetch<{
+      access_token: string;
+      pages: Array<{
+        page_id: string;
+        page_name: string;
+        page_access_token: string;
+      }>;
+      whatsapp_accounts: Array<{
+        waba_id: string;
+        page_id: string;
+        page_name: string;
+      }>;
+    }>("/communications/facebook/exchange-code", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
   },
 
   // Stripe API

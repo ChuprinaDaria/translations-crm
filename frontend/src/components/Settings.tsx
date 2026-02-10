@@ -80,6 +80,16 @@ export function Settings() {
     verify_token: "",
   });
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState<{
+    connected: boolean;
+    has_phone_number_id: boolean;
+    has_waba_id: boolean;
+  }>({
+    connected: false,
+    has_phone_number_id: false,
+    has_waba_id: false,
+  });
+  const [isConnectingWhatsApp, setIsConnectingWhatsApp] = useState(false);
 
   // Instagram state
   const [instagram, setInstagram] = useState<InstagramConfig>({
@@ -246,6 +256,15 @@ export function Settings() {
         setSmtp(smtpSettings);
         setManagerSmtpAccounts(managerSmtpAccountsData);
         setWhatsapp(whatsappConfig);
+        
+        // Перевіряємо статус WhatsApp
+        try {
+          const status = await settingsApi.getWhatsAppStatus();
+          setWhatsappStatus(status);
+        } catch (error) {
+          console.error("Failed to get WhatsApp status:", error);
+        }
+        
         setInstagram(instagramConfig);
         setFacebook(facebookConfig);
         setStripe(stripeConfig);
@@ -1249,6 +1268,100 @@ export function Settings() {
               <CardTitle>WhatsApp API налаштування</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Статус підключення */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${whatsappStatus.connected ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <div>
+                    <p className="font-medium">
+                      {whatsappStatus.connected ? 'Підключено' : 'Не підключено'}
+                    </p>
+                    {whatsappStatus.connected && (
+                      <p className="text-sm text-gray-500">
+                        {whatsappStatus.has_phone_number_id ? 'Phone Number ID налаштовано' : 'Phone Number ID не налаштовано'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {whatsappStatus.connected ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isConnectingWhatsApp}
+                    onClick={async () => {
+                      try {
+                        await settingsApi.disconnectWhatsApp();
+                        setWhatsapp({ ...whatsapp, access_token: "", phone_number_id: "" });
+                        await refreshWhatsAppStatus();
+                        toast.success("WhatsApp відключено");
+                      } catch (error) {
+                        console.error(error);
+                        toast.error("Не вдалося відключити WhatsApp");
+                      }
+                    }}
+                  >
+                    Відключити
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
+                    disabled={isConnectingWhatsApp || !facebook.app_id || !facebook.config_id}
+                    onClick={async () => {
+                      if (!facebook.app_id || !facebook.config_id) {
+                        toast.error("Спочатку налаштуйте Facebook App ID та Config ID в Settings → Facebook");
+                        return;
+                      }
+                      
+                      setIsConnectingWhatsApp(true);
+                      try {
+                        // Імпортуємо функції для роботи з Facebook SDK
+                        const { 
+                          initFacebookSDK, 
+                          loginWithFacebookForBusinessFromSettings 
+                        } = await import('../lib/facebook-sdk');
+                        
+                        // Ініціалізуємо SDK
+                        await initFacebookSDK(facebook.app_id);
+                        
+                        // Викликаємо login з config_id з налаштувань
+                        const loginResponse = await loginWithFacebookForBusinessFromSettings(true);
+                        
+                        if (loginResponse.code) {
+                          // Обмінюємо code на токен (передаємо app_id та app_secret з налаштувань)
+                          const result = await settingsApi.connectWhatsApp(
+                            loginResponse.code,
+                            facebook.app_id,
+                            facebook.app_secret
+                          );
+                          
+                          // Оновлюємо налаштування
+                          setWhatsapp({
+                            ...whatsapp,
+                            access_token: result.access_token,
+                            phone_number_id: result.phone_number_id || "",
+                          });
+                          
+                          // Оновлюємо статус
+                          await refreshWhatsAppStatus();
+                          
+                          toast.success("WhatsApp успішно підключено!");
+                        } else {
+                          throw new Error("Не отримано code від Facebook");
+                        }
+                      } catch (error: any) {
+                        console.error(error);
+                        toast.error(error.message || "Не вдалося підключити WhatsApp");
+                      } finally {
+                        setIsConnectingWhatsApp(false);
+                      }
+                    }}
+                  >
+                    {isConnectingWhatsApp ? "Підключення..." : "Підключити через Facebook"}
+                  </Button>
+                )}
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp-access-token">Access Token</Label>
@@ -1257,7 +1370,11 @@ export function Settings() {
                     type="password"
                     value={whatsapp.access_token}
                     onChange={(e) => setWhatsapp({ ...whatsapp, access_token: e.target.value })}
+                    disabled={whatsappStatus.connected}
                   />
+                  {whatsappStatus.connected && (
+                    <p className="text-xs text-gray-500">Токен отримано автоматично через OAuth</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp-phone-number-id">Phone Number ID</Label>
@@ -1265,7 +1382,11 @@ export function Settings() {
                     id="whatsapp-phone-number-id"
                     value={whatsapp.phone_number_id}
                     onChange={(e) => setWhatsapp({ ...whatsapp, phone_number_id: e.target.value })}
+                    disabled={whatsappStatus.connected}
                   />
+                  {whatsappStatus.connected && (
+                    <p className="text-xs text-gray-500">ID отримано автоматично через OAuth</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp-app-secret">App Secret</Label>

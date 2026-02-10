@@ -1494,6 +1494,157 @@ async def whatsapp_webhook_receive(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# WhatsApp OAuth endpoints (Facebook Login for Business)
+# ============================================================================
+
+@router.post("/webhooks/whatsapp/connect")
+async def whatsapp_connect(
+    request: Request,
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """
+    Обмін authorization code на access token для WhatsApp через Facebook Login for Business.
+    Приймає code, app_id та app_secret з фронту.
+    """
+    import httpx
+    import json
+    
+    try:
+        body = await request.json()
+        code = body.get("code")
+        app_id = body.get("app_id")
+        app_secret = body.get("app_secret")
+        
+        if not code:
+            raise HTTPException(status_code=400, detail="Code не вказано")
+        if not app_id:
+            raise HTTPException(status_code=400, detail="App ID не вказано")
+        if not app_secret:
+            raise HTTPException(status_code=400, detail="App Secret не вказано")
+        
+        # Обмінюємо code на access_token (використовуємо v22.0)
+        token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
+        token_params = {
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "grant_type": "authorization_code",
+            "code": code,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(token_url, params=token_params)
+            response.raise_for_status()
+            token_data = response.json()
+        
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
+        
+        # Отримуємо інформацію про WhatsApp Business акаунти
+        pages_url = "https://graph.facebook.com/v22.0/me/accounts"
+        pages_params = {"access_token": access_token}
+        
+        async with httpx.AsyncClient() as client:
+            pages_response = await client.get(pages_url, params=pages_params)
+            pages_response.raise_for_status()
+            pages_data = pages_response.json()
+        
+        # Збираємо інформацію про WhatsApp Business акаунти
+        whatsapp_accounts = []
+        phone_number_id = None
+        waba_id = None
+        
+        for page in pages_data.get("data", []):
+            if "whatsapp_business_account" in page:
+                whatsapp_info = page["whatsapp_business_account"]
+                waba_id = whatsapp_info.get("id")
+                
+                # Отримуємо phone_number_id з WhatsApp Business Account
+                try:
+                    waba_url = f"https://graph.facebook.com/v22.0/{waba_id}/phone_numbers"
+                    waba_params = {"access_token": access_token}
+                    async with httpx.AsyncClient() as client:
+                        waba_response = await client.get(waba_url, params=waba_params)
+                        waba_response.raise_for_status()
+                        phone_numbers_data = waba_response.json()
+                        
+                        if phone_numbers_data.get("data"):
+                            phone_number_id = phone_numbers_data["data"][0].get("id")
+                except Exception as e:
+                    logger.warning(f"Failed to get phone_number_id: {e}")
+                
+                whatsapp_accounts.append({
+                    "waba_id": waba_id,
+                    "page_id": page.get("id"),
+                    "page_name": page.get("name", ""),
+                    "phone_number_id": phone_number_id,
+                })
+        
+        # Зберігаємо access_token та phone_number_id в налаштуваннях WhatsApp
+        crud.set_setting(db, "whatsapp_access_token", access_token)
+        if phone_number_id:
+            crud.set_setting(db, "whatsapp_phone_number_id", phone_number_id)
+        if waba_id:
+            crud.set_setting(db, "whatsapp_waba_id", waba_id)
+        
+        logger.info(f"WhatsApp connected successfully. WABA ID: {waba_id}, Phone Number ID: {phone_number_id}")
+        
+        return {
+            "status": "ok",
+            "access_token": access_token,
+            "phone_number_id": phone_number_id,
+            "waba_id": waba_id,
+            "whatsapp_accounts": whatsapp_accounts,
+        }
+        
+    except httpx.HTTPStatusError as e:
+        error_detail = f"HTTP {e.response.status_code}"
+        try:
+            error_data = e.response.json()
+            error_detail = error_data.get("error", {}).get("message", error_detail)
+        except:
+            pass
+        logger.error(f"WhatsApp connect error: {error_detail}")
+        raise HTTPException(status_code=400, detail=f"Помилка обміну коду: {error_detail}")
+    except Exception as e:
+        logger.error(f"WhatsApp connect error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Помилка підключення: {str(e)}")
+
+
+@router.get("/webhooks/whatsapp/status")
+async def whatsapp_status(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Перевірка статусу підключення WhatsApp."""
+    settings = crud.get_whatsapp_settings(db)
+    access_token = settings.get("whatsapp_access_token")
+    
+    return {
+        "connected": bool(access_token),
+        "has_phone_number_id": bool(settings.get("whatsapp_phone_number_id")),
+        "has_waba_id": bool(settings.get("whatsapp_waba_id")),
+    }
+
+
+@router.post("/webhooks/whatsapp/disconnect")
+async def whatsapp_disconnect(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Відключення WhatsApp - видаляє токени з бази даних."""
+    # Видаляємо токени
+    crud.set_setting(db, "whatsapp_access_token", "")
+    crud.set_setting(db, "whatsapp_phone_number_id", "")
+    crud.set_setting(db, "whatsapp_waba_id", "")
+    
+    logger.info("WhatsApp disconnected")
+    
+    return {"status": "removed"}
+
+
 @router.get("/instagram/webhook")
 async def instagram_webhook_verify(
     request: Request,
@@ -1770,21 +1921,34 @@ async def facebook_oauth_start(
             detail="Facebook App ID не налаштовано. Будь ласка, введіть App ID в Settings → Facebook або Instagram."
         )
     
-    # Формуємо redirect_uri (повний URL)
+    # Формуємо redirect_uri (повний URL) - завжди використовуємо HTTPS
     base_url = str(request.base_url).rstrip('/')
+    # Замінюємо HTTP на HTTPS (для production завжди використовуємо HTTPS)
+    base_url = base_url.replace("http://", "https://", 1)
     redirect_uri = f"{base_url}/api/v1/communications/facebook/callback"
+    
+    # Перевіряємо, чи використовується Facebook Login for Business (config_id)
+    config_id = settings.get("facebook_config_id")
     
     # OAuth параметри для Meta
     oauth_params = {
         "client_id": app_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "pages_show_list,pages_read_engagement,pages_manage_metadata,pages_messaging",  # Facebook permissions
         "state": str(uuid_module.uuid4()),  # CSRF protection
     }
     
-    # Meta OAuth URL
-    oauth_url = "https://www.facebook.com/v18.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
+    # Якщо є config_id, використовуємо Facebook Login for Business
+    if config_id:
+        oauth_params["config_id"] = config_id
+        logger.info(f"Using Facebook Login for Business with config_id: {config_id}")
+    else:
+        # Стандартний Facebook Login з scope
+        oauth_params["scope"] = "pages_show_list,pages_read_engagement,pages_manage_metadata,pages_messaging"
+        logger.info("Using standard Facebook Login with scope")
+    
+    # Meta OAuth URL (використовуємо v22.0)
+    oauth_url = "https://www.facebook.com/v22.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
     
     logger.info(f"Facebook OAuth redirect: {oauth_url}")
     return RedirectResponse(url=oauth_url)
@@ -1848,12 +2012,12 @@ async def facebook_oauth_callback(
         )
     
     try:
-        # Обмінюємо code на access_token
-        token_url = "https://graph.facebook.com/v18.0/oauth/access_token"
+        # Обмінюємо code на access_token (використовуємо v22.0)
+        token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
         token_params = {
             "client_id": app_id,
             "client_secret": app_secret,
-            "redirect_uri": f"https://tlumaczeniamt.com.pl/api/v1/communications/facebook/callback",
+            "grant_type": "authorization_code",
             "code": code,
         }
         
@@ -1866,8 +2030,8 @@ async def facebook_oauth_callback(
         if not access_token:
             raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
         
-        # Отримуємо інформацію про сторінки користувача
-        pages_url = "https://graph.facebook.com/v18.0/me/accounts"
+        # Отримуємо інформацію про сторінки користувача (використовуємо v22.0)
+        pages_url = "https://graph.facebook.com/v22.0/me/accounts"
         pages_params = {"access_token": access_token}
         
         async with httpx.AsyncClient() as client:
@@ -1939,6 +2103,127 @@ async def facebook_oauth_callback(
             """,
             status_code=500
         )
+
+
+# ============================================================================
+# Endpoint for exchanging authorization code to access token (from frontend)
+# ============================================================================
+
+@router.post("/facebook/exchange-code")
+async def facebook_exchange_code(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Обмін authorization code на access token.
+    Використовується коли фронтенд викликає FB.login() і отримує code.
+    """
+    import httpx
+    import json
+    
+    # Отримуємо code з body
+    try:
+        body = await request.json()
+        code = body.get("code")
+    except:
+        raise HTTPException(status_code=400, detail="Code не отримано в body")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="Code не вказано")
+    
+    # Отримуємо налаштування
+    settings = crud.get_facebook_settings(db)
+    app_id = settings.get("facebook_app_id")
+    app_secret = settings.get("facebook_app_secret")
+    
+    # Якщо немає facebook налаштувань, спробуємо Instagram
+    if not app_id or not app_secret:
+        instagram_settings = crud.get_instagram_settings(db)
+        app_id = app_id or instagram_settings.get("instagram_app_id")
+        app_secret = app_secret or instagram_settings.get("instagram_app_secret")
+    
+    if not app_id or not app_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Facebook App ID або App Secret не налаштовано"
+        )
+    
+    try:
+        # Обмінюємо code на access_token (використовуємо v22.0)
+        token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
+        token_params = {
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "grant_type": "authorization_code",
+            "code": code,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(token_url, params=token_params)
+            response.raise_for_status()
+            token_data = response.json()
+        
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
+        
+        # Отримуємо інформацію про сторінки та WhatsApp Business акаунти
+        pages_url = "https://graph.facebook.com/v22.0/me/accounts"
+        pages_params = {"access_token": access_token}
+        
+        async with httpx.AsyncClient() as client:
+            pages_response = await client.get(pages_url, params=pages_params)
+            pages_response.raise_for_status()
+            pages_data = pages_response.json()
+        
+        # Зберігаємо access_token в налаштуваннях
+        crud.set_setting(db, "facebook_access_token", access_token)
+        
+        # Збираємо інформацію про сторінки та WhatsApp Business акаунти
+        result = {
+            "access_token": access_token,
+            "pages": [],
+            "whatsapp_accounts": [],
+        }
+        
+        for page in pages_data.get("data", []):
+            page_info = {
+                "page_id": page.get("id"),
+                "page_name": page.get("name"),
+                "page_access_token": page.get("access_token"),
+            }
+            result["pages"].append(page_info)
+            
+            # Перевіряємо чи є WhatsApp Business акаунт
+            if "whatsapp_business_account" in page:
+                whatsapp_info = page["whatsapp_business_account"]
+                result["whatsapp_accounts"].append({
+                    "waba_id": whatsapp_info.get("id"),
+                    "page_id": page.get("id"),
+                    "page_name": page.get("name"),
+                })
+        
+        # Якщо знайдено тільки одну сторінку - зберігаємо автоматично
+        if len(result["pages"]) == 1:
+            page = result["pages"][0]
+            if page["page_id"]:
+                crud.set_setting(db, "facebook_page_id", page["page_id"])
+        
+        logger.info(f"Facebook code exchange successful. Access token saved.")
+        return result
+        
+    except httpx.HTTPStatusError as e:
+        error_detail = f"HTTP {e.response.status_code}"
+        try:
+            error_data = e.response.json()
+            error_detail = error_data.get("error", {}).get("message", error_detail)
+        except:
+            pass
+        logger.error(f"Facebook code exchange error: {error_detail}")
+        raise HTTPException(status_code=400, detail=f"Помилка обміну коду: {error_detail}")
+    except Exception as e:
+        logger.error(f"Facebook code exchange error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Помилка обміну коду: {str(e)}")
 
 
 # ============================================================================
@@ -2153,8 +2438,10 @@ async def instagram_oauth_start(
             detail="Instagram App ID не налаштовано. Будь ласка, введіть App ID в Settings → Instagram."
         )
     
-    # Формуємо redirect_uri (повний URL)
+    # Формуємо redirect_uri (повний URL) - завжди використовуємо HTTPS
     base_url = str(request.base_url).rstrip('/')
+    # Замінюємо HTTP на HTTPS (для production завжди використовуємо HTTPS)
+    base_url = base_url.replace("http://", "https://", 1)
     redirect_uri = f"{base_url}/api/v1/communications/instagram/callback"
     
     # OAuth параметри для Meta
@@ -2226,12 +2513,12 @@ async def instagram_oauth_callback(
         )
     
     try:
-        # Обмінюємо code на access_token
-        token_url = "https://graph.facebook.com/v18.0/oauth/access_token"
+        # Обмінюємо code на access_token (використовуємо v22.0)
+        token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
         token_params = {
             "client_id": app_id,
             "client_secret": app_secret,
-            "redirect_uri": f"https://tlumaczeniamt.com.pl/api/v1/communications/instagram/callback",
+            "grant_type": "authorization_code",
             "code": code,
         }
         
@@ -2245,8 +2532,8 @@ async def instagram_oauth_callback(
             raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
         
         # Отримуємо інформацію про сторінку Instagram
-        # Спочатку отримуємо список сторінок користувача
-        pages_url = "https://graph.facebook.com/v18.0/me/accounts"
+        # Спочатку отримуємо список сторінок користувача (використовуємо v22.0)
+        pages_url = "https://graph.facebook.com/v22.0/me/accounts"
         pages_params = {"access_token": access_token}
         
         async with httpx.AsyncClient() as client:

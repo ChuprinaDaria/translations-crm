@@ -9,10 +9,11 @@
  * Facebook Auth Response structure
  */
 export interface FacebookAuthResponse {
-  accessToken: string;
-  expiresIn: number;
-  signedRequest: string;
-  userID: string;
+  accessToken?: string;
+  expiresIn?: number;
+  signedRequest?: string;
+  userID?: string;
+  code?: string;  // Authorization code for Business Integration System User tokens
 }
 
 /**
@@ -31,6 +32,7 @@ declare global {
         cookie?: boolean;
         xfbml?: boolean;
         version: string;
+        autoLogAppEvents?: boolean;
       }) => void;
       getLoginStatus: (
         callback: (response: FacebookLoginStatusResponse) => void,
@@ -38,7 +40,12 @@ declare global {
       ) => void;
       login: (
         callback: (response: FacebookLoginStatusResponse) => void,
-        options?: { scope?: string }
+        options?: { 
+          scope?: string;
+          config_id?: string;
+          response_type?: string;
+          override_default_response_type?: boolean;
+        }
       ) => void;
       logout: (callback: (response: { status: string }) => void) => void;
       api: (path: string, callback: (response: any) => void) => void;
@@ -73,9 +80,9 @@ export function initFacebookSDK(appId: string): Promise<void> {
       try {
         window.FB.init({
           appId: appId,
-          cookie: true,
+          autoLogAppEvents: true,
           xfbml: true,
-          version: 'v18.0'
+          version: 'v24.0'
         });
         
         // Log page view for analytics
@@ -106,9 +113,9 @@ export function initFacebookSDK(appId: string): Promise<void> {
         try {
           window.FB.init({
             appId: appId,
-            cookie: true,
+            autoLogAppEvents: true,
             xfbml: true,
-            version: 'v18.0'
+            version: 'v24.0'
           });
           
           // Log page view for analytics
@@ -134,9 +141,9 @@ export function initFacebookSDK(appId: string): Promise<void> {
         try {
           window.FB.init({
             appId: appId,
-            cookie: true,
+            autoLogAppEvents: true,
             xfbml: true,
-            version: 'v18.0'
+            version: 'v24.0'
           });
           
           // Log page view for analytics
@@ -261,6 +268,186 @@ export function loginWithFacebook(scope?: string): Promise<FacebookLoginStatusRe
       reject(error);
     }
   });
+}
+
+/**
+ * Prompt user to login with Facebook for Business (using config_id)
+ * This is the preferred method for business applications that need access to business assets
+ * @param configId - Configuration ID from Meta App Dashboard (Facebook Login for Business)
+ * @param useSystemUserToken - If true, requests Business Integration System User access token (requires response_type: 'code')
+ * @returns Promise with login status response
+ */
+export function loginWithFacebookForBusiness(
+  configId: string,
+  useSystemUserToken: boolean = false
+): Promise<FacebookLoginStatusResponse> {
+  return new Promise((resolve, reject) => {
+    if (!isFacebookSDKReady()) {
+      reject(new Error('Facebook SDK is not loaded. Call initFacebookSDK first.'));
+      return;
+    }
+
+    if (!configId) {
+      reject(new Error('config_id is required for Facebook Login for Business'));
+      return;
+    }
+
+    try {
+      const FB = getFacebookSDK();
+      const options: {
+        config_id: string;
+        response_type?: string;
+        override_default_response_type?: boolean;
+      } = {
+        config_id: configId,
+      };
+
+      // For Business Integration System User tokens, we need response_type: 'code'
+      if (useSystemUserToken) {
+        options.response_type = 'code';
+        options.override_default_response_type = true;
+      }
+
+      FB.login((response: FacebookLoginStatusResponse) => {
+        if (response.status === 'connected' && response.authResponse) {
+          resolve(response);
+        } else {
+          reject(new Error(`Login failed with status: ${response.status}`));
+        }
+      }, options);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Login with Facebook for Business using config_id from settings
+ * Automatically fetches config_id from backend settings
+ * @param useSystemUserToken - If true, requests Business Integration System User access token (requires response_type: 'code')
+ * @returns Promise with login status response containing code (if useSystemUserToken is true)
+ */
+export async function loginWithFacebookForBusinessFromSettings(
+  useSystemUserToken: boolean = true
+): Promise<FacebookLoginStatusResponse & { code?: string }> {
+  // Import settingsApi dynamically to avoid circular dependencies
+  const { settingsApi } = await import('./api');
+  
+  try {
+    // Отримуємо config_id з налаштувань
+    const facebookConfig = await settingsApi.getFacebookConfig();
+    
+    if (!facebookConfig.config_id) {
+      throw new Error('Facebook config_id не налаштовано. Будь ласка, введіть Config ID в Settings → Facebook.');
+    }
+
+    // Викликаємо login з config_id
+    const response = await loginWithFacebookForBusiness(
+      facebookConfig.config_id,
+      useSystemUserToken
+    );
+
+    // Якщо використовуємо системний токен, код буде в authResponse.code
+    if (useSystemUserToken && response.authResponse) {
+      const code = (response.authResponse as any).code;
+      if (code) {
+        return { ...response, code };
+      }
+    }
+
+    return response;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Exchange authorization code for access token
+ * @param code - Authorization code received from FB.login()
+ * @returns Promise with access token and business account information
+ */
+export async function exchangeFacebookCodeForToken(code: string): Promise<{
+  access_token: string;
+  pages: Array<{
+    page_id: string;
+    page_name: string;
+    page_access_token: string;
+  }>;
+  whatsapp_accounts: Array<{
+    waba_id: string;
+    page_id: string;
+    page_name: string;
+  }>;
+}> {
+  const { settingsApi } = await import('./api');
+  return settingsApi.exchangeFacebookCode(code);
+}
+
+/**
+ * Generate WhatsApp Business onboarding URL
+ * @param appId - Facebook App ID
+ * @param configId - Facebook Login for Business configuration ID
+ * @param features - Optional array of feature names (e.g., ['marketing_messages_lite', 'app_only_install'])
+ * @returns WhatsApp Business onboarding URL
+ */
+export function generateWhatsAppOnboardingURL(
+  appId: string,
+  configId: string,
+  features: string[] = ['marketing_messages_lite', 'app_only_install']
+): string {
+  const baseURL = 'https://business.facebook.com/messaging/whatsapp/onboard/';
+  
+  const extras = {
+    featureType: 'whatsapp_business_app_onboarding',
+    sessionInfoVersion: '3',
+    version: 'v3',
+    features: features.map(name => ({ name })),
+  };
+  
+  const params = new URLSearchParams({
+    app_id: appId,
+    config_id: configId,
+    extras: JSON.stringify(extras),
+  });
+  
+  return `${baseURL}?${params.toString()}`;
+}
+
+/**
+ * Open WhatsApp Business onboarding page using settings from backend
+ * Automatically fetches app_id and config_id from settings
+ * @param features - Optional array of feature names
+ */
+export async function openWhatsAppOnboarding(
+  features: string[] = ['marketing_messages_lite', 'app_only_install']
+): Promise<void> {
+  const { settingsApi } = await import('./api');
+  
+  try {
+    // Отримуємо налаштування Facebook
+    const facebookConfig = await settingsApi.getFacebookConfig();
+    
+    if (!facebookConfig.app_id) {
+      throw new Error('Facebook App ID не налаштовано. Будь ласка, введіть App ID в Settings → Facebook.');
+    }
+    
+    if (!facebookConfig.config_id) {
+      throw new Error('Facebook Config ID не налаштовано. Будь ласка, введіть Config ID в Settings → Facebook.');
+    }
+    
+    // Генеруємо URL та відкриваємо в новому вікні
+    const onboardingURL = generateWhatsAppOnboardingURL(
+      facebookConfig.app_id,
+      facebookConfig.config_id,
+      features
+    );
+    
+    // Відкриваємо onboarding в новому вікні
+    window.open(onboardingURL, '_blank', 'noopener,noreferrer');
+  } catch (error) {
+    console.error('Помилка відкриття WhatsApp onboarding:', error);
+    throw error;
+  }
 }
 
 /**

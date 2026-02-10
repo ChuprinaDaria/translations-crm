@@ -2278,6 +2278,7 @@ def get_facebook_config(db: Session = Depends(get_db), user = Depends(get_curren
         "app_secret": settings.get("facebook_app_secret") or "",
         "verify_token": settings.get("facebook_verify_token") or "",
         "page_id": settings.get("facebook_page_id") or "",
+        "config_id": settings.get("facebook_config_id") or "",  # Facebook Login for Business config ID
     }
 
 
@@ -2288,6 +2289,7 @@ def update_facebook_config(
     app_secret: str = Form(""),
     verify_token: str = Form(""),
     page_id: str = Form(""),
+    config_id: str = Form(""),  # Facebook Login for Business configuration ID
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
@@ -2297,6 +2299,7 @@ def update_facebook_config(
     crud.set_setting(db, "facebook_app_secret", app_secret)
     crud.set_setting(db, "facebook_verify_token", verify_token)
     crud.set_setting(db, "facebook_page_id", page_id)
+    crud.set_setting(db, "facebook_config_id", config_id)
     return {"status": "success"}
 
 

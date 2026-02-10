@@ -17,19 +17,20 @@
     <!-- The SDK is loaded asynchronously and will not block page rendering -->
     <script>
       window.fbAsyncInit = function() {
-        // FB.init will be called dynamically from React component with App ID from settings
-        // This ensures the SDK is ready when we need to initialize it
-        // FB.AppEvents.logPageView() will be called after initialization
-        console.log('Facebook SDK script loaded and ready for initialization');
+        // Initialize Facebook SDK with App ID
+        if (window.FB) {
+          window.FB.init({
+            appId: '4450004628619820',
+            autoLogAppEvents: true,
+            xfbml: true,
+            version: 'v24.0'
+          });
+          console.log('Facebook SDK initialized with App ID: 4450004628619820');
+        }
       };
-
-      (function(d, s, id){
-         var js, fjs = d.getElementsByTagName(s)[0];
-         if (d.getElementById(id)) {return;}
-         js = d.createElement(s); js.id = id;
-         js.src = "https://connect.facebook.net/en_US/sdk.js";
-         fjs.parentNode.insertBefore(js, fjs);
-       }(document, 'script', 'facebook-jssdk'));
+    </script>
+    <script async defer crossorigin="anonymous"
+      src="https://connect.facebook.net/en_US/sdk.js">
     </script>
   </body>
 </html>

@@ -23,7 +23,6 @@ router = APIRouter(tags=["crm"])
 def get_current_user_or_rag_crm(
     x_rag_token: Optional[str] = Header(None, alias="X-RAG-TOKEN"),
     db: Session = Depends(get_db),
-    user: Optional[auth_models.User] = Depends(get_current_user_db),
 ) -> Optional[auth_models.User]:
     """
     Отримати поточного користувача через X-RAG-TOKEN або JWT для CRM endpoints.
@@ -54,8 +53,17 @@ def get_current_user_or_rag_crm(
             logger.warning(f"Помилка перевірки RAG токену: {e}")
             # Якщо помилка перевірки RAG токену, продовжуємо до JWT
     
-    # Якщо немає X-RAG-TOKEN, повертаємо user з JWT (вже отриманий через Depends)
-    return user
+    # Якщо немає X-RAG-TOKEN, використовуємо JWT
+    try:
+        return get_current_user_db(db=db)
+    except HTTPException as jwt_error:
+        # Якщо JWT невалідний і немає RAG токену - помилка
+        if not x_rag_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
+            )
+        raise jwt_error
 
 
 @router.get("/clients", response_model=List[schemas.ClientRead])

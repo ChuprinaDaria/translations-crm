@@ -998,6 +998,7 @@ def get_whatsapp_settings(db: Session) -> dict[str, str | None]:
         "whatsapp_phone_number_id",
         "whatsapp_app_secret",
         "whatsapp_verify_token",
+        "whatsapp_waba_id",  # WhatsApp Business Account ID
     ]
     return get_settings(db, keys)
 
@@ -1020,6 +1021,7 @@ def get_facebook_settings(db: Session) -> dict[str, str | None]:
         "facebook_app_secret",
         "facebook_verify_token",
         "facebook_page_id",
+        "facebook_config_id",  # Facebook Login for Business configuration ID
     ]
     return get_settings(db, keys)
 

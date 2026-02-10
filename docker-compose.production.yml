@@ -54,7 +54,6 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./backend/uploads:/app/uploads
-      - crm_translations_media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,8 +76,6 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
       - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-60}
-    volumes:
-      - crm_translations_media:/app/media
     working_dir: /app
     command: python email_imap_listener.py
     depends_on:
@@ -102,7 +99,6 @@ services:
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
     volumes:
       - ./backend/uploads:/app/uploads
-      - crm_translations_media:/app/media
     working_dir: /app
     command: python telegram_listener.py
     depends_on:
@@ -130,7 +126,6 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./backend/uploads:/app/uploads
-      - crm_translations_media:/app/media
     working_dir: /app
     command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4
     depends_on:
@@ -162,7 +157,6 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./backend/uploads:/app/uploads
-      - crm_translations_media:/app/media
     working_dir: /app
     command: celery -A tasks.celery_app beat --loglevel=info
     depends_on:
@@ -197,7 +191,6 @@ services:
 volumes:
   crm_translations_postgres_data:
   crm_translations_redis_data:
-  crm_translations_media:
 
 networks:
   crm_translations_network:
