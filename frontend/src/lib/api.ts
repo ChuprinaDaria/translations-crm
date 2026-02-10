@@ -1711,14 +1711,12 @@ export const settingsApi = {
   },
   async updateFacebookConfig(data: FacebookConfig): Promise<{ status: string }> {
     const formData = new FormData();
-    formData.append("app_id", data.app_id);
-    formData.append("access_token", data.access_token);
-    formData.append("app_secret", data.app_secret);
-    formData.append("verify_token", data.verify_token);
-    formData.append("page_id", data.page_id);
-    if (data.config_id) {
-      formData.append("config_id", data.config_id);
-    }
+    formData.append("app_id", data.app_id || "");
+    formData.append("access_token", data.access_token || "");
+    formData.append("app_secret", data.app_secret || "");
+    formData.append("verify_token", data.verify_token || "");
+    formData.append("page_id", data.page_id || "");
+    formData.append("config_id", data.config_id || "");
     return apiFetchMultipart<{ status: string }>("/settings/facebook-config", formData, "POST");
   },
 

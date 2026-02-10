@@ -1829,6 +1829,18 @@ export function Settings() {
                     onChange={(e) => setFacebook({ ...facebook, page_id: e.target.value })}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="facebook-config-id">Config ID (Facebook Login for Business)</Label>
+                  <Input
+                    id="facebook-config-id"
+                    value={facebook.config_id || ""}
+                    onChange={(e) => setFacebook({ ...facebook, config_id: e.target.value })}
+                    placeholder="1423802986069102"
+                  />
+                  <p className="text-xs text-gray-500">
+                    ID конфігурації для Facebook Login for Business (необхідно для підключення WhatsApp)
+                  </p>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button
