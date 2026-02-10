@@ -2197,6 +2197,8 @@ def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_curren
         "phone_number_id": phone_number_id,
         "app_secret": settings.get("whatsapp_app_secret") or "",
         "verify_token": settings.get("whatsapp_verify_token") or "",
+        "template_name": settings.get("whatsapp_template_name") or "",
+        "template_language": settings.get("whatsapp_template_language") or "en_US",
     }
 
 
@@ -2206,6 +2208,8 @@ def update_whatsapp_config(
     phone_number_id: str = Form(""),
     app_secret: str = Form(""),
     verify_token: str = Form(""),
+    template_name: str = Form(""),
+    template_language: str = Form("en_US"),
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
@@ -2224,6 +2228,8 @@ def update_whatsapp_config(
     crud.set_setting(db, "whatsapp_phone_number_id", phone_number_id)
     crud.set_setting(db, "whatsapp_app_secret", app_secret)
     crud.set_setting(db, "whatsapp_verify_token", verify_token)
+    crud.set_setting(db, "whatsapp_template_name", template_name)
+    crud.set_setting(db, "whatsapp_template_language", template_language)
     return {"status": "success"}
 
 

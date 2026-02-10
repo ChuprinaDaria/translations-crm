@@ -999,6 +999,8 @@ def get_whatsapp_settings(db: Session) -> dict[str, str | None]:
         "whatsapp_app_secret",
         "whatsapp_verify_token",
         "whatsapp_waba_id",  # WhatsApp Business Account ID
+        "whatsapp_template_name",  # Назва шаблону для повідомлень поза 24h вікном
+        "whatsapp_template_language",  # Мова шаблону (наприклад: en_US, uk_UA)
     ]
     return get_settings(db, keys)
 

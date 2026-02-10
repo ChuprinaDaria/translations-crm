@@ -54,6 +54,8 @@ class WhatsAppService(MessengerService):
                     "phone_number_id": settings.get("whatsapp_phone_number_id") or "",
                     "app_secret": settings.get("whatsapp_app_secret") or "",
                     "verify_token": settings.get("whatsapp_verify_token") or "",
+                    "whatsapp_template_name": settings.get("whatsapp_template_name") or "",
+                    "whatsapp_template_language": settings.get("whatsapp_template_language") or "en_US",
                 }
         finally:
             db.close()
@@ -64,6 +66,8 @@ class WhatsAppService(MessengerService):
             "phone_number_id": os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
             "app_secret": os.getenv("WHATSAPP_APP_SECRET", ""),
             "verify_token": os.getenv("WHATSAPP_VERIFY_TOKEN", ""),
+            "whatsapp_template_name": os.getenv("WHATSAPP_TEMPLATE_NAME", ""),
+            "whatsapp_template_language": os.getenv("WHATSAPP_TEMPLATE_LANGUAGE", "en_US"),
         }
     
     def verify_webhook(self, signature: str, payload: bytes) -> bool:
@@ -93,14 +97,142 @@ class WhatsAppService(MessengerService):
         
         return hmac.compare_digest(expected_signature, received_signature)
     
+    def _is_within_24h_window(self, conversation: Conversation) -> bool:
+        """
+        Перевірити, чи розмова в межах 24-годинного вікна для звичайних повідомлень.
+        
+        WhatsApp дозволяє відправляти звичайні текстові повідомлення тільки в межах
+        24 годин після останнього повідомлення від клієнта. Поза цим вікном потрібно
+        використовувати шаблони (templates).
+        """
+        from datetime import timedelta
+        
+        # Знайти останнє вхідне повідомлення від клієнта
+        from modules.communications.models import Message
+        last_inbound = self.db.query(Message).filter(
+            Message.conversation_id == conversation.id,
+            Message.direction == MessageDirection.INBOUND
+        ).order_by(Message.created_at.desc()).first()
+        
+        if not last_inbound:
+            # Якщо немає вхідних повідомлень, це перше повідомлення - потрібен шаблон
+            return False
+        
+        # Перевірити, чи пройшло менше 24 годин
+        time_diff = datetime.utcnow() - last_inbound.created_at
+        return time_diff < timedelta(hours=24)
+    
+    def _get_template_config(self) -> Optional[Dict[str, Any]]:
+        """Отримати налаштування шаблону з конфігурації."""
+        template_name = self.config.get("whatsapp_template_name")
+        template_language = self.config.get("whatsapp_template_language", "en_US")
+        
+        if template_name:
+            return {
+                "name": template_name,
+                "language": {"code": template_language},
+                "components": []
+            }
+        return None
+    
+    def _clean_phone_number(self, phone: str) -> str:
+        """
+        Очистити номер телефону від символів +, -, пробілів та інших нецифрових символів.
+        
+        Meta API вимагає номер у форматі тільки цифр (наприклад: 1234567890).
+        
+        Args:
+            phone: Номер телефону (може містити +, -, пробіли)
+            
+        Returns:
+            Очищений номер телефону (тільки цифри)
+        """
+        # Видаляємо всі нецифрові символи
+        cleaned = ''.join(filter(str.isdigit, phone))
+        return cleaned
+    
+    def _build_message_payload(self, conversation: Conversation, content: str, use_template: bool) -> Dict[str, Any]:
+        """
+        Побудувати payload для відправки повідомлення.
+        
+        Args:
+            conversation: Розмова
+            content: Текст повідомлення
+            use_template: Чи використовувати шаблон
+            
+        Returns:
+            Dict з payload для Meta API
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Очищаємо номер телефону від +, -, пробілів
+        cleaned_phone = self._clean_phone_number(conversation.external_id)
+        
+        if use_template:
+            # Використовуємо шаблон (для повідомлень поза 24-годинним вікном)
+            template_config = self._get_template_config()
+            
+            if not template_config:
+                # Якщо шаблон не налаштовано, спробуємо відправити як текст
+                # Meta може повернути помилку, але спробуємо
+                logger.warning(f"No WhatsApp template configured, but message is outside 24h window. Attempting to send as text.")
+                return {
+                    "messaging_product": "whatsapp",
+                    "to": cleaned_phone,
+                    "type": "text",
+                    "text": {"body": content},
+                }
+            else:
+                # Використовуємо шаблон
+                # Для шаблонів текст повідомлення передається в components
+                return {
+                    "messaging_product": "whatsapp",
+                    "to": cleaned_phone,
+                    "type": "template",
+                    "template": {
+                        **template_config,
+                        "components": [
+                            {
+                                "type": "body",
+                                "parameters": [
+                                    {
+                                        "type": "text",
+                                        "text": content
+                                    }
+                                ]
+                            }
+                        ] if content else []
+                    }
+                }
+        else:
+            # Звичайне текстове повідомлення (в межах 24-годинного вікна)
+            # Формат відповідає Meta API документації: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages
+            return {
+                "messaging_product": "whatsapp",
+                "to": cleaned_phone,  # Номер телефону (формат: 1234567890 без +, -, пробілів)
+                "type": "text",
+                "text": {"body": content},
+            }
+    
     async def send_message(
         self,
         conversation_id: UUID,
         content: str,
         attachments: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        force_template: bool = False,
     ) -> "MessageModel":
-        """Відправити повідомлення в WhatsApp."""
+        """
+        Відправити повідомлення в WhatsApp.
+        
+        Args:
+            conversation_id: ID розмови
+            content: Текст повідомлення
+            attachments: Вкладення (опціонально)
+            metadata: Метадані (опціонально)
+            force_template: Примусово використати шаблон (опціонально)
+        """
         from modules.communications.models import Message as MessageModel
         
         # Отримати розмову
@@ -138,9 +270,15 @@ class WhatsAppService(MessengerService):
             
             url = f"{self.base_url}/{phone_number_id}/messages"
             headers = {
-                "Authorization": f"Bearer {access_token}",
+                "Authorization": f"Bearer {access_token}",  # Правильний формат для Meta API
                 "Content-Type": "application/json",
             }
+            
+            # Очищаємо номер телефону отримувача від +, -, пробілів
+            cleaned_recipient_phone = self._clean_phone_number(conversation.external_id)
+            
+            # Очищаємо номер телефону отримувача від +, -, пробілів
+            cleaned_recipient_phone = self._clean_phone_number(conversation.external_id)
             
             # Обробити вкладення
             if attachments and len(attachments) > 0:
@@ -229,10 +367,11 @@ class WhatsAppService(MessengerService):
                         
                         if media_id:
                             # Відправляємо повідомлення з медіа
+                            # Використовуємо очищений номер телефону
                             if att_type == "image":
                                 payload = {
                                     "messaging_product": "whatsapp",
-                                    "to": conversation.external_id,
+                                    "to": cleaned_recipient_phone,
                                     "type": "image",
                                     "image": {
                                         "id": media_id,
@@ -243,7 +382,7 @@ class WhatsAppService(MessengerService):
                             elif att_type == "video":
                                 payload = {
                                     "messaging_product": "whatsapp",
-                                    "to": conversation.external_id,
+                                    "to": cleaned_recipient_phone,
                                     "type": "video",
                                     "video": {
                                         "id": media_id,
@@ -254,7 +393,7 @@ class WhatsAppService(MessengerService):
                             elif att_type == "audio":
                                 payload = {
                                     "messaging_product": "whatsapp",
-                                    "to": conversation.external_id,
+                                    "to": cleaned_recipient_phone,
                                     "type": "audio",
                                     "audio": {
                                         "id": media_id,
@@ -264,7 +403,7 @@ class WhatsAppService(MessengerService):
                                 # Document
                                 payload = {
                                     "messaging_product": "whatsapp",
-                                    "to": conversation.external_id,
+                                    "to": cleaned_recipient_phone,
                                     "type": "document",
                                     "document": {
                                         "id": media_id,
@@ -281,12 +420,9 @@ class WhatsAppService(MessengerService):
                             raise ValueError("Failed to upload media to WhatsApp")
                 else:
                     # Файл не знайдено, відправити тільки текст
-                    payload = {
-                        "messaging_product": "whatsapp",
-                        "to": conversation.external_id,
-                        "type": "text",
-                        "text": {"body": content},
-                    }
+                    # Перевірити, чи потрібно використовувати шаблон
+                    use_template = force_template or not self._is_within_24h_window(conversation)
+                    payload = self._build_message_payload(conversation, content, use_template, cleaned_recipient_phone)
                     
                     async with httpx.AsyncClient() as client:
                         response = await client.post(url, json=payload, headers=headers)
@@ -294,17 +430,21 @@ class WhatsAppService(MessengerService):
                         result = response.json()
             else:
                 # Немає вкладень, відправити тільки текст
-                payload = {
-                    "messaging_product": "whatsapp",
-                    "to": conversation.external_id,  # Номер телефону
-                    "type": "text",
-                    "text": {"body": content},
-                }
+                # Перевірити, чи потрібно використовувати шаблон
+                use_template = force_template or not self._is_within_24h_window(conversation)
+                payload = self._build_message_payload(conversation, content, use_template, cleaned_recipient_phone)
+                
+                import logging
+                logger = logging.getLogger(__name__)
+                message_type = "template" if use_template else "text"
+                logger.info(f"Sending WhatsApp {message_type} message to {conversation.external_id} via phone_number_id {phone_number_id}")
                 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(url, json=payload, headers=headers)
                     response.raise_for_status()
                     result = response.json()
+                    
+                    logger.info(f"WhatsApp message sent successfully. Response: {result}")
             
             # Оновити статус
             message.status = MessageStatus.SENT

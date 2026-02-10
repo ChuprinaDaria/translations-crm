@@ -78,6 +78,8 @@ export function Settings() {
     phone_number_id: "",
     app_secret: "",
     verify_token: "",
+    template_name: "",
+    template_language: "en_US",
   });
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<{
@@ -263,7 +265,7 @@ export function Settings() {
           settingsApi.getTelegramAccounts(),
           settingsApi.getSmtpSettings(),
           settingsApi.getManagerSmtpAccounts().catch(() => []),
-          settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "" })),
+          settingsApi.getWhatsAppConfig().catch(() => ({ access_token: "", phone_number_id: "", app_secret: "", verify_token: "", template_name: "", template_language: "en_US" })),
           settingsApi.getInstagramConfig().catch(() => ({ app_id: "", access_token: false as boolean, app_secret: "", verify_token: "", page_id: "", page_name: "", business_id: "" })),
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "", config_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
@@ -1424,10 +1426,10 @@ export function Settings() {
               )}
               
               {/* Попередження про неправильний Phone Number ID */}
-              {whatsapp.phone_number_id && (whatsapp.phone_number_id.includes('@') || !/^[0-9]+$/.test(whatsapp.phone_number_id)) && !whatsappStatus.connected && (
+              {whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id) && !whatsappStatus.connected && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                   <p className="text-sm text-red-800">
-                    <strong>Помилка:</strong> Phone Number ID містить некоректні дані (email або нецифрові символи). 
+                    <strong>Помилка:</strong> Phone Number ID має містити тільки цифри. 
                     <br />
                     <span className="text-xs mt-1 block">Поле буде автоматично очищено. Для підключення через OAuth це поле не потрібно заповнювати вручну - воно отримається автоматично.</span>
                   </p>
@@ -1443,26 +1445,36 @@ export function Settings() {
                         Встроенная регистрация WhatsApp Business
                       </p>
                       <p className="text-xs text-blue-700 mt-1">
-                        Відкрийте діалогове вікно для створення або вибору акаунту WhatsApp Business, додавання телефонного номера та його підтвердження.
+                        Відкрийте сторінку для створення або вибору акаунту WhatsApp Business, додавання телефонного номера та його підтвердження. Після завершення ви отримаєте код авторизації, який потрібно буде обміняти на токен доступу.
                       </p>
                     </div>
                     <Button
                       type="button"
                       variant="outline"
                       className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                      onClick={async () => {
-                        try {
-                          const { openWhatsAppOnboarding } = await import('../lib/facebook-sdk');
-                          await openWhatsAppOnboarding(['marketing_messages_lite', 'app_only_install']);
-                        } catch (error: any) {
-                          console.error(error);
-                          toast.error(error.message || "Не вдалося відкрити WhatsApp onboarding");
-                        }
+                      onClick={() => {
+                        // Просто відкриваємо URL встроенной регистрації без використання SDK
+                        const onboardingURL = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${facebook.app_id}&config_id=${facebook.config_id}&extras=${encodeURIComponent(JSON.stringify({
+                          featureType: 'whatsapp_business_app_onboarding',
+                          sessionInfoVersion: '3',
+                          version: 'v3',
+                          features: [
+                            { name: 'marketing_messages_lite' },
+                            { name: 'app_only_install' }
+                          ]
+                        }))}`;
+                        
+                        // Відкриваємо в новому вікні
+                        window.open(onboardingURL, '_blank', 'noopener,noreferrer');
+                        toast.info("Відкрито сторінку встроенной регистрації WhatsApp. Після завершення скопіюйте код авторизації та обміняйте його на токен.");
                       }}
                     >
                       <ImageIcon className="w-4 h-4 mr-2" />
                       Відкрити встроенную регистрацию
                     </Button>
+                  </div>
+                  <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+                    <strong>Примітка:</strong> Після завершення встроенной регистрації ви отримаєте код авторизації. Використайте кнопку "Підключити через Facebook" для автоматичного обміну коду на токен, або обміняйте код вручну через API.
                   </div>
                 </div>
               )}
@@ -1524,6 +1536,30 @@ export function Settings() {
                     value={whatsapp.verify_token}
                     onChange={(e) => setWhatsapp({ ...whatsapp, verify_token: e.target.value })}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-template-name">Template Name (для повідомлень поза 24h)</Label>
+                  <Input
+                    id="whatsapp-template-name"
+                    value={whatsapp.template_name || ""}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, template_name: e.target.value })}
+                    placeholder="Назва затвердженого шаблону (наприклад: hello_world)"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Шаблон використовується для повідомлень поза 24-годинним вікном після останнього повідомлення від клієнта
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp-template-language">Template Language</Label>
+                  <Input
+                    id="whatsapp-template-language"
+                    value={whatsapp.template_language || "en_US"}
+                    onChange={(e) => setWhatsapp({ ...whatsapp, template_language: e.target.value })}
+                    placeholder="en_US, uk_UA, pl_PL"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Мова шаблону (ISO 639-1 код мови + ISO 3166-1 код країни)
+                  </p>
                 </div>
               </div>
               <div className="flex justify-end">

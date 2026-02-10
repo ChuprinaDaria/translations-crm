@@ -1186,6 +1186,8 @@ export interface TelegramApiConfig {
 }
 
 export interface WhatsAppConfig {
+  template_name?: string;  // Назва шаблону для повідомлень поза 24h вікном
+  template_language?: string;  // Мова шаблону (наприклад: en_US, uk_UA)
   access_token: string;
   phone_number_id: string;
   app_secret: string;
@@ -1602,6 +1604,8 @@ export const settingsApi = {
     formData.append("phone_number_id", data.phone_number_id);
     formData.append("app_secret", data.app_secret);
     formData.append("verify_token", data.verify_token);
+    formData.append("template_name", data.template_name || "");
+    formData.append("template_language", data.template_language || "en_US");
     return apiFetchMultipart<{ status: string }>("/settings/whatsapp-config", formData, "POST");
   },
   
