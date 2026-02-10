@@ -98,6 +98,9 @@ export function Settings() {
     phone_number_id?: string;
     waba_id?: string;
   }>({});
+  // WhatsApp accounts
+  const [whatsappAccounts, setWhatsappAccounts] = useState<WhatsAppAccount[]>([]);
+  const [isLoadingWhatsAppAccounts, setIsLoadingWhatsAppAccounts] = useState(false);
 
   // Instagram state
   const [instagram, setInstagram] = useState<InstagramConfig>({
