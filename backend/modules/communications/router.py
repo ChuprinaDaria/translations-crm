@@ -24,7 +24,8 @@ from modules.communications.models import (
     PlatformEnum, 
     MessageDirection, 
     MessageType, 
-    MessageStatus
+    MessageStatus,
+    WhatsAppAccount
 )
 from modules.communications import schemas
 from modules.communications.webhooks import (
@@ -1636,6 +1637,55 @@ async def whatsapp_connect(
                     "page_name": page.get("name", ""),
                     "phone_number_id": phone_number_id,
                 })
+                
+                # Зберігаємо акаунт в БД, якщо phone_number_id є
+                if phone_number_id:
+                    # Перевіряємо чи акаунт вже існує
+                    existing_account = db.query(WhatsAppAccount).filter(
+                        WhatsAppAccount.phone_number_id == phone_number_id
+                    ).first()
+                    
+                    if existing_account:
+                        # Оновлюємо існуючий акаунт
+                        existing_account.waba_id = waba_id
+                        existing_account.page_id = page.get("id")
+                        existing_account.page_name = page.get("name", "")
+                        existing_account.is_active = True
+                    else:
+                        # Створюємо новий акаунт
+                        # Спробуємо отримати відображуваний номер телефону з Meta API
+                        phone_number_display = None
+                        try:
+                            phone_url = f"https://graph.facebook.com/v22.0/{phone_number_id}"
+                            phone_params = {"access_token": access_token, "fields": "display_phone_number,verified_name"}
+                            async with httpx.AsyncClient() as client:
+                                phone_response = await client.get(phone_url, params=phone_params)
+                                if phone_response.status_code == 200:
+                                    phone_data = phone_response.json()
+                                    phone_number_display = phone_data.get("display_phone_number")
+                                    verified_name = phone_data.get("verified_name")
+                                    if verified_name:
+                                        name = verified_name
+                                    else:
+                                        name = phone_number_display or f"WhatsApp {phone_number_id[:6]}..."
+                                else:
+                                    name = f"WhatsApp {phone_number_id[:6]}..."
+                        except Exception as e:
+                            logger.warning(f"Failed to get phone number details: {e}")
+                            name = f"WhatsApp {phone_number_id[:6]}..."
+                        
+                        new_account = WhatsAppAccount(
+                            phone_number_id=phone_number_id,
+                            phone_number=phone_number_display,
+                            name=name,
+                            waba_id=waba_id,
+                            page_id=page.get("id"),
+                            page_name=page.get("name", ""),
+                            is_active=True
+                        )
+                        db.add(new_account)
+                    
+                    db.commit()
         
         # Зберігаємо access_token та phone_number_id в налаштуваннях WhatsApp
         crud.set_setting(db, "whatsapp_access_token", access_token)
@@ -1698,6 +1748,55 @@ async def whatsapp_disconnect(
     logger.info("WhatsApp disconnected")
     
     return {"status": "removed"}
+
+
+@router.get("/whatsapp/accounts")
+async def get_whatsapp_accounts(
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Отримати список всіх підключених WhatsApp акаунтів."""
+    accounts = db.query(WhatsAppAccount).filter(
+        WhatsAppAccount.is_active == True
+    ).order_by(WhatsAppAccount.created_at.desc()).all()
+    
+    return [
+        {
+            "id": account.id,
+            "phone_number_id": account.phone_number_id,
+            "phone_number": account.phone_number,
+            "name": account.name or f"WhatsApp {account.phone_number_id[:6]}...",
+            "waba_id": account.waba_id,
+            "page_id": account.page_id,
+            "page_name": account.page_name,
+            "is_active": account.is_active,
+            "created_at": account.created_at.isoformat() if account.created_at else None,
+        }
+        for account in accounts
+    ]
+
+
+@router.delete("/whatsapp/accounts/{account_id}")
+async def delete_whatsapp_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user_db),
+):
+    """Видалити WhatsApp акаунт за ID."""
+    account = db.query(WhatsAppAccount).filter(
+        WhatsAppAccount.id == account_id
+    ).first()
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="WhatsApp акаунт не знайдено")
+    
+    # Видаляємо акаунт (або деактивуємо)
+    account.is_active = False
+    db.commit()
+    
+    logger.info(f"WhatsApp account {account_id} deleted")
+    
+    return {"status": "deleted", "id": account_id}
 
 
 @router.get("/instagram/webhook")

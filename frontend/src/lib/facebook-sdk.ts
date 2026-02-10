@@ -45,6 +45,12 @@ declare global {
           config_id?: string;
           response_type?: string;
           override_default_response_type?: boolean;
+          extras?: {
+            version?: string;
+            featureType?: string;
+            features?: Array<{ name: string }>;
+            sessionInfoVersion?: string;
+          };
         }
       ) => void;
       logout: (callback: (response: { status: string }) => void) => void;

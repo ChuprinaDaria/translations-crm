@@ -109,3 +109,19 @@ class Attachment(Base):
     
     message: Mapped["Message"] = relationship("Message", back_populates="attachment_objects", lazy="joined")
 
+
+class WhatsAppAccount(Base):
+    """Модель для зберігання підключених WhatsApp телефонних номерів."""
+    __tablename__ = "whatsapp_accounts"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    phone_number_id: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)  # Phone Number ID від Meta
+    phone_number: Mapped[str | None] = mapped_column(String, nullable=True, index=True)  # Відображуваний номер телефону
+    name: Mapped[str | None] = mapped_column(String, nullable=True)  # Назва/опис акаунта
+    waba_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)  # WhatsApp Business Account ID
+    page_id: Mapped[str | None] = mapped_column(String, nullable=True)  # Facebook Page ID
+    page_name: Mapped[str | None] = mapped_column(String, nullable=True)  # Назва Facebook Page
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+

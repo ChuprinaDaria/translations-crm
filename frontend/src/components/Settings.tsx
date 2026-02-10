@@ -20,6 +20,7 @@ import {
   type ManagerSmtpAccountCreate,
   type ManagerSmtpAccountUpdate,
   type WhatsAppConfig,
+  type WhatsAppAccount,
   type InstagramConfig,
   type FacebookConfig,
   type StripeConfig,
@@ -92,6 +93,11 @@ export function Settings() {
     has_waba_id: false,
   });
   const [isConnectingWhatsApp, setIsConnectingWhatsApp] = useState(false);
+  // Embedded signup session info
+  const [embeddedSignupSessionInfo, setEmbeddedSignupSessionInfo] = useState<{
+    phone_number_id?: string;
+    waba_id?: string;
+  }>({});
 
   // Instagram state
   const [instagram, setInstagram] = useState<InstagramConfig>({
@@ -305,6 +311,14 @@ export function Settings() {
           console.error("Failed to get WhatsApp status:", error);
         }
         
+        // Завантажуємо WhatsApp акаунти
+        try {
+          const accounts = await settingsApi.getWhatsAppAccounts();
+          setWhatsappAccounts(accounts);
+        } catch (error) {
+          console.error("Failed to load WhatsApp accounts:", error);
+        }
+        
         try {
           const instagramStatus = await settingsApi.getInstagramStatus();
           setInstagramStatus(instagramStatus);
@@ -355,6 +369,152 @@ export function Settings() {
     loadData();
     loadOffices();
   }, []);
+
+  // MessageEvent handler for WhatsApp Embedded Signup
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") {
+        return;
+      }
+
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          // If user finishes the Embedded Signup flow
+          if (data.event === 'FINISH') {
+            const { phone_number_id, waba_id } = data.data;
+            console.log("Phone number ID:", phone_number_id, "WhatsApp business account ID:", waba_id);
+            
+            // Store session info in local state
+            setEmbeddedSignupSessionInfo({
+              phone_number_id,
+              waba_id,
+            });
+
+            // Update WhatsApp config with phone_number_id
+            if (phone_number_id) {
+              setWhatsapp((prev) => ({
+                ...prev,
+                phone_number_id: phone_number_id.toString(),
+              }));
+            }
+
+            toast.success(`WhatsApp Business підключено! Phone Number ID: ${phone_number_id}, WABA ID: ${waba_id}`);
+          } 
+          // If user cancels the Embedded Signup flow
+          else if (data.event === 'CANCEL') {
+            const { current_step } = data.data;
+            console.warn("Embedded Signup cancelled at step:", current_step);
+            toast.info("Встроенная регистрация скасована");
+          } 
+          // If user reports an error during the Embedded Signup flow
+          else if (data.event === 'ERROR') {
+            const { error_message } = data.data;
+            console.error("Embedded Signup error:", error_message);
+            toast.error(`Помилка встроенной регистрації: ${error_message}`);
+          }
+        }
+      } catch (error) {
+        // Not JSON or not our message type, ignore
+        console.log('Non JSON Responses or non-embedded signup message:', event.data);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
+  // Facebook login callback for embedded signup
+  const fbLoginCallback = useCallback((response: any) => {
+    if (response.authResponse && response.authResponse.code) {
+      const code = response.authResponse.code;
+      console.log("Received authorization code from Facebook:", code);
+      
+      // Exchange code for access token via backend
+      if (facebook.app_id && facebook.app_secret) {
+        setIsConnectingWhatsApp(true);
+        settingsApi.connectWhatsApp(
+          code,
+          facebook.app_id,
+          facebook.app_secret,
+          undefined // redirect_uri is optional
+        )
+          .then((result) => {
+            setWhatsapp({
+              ...whatsapp,
+              access_token: result.access_token,
+              phone_number_id: result.phone_number_id || embeddedSignupSessionInfo.phone_number_id || "",
+            });
+            return refreshWhatsAppStatus();
+          })
+          .then(async () => {
+            // Оновлюємо список акаунтів
+            try {
+              const accounts = await settingsApi.getWhatsAppAccounts();
+              setWhatsappAccounts(accounts);
+            } catch (error) {
+              console.error("Failed to load WhatsApp accounts:", error);
+            }
+            toast.success("WhatsApp успішно підключено через встроенную регистрацию!");
+          })
+          .catch((error: any) => {
+            console.error("Error exchanging code for token:", error);
+            toast.error(error.message || "Не вдалося обміняти код на токен");
+          })
+          .finally(() => {
+            setIsConnectingWhatsApp(false);
+          });
+      } else {
+        toast.error("Facebook App ID та App Secret не налаштовано");
+      }
+    } else {
+      console.log("Facebook login response:", response);
+      if (response.status === 'not_authorized') {
+        toast.error("Користувач не авторизовав додаток");
+      }
+    }
+  }, [facebook.app_id, facebook.app_secret, whatsapp, embeddedSignupSessionInfo, refreshWhatsAppStatus]);
+
+  // Launch WhatsApp Embedded Signup
+  const launchWhatsAppSignup = useCallback(async () => {
+    if (!facebook.app_id || !facebook.config_id) {
+      toast.error("Спочатку налаштуйте Facebook App ID та Config ID в Settings → Facebook");
+      return;
+    }
+
+    try {
+      // Initialize Facebook SDK
+      const { initFacebookSDK } = await import('../lib/facebook-sdk');
+      await initFacebookSDK(facebook.app_id);
+
+      // Check if FB is available
+      if (!window.FB) {
+        throw new Error("Facebook SDK не завантажено");
+      }
+
+      // Launch Facebook login with embedded signup configuration
+      window.FB.login(fbLoginCallback, {
+        config_id: facebook.config_id,
+        response_type: 'code', // Must be set to 'code' for System User access token
+        override_default_response_type: true, // When true, response_type takes precedence
+        extras: {
+          version: "v3",
+          featureType: "whatsapp_business_app_onboarding",
+          features: [
+            { name: "marketing_messages_lite" },
+            { name: "app_only_install" }
+          ]
+        }
+      });
+    } catch (error: any) {
+      console.error("Error launching WhatsApp signup:", error);
+      toast.error(error.message || "Не вдалося запустити встроенную регистрацию");
+    }
+  }, [facebook.app_id, facebook.config_id, fbLoginCallback]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1394,6 +1554,14 @@ export function Settings() {
                           // Оновлюємо статус
                           await refreshWhatsAppStatus();
                           
+                          // Оновлюємо список акаунтів
+                          try {
+                            const accounts = await settingsApi.getWhatsAppAccounts();
+                            setWhatsappAccounts(accounts);
+                          } catch (error) {
+                            console.error("Failed to load WhatsApp accounts:", error);
+                          }
+                          
                           toast.success("WhatsApp успішно підключено!");
                         } else {
                           throw new Error("Не отримано code від Facebook");
@@ -1436,7 +1604,7 @@ export function Settings() {
                 </div>
               )}
               
-              {/* Кнопка для відкриття встроенной регистрації WhatsApp */}
+              {/* Кнопка для встроенной регистрації WhatsApp через SDK */}
               {facebook.app_id && facebook.config_id && (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between">
@@ -1445,36 +1613,272 @@ export function Settings() {
                         Встроенная регистрация WhatsApp Business
                       </p>
                       <p className="text-xs text-blue-700 mt-1">
-                        Відкрийте сторінку для створення або вибору акаунту WhatsApp Business, додавання телефонного номера та його підтвердження. Після завершення ви отримаєте код авторизації, який потрібно буде обміняти на токен доступу.
+                        <strong>Рекомендований спосіб:</strong> Натисніть кнопку нижче для запуску встроенной регистрації через Facebook SDK. Після завершення ви автоматично отримаєте код авторизації та інформацію про сеанс (Phone Number ID та WABA ID).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      className="bg-[#1877f2] hover:bg-[#1877f2]/90 text-white border-0"
+                      disabled={isConnectingWhatsApp}
+                      onClick={launchWhatsAppSignup}
+                      style={{
+                        backgroundColor: '#1877f2',
+                        border: 0,
+                        borderRadius: '4px',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        height: '40px',
+                        padding: '0 24px'
+                      }}
+                    >
+                      {isConnectingWhatsApp ? "Підключення..." : "Login with Facebook"}
+                    </Button>
+                  </div>
+                  <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+                    <strong>Примітка:</strong> Після завершення встроенной регистрації ви отримаєте код авторизації та інформацію про сеанс автоматично. Код буде обміняно на токен доступу на бекенді.
+                  </div>
+                  {embeddedSignupSessionInfo.phone_number_id && (
+                    <div className="mt-3 p-2 bg-green-100 rounded text-xs text-green-800">
+                      <strong>Отримано:</strong> Phone Number ID: {embeddedSignupSessionInfo.phone_number_id}
+                      {embeddedSignupSessionInfo.waba_id && `, WABA ID: ${embeddedSignupSessionInfo.waba_id}`}
+                    </div>
+                  )}
+                  <div className="mt-3 p-2 bg-gray-100 rounded text-xs text-gray-700">
+                    <strong>Альтернативний спосіб:</strong> Якщо ви хочете відкрити встроенную регистрацию в окремому вікні, використайте кнопку нижче.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                    onClick={() => {
+                      // Просто відкриваємо URL встроенной регистрації без використання SDK
+                      const onboardingURL = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${facebook.app_id}&config_id=${facebook.config_id}&extras=${encodeURIComponent(JSON.stringify({
+                        featureType: 'whatsapp_business_app_onboarding',
+                        sessionInfoVersion: '3',
+                        version: 'v3',
+                        features: [
+                          { name: 'marketing_messages_lite' },
+                          { name: 'app_only_install' }
+                        ]
+                      }))}`;
+                      
+                      // Відкриваємо в новому вікні
+                      window.open(onboardingURL, '_blank', 'noopener,noreferrer');
+                      toast.info("Відкрито сторінку встроенной регистрації WhatsApp. Після завершення скопіюйте код авторизації та обміняйте його на токен.");
+                    }}
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    Відкрити встроенную регистрацию в окремому вікні
+                  </Button>
+                </div>
+              )}
+              
+              {/* Стара секція для ручного введення коду (залишаємо для сумісності) */}
+              {facebook.app_id && facebook.config_id && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">
+                        Ручне введення коду авторизації
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        <strong>Якщо ви вже маєте код:</strong> Вставте код авторизації нижче та натисніть "Обміняти код".
+                      </p>
+                    </div>
+                  </div>
+                  {/* Поле для введення коду вручну */}
+                  <div className="mt-4 p-3 bg-white border border-blue-200 rounded-lg">
+                    <Label htmlFor="whatsapp-auth-code" className="text-sm font-medium text-blue-900">
+                      Або введіть код авторизації вручну:
+                    </Label>
+                    <div className="flex gap-2 mt-2">
+                      <Input
+                        id="whatsapp-auth-code"
+                        type="text"
+                        placeholder="Вставте код авторизації з Meta"
+                        className="flex-1"
+                        onPaste={async (e) => {
+                          const code = e.clipboardData.getData('text').trim();
+                          if (code && code.length > 10) {
+                            // Автоматично обмінюємо код при вставці
+                            try {
+                              setIsConnectingWhatsApp(true);
+                              const redirectUri = new URLSearchParams(window.location.search).get('redirect_uri') || 
+                                                  `https://developers.facebook.com/es/oauth/callback/`;
+                              
+                              const result = await settingsApi.connectWhatsApp(
+                                code,
+                                facebook.app_id,
+                                facebook.app_secret,
+                                redirectUri
+                              );
+                              
+                              setWhatsapp({
+                                ...whatsapp,
+                                access_token: result.access_token,
+                                phone_number_id: result.phone_number_id || "",
+                              });
+                              
+                              await refreshWhatsAppStatus();
+                              toast.success("WhatsApp успішно підключено!");
+                              
+                              // Очищаємо поле
+                              e.currentTarget.value = '';
+                            } catch (error: any) {
+                              console.error(error);
+                              toast.error(error.message || "Не вдалося обміняти код на токен");
+                            } finally {
+                              setIsConnectingWhatsApp(false);
+                            }
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const codeInput = document.getElementById('whatsapp-auth-code') as HTMLInputElement;
+                          const code = codeInput?.value.trim();
+                          
+                          if (!code) {
+                            toast.error("Введіть код авторизації");
+                            return;
+                          }
+                          
+                          if (!facebook.app_id || !facebook.app_secret) {
+                            toast.error("Спочатку налаштуйте Facebook App ID та App Secret");
+                            return;
+                          }
+                          
+                          setIsConnectingWhatsApp(true);
+                          try {
+                            // Спробуємо отримати redirect_uri з URL або використаємо стандартний
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const redirectUri = urlParams.get('redirect_uri') || 
+                                              `https://developers.facebook.com/es/oauth/callback/`;
+                            
+                            const result = await settingsApi.connectWhatsApp(
+                              code,
+                              facebook.app_id,
+                              facebook.app_secret,
+                              redirectUri
+                            );
+                            
+                            setWhatsapp({
+                              ...whatsapp,
+                              access_token: result.access_token,
+                              phone_number_id: result.phone_number_id || "",
+                            });
+                            
+                            await refreshWhatsAppStatus();
+                            toast.success("WhatsApp успішно підключено!");
+                            
+                            // Очищаємо поле
+                            codeInput.value = '';
+                          } catch (error: any) {
+                            console.error(error);
+                            toast.error(error.message || "Не вдалося обміняти код на токен");
+                          } finally {
+                            setIsConnectingWhatsApp(false);
+                          }
+                        }}
+                        disabled={isConnectingWhatsApp}
+                      >
+                        {isConnectingWhatsApp ? "Обмін..." : "Обміняти код"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-2">
+                      <strong>Як знайти код:</strong> Після завершення встроенной регистрації Meta перенаправить вас на сторінку з кодом авторизації. Код буде в URL параметрі <code className="bg-gray-100 px-1 rounded">code=...</code> або відображатиметься на сторінці. Скопіюйте весь код (довгий рядок символів) та вставте його тут.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Список підключених WhatsApp акаунтів */}
+              {whatsappAccounts.length > 0 && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        Підключені WhatsApp акаунти ({whatsappAccounts.length})
+                      </p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Список всіх підключених телефонних номерів WhatsApp Business
                       </p>
                     </div>
                     <Button
                       type="button"
                       variant="outline"
-                      className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                      onClick={() => {
-                        // Просто відкриваємо URL встроенной регистрації без використання SDK
-                        const onboardingURL = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${facebook.app_id}&config_id=${facebook.config_id}&extras=${encodeURIComponent(JSON.stringify({
-                          featureType: 'whatsapp_business_app_onboarding',
-                          sessionInfoVersion: '3',
-                          version: 'v3',
-                          features: [
-                            { name: 'marketing_messages_lite' },
-                            { name: 'app_only_install' }
-                          ]
-                        }))}`;
-                        
-                        // Відкриваємо в новому вікні
-                        window.open(onboardingURL, '_blank', 'noopener,noreferrer');
-                        toast.info("Відкрито сторінку встроенной регистрації WhatsApp. Після завершення скопіюйте код авторизації та обміняйте його на токен.");
+                      size="sm"
+                      onClick={async () => {
+                        setIsLoadingWhatsAppAccounts(true);
+                        try {
+                          const accounts = await settingsApi.getWhatsAppAccounts();
+                          setWhatsappAccounts(accounts);
+                        } catch (error) {
+                          console.error("Failed to refresh WhatsApp accounts:", error);
+                          toast.error("Не вдалося оновити список акаунтів");
+                        } finally {
+                          setIsLoadingWhatsAppAccounts(false);
+                        }
                       }}
+                      disabled={isLoadingWhatsAppAccounts}
                     >
-                      <ImageIcon className="w-4 h-4 mr-2" />
-                      Відкрити встроенную регистрацию
+                      {isLoadingWhatsAppAccounts ? "Оновлення..." : "Оновити"}
                     </Button>
                   </div>
-                  <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
-                    <strong>Примітка:</strong> Після завершення встроенной регистрації ви отримаєте код авторизації. Використайте кнопку "Підключити через Facebook" для автоматичного обміну коду на токен, або обміняйте код вручну через API.
+                  <div className="space-y-2">
+                    {whatsappAccounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between gap-4 p-3 border rounded-lg bg-white"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900 mb-1">
+                            {account.name || `WhatsApp ${account.phone_number_id.substring(0, 6)}...`}
+                          </div>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            {account.phone_number && (
+                              <div>📱 {account.phone_number}</div>
+                            )}
+                            <div className="text-xs text-gray-500">
+                              Phone Number ID: {account.phone_number_id}
+                            </div>
+                            {account.page_name && (
+                              <div className="text-xs text-gray-500">
+                                Page: {account.page_name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50 shrink-0"
+                          onClick={async () => {
+                            if (confirm(`Видалити WhatsApp акаунт "${account.name || account.phone_number_id}"?`)) {
+                              try {
+                                await settingsApi.deleteWhatsAppAccount(account.id);
+                                setWhatsappAccounts((prev) =>
+                                  prev.filter((a) => a.id !== account.id)
+                                );
+                                toast.success("WhatsApp акаунт видалено");
+                              } catch (error: any) {
+                                console.error(error);
+                                toast.error(error.message || "Не вдалося видалити WhatsApp акаунт");
+                              }
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

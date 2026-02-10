@@ -6,7 +6,7 @@ import hashlib
 import httpx
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from modules.communications.models import (
@@ -119,7 +119,14 @@ class WhatsAppService(MessengerService):
             return False
         
         # Перевірити, чи пройшло менше 24 годин
-        time_diff = datetime.utcnow() - last_inbound.created_at
+        # Виправлення: використовуємо timezone-aware datetime для обох значень
+        now = datetime.now(timezone.utc)
+        # Якщо last_inbound.created_at не має timezone, додаємо UTC
+        if last_inbound.created_at.tzinfo is None:
+            last_message_time = last_inbound.created_at.replace(tzinfo=timezone.utc)
+        else:
+            last_message_time = last_inbound.created_at
+        time_diff = now - last_message_time
         return time_diff < timedelta(hours=24)
     
     def _get_template_config(self) -> Optional[Dict[str, Any]]:
@@ -448,7 +455,7 @@ class WhatsAppService(MessengerService):
             
             # Оновити статус
             message.status = MessageStatus.SENT
-            message.sent_at = datetime.utcnow()
+            message.sent_at = datetime.now(timezone.utc)
             if metadata is None:
                 metadata = {}
             metadata["whatsapp_message_id"] = result.get("messages", [{}])[0].get("id")

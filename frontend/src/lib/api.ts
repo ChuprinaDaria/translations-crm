@@ -1194,6 +1194,18 @@ export interface WhatsAppConfig {
   verify_token: string;
 }
 
+export interface WhatsAppAccount {
+  id: number;
+  phone_number_id: string;
+  phone_number?: string;
+  name?: string;
+  waba_id?: string;
+  page_id?: string;
+  page_name?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export interface InstagramConfig {
   app_id: string;
   access_token: string | boolean; // boolean коли отримуємо з API (для безпеки), string коли відправляємо
@@ -1661,6 +1673,17 @@ export const settingsApi = {
   async disconnectWhatsApp(): Promise<{ status: string }> {
     return apiFetch<{ status: string }>("/communications/webhooks/whatsapp/disconnect", {
       method: "POST",
+    });
+  },
+
+  // WhatsApp акаунти
+  async getWhatsAppAccounts(): Promise<WhatsAppAccount[]> {
+    return apiFetch<WhatsAppAccount[]>("/communications/whatsapp/accounts");
+  },
+
+  async deleteWhatsAppAccount(accountId: number): Promise<{ status: string; id: number }> {
+    return apiFetch<{ status: string; id: number }>(`/communications/whatsapp/accounts/${accountId}`, {
+      method: "DELETE",
     });
   },
 
