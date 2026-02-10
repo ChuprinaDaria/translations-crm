@@ -769,10 +769,31 @@ async def assign_manager_to_conversation(
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
     """Assign current user as manager to conversation."""
+    logger.info(f"Attempting to assign manager to conversation {conversation_id}")
+    
+    # Спробуємо знайти розмову за UUID
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     
+    # Якщо не знайдено за UUID, спробуємо знайти за external_id (для сумісності)
     if not conversation:
+        logger.warning(f"Conversation {conversation_id} not found by UUID, trying external_id")
+        conversation = db.query(Conversation).filter(Conversation.external_id == str(conversation_id)).first()
+    
+    if not conversation:
+        # Додаткова діагностика: перевіримо, чи взагалі є розмови в БД
+        total_conversations = db.query(Conversation).count()
+        logger.error(f"Conversation {conversation_id} not found in database. Total conversations in DB: {total_conversations}")
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    logger.info(f"Found conversation {conversation_id}, platform: {conversation.platform}, archived: {conversation.is_archived}")
+    
+    # Перевіряємо наявність користувача
+    if not user:
+        logger.error(f"User not found for assigning manager to conversation {conversation_id}")
+        raise HTTPException(status_code=401, detail="User authentication required")
+    
+    # Перевіряємо, чи розмова не видалена (якщо є поле deleted_at)
+    # Але навіть архівовані розмови можна призначати менеджера
     
     # Assign manager if not already assigned
     if not conversation.assigned_manager_id:

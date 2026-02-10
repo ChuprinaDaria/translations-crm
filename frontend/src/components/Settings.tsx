@@ -1582,31 +1582,6 @@ export function Settings() {
                 )}
               </div>
               
-              {/* Підказка якщо кнопка неактивна */}
-              {!whatsappStatus.connected && (!facebook.app_id || !facebook.config_id || !facebook.app_secret) && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800">
-                    <strong>Увага:</strong> Для підключення WhatsApp необхідно спочатку налаштувати <strong>Facebook App ID</strong>, <strong>Config ID</strong> та <strong>App Secret</strong> в розділі <strong>Settings → Facebook</strong>.
-                    <div className="mt-2 space-y-1">
-                      {!facebook.app_id && <span className="block">• Facebook App ID не вказано</span>}
-                      {!facebook.config_id && <span className="block">• Config ID не вказано</span>}
-                      {!facebook.app_secret && <span className="block">• App Secret не вказано</span>}
-                    </div>
-                  </p>
-                </div>
-              )}
-              
-              {/* Попередження про неправильний Phone Number ID */}
-              {whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id) && !whatsappStatus.connected && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-800">
-                    <strong>Помилка:</strong> Phone Number ID має містити тільки цифри. 
-                    <br />
-                    <span className="text-xs mt-1 block">Поле буде автоматично очищено. Для підключення через OAuth це поле не потрібно заповнювати вручну - воно отримається автоматично.</span>
-                  </p>
-                </div>
-              )}
-              
               {/* Кнопка для встроенной регистрації WhatsApp через SDK */}
               {facebook.app_id && facebook.config_id && (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1676,6 +1651,31 @@ export function Settings() {
                     <ImageIcon className="w-4 h-4 mr-2" />
                     Відкрити встроенную регистрацию в окремому вікні
                   </Button>
+                </div>
+              )}
+              
+              {/* Підказка якщо кнопка неактивна */}
+              {!whatsappStatus.connected && (!facebook.app_id || !facebook.config_id || !facebook.app_secret) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    <strong>Увага:</strong> Для підключення WhatsApp необхідно спочатку налаштувати <strong>Facebook App ID</strong>, <strong>Config ID</strong> та <strong>App Secret</strong> в розділі <strong>Settings → Facebook</strong>.
+                    <div className="mt-2 space-y-1">
+                      {!facebook.app_id && <span className="block">• Facebook App ID не вказано</span>}
+                      {!facebook.config_id && <span className="block">• Config ID не вказано</span>}
+                      {!facebook.app_secret && <span className="block">• App Secret не вказано</span>}
+                    </div>
+                  </p>
+                </div>
+              )}
+              
+              {/* Попередження про неправильний Phone Number ID */}
+              {whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id) && !whatsappStatus.connected && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    <strong>Помилка:</strong> Phone Number ID має містити тільки цифри. 
+                    <br />
+                    <span className="text-xs mt-1 block">Поле буде автоматично очищено. Для підключення через OAuth це поле не потрібно заповнювати вручну - воно отримається автоматично.</span>
+                  </p>
                 </div>
               )}
               
