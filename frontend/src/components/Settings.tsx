@@ -1802,12 +1802,12 @@ export function Settings() {
               )}
               
               {/* Список підключених WhatsApp акаунтів */}
-              {whatsappAccounts.length > 0 && (
+              {whatsappAccounts && whatsappAccounts.length > 0 && (
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        Підключені WhatsApp акаунти ({whatsappAccounts.length})
+                        Підключені WhatsApp акаунти ({whatsappAccounts?.length || 0})
                       </p>
                       <p className="text-xs text-gray-600 mt-1">
                         Список всіх підключених телефонних номерів WhatsApp Business
@@ -1835,7 +1835,7 @@ export function Settings() {
                     </Button>
                   </div>
                   <div className="space-y-2">
-                    {whatsappAccounts.map((account) => (
+                    {whatsappAccounts?.map((account) => (
                       <div
                         key={account.id}
                         className="flex items-center justify-between gap-4 p-3 border rounded-lg bg-white"
