@@ -1297,17 +1297,20 @@ async def get_tracking(
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """Get InPost tracking number for order."""
+    """
+    Get InPost tracking number for order.
+    If tracking number doesn't exist and order has address/paczkomat, automatically creates shipment via InPost ShipX API.
+    """
     from modules.crm.models import Order
+    from modules.communications.services.inpost_shipx import InPostShipXService
+    import os
     
     logger.info(f"Getting tracking for order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
     
-    # Try to find order - log all attempts
     logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
     
     if not order:
-        # Try to find by string comparison
         logger.warning(f"Order not found with UUID filter. Trying alternative search...")
         order_str = str(order_id)
         all_orders = db.query(Order).limit(5).all()
@@ -1319,52 +1322,125 @@ async def get_tracking(
     
     try:
         import httpx
-        import os
         
-        # Завантажити InPost ключ з бази даних
         inpost_settings = crud.get_inpost_settings(db)
         inpost_api_key = inpost_settings.get("inpost_api_key") or os.getenv("INPOST_API_KEY", "")
-        if not inpost_api_key:
-            raise HTTPException(status_code=500, detail="InPost API key not configured")
+        organization_id = os.getenv("INPOST_ORGANIZATION_ID", "")
         
-        base_url = "https://api-shipx-pl.easypack24.net/v1"
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{base_url}/shipments",
-                headers={
-                    "Authorization": f"Bearer {inpost_api_key}",
-                },
-                params={
-                    "order_id": str(order.id),
-                }
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                tracking_number = data.get("tracking_number") or data.get("number")
-                
-                if tracking_number:
-                    return {
-                        "number": tracking_number,
-                        "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-                        "order_id": str(order.id),
-                    }
+        if inpost_api_key and organization_id:
+            base_url = "https://api-shipx-pl.easypack24.net/v1"
             
-            return {
-                "number": None,
-                "trackingUrl": None,
-                "message": "Tracking number not found",
-                "order_id": str(order.id),
-            }
-    except ImportError:
-        raise HTTPException(status_code=500, detail="httpx library not installed")
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{base_url}/organizations/{organization_id}/shipments",
+                    headers={
+                        "Authorization": f"Bearer {inpost_api_key}",
+                    },
+                    params={
+                        "reference": order.order_number,
+                    }
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("items", [])
+                    if items and len(items) > 0:
+                        tracking_number = items[0].get("tracking_number") or items[0].get("number")
+                        if tracking_number:
+                            logger.info(f"Found existing tracking number: {tracking_number}")
+                            return {
+                                "number": tracking_number,
+                                "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+                                "order_id": str(order.id),
+                            }
     except Exception as e:
-        logger.error(f"InPost API error: {e}")
+        logger.warning(f"Error checking ShipX API for existing tracking: {e}")
+    
+    if not order.description:
         return {
             "number": None,
             "trackingUrl": None,
-            "message": f"Error: {str(e)}",
+            "message": "Order has no delivery address. Please add address or paczkomat first.",
+            "order_id": str(order.id),
+        }
+    
+    inpost_service = InPostShipXService()
+    delivery_address, paczkomat_code, is_paczkomat = inpost_service.parse_address_from_description(order.description)
+    
+    if not delivery_address and not paczkomat_code:
+        return {
+            "number": None,
+            "trackingUrl": None,
+            "message": "No delivery address or paczkomat found in order description.",
+            "order_id": str(order.id),
+        }
+    
+    if not order.client:
+        return {
+            "number": None,
+            "trackingUrl": None,
+            "message": "Order has no client information.",
+            "order_id": str(order.id),
+        }
+    
+    client = order.client
+    client_name = (client.full_name or "").split()[0] if client.full_name else "Client"
+    client_surname = " ".join((client.full_name or "").split()[1:]) if client.full_name and len(client.full_name.split()) > 1 else "Name"
+    client_phone = client.phone or "+48123456789"
+    client_email = client.email or "client@example.com"
+    
+    try:
+        logger.info(f"Creating InPost ShipX shipment for order_id: {order.id}, is_paczkomat: {is_paczkomat}, paczkomat_code: {paczkomat_code}")
+        
+        result = await inpost_service.create_shipment(
+            receiver_name=client_name,
+            receiver_surname=client_surname,
+            receiver_phone=client_phone,
+            receiver_email=client_email,
+            delivery_address=delivery_address,
+            paczkomat_code=paczkomat_code,
+            is_paczkomat=is_paczkomat,
+            reference=order.order_number,
+            parcel_template="medium",
+        )
+        
+        tracking_number = result.get("tracking_number")
+        
+        if tracking_number:
+            if order.description and f"Трекінг: {tracking_number}" not in order.description:
+                order.description += f"\n\nТрекінг: {tracking_number}"
+                db.commit()
+            
+            logger.info(f"Successfully created InPost ShipX shipment with tracking: {tracking_number}")
+            return {
+                "number": tracking_number,
+                "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
+                "order_id": str(order.id),
+                "message": "Shipment created automatically via InPost ShipX",
+            }
+        else:
+            logger.warning(f"InPost ShipX shipment created but no tracking number in response")
+            return {
+                "number": None,
+                "trackingUrl": None,
+                "message": "Shipment created but tracking number not available yet. Please try again later.",
+                "order_id": str(order.id),
+            }
+            
+    except ValueError as e:
+        logger.error(f"InPost ShipX configuration error: {e}")
+        return {
+            "number": None,
+            "trackingUrl": None,
+            "message": f"InPost ShipX configuration error: {str(e)}",
+            "order_id": str(order.id),
+        }
+    except Exception as e:
+        logger.error(f"Error creating InPost ShipX shipment: {e}", exc_info=True)
+        return {
+            "number": None,
+            "trackingUrl": None,
+            "message": f"Error creating shipment: {str(e)}",
             "order_id": str(order.id),
         }
 
