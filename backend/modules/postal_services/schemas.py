@@ -192,6 +192,7 @@ class InPostSettingsResponse(BaseModel):
     """InPost settings response."""
     id: int
     api_key: Optional[str] = Field(None, description="Masked API key")
+    organization_id: Optional[str] = None
     api_url: str
     sandbox_mode: bool
     webhook_url: Optional[str]
@@ -207,6 +208,7 @@ class InPostSettingsResponse(BaseModel):
 class InPostSettingsUpdate(BaseModel):
     """Update InPost settings."""
     api_key: Optional[str] = None
+    organization_id: Optional[str] = None
     sandbox_mode: Optional[bool] = None
     sandbox_api_key: Optional[str] = None
     webhook_url: Optional[str] = None

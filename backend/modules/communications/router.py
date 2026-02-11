@@ -1364,7 +1364,7 @@ async def get_tracking(
             "order_id": str(order.id),
         }
     
-    inpost_service = InPostShipXService()
+    inpost_service = InPostShipXService(db=db)
     delivery_address, paczkomat_code, is_paczkomat = inpost_service.parse_address_from_description(order.description)
     
     if not delivery_address and not paczkomat_code:

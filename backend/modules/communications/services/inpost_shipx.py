@@ -6,6 +6,7 @@ import os
 import logging
 import re
 from typing import Optional, Dict, Any, Tuple
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from decimal import Decimal
 
@@ -62,10 +63,24 @@ class ShipmentRequest(BaseModel):
 class InPostShipXService:
     """Service for interacting with InPost ShipX API."""
     
-    def __init__(self, api_key: Optional[str] = None, organization_id: Optional[str] = None):
-        self.api_key = api_key or os.getenv("INPOST_API_KEY", "")
-        self.organization_id = organization_id or os.getenv("INPOST_ORGANIZATION_ID", "")
-        self.base_url = os.getenv("INPOST_API_URL", "https://api-shipx-pl.easypack24.net/v1")
+    def __init__(self, db: Optional[Session] = None, api_key: Optional[str] = None, organization_id: Optional[str] = None):
+        from modules.postal_services.models import InPostSettings
+        
+        self.db = db
+        if db:
+            settings = db.query(InPostSettings).first()
+            if settings:
+                self.api_key = api_key or (settings.sandbox_api_key if settings.sandbox_mode else settings.api_key) or ""
+                self.organization_id = organization_id or settings.organization_id or ""
+                self.base_url = settings.sandbox_api_url if settings.sandbox_mode else settings.api_url
+            else:
+                self.api_key = api_key or os.getenv("INPOST_API_KEY", "")
+                self.organization_id = organization_id or os.getenv("INPOST_ORGANIZATION_ID", "")
+                self.base_url = os.getenv("INPOST_API_URL", "https://api-shipx-pl.easypack24.net/v1")
+        else:
+            self.api_key = api_key or os.getenv("INPOST_API_KEY", "")
+            self.organization_id = organization_id or os.getenv("INPOST_ORGANIZATION_ID", "")
+            self.base_url = os.getenv("INPOST_API_URL", "https://api-shipx-pl.easypack24.net/v1")
         
     def _get_headers(self) -> Dict[str, str]:
         if not self.api_key:
