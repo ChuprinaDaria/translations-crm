@@ -1203,6 +1203,29 @@ async def create_payment_link(
             import stripe
             stripe.api_key = payment_settings.stripe_secret_key
             
+            # Create internal session ID for tracking
+            session_id = str(uuid4())
+            
+            # Create PaymentTransaction record
+            from modules.payment.models import PaymentTransaction, PaymentStatus, PaymentProvider
+            from datetime import datetime
+            
+            transaction = PaymentTransaction(
+                order_id=order.id,
+                provider=PaymentProvider.STRIPE,
+                status=PaymentStatus.PENDING,
+                amount=Decimal(str(amount)),
+                currency=currency.upper(),
+                session_id=session_id,
+                customer_email=order.client.email if order.client and order.client.email else "customer@example.com",
+                customer_name=order.client.full_name if order.client and order.client.full_name else "Customer",
+                description=f"Payment for order {order.order_number}",
+            )
+            db.add(transaction)
+            db.flush()
+            
+            logger.info(f"Created PaymentTransaction {transaction.id} with session_id {session_id} for order {order.id}")
+            
             # Create Price
             price = stripe.Price.create(
                 unit_amount=int(amount * 100),  # Stripe works in cents
@@ -1212,7 +1235,7 @@ async def create_payment_link(
                 },
             )
 
-            # Create Payment Link
+            # Create Payment Link with session_id in metadata
             payment_link_obj = stripe.PaymentLink.create(
                 line_items=[
                     {
@@ -1222,6 +1245,7 @@ async def create_payment_link(
                 ],
                 metadata={
                     "order_id": str(order.id),
+                    "session_id": session_id,
                 },
                 after_completion={
                     "type": "redirect",
@@ -1231,6 +1255,10 @@ async def create_payment_link(
                 }
             )
 
+            # Update transaction with payment URL
+            transaction.payment_url = payment_link_obj.url
+            db.commit()
+            
             payment_url = payment_link_obj.url
             
         elif active_provider == PaymentProvider.PRZELEWY24:
