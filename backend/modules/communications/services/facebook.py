@@ -93,6 +93,37 @@ class FacebookService(MessengerService):
         
         return hmac.compare_digest(expected_signature, received_signature)
     
+    def _is_within_24h_window(self, conversation: Conversation) -> bool:
+        """
+        Перевірити, чи розмова в межах 24-годинного вікна для звичайних повідомлень.
+        
+        Facebook Messenger дозволяє відправляти звичайні текстові повідомлення тільки в межах
+        24 годин після останнього повідомлення від клієнта. Поза цим вікном потрібно
+        використовувати messaging_type: MESSAGE_TAG з tag: HUMAN_AGENT.
+        """
+        from datetime import timedelta
+        from datetime import timezone as tz
+        
+        # Знайти останнє вхідне повідомлення від клієнта
+        from modules.communications.models import Message
+        last_inbound = self.db.query(Message).filter(
+            Message.conversation_id == conversation.id,
+            Message.direction == MessageDirection.INBOUND
+        ).order_by(Message.created_at.desc()).first()
+        
+        if not last_inbound:
+            # Якщо немає вхідних повідомлень, це перше повідомлення - поза вікном
+            return False
+        
+        # Перевірити, чи пройшло менше 24 годин
+        now = datetime.now(tz.utc)
+        if last_inbound.created_at.tzinfo is None:
+            last_message_time = last_inbound.created_at.replace(tzinfo=tz.utc)
+        else:
+            last_message_time = last_inbound.created_at
+        time_diff = now - last_message_time
+        return time_diff < timedelta(hours=24)
+    
     async def send_message(
         self,
         conversation_id: UUID,
@@ -110,6 +141,11 @@ class FacebookService(MessengerService):
         
         if not conversation:
             raise ValueError(f"Conversation {conversation_id} not found")
+        
+        # Перевірити, чи повідомлення відправляє людина (оператор)
+        # Якщо assigned_manager_id встановлено, це означає що людина веде діалог
+        is_human_agent = conversation.assigned_manager_id is not None
+        is_within_24h = self._is_within_24h_window(conversation)
         
         # Створити повідомлення в БД
         message = self.create_message_in_db(
@@ -140,6 +176,11 @@ class FacebookService(MessengerService):
                 "recipient": {"id": conversation.external_id},  # PSID (Page-Scoped ID)
                 "message": {"text": content},
             }
+            
+            # Додати messaging_type та tag якщо поза 24h вікном та людина відправляє
+            if not is_within_24h and is_human_agent:
+                payload["messaging_type"] = "MESSAGE_TAG"
+                payload["tag"] = "HUMAN_AGENT"
             
             async with httpx.AsyncClient() as client:
                 response = await client.post(url, json=payload, headers=headers)

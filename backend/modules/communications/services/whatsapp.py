@@ -158,7 +158,7 @@ class WhatsAppService(MessengerService):
         cleaned = ''.join(filter(str.isdigit, phone))
         return cleaned
     
-    def _build_message_payload(self, conversation: Conversation, content: str, use_template: bool) -> Dict[str, Any]:
+    def _build_message_payload(self, conversation: Conversation, content: str, use_template: bool, is_human_agent: bool = False) -> Dict[str, Any]:
         """
         Побудувати payload для відправки повідомлення.
         
@@ -166,6 +166,7 @@ class WhatsAppService(MessengerService):
             conversation: Розмова
             content: Текст повідомлення
             use_template: Чи використовувати шаблон
+            is_human_agent: Чи повідомлення відправляє людина (оператор)
             
         Returns:
             Dict з payload для Meta API
@@ -176,26 +177,31 @@ class WhatsAppService(MessengerService):
         # Очищаємо номер телефону від +, -, пробілів
         cleaned_phone = self._clean_phone_number(conversation.external_id)
         
+        # Базовий payload
+        base_payload = {
+            "messaging_product": "whatsapp",
+            "to": cleaned_phone,
+        }
+        
         if use_template:
             # Використовуємо шаблон (для повідомлень поза 24-годинним вікном)
             template_config = self._get_template_config()
             
             if not template_config:
-                # Якщо шаблон не налаштовано, спробуємо відправити як текст
-                # Meta може повернути помилку, але спробуємо
-                logger.warning(f"No WhatsApp template configured, but message is outside 24h window. Attempting to send as text.")
-                return {
-                    "messaging_product": "whatsapp",
-                    "to": cleaned_phone,
+                # Якщо шаблон не налаштовано, спробуємо відправити як текст з tag
+                logger.warning(f"No WhatsApp template configured, but message is outside 24h window. Attempting to send as text with tag.")
+                base_payload.update({
                     "type": "text",
                     "text": {"body": content},
-                }
+                })
+                if is_human_agent:
+                    base_payload["messaging_type"] = "MESSAGE_TAG"
+                    base_payload["tag"] = "HUMAN_AGENT"
+                return base_payload
             else:
                 # Використовуємо шаблон
                 # Для шаблонів текст повідомлення передається в components
-                return {
-                    "messaging_product": "whatsapp",
-                    "to": cleaned_phone,
+                base_payload.update({
                     "type": "template",
                     "template": {
                         **template_config,
@@ -211,16 +217,20 @@ class WhatsAppService(MessengerService):
                             }
                         ] if content else []
                     }
-                }
+                })
+                # Поза 24h вікном - завжди додаємо tag якщо людина
+                if is_human_agent:
+                    base_payload["messaging_type"] = "MESSAGE_TAG"
+                    base_payload["tag"] = "HUMAN_AGENT"
+                return base_payload
         else:
             # Звичайне текстове повідомлення (в межах 24-годинного вікна)
             # Формат відповідає Meta API документації: https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-messages
-            return {
-                "messaging_product": "whatsapp",
-                "to": cleaned_phone,  # Номер телефону (формат: 1234567890 без +, -, пробілів)
+            base_payload.update({
                 "type": "text",
                 "text": {"body": content},
-            }
+            })
+            return base_payload
     
     async def send_message(
         self,
@@ -286,6 +296,10 @@ class WhatsAppService(MessengerService):
             
             # Очищаємо номер телефону отримувача від +, -, пробілів
             cleaned_recipient_phone = self._clean_phone_number(conversation.external_id)
+            
+            # Перевірити, чи повідомлення відправляє людина (оператор)
+            # Якщо assigned_manager_id встановлено, це означає що людина веде діалог
+            is_human_agent = conversation.assigned_manager_id is not None
             
             # Обробити вкладення
             if attachments and len(attachments) > 0:
@@ -420,6 +434,11 @@ class WhatsAppService(MessengerService):
                                 if content:
                                     payload["document"]["caption"] = content
                             
+                            # Додати tag якщо поза 24h вікном та людина відправляє
+                            if not self._is_within_24h_window(conversation) and is_human_agent:
+                                payload["messaging_type"] = "MESSAGE_TAG"
+                                payload["tag"] = "HUMAN_AGENT"
+                            
                             response = await client.post(url, json=payload, headers=headers)
                             response.raise_for_status()
                             result = response.json()
@@ -429,7 +448,7 @@ class WhatsAppService(MessengerService):
                     # Файл не знайдено, відправити тільки текст
                     # Перевірити, чи потрібно використовувати шаблон
                     use_template = force_template or not self._is_within_24h_window(conversation)
-                    payload = self._build_message_payload(conversation, content, use_template, cleaned_recipient_phone)
+                    payload = self._build_message_payload(conversation, content, use_template, is_human_agent)
                     
                     async with httpx.AsyncClient() as client:
                         response = await client.post(url, json=payload, headers=headers)
@@ -439,7 +458,7 @@ class WhatsAppService(MessengerService):
                 # Немає вкладень, відправити тільки текст
                 # Перевірити, чи потрібно використовувати шаблон
                 use_template = force_template or not self._is_within_24h_window(conversation)
-                payload = self._build_message_payload(conversation, content, use_template, cleaned_recipient_phone)
+                payload = self._build_message_payload(conversation, content, use_template, is_human_agent)
                 
                 import logging
                 logger = logging.getLogger(__name__)
