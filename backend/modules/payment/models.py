@@ -69,6 +69,7 @@ class PaymentSettings(Base):
     
     # General settings
     default_currency: Mapped[str] = mapped_column(String(3), default="PLN", nullable=False)
+    active_payment_provider: Mapped[PaymentProvider | None] = mapped_column(String, nullable=True, index=True)  # Активна система оплати (stripe або przelewy24)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

@@ -240,7 +240,20 @@ export function BoardPage() {
             ? new Date(order.deadline)
             : new Date(order.created_at ?? Date.now()),
           status: autoStatus as any,
-          managerName: "Менеджер", // TODO: Get from order.manager
+          managerName: (() => {
+            // Отримати ім'я менеджера з order.manager
+            if ((order as any).manager) {
+              const manager = (order as any).manager;
+              if (manager.first_name && manager.last_name) {
+                return `${manager.first_name} ${manager.last_name}`;
+              } else if (manager.first_name) {
+                return manager.first_name;
+              } else if (manager.email) {
+                return manager.email.split('@')[0];
+              }
+            }
+            return undefined;
+          })(),
           description: order.description,
           file_url: order.file_url,
           // Тип документа та мова з БД

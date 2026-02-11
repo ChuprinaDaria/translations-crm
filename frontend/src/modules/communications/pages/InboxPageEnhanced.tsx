@@ -594,6 +594,27 @@ export function InboxPageEnhanced() {
     }
   };
 
+  const handleSendDraft = async (messageId: string, content: string) => {
+    // Знайти чернетку в чаті
+    const chat = openChats.find(c => 
+      c.messages.some(m => m.id === messageId && m.status === 'draft')
+    );
+    
+    if (!chat) {
+      toast.error('Чернетка не знайдена');
+      return;
+    }
+    
+    // Відправити повідомлення клієнту
+    await handleSendMessage(chat.conversationId, content);
+    
+    // Видалити чернетку з чату
+    const updatedMessages = chat.messages.filter(m => m.id !== messageId);
+    updateChatMessages(chat.conversationId, updatedMessages);
+    
+    toast.success('Повідомлення відправлено клієнту');
+  };
+
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await inboxApi.deleteMessage(messageId);
@@ -1023,10 +1044,29 @@ export function InboxPageEnhanced() {
 
       const { payment_link } = await inboxApi.createPaymentLink(orderId, amount);
       
-      // Auto-send payment link in chat
-      await handleSendMessage(conversationId, `💳 Посилання для оплати${amount ? ` ${amount} zł` : ''}:\n${payment_link}`);
+      // Створити чернетку в чаті замість відправки
+      const draftMessage: Message = {
+        id: `draft-${Date.now()}`,
+        conversation_id: conversationId,
+        direction: 'outbound',
+        type: 'text',
+        content: `💳 Посилання для оплати${amount ? ` ${amount} zł` : ''}:\n${payment_link}`,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        meta_data: {
+          payment_link,
+          order_id: orderId,
+          amount,
+        },
+      };
       
-      toast.success('Посилання на оплату відправлено');
+      // Додати чернетку до чату
+      const chat = openChats.find(c => c.conversationId === conversationId);
+      if (chat) {
+        updateChatMessages(conversationId, [...chat.messages, draftMessage]);
+      }
+      
+      toast.success('Посилання на оплату створено. Натисніть "Відправити клієнту" для надсилання.');
     } catch (error) {
       console.error('Error creating payment link:', error);
       toast.error('Помилка створення посилання на оплату');
@@ -1050,9 +1090,29 @@ export function InboxPageEnhanced() {
       const tracking = await inboxApi.getTracking(orderId);
       
       if (tracking.number && tracking.trackingUrl) {
-        // Auto-send tracking info in chat
-        await handleSendMessage(conversationId, `📦 Twoje zlecenie zostało wysłane!\n\nNumer śledzenia: ${tracking.number}\nŚledź: ${tracking.trackingUrl}`);
-        toast.success('Трекінг номер відправлено');
+        // Створити чернетку в чаті замість відправки
+        const draftMessage: Message = {
+          id: `draft-${Date.now()}`,
+          conversation_id: conversationId,
+          direction: 'outbound',
+          type: 'text',
+          content: `📦 Twoje zlecenie zostało wysłane!\n\nNumer śledzenia: ${tracking.number}\nŚledź: ${tracking.trackingUrl}`,
+          status: 'draft',
+          created_at: new Date().toISOString(),
+          meta_data: {
+            tracking_number: tracking.number,
+            tracking_url: tracking.trackingUrl,
+            order_id: orderId,
+          },
+        };
+        
+        // Додати чернетку до чату
+        const chat = openChats.find(c => c.conversationId === conversationId);
+        if (chat) {
+          updateChatMessages(conversationId, [...chat.messages, draftMessage]);
+        }
+        
+        toast.success('Трекінг номер створено. Натисніть "Відправити клієнту" для надсилання.');
       } else {
         toast.error('Трекінг номер ще не створений');
       }
@@ -1313,6 +1373,7 @@ export function InboxPageEnhanced() {
             onOrderClick={handleOrderClick}
             onDocumentsClick={handleDocumentsClick}
             onDeleteMessage={handleDeleteMessage}
+            onSendDraft={handleSendDraft}
           />
         </CommunicationsLayout>
       </CommunicationsErrorBoundary>
@@ -1372,6 +1433,7 @@ export function InboxPageEnhanced() {
             open={createClientDialogOpen}
             onOpenChange={setCreateClientDialogOpen}
             conversation={chatConversation}
+            messages={activeChat?.messages || []}
             onSuccess={handleCreateClientSuccess}
           />
           

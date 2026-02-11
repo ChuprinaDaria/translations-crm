@@ -154,6 +154,19 @@ class MessengerService(ABC):
                 logger.warning(f"[Message DB] Metadata is not a dict, converting: {type(metadata)}")
                 metadata = {}
         
+        # Якщо повідомлення від нас (is_from_me=True) і direction=OUTBOUND,
+        # але воно створюється через receive_message (не через send_message),
+        # це означає, що воно було відправлено зі стороннього пристрою
+        # Перевіряємо, чи це не повідомлення, відправлене через CRM API
+        # (якщо metadata містить sent_from_crm=True, то не позначаємо як external)
+        if is_from_me and direction == MessageDirection.OUTBOUND:
+            if metadata is None:
+                metadata = {}
+            # Позначити як відправлене зі стороннього пристрою
+            # (якщо ще не позначено явно і не відправлено через CRM)
+            if "sent_from_external_device" not in metadata and not metadata.get("sent_from_crm", False):
+                metadata["sent_from_external_device"] = True
+        
         message = MessageModel(
             conversation_id=conversation_id,
             direction=direction,
@@ -182,6 +195,11 @@ class MessengerService(ABC):
         
         self.db.commit()
         self.db.refresh(message)
+        
+        # Автоматично створити клієнта при першому повідомленні (якщо ще немає)
+        if conversation and not conversation.client_id and direction == MessageDirection.INBOUND:
+            self._auto_create_client_from_conversation(conversation, metadata)
+        
         return message
     
     def extract_client_info(self, sender_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -208,4 +226,104 @@ class MessengerService(ABC):
             True якщо конфігурація валідна
         """
         return True
+    
+    def _auto_create_client_from_conversation(
+        self,
+        conversation: Conversation,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Автоматично створити клієнта з розмови при першому повідомленні.
+        
+        Args:
+            conversation: Розмова
+            metadata: Метадані повідомлення для витягування імені
+        """
+        import logging
+        from modules.crm.models import Client, ClientSource
+        
+        logger = logging.getLogger(__name__)
+        
+        # Перевірити, чи вже є клієнт
+        if conversation.client_id:
+            return
+        
+        # Map platform to client source
+        platform_to_source = {
+            PlatformEnum.TELEGRAM: ClientSource.TELEGRAM,
+            PlatformEnum.WHATSAPP: ClientSource.WHATSAPP,
+            PlatformEnum.EMAIL: ClientSource.EMAIL,
+            PlatformEnum.INSTAGRAM: ClientSource.INSTAGRAM,
+            PlatformEnum.FACEBOOK: ClientSource.FACEBOOK,
+        }
+        client_source = platform_to_source.get(conversation.platform, ClientSource.MANUAL)
+        
+        # Витягнути ім'я з метаданих
+        client_name = None
+        if metadata:
+            # Для Telegram
+            if conversation.platform == PlatformEnum.TELEGRAM:
+                client_name = (
+                    metadata.get("name") or 
+                    metadata.get("sender_name") or
+                    metadata.get("telegram_username", "").replace("@", "")
+                )
+            # Для WhatsApp
+            elif conversation.platform == PlatformEnum.WHATSAPP:
+                client_name = metadata.get("whatsapp_profile_name") or metadata.get("name")
+            # Для Instagram
+            elif conversation.platform == PlatformEnum.INSTAGRAM:
+                client_name = metadata.get("name") or metadata.get("username", "").replace("@", "")
+            # Для Email
+            elif conversation.platform == PlatformEnum.EMAIL:
+                client_name = metadata.get("from_name") or metadata.get("sender_name")
+                if not client_name and conversation.external_id:
+                    # Витягнути з email
+                    email_part = conversation.external_id.split("@")[0]
+                    client_name = email_part.capitalize()
+            # Для Facebook
+            elif conversation.platform == PlatformEnum.FACEBOOK:
+                client_name = metadata.get("name") or metadata.get("sender_name")
+        
+        # Якщо ім'я не знайдено, використати external_id
+        if not client_name:
+            if conversation.platform == PlatformEnum.EMAIL and conversation.external_id:
+                email_part = conversation.external_id.split("@")[0]
+                client_name = email_part.capitalize()
+            elif conversation.external_id.startswith("@"):
+                client_name = conversation.external_id[1:]
+            else:
+                client_name = f"Клієнт {conversation.external_id[:20]}"
+        
+        # Визначити phone та email
+        phone = ""
+        email = None
+        
+        if conversation.platform == PlatformEnum.EMAIL:
+            email = conversation.external_id
+        elif conversation.platform in [PlatformEnum.TELEGRAM, PlatformEnum.WHATSAPP]:
+            # Перевірити, чи external_id це номер телефону
+            external_id_clean = conversation.external_id.replace("+", "").replace("-", "").replace(" ", "")
+            if external_id_clean.isdigit() or conversation.external_id.startswith("+"):
+                phone = conversation.external_id
+        
+        try:
+            # Створити клієнта
+            client = Client(
+                full_name=client_name,
+                phone=phone,
+                email=email,
+                source=client_source,
+            )
+            self.db.add(client)
+            self.db.flush()
+            
+            # Прив'язати розмову до клієнта
+            conversation.client_id = client.id
+            self.db.commit()
+            
+            logger.info(f"✅ Автоматично створено клієнта {client_name} (ID: {client.id}) для розмови {conversation.id}")
+        except Exception as e:
+            logger.error(f"Помилка автоматичного створення клієнта: {e}", exc_info=True)
+            self.db.rollback()
 

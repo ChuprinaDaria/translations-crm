@@ -147,6 +147,11 @@ class FacebookService(MessengerService):
         is_human_agent = conversation.assigned_manager_id is not None
         is_within_24h = self._is_within_24h_window(conversation)
         
+        # Позначити, що повідомлення відправлено через CRM API
+        if metadata is None:
+            metadata = {}
+        metadata["sent_from_crm"] = True
+        
         # Створити повідомлення в БД
         message = self.create_message_in_db(
             conversation_id=conversation_id,

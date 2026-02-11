@@ -1131,11 +1131,18 @@ async def create_payment_link(
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """Create Stripe payment link for order."""
+    """Create payment link for order using active payment provider (Stripe or Przelewy24)."""
     from modules.crm.models import Order
+    from modules.payment.models import PaymentSettings, PaymentProvider
+    from modules.payment.services.stripe_service import StripeService
+    from modules.payment.services.przelewy24_service import Przelewy24Service
+    from modules.payment.schemas import P24TransactionRegisterRequest
+    from decimal import Decimal
+    import os
+    from uuid import uuid4
     
     amount = request.amount
-    currency = request.currency
+    currency = request.currency or "PLN"
     
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
@@ -1144,57 +1151,120 @@ async def create_payment_link(
     # If amount not provided, calculate from order or use default
     if not amount:
         # Try to get amount from order transactions or use a default
-        amount = 100.0  # Default, should be replaced with actual order amount
+        amount = float(order.price_brutto) if order.price_brutto else 100.0
     
+    # Отримати налаштування оплати
+    payment_settings = db.query(PaymentSettings).first()
+    if not payment_settings:
+        raise HTTPException(status_code=500, detail="Payment settings not configured")
+    
+    # Визначити активну систему оплати
+    active_provider = payment_settings.active_payment_provider
+    
+    # Якщо не встановлено, вибрати автоматично на основі enabled статусів
+    if not active_provider:
+        if payment_settings.stripe_enabled and payment_settings.stripe_secret_key:
+            active_provider = PaymentProvider.STRIPE
+        elif payment_settings.przelewy24_enabled and payment_settings.przelewy24_merchant_id:
+            active_provider = PaymentProvider.PRZELEWY24
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in settings."
+            )
+    
+    # Створити посилання на оплату в залежності від вибраної системи
     try:
-        import stripe
-        import os
-        
-        # Завантажити Stripe ключ з бази даних
-        stripe_settings = crud.get_stripe_settings(db)
-        stripe_key = stripe_settings.get("stripe_secret_key") or os.getenv("STRIPE_SECRET_KEY", "")
-        stripe.api_key = stripe_key
-        if not stripe.api_key:
-            raise HTTPException(status_code=500, detail="Stripe API key not configured")
-        
-        # Create Price
-        price = stripe.Price.create(
-            unit_amount=int(amount * 100),  # Stripe works in cents
-            currency=currency,
-            product_data={
-                "name": f"Замовлення {order.order_number}",
-            },
-        )
-
-        # Create Payment Link
-        payment_link = stripe.PaymentLink.create(
-            line_items=[
-                {
-                    "price": price.id,
-                    "quantity": 1,
+        if active_provider == PaymentProvider.STRIPE:
+            # Stripe payment link
+            if not payment_settings.stripe_enabled or not payment_settings.stripe_secret_key:
+                raise HTTPException(status_code=500, detail="Stripe is not configured or enabled")
+            
+            import stripe
+            stripe.api_key = payment_settings.stripe_secret_key
+            
+            # Create Price
+            price = stripe.Price.create(
+                unit_amount=int(amount * 100),  # Stripe works in cents
+                currency=currency.lower(),
+                product_data={
+                    "name": f"Замовлення {order.order_number}",
                 },
-            ],
-            metadata={
-                "order_id": str(order.id),
-            },
-            after_completion={
-                "type": "redirect",
-                "redirect": {
-                    "url": f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/orders/{order.id}/success"
+            )
+
+            # Create Payment Link
+            payment_link_obj = stripe.PaymentLink.create(
+                line_items=[
+                    {
+                        "price": price.id,
+                        "quantity": 1,
+                    },
+                ],
+                metadata={
+                    "order_id": str(order.id),
+                },
+                after_completion={
+                    "type": "redirect",
+                    "redirect": {
+                        "url": f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/orders/{order.id}/success"
+                    }
                 }
-            }
-        )
+            )
+
+            payment_url = payment_link_obj.url
+            
+        elif active_provider == PaymentProvider.PRZELEWY24:
+            # Przelewy24 payment link
+            if not payment_settings.przelewy24_enabled or not payment_settings.przelewy24_merchant_id:
+                raise HTTPException(status_code=500, detail="Przelewy24 is not configured or enabled")
+            
+            p24_service = Przelewy24Service(payment_settings)
+            
+            # Отримати email клієнта
+            customer_email = order.client.email if order.client and order.client.email else "customer@example.com"
+            customer_name = order.client.full_name if order.client else "Клієнт"
+            
+            # Створити session_id
+            session_id = str(uuid4())
+            
+            # URLs
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+            backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
+            return_url = f"{frontend_url}/orders/{order.id}/success"
+            status_url = f"{backend_url}/api/v1/payment/webhooks/przelewy24"
+            
+            # Зареєструвати транзакцію в Przelewy24
+            p24_request = P24TransactionRegisterRequest(
+                order_id=order.id,
+                amount=Decimal(str(amount)),
+                currency=currency,
+                customer_email=customer_email,
+                customer_name=customer_name,
+                description=f"Замовлення {order.order_number}",
+            )
+            
+            result = await p24_service.register_transaction(
+                request=p24_request,
+                session_id=session_id,
+                return_url=return_url,
+                status_url=status_url,
+            )
+            
+            payment_url = result.payment_url
+        else:
+            raise HTTPException(status_code=500, detail=f"Unsupported payment provider: {active_provider}")
 
         return {
-            "payment_link": payment_link.url,
+            "payment_link": payment_url,
             "order_id": str(order.id),
             "amount": amount,
             "currency": currency,
+            "provider": active_provider.value,
         }
-    except ImportError:
-        raise HTTPException(status_code=500, detail="Stripe library not installed")
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Payment library not installed: {str(e)}")
     except Exception as e:
-        logger.error(f"Stripe error: {e}")
+        logger.error(f"Payment error ({active_provider}): {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create payment link: {str(e)}")
 
 

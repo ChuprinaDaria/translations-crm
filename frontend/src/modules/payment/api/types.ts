@@ -47,6 +47,7 @@ export interface PaymentSettings {
   przelewy24_sandbox: boolean;
   // General
   default_currency: string;
+  active_payment_provider?: PaymentProvider;  // Активна система оплати (stripe або przelewy24)
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,7 @@ export interface PaymentSettingsUpdate {
   przelewy24_sandbox?: boolean;
   // General
   default_currency?: string;
+  active_payment_provider?: PaymentProvider;  // Активна система оплати (stripe або przelewy24)
 }
 
 // Transaction

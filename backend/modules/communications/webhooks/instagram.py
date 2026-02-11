@@ -108,6 +108,9 @@ async def handle_instagram_webhook(
             # Додати username якщо є
             if username:
                 metadata["username"] = username
+            # Якщо повідомлення від нас (is_from_me=True), воно було відправлено зі стороннього пристрою
+            if is_from_me:
+                metadata["sent_from_external_device"] = True
             
             # Обробити вкладення - завантажити з URL та зберегти
             attachments = []

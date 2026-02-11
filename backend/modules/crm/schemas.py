@@ -53,6 +53,17 @@ class ClientReadSimple(BaseModel):
         from_attributes = True
 
 
+class ManagerRead(BaseModel):
+    """Проста схема для менеджера (користувача)"""
+    id: UUID
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
 # Office Schemas - must be defined before OrderRead
 class OfficeCreate(BaseModel):
     name: str
@@ -128,6 +139,7 @@ class OrderUpdate(BaseModel):
     translation_type: Optional[str] = None  # Тип перекладу
     payment_method: Optional[str] = None  # Спосіб оплати (cash = готівка)
     amount_gross: Optional[float] = None  # Сума оплати клієнта для оновлення транзакції
+    is_archived: Optional[bool] = None  # Чи замовлення архівоване
     # CSV поля
     price_netto: Optional[float] = None  # Ціна нетто
     price_brutto: Optional[float] = None  # Ціна брутто
@@ -157,9 +169,11 @@ class OrderRead(BaseModel):
     repertorium_number: Optional[str] = None  # Nr_repertorium
     follow_up_date: Optional[datetime] = None  # Ponowny_kontakt
     order_source: Optional[str] = None  # Zrodlo (WhatsApp, Email, Formularz kontaktowy)
+    is_archived: bool = False  # Чи замовлення архівоване
     created_at: datetime
     updated_at: datetime
     client: Optional["ClientReadSimple"] = None  # Use simple version to avoid recursion
+    manager: Optional["ManagerRead"] = None  # Менеджер замовлення
     office: Optional["OfficeRead"] = None
     timeline_steps: list["TimelineStepRead"] = []
     

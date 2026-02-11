@@ -260,6 +260,11 @@ class WhatsAppService(MessengerService):
         if not conversation:
             raise ValueError(f"Conversation {conversation_id} not found")
         
+        # Позначити, що повідомлення відправлено через CRM API
+        if metadata is None:
+            metadata = {}
+        metadata["sent_from_crm"] = True
+        
         # Створити повідомлення в БД
         message = self.create_message_in_db(
             conversation_id=conversation_id,

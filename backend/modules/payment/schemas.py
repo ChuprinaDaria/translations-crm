@@ -28,6 +28,7 @@ class PaymentSettingsBase(BaseModel):
     
     # General
     default_currency: str = "PLN"
+    active_payment_provider: Optional[PaymentProvider] = None  # Активна система оплати (stripe або przelewy24)
 
 
 class PaymentSettingsCreate(PaymentSettingsBase):
@@ -53,6 +54,7 @@ class PaymentSettingsUpdate(BaseModel):
     
     # General
     default_currency: Optional[str] = None
+    active_payment_provider: Optional[PaymentProvider] = None  # Активна система оплати (stripe або przelewy24)
 
 
 class PaymentSettingsRead(PaymentSettingsBase):

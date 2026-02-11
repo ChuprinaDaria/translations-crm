@@ -7,13 +7,14 @@ import { Alert, AlertDescription } from '../../../../components/ui/alert';
 import { AlertCircle, User, Mail, Phone, MessageSquare, Instagram } from 'lucide-react';
 import { toast } from 'sonner';
 import { clientsApi } from '../../../crm/api/clients';
-import { inboxApi } from '../../api/inbox';
+import { inboxApi, type Message } from '../../api/inbox';
 import type { Conversation } from '../ContextPanel';
 
 interface CreateClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: Conversation | null;
+  messages?: Message[]; // Повідомлення для витягування імені
   onSuccess?: (clientId: string) => void;
 }
 
@@ -21,6 +22,7 @@ export function CreateClientDialog({
   open,
   onOpenChange,
   conversation,
+  messages = [],
   onSuccess,
 }: CreateClientDialogProps) {
   const [name, setName] = useState('');
@@ -32,30 +34,149 @@ export function CreateClientDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [existingClient, setExistingClient] = useState<{ id: string; name: string } | null>(null);
 
-  // Автозаповнення з conversation
+  // Функція для витягування імені з повідомлень
+  const extractNameFromMessages = (): string | null => {
+    if (!messages || messages.length === 0) return null;
+
+    // Шукаємо вхідні повідомлення (від клієнта)
+    const inboundMessages = messages.filter(msg => msg.direction === 'inbound');
+    
+    for (const msg of inboundMessages) {
+      const meta = msg.meta_data;
+      if (!meta) continue;
+
+      // Для Telegram
+      if (conversation?.platform === 'telegram') {
+        // Спробувати отримати ім'я з sender_info або метаданих
+        if (meta.telegram_username) {
+          return meta.telegram_username.startsWith('@') 
+            ? meta.telegram_username.substring(1) 
+            : meta.telegram_username;
+        }
+        // Або з name поля в метаданих
+        if (meta.name) {
+          return meta.name.trim();
+        }
+        // Або з sender_name
+        if (meta.sender_name) {
+          return meta.sender_name.trim();
+        }
+      }
+
+      // Для WhatsApp
+      if (conversation?.platform === 'whatsapp') {
+        if (meta.whatsapp_profile_name) {
+          return meta.whatsapp_profile_name.trim();
+        }
+        if (meta.name) {
+          return meta.name.trim();
+        }
+      }
+
+      // Для Instagram
+      if (conversation?.platform === 'instagram') {
+        if (meta.username) {
+          return meta.username.startsWith('@') 
+            ? meta.username.substring(1) 
+            : meta.username;
+        }
+        if (meta.name) {
+          return meta.name.trim();
+        }
+      }
+
+      // Для Email
+      if (conversation?.platform === 'email') {
+        if (meta.from_name) {
+          return meta.from_name.trim();
+        }
+        if (meta.sender_name) {
+          return meta.sender_name.trim();
+        }
+        // Якщо немає імені, спробувати витягти з email
+        if (conversation.external_id) {
+          const emailPart = conversation.external_id.split('@')[0];
+          // Капіталізувати першу літеру
+          return emailPart.charAt(0).toUpperCase() + emailPart.slice(1);
+        }
+      }
+
+      // Для Facebook
+      if (conversation?.platform === 'facebook') {
+        if (meta.name) {
+          return meta.name.trim();
+        }
+        if (meta.sender_name) {
+          return meta.sender_name.trim();
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // Автозаповнення з conversation та повідомлень
   useEffect(() => {
     if (conversation && open) {
-
       // Автозаповнення телефону/email з external_id
       if (conversation.platform === 'email') {
         setEmail(conversation.external_id);
       } else if (conversation.platform === 'telegram' || conversation.platform === 'whatsapp') {
-        setPhone(conversation.external_id);
+        // Для Telegram/WhatsApp - external_id може бути номером телефону або username
+        const externalId = conversation.external_id;
+        if (externalId.startsWith('+') || /^\d+$/.test(externalId.replace(/\D/g, ''))) {
+          // Це номер телефону
+          setPhone(externalId);
+        } else if (externalId.startsWith('@')) {
+          // Це username для Telegram
+          setTelegram(externalId);
+        } else {
+          // Спробувати як номер телефону
+          setPhone(externalId);
+        }
+        
         if (conversation.platform === 'telegram') {
-          setTelegram(conversation.external_id);
+          // Для Telegram: якщо external_id починається з @ або не є числом - це username
+          if (conversation.external_id.startsWith('@')) {
+            setTelegram(conversation.external_id);
+          } else if (!/^\d+$/.test(conversation.external_id)) {
+            // Якщо не число - додаємо @
+            setTelegram(`@${conversation.external_id}`);
+          }
+          // Якщо це число (user_id), не встановлюємо telegram username
         } else {
           setWhatsapp(conversation.external_id);
         }
       } else if (conversation.platform === 'instagram') {
-        setInstagram(conversation.external_id);
+        setInstagram(conversation.external_id.startsWith('@') 
+          ? conversation.external_id 
+          : `@${conversation.external_id}`);
       }
 
-      // Якщо є client_name, використовуємо його
+      // Автозаповнення імені
+      // 1. Спочатку перевіряємо client_name з conversation
       if (conversation.client_name) {
         setName(conversation.client_name);
+      } else {
+        // 2. Якщо немає, намагаємося витягти з повідомлень
+        const extractedName = extractNameFromMessages();
+        if (extractedName) {
+          setName(extractedName);
+        } else {
+          // 3. Якщо все ще немає, використовуємо external_id як основу
+          if (conversation.platform === 'telegram' && conversation.external_id.startsWith('@')) {
+            setName(conversation.external_id.substring(1));
+          } else if (conversation.platform === 'instagram' && conversation.external_id.startsWith('@')) {
+            setName(conversation.external_id.substring(1));
+          } else if (conversation.platform === 'email') {
+            // Для email використовуємо частину до @
+            const emailPart = conversation.external_id.split('@')[0];
+            setName(emailPart.charAt(0).toUpperCase() + emailPart.slice(1));
+          }
+        }
       }
     }
-  }, [conversation, open]);
+  }, [conversation, messages, open]);
 
   // Перевірка на існуючого клієнта
   // Для Telegram: не перевіряємо по телефону, бо різні Telegram сесії мають різні external_id

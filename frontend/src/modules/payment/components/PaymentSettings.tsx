@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { paymentApi } from '../api/payment';
 import { PaymentProvider, PaymentSettingsUpdate } from '../api/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const PaymentSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -49,6 +50,7 @@ export const PaymentSettings: React.FC = () => {
         przelewy24_api_key: settings.przelewy24_api_key,
         przelewy24_sandbox: settings.przelewy24_sandbox,
         default_currency: settings.default_currency,
+        active_payment_provider: settings.active_payment_provider,
       });
     }
   }, [settings]);
@@ -353,6 +355,38 @@ export const PaymentSettings: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor="active_payment_provider">Активна система оплати *</Label>
+                  <Select
+                    value={formData.active_payment_provider || ''}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, active_payment_provider: value as PaymentProvider })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Виберіть систему оплати" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem 
+                        value={PaymentProvider.STRIPE}
+                        disabled={!formData.stripe_enabled || !formData.stripe_secret_key}
+                      >
+                        Stripe {!formData.stripe_enabled || !formData.stripe_secret_key ? '(не налаштовано)' : ''}
+                      </SelectItem>
+                      <SelectItem 
+                        value={PaymentProvider.PRZELEWY24}
+                        disabled={!formData.przelewy24_enabled || !formData.przelewy24_merchant_id}
+                      >
+                        Przelewy24 {!formData.przelewy24_enabled || !formData.przelewy24_merchant_id ? '(не налаштовано)' : ''}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Система оплати, яка буде використовуватися для створення посилань на оплату. 
+                    Обов'язково налаштуйте та увімкніть вибрану систему перед вибором.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="default_currency">{t('payment.settings.defaultCurrency')}</Label>
                   <Input
                     id="default_currency"
@@ -391,6 +425,7 @@ export const PaymentSettings: React.FC = () => {
                   przelewy24_api_key: settings.przelewy24_api_key,
                   przelewy24_sandbox: settings.przelewy24_sandbox,
                   default_currency: settings.default_currency,
+                  active_payment_provider: settings.active_payment_provider,
                 });
               }
             }}

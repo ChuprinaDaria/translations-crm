@@ -113,6 +113,11 @@ class EmailService(MessengerService):
             from_email = self.config["smtp_from_email"]
             from_name = self.config["smtp_from_name"]
         
+        # Позначити, що повідомлення відправлено через CRM API
+        if metadata is None:
+            metadata = {}
+        metadata["sent_from_crm"] = True
+        
         # Створити повідомлення в БД
         subject = conversation.subject or "No Subject"
         message = self.create_message_in_db(

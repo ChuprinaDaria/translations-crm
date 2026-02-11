@@ -101,6 +101,23 @@ def update_settings(
     
     # Update fields
     update_data = settings_update.model_dump(exclude_unset=True)
+    
+    # Валідація: якщо встановлюється active_payment_provider, перевірити чи система налаштована
+    if "active_payment_provider" in update_data:
+        active_provider = update_data["active_payment_provider"]
+        if active_provider == PaymentProvider.STRIPE:
+            if not settings.stripe_enabled or not settings.stripe_secret_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Stripe is not enabled or not configured. Please enable and configure Stripe first."
+                )
+        elif active_provider == PaymentProvider.PRZELEWY24:
+            if not settings.przelewy24_enabled or not settings.przelewy24_merchant_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Przelewy24 is not enabled or not configured. Please enable and configure Przelewy24 first."
+                )
+    
     for field, value in update_data.items():
         setattr(settings, field, value)
     

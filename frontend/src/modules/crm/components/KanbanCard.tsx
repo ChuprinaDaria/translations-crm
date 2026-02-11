@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Clock, Bot, User, FileText, MessageSquare, GripVertical } from "lucide-react";
+import { Clock, Bot, User, FileText, MessageSquare, GripVertical, Users } from "lucide-react";
 import { Card } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
@@ -275,11 +275,19 @@ export function KanbanCard({
             <span>Автоматично</span>
           </div>
           
+          {/* Клієнт */}
+          {order.clientName && (
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{order.clientName}</span>
+            </div>
+          )}
+          
           {/* Менеджер */}
           {order.managerName && (
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 shrink-0" />
-              <span>@{order.managerName.replace(/\s+/g, '_')}</span>
+              <span className="truncate">{order.managerName}</span>
             </div>
           )}
         </div>

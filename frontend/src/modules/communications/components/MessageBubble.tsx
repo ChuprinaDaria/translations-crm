@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2, Send } from 'lucide-react';
+import { Button } from '../../../components/ui/button';
 import { PlatformIcon } from './PlatformIcon';
 import { AttachmentPreview } from './AttachmentPreview';
 import { cn } from '../../../components/ui/utils';
@@ -14,7 +15,7 @@ export interface Message {
   direction: 'inbound' | 'outbound';
   type: 'text' | 'html' | 'file' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'voice';
   content: string;
-  status: 'queued' | 'sent' | 'read' | 'failed';
+  status: 'queued' | 'sent' | 'read' | 'failed' | 'draft';
   attachments?: Array<{
     id?: string;
     type: string;
@@ -50,6 +51,7 @@ interface MessageBubbleProps {
   onAddFileAutoCreateOrder?: (fileUrl: string, fileName: string) => void; // Create order and add file
   onAddAddress?: (address: string, isPaczkomat: boolean, paczkomatCode?: string) => void; // Add address or paczkomat to order
   onDeleteMessage?: (messageId: string) => void; // Delete message callback
+  onSendDraft?: (messageId: string, content: string) => void; // Send draft message to client
 }
 
 /**
@@ -103,10 +105,12 @@ export function MessageBubble({
   onAddFileAutoCreateOrder,
   onAddAddress,
   onDeleteMessage,
+  onSendDraft,
 }: MessageBubbleProps) {
   const isOutbound = message.direction === 'outbound';
   const isRead = message.status === 'read';
   const isFailed = message.status === 'failed';
+  const isDraft = message.status === 'draft';
   const [detectedData, setDetectedData] = useState<DetectedData[]>([]);
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
 
@@ -439,7 +443,8 @@ export function MessageBubble({
           isOutbound
             ? getManagerMessageStyles()
             : getInboundMessageStyles(),
-          !isOutbound && 'pt-4'
+          !isOutbound && 'pt-4',
+          isDraft && 'border-2 border-amber-300 border-dashed'
         )}
         style={isOutbound ? {
           // Fallback: ensure border-l color and background are applied via inline style
@@ -495,6 +500,14 @@ export function MessageBubble({
           {isOutbound && message.meta_data?.author_display && (
             <div className="text-[10px] font-medium text-gray-600 mb-1">
               {message.meta_data.author_display}
+            </div>
+          )}
+          
+          {/* Помітка для повідомлень, відправлених зі стороннього пристрою */}
+          {isOutbound && message.meta_data?.sent_from_external_device && (
+            <div className="text-[10px] font-medium text-amber-600 mb-1 flex items-center gap-1">
+              <span>📱</span>
+              <span>wysłane z zewnętrznego urządzenia</span>
             </div>
           )}
           
@@ -685,26 +698,52 @@ export function MessageBubble({
             </div>
           )}
 
+          {/* Draft message - show send button */}
+          {isDraft && isOutbound && onSendDraft && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <Button
+                size="sm"
+                onClick={() => onSendDraft(message.id, message.content)}
+                className="w-full bg-[#FF5A00] hover:bg-[#FF5A00]/90 text-white"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Відправити клієнту
+              </Button>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Це чернетка. Натисніть "Відправити клієнту" для надсилання.
+              </p>
+            </div>
+          )}
+
           {/* Timestamp and status */}
-          <div
-            className={cn(
-              'flex items-center gap-1 text-xs mt-1',
-              isOutbound ? 'text-gray-600' : 'text-gray-400'
-            )}
-          >
-            <span>{timeStr}</span>
-            {isOutbound && (
-              <span className="ml-1">
-                {isFailed ? (
-                  <span className="text-red-300">✕</span>
-                ) : isRead ? (
-                  <CheckCheck className="w-3 h-3" />
-                ) : (
-                  <Check className="w-3 h-3" />
-                )}
-              </span>
-            )}
-          </div>
+          {!isDraft && (
+            <div
+              className={cn(
+                'flex items-center gap-1 text-xs mt-1',
+                isOutbound ? 'text-gray-600' : 'text-gray-400'
+              )}
+            >
+              <span>{timeStr}</span>
+              {isOutbound && (
+                <span className="ml-1">
+                  {isFailed ? (
+                    <span className="text-red-300">✕</span>
+                  ) : isRead ? (
+                    <CheckCheck className="w-3 h-3" />
+                  ) : (
+                    <Check className="w-3 h-3" />
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+          
+          {/* Draft badge */}
+          {isDraft && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+              <span>📝 Чернетка</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

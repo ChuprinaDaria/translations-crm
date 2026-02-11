@@ -34,6 +34,7 @@ interface ChatTabsAreaProps {
   onOrderClick?: (conversationId: string) => void;
   onDocumentsClick?: (conversationId: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onSendDraft?: (messageId: string, content: string) => void;
 }
 
 export function ChatTabsArea({
@@ -60,6 +61,7 @@ export function ChatTabsArea({
   onOrderClick,
   onDocumentsClick,
   onDeleteMessage,
+  onSendDraft,
 }: ChatTabsAreaProps) {
   if (openChats.length === 0) {
     return (
@@ -124,6 +126,7 @@ export function ChatTabsArea({
               onOrderClick={onOrderClick ? () => onOrderClick(chat.conversationId) : undefined}
               onDocumentsClick={onDocumentsClick ? () => onDocumentsClick(chat.conversationId) : undefined}
               onDeleteMessage={onDeleteMessage}
+              onSendDraft={onSendDraft}
             />
           </div>
         ))}

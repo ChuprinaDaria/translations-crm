@@ -64,6 +64,7 @@ interface ChatAreaProps {
   onOrderClick?: () => void;
   onDocumentsClick?: () => void;
   onDeleteMessage?: (messageId: string) => void;
+  onSendDraft?: (messageId: string, content: string) => void;
 }
 
 export function ChatArea({
@@ -88,6 +89,7 @@ export function ChatArea({
   onOrderClick,
   onDocumentsClick,
   onDeleteMessage,
+  onSendDraft,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -184,6 +186,7 @@ export function ChatArea({
                   onAddFileAutoCreateOrder={onAddFileAutoCreateOrder}
                   onAddAddress={onAddAddress}
                   onDeleteMessage={onDeleteMessage}
+                  onSendDraft={onSendDraft}
                 />
               ))
             )}

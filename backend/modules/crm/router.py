@@ -1,7 +1,7 @@
 """
 CRM routes - clients, orders, KP endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
@@ -21,6 +21,7 @@ router = APIRouter(tags=["crm"])
 
 # Dependency для альтернативної авторизації (X-RAG-TOKEN або JWT) для CRM endpoints
 def get_current_user_or_rag_crm(
+    request: Request,
     x_rag_token: Optional[str] = Header(None, alias="X-RAG-TOKEN"),
     db: Session = Depends(get_db),
 ) -> Optional[auth_models.User]:
@@ -29,6 +30,7 @@ def get_current_user_or_rag_crm(
     Аналогічно до communications, але для CRM модуля.
     """
     import logging
+    import crud_user
     logger = logging.getLogger(__name__)
     
     # Спочатку перевіряємо X-RAG-TOKEN
@@ -55,15 +57,44 @@ def get_current_user_or_rag_crm(
     
     # Якщо немає X-RAG-TOKEN, використовуємо JWT
     try:
-        return get_current_user_db(db=db)
-    except HTTPException as jwt_error:
-        # Якщо JWT невалідний і немає RAG токену - помилка
-        if not x_rag_token:
+        # Отримуємо токен з заголовка Authorization
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
             )
-        raise jwt_error
+        
+        token = auth_header.replace("Bearer ", "")
+        
+        # Декодуємо токен
+        from core.security import decode_access_token
+        user_payload = decode_access_token(token)
+        
+        if not user_payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+        
+        user_id_str = user_payload.get("sub")
+        if not user_id_str:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = crud_user.get_user_by_id(db, user_id_str)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"JWT авторизація не вдалася: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: Provide either X-RAG-TOKEN header or valid JWT token"
+        )
 
 
 @router.get("/clients", response_model=List[schemas.ClientRead])
@@ -309,6 +340,7 @@ def delete_client(
 def get_orders(
     status: Optional[str] = None,
     client_id: Optional[str] = None,
+    include_archived: bool = False,  # Чи включати архівовані замовлення
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -316,6 +348,10 @@ def get_orders(
 ):
     """Get orders list with optional filtering."""
     query = db.query(models.Order)
+    
+    # За замовчуванням не показуємо архівовані замовлення
+    if not include_archived:
+        query = query.filter(models.Order.is_archived == False)
     
     if status:
         query = query.filter(models.Order.status == status)
@@ -443,6 +479,8 @@ def update_order(
         order.follow_up_date = order_in.follow_up_date
     if order_in.order_source is not None:
         order.order_source = order_in.order_source
+    if order_in.is_archived is not None:
+        order.is_archived = order_in.is_archived
     
     # Оновлюємо або створюємо транзакцію якщо:
     # 1. Змінився payment_method на щось, крім 'none'
@@ -781,6 +819,63 @@ def mark_payment_received(
     
     step = timeline_service.mark_payment_received(db, order.id, transaction_id)
     return step
+
+
+@router.delete("/orders/{order_id}")
+def delete_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Видалити замовлення."""
+    from uuid import UUID
+    
+    try:
+        order_uuid = UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid order_id format")
+    
+    order = db.query(models.Order).filter(models.Order.id == order_uuid).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Видаляємо замовлення (cascade видалить пов'язані записи)
+    db.delete(order)
+    db.commit()
+    
+    return {"status": "deleted", "id": order_id}
+
+
+@router.patch("/orders/{order_id}/archive")
+def archive_order(
+    order_id: str,
+    archived: bool = Body(True, embed=True),  # True для архівації, False для розархівації
+    db: Session = Depends(get_db),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Архівувати або розархівувати замовлення."""
+    from uuid import UUID
+    
+    try:
+        order_uuid = UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid order_id format")
+    
+    order = db.query(models.Order).filter(models.Order.id == order_uuid).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order.is_archived = archived
+    db.commit()
+    db.refresh(order)
+    
+    action = "архівовано" if archived else "розархівовано"
+    return {
+        "status": "success",
+        "id": order_id,
+        "is_archived": archived,
+        "message": f"Замовлення {action}"
+    }
 
 
 # Translators endpoints

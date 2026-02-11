@@ -273,7 +273,7 @@ class InPostSettings(Base):
     )
     
     webhook_secret: Mapped[Optional[str]] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
         comment="Webhook secret for verification"
     )

@@ -218,6 +218,11 @@ class InstagramService(MessengerService):
         is_human_agent = conversation.assigned_manager_id is not None
         is_within_24h = self._is_within_24h_window(conversation)
         
+        # Позначити, що повідомлення відправлено через CRM API
+        if metadata is None:
+            metadata = {}
+        metadata["sent_from_crm"] = True
+        
         # Створити повідомлення в БД
         message = self.create_message_in_db(
             conversation_id=conversation_id,
@@ -528,6 +533,14 @@ class InstagramService(MessengerService):
             external_id=external_id,
             client_id=None,
         )
+        
+        # Якщо повідомлення від нас (is_from_me=True), але воно надійшло через webhook,
+        # це означає, що воно було відправлено зі стороннього пристрою (не через CRM API)
+        if is_from_me and metadata is None:
+            metadata = {}
+        if is_from_me:
+            metadata = metadata or {}
+            metadata["sent_from_external_device"] = True
         
         # Створити повідомлення
         message = self.create_message_in_db(
