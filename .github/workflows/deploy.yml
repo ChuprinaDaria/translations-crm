@@ -240,6 +240,15 @@ jobs:
               }
             fi
             
+            # Fix ownership of all files before git operations
+            echo "Fixing file ownership..."
+            sudo chown -R $USER:$USER "$DEPLOY_DIR" 2>/dev/null || {
+              echo "Warning: Cannot fix file ownership, trying to continue..."
+            }
+            
+            # Fix permissions for files that might be locked
+            find "$DEPLOY_DIR" -type f -name "*.py" -exec chmod u+w {} \; 2>/dev/null || true
+            
             # Pull latest code
             if [ -d ".git" ]; then
               echo "Pulling latest changes from git..."
