@@ -12,6 +12,8 @@ import { ordersApi } from '../../../crm/api/orders';
 import { getUserIdFromToken } from '../../../notifications/utils/userId';
 import { clientsApi } from '../../../crm/api/clients';
 import { languagesApi, type Language } from '../../../crm/api/languages';
+import { paymentApi } from '../../../payment/api/payment';
+import { PaymentProvider } from '../../../payment/api/types';
 import { cn } from '../../../../components/ui/utils';
 
 interface Conversation {
@@ -64,7 +66,8 @@ const ORDER_SOURCES = [
 const PAYMENT_METHODS = [
   { value: 'none', label: 'Не оплачено' },
   { value: 'cash', label: '💵 Готівка' },
-  { value: 'card', label: '💳 Картка' },
+  { value: 'card', label: '💳 Оплата картою' },
+  { value: 'payment_link', label: '🔗 Вислано лінк на оплату' },
   { value: 'transfer', label: '🏦 Переказ' },
 ];
 
@@ -208,6 +211,10 @@ export function CreateOrderDialog({
       
       const orderDescription = orderDescriptionParts.filter(Boolean).join('\n');
 
+      // Визначаємо статус замовлення
+      // Тільки для готівки встановлюємо статус "Оплачено"
+      const orderStatus = paymentMethod === 'cash' ? 'oplacone' : 'do_wykonania';
+
       // Створюємо замовлення через API
       const order = await ordersApi.createOrder({
         client_id: clientId,
@@ -216,7 +223,7 @@ export function CreateOrderDialog({
         description: orderDescription || undefined,
         deadline: deadline ? `${deadline}T23:59:59.000Z` : undefined,
         office_id: deliveryMethod === 'office' && officeId ? parseInt(officeId) : undefined,
-        status: paymentMethod !== 'none' ? 'oplacone' : 'do_wykonania',
+        status: orderStatus,
         language: language || undefined,
         translation_type: documentType || customDocumentType || undefined,
         payment_method: paymentMethod !== 'none' ? paymentMethod : undefined,
@@ -226,7 +233,59 @@ export function CreateOrderDialog({
         order_source: orderSource || undefined,
       });
 
-      toast.success('Zlecenie zostało utworzone');
+      // Якщо вибрано оплату картою або лінк на оплату, створюємо payment transaction/link
+      if ((paymentMethod === 'card' || paymentMethod === 'payment_link') && priceBrutto && parseFloat(priceBrutto) > 0) {
+        try {
+          // Отримуємо дані клієнта
+          const client = await clientsApi.getClient(parseInt(clientId));
+          const customerEmail = client.client.email || conversation?.client_id || 'customer@example.com';
+          const customerName = client.client.full_name || conversation?.client_name || 'Клієнт';
+
+          // Отримуємо активний payment provider
+          const methods = await paymentApi.getAvailableMethods();
+          const activeProvider = methods.stripe_enabled 
+            ? PaymentProvider.STRIPE 
+            : methods.przelewy24_enabled 
+            ? PaymentProvider.PRZELEWY24 
+            : null;
+
+          if (!activeProvider) {
+            toast.warning('Платіжні провайдери не налаштовані. Замовлення створено без платежу.');
+          } else {
+            if (paymentMethod === 'card') {
+              // Створюємо payment transaction для оплати картою
+              await paymentApi.createTransaction({
+                order_id: order.id,
+                provider: activeProvider,
+                amount: parseFloat(priceBrutto),
+                currency: 'PLN',
+                customer_email: customerEmail,
+                customer_name: customerName,
+                description: `Оплата за замовлення ${orderNumber}`,
+              });
+              toast.success('Zlecenie zostało utworzone. Transakcja płatności kartą została utworzona.');
+            } else if (paymentMethod === 'payment_link') {
+              // Створюємо payment link
+              await paymentApi.createPaymentLink({
+                order_id: order.id,
+                provider: activeProvider,
+                amount: parseFloat(priceBrutto),
+                currency: 'PLN',
+                customer_email: customerEmail,
+                customer_name: customerName,
+                description: `Оплата за замовлення ${orderNumber}`,
+              });
+              toast.success('Zlecenie zostało utworzone. Link płatności został utworzony.');
+            }
+          }
+        } catch (paymentError: any) {
+          console.error('Error creating payment:', paymentError);
+          toast.warning('Zlecenie zostało utworzone, ale nie udało się utworzyć płatności: ' + (paymentError?.message || 'Nieznany błąd'));
+        }
+      } else {
+        toast.success('Zlecenie zostało utworzone');
+      }
+
       onSuccess?.(order.id);
       handleClose();
     } catch (error: any) {
@@ -638,9 +697,19 @@ export function CreateOrderDialog({
             </div>
           </div>
           
-          {paymentMethod !== 'none' && (
+          {paymentMethod === 'cash' && (
             <p className="text-xs text-green-600 -mt-2">
               ✅ Zlecenie zostanie utworzone ze statusem "Opłacone"
+            </p>
+          )}
+          {paymentMethod === 'card' && (
+            <p className="text-xs text-blue-600 -mt-2">
+              💳 Zlecenie zostanie utworzone ze statusem "Do wykonania". Transakcja płatności kartą zostanie utworzona.
+            </p>
+          )}
+          {paymentMethod === 'payment_link' && (
+            <p className="text-xs text-blue-600 -mt-2">
+              🔗 Zlecenie zostanie utworzone ze statusem "Do wykonania". Link płatności zostanie utworzony.
             </p>
           )}
 

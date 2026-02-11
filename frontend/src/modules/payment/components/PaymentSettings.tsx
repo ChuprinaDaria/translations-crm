@@ -2,7 +2,7 @@
  * Payment Settings Component
  */
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useI18n } from '@/lib/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,7 @@ import { PaymentProvider, PaymentSettingsUpdate } from '../api/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const PaymentSettings: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   // Fetch current settings

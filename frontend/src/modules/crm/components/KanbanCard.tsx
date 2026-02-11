@@ -86,6 +86,13 @@ export interface Order {
   // Додаткові поля для автоматичної логіки
   transactions?: Array<{ type: string; amount: number }>;
   delivery?: { method: string; delivered_at?: string; tracking_number?: string };
+  payment_transactions?: Array<{
+    id: string;
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'cancelled';
+    payment_method?: string;
+    amount: number;
+    completed_at?: string;
+  }>;
 }
 
 interface KanbanCardProps {

@@ -305,10 +305,189 @@ export function OrdersListPage() {
   
   // Order details dialog
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orderToEdit, setOrderToEdit] = useState<Order | null>(null);
 
   useEffect(() => {
     loadOrders();
   }, [statusFilter]);
+
+  // Слухаємо події оновлення замовлень з канбану та зміни статусів оплати
+  useEffect(() => {
+    const handleOrderUpdated = async (event: CustomEvent) => {
+      const { orderId, orderStatus, order, skipReload } = event.detail;
+      
+      // Якщо skipReload = true, це оновлення з канбану - оновлюємо локально
+      if (skipReload && order) {
+        setOrders((prevOrders) =>
+          prevOrders.map((o) => {
+            if (o.id === orderId) {
+              return {
+                ...o,
+                ...order,
+                status: orderStatus || order.status,
+                payment_transactions: order.payment_transactions || o.payment_transactions || [],
+              };
+            }
+            return o;
+          })
+        );
+      } else if (orderId) {
+        // Якщо немає skipReload, перезавантажуємо замовлення з API
+        try {
+          const updatedOrder = await ordersApi.getOrder(orderId);
+          setOrders((prevOrders) =>
+            prevOrders.map((o) => {
+              if (o.id === orderId) {
+                return {
+                  ...o,
+                  ...updatedOrder,
+                  payment_transactions: updatedOrder.payment_transactions || [],
+                };
+              }
+              return o;
+            })
+          );
+        } catch (error) {
+          console.error(`Failed to update order ${orderId}:`, error);
+        }
+      }
+    };
+
+    const handleOrderStatusChanged = async (event: CustomEvent) => {
+      const { orderId, orderStatus, order } = event.detail;
+      
+      if (orderId) {
+        setOrders((prevOrders) =>
+          prevOrders.map((o) => {
+            if (o.id === orderId) {
+              return {
+                ...o,
+                status: orderStatus || o.status,
+                ...(order || {}),
+                payment_transactions: order?.payment_transactions || o.payment_transactions || [],
+              };
+            }
+            return o;
+          })
+        );
+      }
+    };
+
+    const handlePaymentStatusChanged = async (event: CustomEvent) => {
+      const { orderId, paymentStatus, orderStatus, order } = event.detail;
+      
+      if (orderId) {
+        // Оновлюємо замовлення з новим статусом оплати
+        try {
+          const updatedOrder = order || await ordersApi.getOrder(orderId);
+          setOrders((prevOrders) =>
+            prevOrders.map((o) => {
+              if (o.id === orderId) {
+                return {
+                  ...o,
+                  ...updatedOrder,
+                  status: orderStatus || updatedOrder.status || o.status,
+                  payment_transactions: updatedOrder.payment_transactions || [],
+                };
+              }
+              return o;
+            })
+          );
+        } catch (error) {
+          console.error(`Failed to update order ${orderId} after payment status change:`, error);
+        }
+      }
+    };
+
+    window.addEventListener('orderUpdated', handleOrderUpdated as EventListener);
+    window.addEventListener('orderStatusChanged', handleOrderStatusChanged as EventListener);
+    window.addEventListener('orderPaymentStatusChanged', handlePaymentStatusChanged as EventListener);
+    
+    return () => {
+      window.removeEventListener('orderUpdated', handleOrderUpdated as EventListener);
+      window.removeEventListener('orderStatusChanged', handleOrderStatusChanged as EventListener);
+      window.removeEventListener('orderPaymentStatusChanged', handlePaymentStatusChanged as EventListener);
+    };
+  }, []);
+
+  // Polling for orders with pending payment transactions
+  useEffect(() => {
+    // Знаходимо замовлення з pending/processing payment transactions
+    const ordersWithPendingPayments = orders.filter(order => 
+      order.payment_transactions?.some((pt: any) => 
+        pt.status === 'pending' || pt.status === 'processing'
+      )
+    );
+
+    if (ordersWithPendingPayments.length === 0) {
+      return; // Немає замовлень для polling
+    }
+
+    // Polling кожні 5 секунд для замовлень з pending payments
+    const interval = setInterval(async () => {
+      try {
+        // Оновлюємо тільки замовлення з pending payments
+        const updatedOrders = await Promise.all(
+          ordersWithPendingPayments.map(async (order) => {
+            try {
+              const updatedOrder = await ordersApi.getOrder(order.id);
+              return updatedOrder;
+            } catch (error) {
+              console.error(`Failed to fetch order ${order.id}:`, error);
+              return null;
+            }
+          })
+        );
+
+        // Оновлюємо тільки ті замовлення, де змінився статус оплати
+        setOrders((prevOrders) =>
+          prevOrders.map((prevOrder) => {
+            const updatedOrder = updatedOrders.find(
+              (uo) => uo && uo.id === prevOrder.id
+            );
+            
+            if (!updatedOrder) {
+              return prevOrder;
+            }
+
+            // Перевіряємо чи змінився статус оплати або статус замовлення
+            const prevPaymentStatus = prevOrder.payment_transactions?.[prevOrder.payment_transactions.length - 1]?.status;
+            const newPaymentStatus = updatedOrder.payment_transactions?.[updatedOrder.payment_transactions.length - 1]?.status;
+            const prevOrderStatus = prevOrder.status;
+            const newOrderStatus = updatedOrder.status;
+            
+            if (prevPaymentStatus !== newPaymentStatus || prevOrderStatus !== newOrderStatus) {
+              // Статус оплати або замовлення змінився - оновлюємо
+              
+              // Сповіщаємо про зміну статусу оплати для синхронізації з канбаном
+              if (prevPaymentStatus !== newPaymentStatus) {
+                window.dispatchEvent(new CustomEvent('orderPaymentStatusChanged', {
+                  detail: { 
+                    orderId: updatedOrder.id, 
+                    paymentStatus: newPaymentStatus,
+                    orderStatus: newOrderStatus,
+                    order: updatedOrder
+                  }
+                }));
+              }
+              
+              return {
+                ...prevOrder,
+                ...updatedOrder,
+                payment_transactions: updatedOrder.payment_transactions || [],
+              };
+            }
+            
+            return prevOrder;
+          })
+        );
+      } catch (error) {
+        console.error('Error polling payment status:', error);
+      }
+    }, 5000); // Poll кожні 5 секунд
+
+    return () => clearInterval(interval);
+  }, [orders]);
 
   const loadOrders = async () => {
     setIsLoading(true);
@@ -328,6 +507,105 @@ export function OrdersListPage() {
 
   const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
+  };
+
+  const handleEditOrder = async (order: Order) => {
+    try {
+      // Завантажуємо повні дані замовлення
+      const fullOrder = await ordersApi.getOrder(order.id);
+      setOrderToEdit(fullOrder);
+      setSelectedOrder(fullOrder);
+    } catch (error: any) {
+      toast.error(`Помилка завантаження замовлення: ${error?.message || "Невідома помилка"}`);
+    }
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    if (!confirm(`Ви впевнені, що хочете видалити замовлення ${order.order_number}?`)) {
+      return;
+    }
+
+    try {
+      await ordersApi.deleteOrder(order.id);
+      toast.success('Замовлення видалено');
+      loadOrders(); // Перезавантажуємо список
+    } catch (error: any) {
+      toast.error(`Помилка видалення: ${error?.message || "Невідома помилка"}`);
+    }
+  };
+
+  const handleDownloadFiles = async (order: Order) => {
+    try {
+      // Парсимо файли з опису
+      const parseFilesFromDescription = (description: string | null | undefined): Array<{ name: string; url: string }> => {
+        if (!description) return [];
+        const files: Array<{ name: string; url: string }> = [];
+        const filePattern = /Файл:\s*([^\n(]+)\s*\(([^)]+)\)/g;
+        let match;
+        while ((match = filePattern.exec(description)) !== null) {
+          files.push({
+            name: match[1].trim(),
+            url: match[2].trim(),
+          });
+        }
+        return files;
+      };
+
+      const files = parseFilesFromDescription(order.description);
+      
+      // Додаємо файл з file_url якщо є
+      if (order.file_url) {
+        const fileName = order.file_url.split('/').pop() || 'Файл';
+        files.push({ name: fileName, url: order.file_url });
+      }
+
+      if (files.length === 0) {
+        toast.info('Немає файлів для завантаження');
+        return;
+      }
+
+      // Завантажуємо всі файли
+      for (const file of files) {
+        try {
+          const url = file.url.startsWith('http') ? file.url : `/api/v1${file.url}`;
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = file.name;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (error) {
+          console.error(`Помилка завантаження файлу ${file.name}:`, error);
+        }
+      }
+
+      toast.success(`Завантажено ${files.length} файл(ів)`);
+    } catch (error: any) {
+      toast.error(`Помилка завантаження файлів: ${error?.message || "Невідома помилка"}`);
+    }
+  };
+
+  const handleViewClient = (order: Order) => {
+    if (order.client_id) {
+      // Переходимо на сторінку клієнта
+      window.location.href = `/clients?clientId=${order.client_id}`;
+    } else {
+      toast.info('Клієнт не пов\'язаний з замовленням');
+    }
+  };
+
+  const handleSendEmail = (order: Order) => {
+    const details = parseOrderDetails(order.description || '');
+    const email = details.email || order.client?.email;
+    
+    if (email) {
+      const subject = encodeURIComponent(`Замовлення ${order.order_number}`);
+      const body = encodeURIComponent(`Добрий день!\n\nПишу щодо замовлення ${order.order_number}.\n\nЗ повагою,`);
+      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    } else {
+      toast.info('Email клієнта не знайдено');
+    }
   };
 
   // Filter orders with useMemo for performance
@@ -769,15 +1047,26 @@ export function OrdersListPage() {
                                 <Eye className="w-4 h-4 mr-2" />
                                 Переглянути
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditOrder(order)}>
                                 <Edit2 className="w-4 h-4 mr-2" />
                                 Редагувати
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDownloadFiles(order)}>
+                                <FileText className="w-4 h-4 mr-2" />
+                                Завантажити файли
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleViewClient(order)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                Переглянути клієнта
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleSendEmail(order)}>
                                 <Mail className="w-4 h-4 mr-2" />
                                 Надіслати email
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem 
+                                className="text-red-600"
+                                onClick={() => handleDeleteOrder(order)}
+                              >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Видалити
                               </DropdownMenuItem>

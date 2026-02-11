@@ -1,12 +1,15 @@
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List, Any
+from typing import Optional, List, Any, TYPE_CHECKING
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, model_serializer, field_serializer, computed_field
 from modules.crm.models import (
     OrderStatus, ClientSource, EntityType, TimelineStepType,
     TranslatorStatus, TranslationRequestStatus, PaymentMethod, TranslationType
 )
+
+if TYPE_CHECKING:
+    from modules.payment.schemas import PaymentTransactionRead
 
 
 class ClientCreate(BaseModel):
@@ -176,6 +179,7 @@ class OrderRead(BaseModel):
     manager: Optional["ManagerRead"] = None  # Менеджер замовлення
     office: Optional["OfficeRead"] = None
     timeline_steps: list["TimelineStepRead"] = []
+    payment_transactions: Optional[list["PaymentTransactionRead"]] = []  # Payment transactions from Stripe/P24
     
     class Config:
         from_attributes = True

@@ -58,19 +58,39 @@ const statusMap: Record<ColumnId, string> = {
 
 // Map backend status to frontend column
 function mapStatusToColumn(status: string, order?: any): ColumnId {
-  // Автоматична логіка: якщо є транзакція income → PAID
-  if (order?.transactions?.some((t: any) => t.type === "income")) {
-    // Перевіряємо чи не видано (ISSUED має пріоритет)
-    if (status === "CLOSED" || status === "closed") {
-      return "ISSUED";
+  // Пріоритет 1: Перевіряємо чи не видано (ISSUED має найвищий пріоритет)
+  if (status === "CLOSED" || status === "closed") {
+    return "ISSUED";
+  }
+  
+  // Пріоритет 2: Перевіряємо payment_transactions від Stripe/P24
+  if (order?.payment_transactions && order.payment_transactions.length > 0) {
+    // Беремо останню транзакцію
+    const latestPayment = order.payment_transactions[order.payment_transactions.length - 1];
+    
+    // Якщо оплата успішна → PAID
+    if (latestPayment.status === "completed") {
+      // Перевіряємо доставку InPost
+      if (order?.delivery?.method === "inpost" && order?.delivery?.delivered_at) {
+        return "ISSUED";
+      }
+      return "PAID";
     }
-    // Якщо доставка InPost і delivered_at встановлено → ISSUED
+    
+    // Якщо оплата в процесі або очікує → залишаємо поточний статус, але можна показати індикатор
+    // (pending, processing) - замовлення залишається в поточному статусі
+  }
+  
+  // Пріоритет 3: Автоматична логіка: якщо є транзакція income → PAID
+  if (order?.transactions?.some((t: any) => t.type === "income")) {
+    // Перевіряємо доставку InPost
     if (order?.delivery?.method === "inpost" && order?.delivery?.delivered_at) {
       return "ISSUED";
     }
     return "PAID";
   }
 
+  // Пріоритет 4: Стандартна логіка статусів
   switch (status) {
     case "NEW":
       return "NEW";
@@ -122,6 +142,83 @@ export function BoardPage() {
     loadData();
   }, []);
 
+  // Polling for orders with pending payment transactions
+  useEffect(() => {
+    // Знаходимо замовлення з pending/processing payment transactions
+    const ordersWithPendingPayments = orders.filter(order => 
+      order.payment_transactions?.some((pt: any) => 
+        pt.status === 'pending' || pt.status === 'processing'
+      )
+    );
+
+    if (ordersWithPendingPayments.length === 0) {
+      return; // Немає замовлень для polling
+    }
+
+    // Polling кожні 5 секунд для замовлень з pending payments
+    const interval = setInterval(async () => {
+      try {
+        // Оновлюємо тільки замовлення з pending payments
+        const updatedOrders = await Promise.all(
+          ordersWithPendingPayments.map(async (order) => {
+            try {
+              const updatedOrder = await ordersApi.getOrder(order.id);
+              return updatedOrder;
+            } catch (error) {
+              console.error(`Failed to fetch order ${order.id}:`, error);
+              return null;
+            }
+          })
+        );
+
+        // Оновлюємо тільки ті замовлення, де змінився статус оплати
+        setOrders((prevOrders) =>
+          prevOrders.map((prevOrder) => {
+            const updatedOrder = updatedOrders.find(
+              (uo) => uo && uo.id === prevOrder.id
+            );
+            
+            if (!updatedOrder) {
+              return prevOrder;
+            }
+
+            // Перевіряємо чи змінився статус оплати
+            const prevPaymentStatus = prevOrder.payment_transactions?.[prevOrder.payment_transactions.length - 1]?.status;
+            const newPaymentStatus = updatedOrder.payment_transactions?.[updatedOrder.payment_transactions.length - 1]?.status;
+            
+            if (prevPaymentStatus !== newPaymentStatus) {
+              // Статус оплати змінився - оновлюємо замовлення
+              const mappedStatus = mapStatusToColumn(updatedOrder.status, updatedOrder);
+              
+              // Сповіщаємо про зміну статусу оплати для синхронізації з іншими компонентами
+              window.dispatchEvent(new CustomEvent('orderPaymentStatusChanged', {
+                detail: { 
+                  orderId: updatedOrder.id, 
+                  paymentStatus: newPaymentStatus,
+                  orderStatus: updatedOrder.status,
+                  order: updatedOrder
+                }
+              }));
+              
+              return {
+                ...prevOrder,
+                ...updatedOrder,
+                status: mappedStatus,
+                payment_transactions: updatedOrder.payment_transactions || [],
+              };
+            }
+            
+            return prevOrder;
+          })
+        );
+      } catch (error) {
+        console.error('Error polling payment status:', error);
+      }
+    }, 5000); // Poll кожні 5 секунд
+
+    return () => clearInterval(interval);
+  }, [orders]);
+
   // Listen for order updates to refresh the board
   // Але не перезавантажуємо, якщо замовлення вже оновлене локально (drag-and-drop)
   useEffect(() => {
@@ -145,12 +242,80 @@ export function BoardPage() {
       await loadData();
     };
 
+    const handlePaymentStatusChanged = async (event: CustomEvent) => {
+      const { orderId, paymentStatus, orderStatus, order } = event.detail;
+      
+      // Оновлюємо локально якщо є дані
+      if (order && orderId) {
+        setOrders((prevOrders) =>
+          prevOrders.map((o) => {
+            if (o.id === orderId) {
+              const mappedStatus = mapStatusToColumn(orderStatus || order.status, order);
+              return {
+                ...o,
+                ...order,
+                status: mappedStatus,
+                payment_transactions: order.payment_transactions || o.payment_transactions || [],
+              };
+            }
+            return o;
+          })
+        );
+      } else if (orderId) {
+        // Якщо немає даних, завантажуємо з API
+        try {
+          const updatedOrder = await ordersApi.getOrder(orderId);
+          const mappedStatus = mapStatusToColumn(updatedOrder.status, updatedOrder);
+          setOrders((prevOrders) =>
+            prevOrders.map((o) => {
+              if (o.id === orderId) {
+                return {
+                  ...o,
+                  ...updatedOrder,
+                  status: mappedStatus,
+                  payment_transactions: updatedOrder.payment_transactions || [],
+                };
+              }
+              return o;
+            })
+          );
+        } catch (error) {
+          console.error(`Failed to update order ${orderId} after payment status change:`, error);
+        }
+      }
+    };
+
+    const handleOrderStatusChanged = async (event: CustomEvent) => {
+      const { orderId, orderStatus, order } = event.detail;
+      
+      if (orderId) {
+        setOrders((prevOrders) =>
+          prevOrders.map((o) => {
+            if (o.id === orderId) {
+              const mappedStatus = mapStatusToColumn(orderStatus || order?.status || o.status, order || o);
+              return {
+                ...o,
+                ...(order || {}),
+                status: mappedStatus,
+                payment_transactions: order?.payment_transactions || o.payment_transactions || [],
+              };
+            }
+            return o;
+          })
+        );
+      }
+    };
+
     window.addEventListener('orderUpdated', handleOrderUpdate as EventListener);
     window.addEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+    window.addEventListener('orderPaymentStatusChanged', handlePaymentStatusChanged as EventListener);
+    window.addEventListener('orderStatusChanged', handleOrderStatusChanged as EventListener);
     
     return () => {
       window.removeEventListener('orderUpdated', handleOrderUpdate as EventListener);
       window.removeEventListener('orderTranslatorsUpdated', handleTranslatorsUpdate as EventListener);
+      window.removeEventListener('orderPaymentStatusChanged', handlePaymentStatusChanged as EventListener);
+      window.removeEventListener('orderStatusChanged', handleOrderStatusChanged as EventListener);
     };
   }, []);
 
@@ -217,19 +382,8 @@ export function BoardPage() {
           (t: any) => t.type === "income"
         )?.amount;
 
-        // Автоматична зміна статусу на основі транзакцій та доставки
-        let autoStatus = order.status.toUpperCase();
-        
-        // Якщо є транзакція income → PAID (якщо ще не ISSUED)
-        if (order.transactions?.some((t: any) => t.type === "income")) {
-          // Перевіряємо доставку InPost
-          const delivery = (order as any).delivery || (order as any).deliveries?.[0];
-          if (delivery?.method === "inpost" && delivery?.delivered_at) {
-            autoStatus = "ISSUED";
-          } else if (autoStatus !== "CLOSED" && autoStatus !== "ISSUED") {
-            autoStatus = "PAID";
-          }
-        }
+        // Визначаємо статус з урахуванням payment_transactions
+        const mappedStatus = mapStatusToColumn(order.status, order);
 
         return {
           id: order.id,
@@ -239,7 +393,8 @@ export function BoardPage() {
           deadline: order.deadline
             ? new Date(order.deadline)
             : new Date(order.created_at ?? Date.now()),
-          status: autoStatus as any,
+          status: mappedStatus,
+          payment_transactions: order.payment_transactions || [],
           managerName: (() => {
             // Отримати ім'я менеджера з order.manager
             if ((order as any).manager) {
@@ -468,14 +623,29 @@ export function BoardPage() {
         }));
       }
       
-      // Сповіщаємо про оновлення замовлення для синхронізації з карткою клієнта
+      // Сповіщаємо про оновлення замовлення для синхронізації з карткою клієнта та списком замовлень
       // skipReload = true, щоб не перезавантажувати BoardPage (ми вже оновили локально)
       const orderClientId = order.clientId || (order as any).client_id;
       if (orderClientId) {
         window.dispatchEvent(new CustomEvent('orderUpdated', {
-          detail: { orderId, clientId: orderClientId, skipReload: true }
+          detail: { 
+            orderId, 
+            clientId: orderClientId, 
+            skipReload: true,
+            orderStatus: backendStatus,
+            order: updatedOrder
+          }
         }));
       }
+      
+      // Сповіщаємо про зміну статусу замовлення для синхронізації зі списком замовлень
+      window.dispatchEvent(new CustomEvent('orderStatusChanged', {
+        detail: { 
+          orderId, 
+          orderStatus: backendStatus,
+          order: updatedOrder
+        }
+      }));
       
       // Success - state already updated optimistically
       // Optional: Play subtle sound or haptic feedback

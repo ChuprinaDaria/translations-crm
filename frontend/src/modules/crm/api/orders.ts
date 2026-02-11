@@ -146,5 +146,14 @@ export const ordersApi = {
       body: JSON.stringify({ translator_id: translatorId }),
     });
   },
+
+  /**
+   * Delete order
+   */
+  async deleteOrder(orderId: string): Promise<{ status: string; id: string }> {
+    return apiFetch<{ status: string; id: string }>(`/crm/orders/${orderId}`, {
+      method: "DELETE",
+    });
+  },
 };
 

@@ -432,6 +432,19 @@ async def create_payment_link(
     )
     
     db.add(payment_link)
+    
+    # Mark payment link as sent in timeline
+    from modules.crm.services import timeline as timeline_service
+    try:
+        timeline_service.mark_payment_link_sent(
+            db=db,
+            order_id=link_data.order_id,
+            sent_by_id=user.id,
+            payment_link=payment_link.link_url
+        )
+    except Exception as e:
+        logger.warning(f"Failed to mark payment link sent in timeline: {e}")
+    
     db.commit()
     db.refresh(payment_link)
     
@@ -520,7 +533,28 @@ async def stripe_webhook(
                 transaction.provider_transaction_id = session_id
                 transaction.completed_at = datetime.utcnow()
                 
-                # Create finance transaction
+                # Get payment method from checkout session
+                payment_method_type = data.get("payment_method_types", ["card"])[0] if data.get("payment_method_types") else "card"
+                transaction.payment_method = service.get_payment_method_type(payment_method_type)
+                
+                # Update order status to "oplacone" (paid)
+                order = db.query(Order).filter(Order.id == transaction.order_id).first()
+                if order:
+                    order.status = "oplacone"
+                    # Update payment_method in order based on actual payment method
+                    payment_method_map = {
+                        "card": "card",
+                        "p24_card": "card",
+                        "p24_transfer": "transfer",
+                        "p24_blik": "card",
+                        "sepa": "transfer",
+                    }
+                    order.payment_method = payment_method_map.get(
+                        transaction.payment_method.value if transaction.payment_method else "card",
+                        "card"
+                    )
+                
+                # Create finance transaction (only on successful payment)
                 await create_finance_transaction_from_payment(transaction, db)
                 
                 db.commit()
@@ -544,7 +578,24 @@ async def stripe_webhook(
                 payment_method_type = data.get("payment_method_types", ["card"])[0]
                 transaction.payment_method = service.get_payment_method_type(payment_method_type)
                 
-                # Create finance transaction
+                # Update order status to "oplacone" (paid)
+                order = db.query(Order).filter(Order.id == transaction.order_id).first()
+                if order:
+                    order.status = "oplacone"
+                    # Update payment_method in order based on actual payment method
+                    payment_method_map = {
+                        "card": "card",
+                        "p24_card": "card",
+                        "p24_transfer": "transfer",
+                        "p24_blik": "card",
+                        "sepa": "transfer",
+                    }
+                    order.payment_method = payment_method_map.get(
+                        transaction.payment_method.value if transaction.payment_method else "card",
+                        "card"
+                    )
+                
+                # Create finance transaction (only on successful payment)
                 await create_finance_transaction_from_payment(transaction, db)
                 
                 db.commit()
@@ -562,6 +613,10 @@ async def stripe_webhook(
             if transaction:
                 transaction.status = PaymentStatus.FAILED
                 transaction.error_message = data.get("last_payment_error", {}).get("message")
+                
+                # Order status remains unchanged on failed payment
+                # (stays as "do_wykonania" or current status)
+                
                 db.commit()
     
     return {"received": True}
@@ -620,7 +675,24 @@ async def przelewy24_webhook(
     # Map method ID to type
     transaction.payment_method = service.map_method_id_to_type(webhook_data.methodId)
     
-    # Create finance transaction
+    # Update order status to "oplacone" (paid)
+    order = db.query(Order).filter(Order.id == transaction.order_id).first()
+    if order:
+        order.status = "oplacone"
+        # Update payment_method in order based on actual payment method
+        payment_method_map = {
+            "p24_card": "card",
+            "p24_transfer": "transfer",
+            "p24_blik": "card",
+            "p24_paypo": "card",
+            "p24_installments": "card",
+        }
+        order.payment_method = payment_method_map.get(
+            transaction.payment_method.value if transaction.payment_method else "transfer",
+            "transfer"
+        )
+    
+    # Create finance transaction (only on successful payment)
     await create_finance_transaction_from_payment(transaction, db)
     
     db.commit()

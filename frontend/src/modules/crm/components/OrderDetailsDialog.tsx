@@ -39,6 +39,8 @@ import {
 import { cn } from '../../../components/ui/utils';
 import { toast } from 'sonner';
 import type { Order } from '../api/clients';
+import { ordersApi } from '../api/orders';
+import { getImageUrl } from '../../../lib/api/config';
 
 interface OrderDetailsDialogProps {
   order: Order | null;
@@ -200,6 +202,84 @@ export function OrderDetailsDialog({
     }
   };
 
+  // Обробники дій
+  const handleEditOrder = () => {
+    toast.info('Функція редагування замовлення відкриється в окремому вікні');
+    // Можна відкрити OrderDetailSheet або інший компонент редагування
+  };
+
+  const handleDownloadFiles = async () => {
+    try {
+      // Парсимо файли з опису
+      const parseFilesFromDescription = (description: string | null | undefined): Array<{ name: string; url: string }> => {
+        if (!description) return [];
+        const files: Array<{ name: string; url: string }> = [];
+        const filePattern = /Файл:\s*([^\n(]+)\s*\(([^)]+)\)/g;
+        let match;
+        while ((match = filePattern.exec(description)) !== null) {
+          files.push({
+            name: match[1].trim(),
+            url: match[2].trim(),
+          });
+        }
+        return files;
+      };
+
+      const files = parseFilesFromDescription(order.description);
+      
+      // Додаємо файл з file_url якщо є
+      if (order.file_url) {
+        const fileName = order.file_url.split('/').pop() || 'Файл';
+        files.push({ name: fileName, url: order.file_url });
+      }
+
+      if (files.length === 0) {
+        toast.info('Немає файлів для завантаження');
+        return;
+      }
+
+      // Завантажуємо всі файли
+      for (const file of files) {
+        try {
+          const fileUrl = getImageUrl(file.url) || (file.url.startsWith('http') ? file.url : `/api/v1${file.url}`);
+          const link = document.createElement('a');
+          link.href = fileUrl;
+          link.download = file.name;
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (error) {
+          console.error(`Помилка завантаження файлу ${file.name}:`, error);
+        }
+      }
+
+      toast.success(`Завантажено ${files.length} файл(ів)`);
+    } catch (error: any) {
+      toast.error(`Помилка завантаження файлів: ${error?.message || "Невідома помилка"}`);
+    }
+  };
+
+  const handleViewClient = () => {
+    if (order.client_id) {
+      window.location.href = `/clients?clientId=${order.client_id}`;
+    } else {
+      toast.info('Клієнт не пов\'язаний з замовленням');
+    }
+  };
+
+  const handleSendEmail = () => {
+    const email = details.email || order.client?.email;
+    
+    if (email) {
+      const subject = encodeURIComponent(`Замовлення ${order.order_number}`);
+      const body = encodeURIComponent(`Добрий день!\n\nПишу щодо замовлення ${order.order_number}.\n\nЗ повагою,`);
+      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    } else {
+      toast.info('Email клієнта не знайдено');
+    }
+  };
+
   // Швидкі дії
   const quickActions = [
     {
@@ -226,9 +306,7 @@ export function OrderDetailsDialog({
     {
       label: 'Відкрити клієнта',
       icon: Eye,
-      onClick: () => {
-        toast.info('Функція відкриття клієнта буде додана');
-      },
+      onClick: handleViewClient,
     },
   ];
 
@@ -439,6 +517,40 @@ export function OrderDetailsDialog({
                     bgColor="bg-emerald-50"
                   />
 
+                  {/* Статус оплати */}
+                  {order.payment_transactions && order.payment_transactions.length > 0 && (
+                    <InfoCard
+                      icon={<DollarSign className="w-5 h-5 text-blue-500" />}
+                      label="Статус оплати"
+                      value={
+                        (() => {
+                          const latestTransaction = order.payment_transactions[order.payment_transactions.length - 1];
+                          const status = latestTransaction.status;
+                          const statusLabels = {
+                            pending: { label: '⏳ Лінк відправлено (очікує)', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+                            processing: { label: '🔄 Обробляється', color: 'text-blue-600', bg: 'bg-blue-100' },
+                            completed: { label: '✅ Оплачено', color: 'text-green-600', bg: 'bg-green-100' },
+                            failed: { label: '❌ Помилка оплати', color: 'text-red-600', bg: 'bg-red-100' },
+                            refunded: { label: '↩️ Повернено', color: 'text-orange-600', bg: 'bg-orange-100' },
+                            cancelled: { label: '🚫 Скасовано', color: 'text-gray-600', bg: 'bg-gray-100' },
+                          };
+                          const statusConfig = statusLabels[status as keyof typeof statusLabels] || statusLabels.pending;
+                          return (
+                            <Badge className={cn('px-3 py-1 font-semibold', statusConfig.bg, statusConfig.color, 'border-2')}>
+                              {statusConfig.label}
+                              {latestTransaction.payment_method && (
+                                <span className="ml-2 text-xs opacity-75">
+                                  ({latestTransaction.payment_method})
+                                </span>
+                              )}
+                            </Badge>
+                          );
+                        })()
+                      }
+                      bgColor="bg-blue-50"
+                    />
+                  )}
+
                   {/* Доставка */}
                   {details.delivery && (
                     <InfoCard
@@ -622,6 +734,7 @@ export function OrderDetailsDialog({
                         variant="outline" 
                         size="default"
                         className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                        onClick={handleEditOrder}
                       >
                         <Edit2 className="w-4 h-4 mr-2" />
                         Редагувати замовлення
@@ -630,6 +743,7 @@ export function OrderDetailsDialog({
                         variant="outline" 
                         size="default"
                         className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                        onClick={handleDownloadFiles}
                       >
                         <Download className="w-4 h-4 mr-2" />
                         Завантажити файли
@@ -638,6 +752,7 @@ export function OrderDetailsDialog({
                         variant="outline" 
                         size="default"
                         className="h-10 px-4 text-sm hover:bg-slate-100 transition-colors"
+                        onClick={handleViewClient}
                       >
                         <Eye className="w-4 h-4 mr-2" />
                         Переглянути клієнта
@@ -645,6 +760,7 @@ export function OrderDetailsDialog({
                       <Button 
                         size="default"
                         className="h-10 px-4 text-sm bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all hover:shadow-md"
+                        onClick={handleSendEmail}
                       >
                         <Send className="w-4 h-4 mr-2" />
                         Надіслати email
@@ -664,6 +780,7 @@ export function OrderDetailsDialog({
               variant="outline" 
               size="default"
               className="h-10 px-4 text-sm hover:bg-white transition-colors"
+              onClick={handleEditOrder}
             >
               <Edit2 className="w-4 h-4 mr-2" />
               Редагувати
@@ -672,6 +789,7 @@ export function OrderDetailsDialog({
               variant="outline" 
               size="default"
               className="h-10 px-4 text-sm hover:bg-white transition-colors"
+              onClick={handleDownloadFiles}
             >
               <Download className="w-4 h-4 mr-2" />
               Завантажити
@@ -681,6 +799,7 @@ export function OrderDetailsDialog({
           <Button 
             size="default"
             className="h-10 px-4 text-sm bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all hover:shadow-md"
+            onClick={handleSendEmail}
           >
             <Send className="w-4 h-4 mr-2" />
             Надіслати

@@ -76,6 +76,27 @@ export interface Order {
   timeline_steps?: TimelineStep[];
   translation_requests?: TranslationRequest[];
   transactions?: Transaction[];
+  payment_transactions?: PaymentTransaction[];
+}
+
+export interface PaymentTransaction {
+  id: string;
+  order_id: string;
+  provider: 'stripe' | 'przelewy24';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'cancelled';
+  payment_method?: string;
+  amount: number;
+  currency: string;
+  session_id: string;
+  provider_transaction_id?: string;
+  payment_url?: string;
+  customer_email: string;
+  customer_name?: string;
+  description?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
 }
 
 export interface Office {

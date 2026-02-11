@@ -2,7 +2,7 @@
  * Payment Modal Component - Select provider and amount
  */
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useI18n } from '@/lib/i18n';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -42,7 +42,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   defaultAmount = 0,
   onSuccess,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useI18n();
 
   // Fetch available payment methods
   const { data: methods, isLoading: methodsLoading } = useQuery({

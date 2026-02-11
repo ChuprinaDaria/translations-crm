@@ -2,7 +2,7 @@
  * Send Payment Link Button - Manager action to send payment link
  */
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useI18n } from '@/lib/i18n';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ export const SendPaymentLinkButton: React.FC<SendPaymentLinkButtonProps> = ({
   variant = 'default',
   size = 'default',
 }) => {
-  const { t } = useTranslation();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
