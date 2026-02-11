@@ -24,12 +24,20 @@ interface Conversation {
   client_avatar?: string;
 }
 
+interface Message {
+  id: string;
+  content: string;
+  direction: 'inbound' | 'outbound';
+  meta_data?: Record<string, any>;
+}
+
 interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientId: string;
   onSuccess?: (orderId: string) => void;
   conversation?: Conversation | null;
+  messages?: Message[];
 }
 
 // Типи документів (спрощений список)
@@ -66,6 +74,7 @@ export function CreateOrderDialog({
   clientId,
   onSuccess,
   conversation,
+  messages = [],
 }: CreateOrderDialogProps) {
   const [documentType, setDocumentType] = useState('');
   const [customDocumentType, setCustomDocumentType] = useState('');
@@ -276,6 +285,87 @@ export function CreateOrderDialog({
     }
   }, [open, conversation?.platform, orderSource]);
 
+  // Функція для визначення пачкоматів та адрес з повідомлень
+  const detectPaczkomatAndAddress = () => {
+    if (!messages || messages.length === 0) return { paczkomat: null, address: null };
+    
+    let detectedPaczkomat: { code: string; fullAddress: string } | null = null;
+    let detectedAddress: string | null = null;
+    
+    // Перевіряємо всі вхідні повідомлення
+    for (const message of messages) {
+      if (message.direction !== 'inbound' || !message.content) continue;
+      
+      const content = message.content;
+      
+      // Визначення пачкомату - формат 1: повна адреса
+      const paczkomatFullPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let paczkomatFullMatch;
+      while ((paczkomatFullMatch = paczkomatFullPattern.exec(content)) !== null) {
+        const code = paczkomatFullMatch[1].trim();
+        const postalCode = paczkomatFullMatch[2].trim();
+        const city = paczkomatFullMatch[3].trim().replace(/\*\*/g, '');
+        const street = paczkomatFullMatch[4].trim();
+        detectedPaczkomat = {
+          code,
+          fullAddress: `${code}, ${postalCode} ${city}, ${street}`,
+        };
+        break;
+      }
+      
+      // Визначення пачкомату - формат 2: просто код
+      if (!detectedPaczkomat) {
+        const paczkomatCodePattern = /\b([A-Z]{3,6}\d{0,3}[A-Z]{0,3})\b/g;
+        let paczkomatCodeMatch;
+        while ((paczkomatCodeMatch = paczkomatCodePattern.exec(content)) !== null) {
+          const code = paczkomatCodeMatch[1].trim();
+          const beforeCode = content.substring(Math.max(0, paczkomatCodeMatch.index - 1), paczkomatCodeMatch.index);
+          const afterCode = content.substring(paczkomatCodeMatch.index + code.length, paczkomatCodeMatch.index + code.length + 1);
+          const isWordBoundary = (!beforeCode || /[\s,;:!?.\n]/.test(beforeCode)) && (!afterCode || /[\s,;:!?.\n]/.test(afterCode));
+          
+          if (isWordBoundary && code.length >= 5) {
+            detectedPaczkomat = { code, fullAddress: code };
+            break;
+          }
+        }
+      }
+      
+      // Визначення адреси - формат 1: поштовий індекс, місто, вулиця
+      const addressPattern1 = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let addressMatch1;
+      while ((addressMatch1 = addressPattern1.exec(content)) !== null) {
+        const postalCode = addressMatch1[1].trim();
+        const city = addressMatch1[2].trim().replace(/\*\*/g, '');
+        const street = addressMatch1[3].trim();
+        const beforeAddress = content.substring(Math.max(0, addressMatch1.index - 30), addressMatch1.index);
+        const hasPaczkomatCode = /[A-Z]{3,6}\d{0,3}[A-Z]{0,3},/.test(beforeAddress);
+        
+        if (!hasPaczkomatCode) {
+          detectedAddress = `${postalCode} ${city}, ${street}`;
+          break;
+        }
+      }
+      
+      // Визначення адреси - формат 2: Місто, Вулиця, Номер, Поштовий індекс
+      if (!detectedAddress) {
+        const addressPattern2 = /([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)*),\s*([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)*),\s*([^,]+),\s*(\d{2}-\d{3})/g;
+        let addressMatch2;
+        while ((addressMatch2 = addressPattern2.exec(content)) !== null) {
+          const city = addressMatch2[1].trim();
+          const street = addressMatch2[2].trim();
+          const number = addressMatch2[3].trim();
+          const postalCode = addressMatch2[4].trim();
+          detectedAddress = `${postalCode} ${city}, ${street} ${number}`;
+          break;
+        }
+      }
+      
+      if (detectedPaczkomat || detectedAddress) break;
+    }
+    
+    return { paczkomat: detectedPaczkomat, address: detectedAddress };
+  };
+
   // Завантажуємо офіси, мови та дані клієнта при відкритті діалогу
   useEffect(() => {
     if (open) {
@@ -285,6 +375,26 @@ export function CreateOrderDialog({
       checkExistingOrders();
     }
   }, [open, clientId]);
+
+  // Автоматично заповнюємо пачкомат/адресу при виборі способу доставки InPost
+  useEffect(() => {
+    if (!open) return;
+    
+    if (deliveryMethod === 'inpost_locker' && !lockerNumber) {
+      const { paczkomat } = detectPaczkomatAndAddress();
+      if (paczkomat) {
+        setLockerNumber(paczkomat.code);
+        toast.info(`Автоматично визначено пачкомат: ${paczkomat.code}`);
+      }
+    } else if (deliveryMethod === 'inpost_courier' && !courierAddress) {
+      const { address } = detectPaczkomatAndAddress();
+      if (address) {
+        setCourierAddress(address);
+        toast.info(`Автоматично визначено адресу: ${address}`);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deliveryMethod]);
 
   // Перевіряємо, чи вже є замовлення для клієнта
   const checkExistingOrders = async () => {

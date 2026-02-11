@@ -354,29 +354,63 @@ export const PaymentSettings: React.FC = () => {
                 <CardDescription>{t('payment.settings.generalDescription')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <Alert>
+                  <AlertDescription>
+                    <strong>Важливо:</strong> Оберіть активну систему оплати, яка буде використовуватися для створення посилань на оплату.
+                    Система має бути налаштована та увімкнена перед вибором.
+                  </AlertDescription>
+                </Alert>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="active_payment_provider">Активна система оплати *</Label>
+                  <Label htmlFor="active_payment_provider" className="text-base font-semibold">
+                    Активна система оплати *
+                  </Label>
                   <Select
-                    value={formData.active_payment_provider || ''}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, active_payment_provider: value as PaymentProvider })
-                    }
+                    value={formData.active_payment_provider || 'none'}
+                    onValueChange={(value) => {
+                      if (value === 'none') {
+                        setFormData({ ...formData, active_payment_provider: undefined });
+                      } else {
+                        setFormData({ ...formData, active_payment_provider: value as PaymentProvider });
+                      }
+                    }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Виберіть систему оплати" />
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Виберіть систему оплати">
+                        {formData.active_payment_provider === PaymentProvider.STRIPE && '💳 Stripe'}
+                        {formData.active_payment_provider === PaymentProvider.PRZELEWY24 && '🏦 Przelewy24'}
+                        {!formData.active_payment_provider && 'Не вибрано'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-muted-foreground">Не вибрано</span>
+                      </SelectItem>
                       <SelectItem 
                         value={PaymentProvider.STRIPE}
                         disabled={!formData.stripe_enabled || !formData.stripe_secret_key}
                       >
-                        Stripe {!formData.stripe_enabled || !formData.stripe_secret_key ? '(не налаштовано)' : ''}
+                        <div className="flex items-center gap-2">
+                          <span>💳 Stripe</span>
+                          {!formData.stripe_enabled || !formData.stripe_secret_key ? (
+                            <span className="text-xs text-muted-foreground">(не налаштовано)</span>
+                          ) : (
+                            <span className="text-xs text-green-600">✓ готово</span>
+                          )}
+                        </div>
                       </SelectItem>
                       <SelectItem 
                         value={PaymentProvider.PRZELEWY24}
                         disabled={!formData.przelewy24_enabled || !formData.przelewy24_merchant_id}
                       >
-                        Przelewy24 {!formData.przelewy24_enabled || !formData.przelewy24_merchant_id ? '(не налаштовано)' : ''}
+                        <div className="flex items-center gap-2">
+                          <span>🏦 Przelewy24</span>
+                          {!formData.przelewy24_enabled || !formData.przelewy24_merchant_id ? (
+                            <span className="text-xs text-muted-foreground">(не налаштовано)</span>
+                          ) : (
+                            <span className="text-xs text-green-600">✓ готово</span>
+                          )}
+                        </div>
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -384,6 +418,14 @@ export const PaymentSettings: React.FC = () => {
                     Система оплати, яка буде використовуватися для створення посилань на оплату. 
                     Обов'язково налаштуйте та увімкніть вибрану систему перед вибором.
                   </p>
+                  {(!formData.stripe_enabled || !formData.stripe_secret_key) && 
+                   (!formData.przelewy24_enabled || !formData.przelewy24_merchant_id) && (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Немає налаштованих систем оплати. Будь ласка, налаштуйте Stripe або Przelewy24 в відповідних закладках.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
 
                 <div className="space-y-2">

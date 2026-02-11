@@ -1153,10 +1153,9 @@ async def create_payment_link(
         # Try to get amount from order transactions or use a default
         amount = float(order.price_brutto) if order.price_brutto else 100.0
     
-    # Отримати налаштування оплати
-    payment_settings = db.query(PaymentSettings).first()
-    if not payment_settings:
-        raise HTTPException(status_code=500, detail="Payment settings not configured")
+    # Отримати налаштування оплати (створити дефолтні, якщо не існують)
+    from modules.payment.router import get_or_create_settings
+    payment_settings = get_or_create_settings(db)
     
     # Визначити активну систему оплати
     active_provider = payment_settings.active_payment_provider
@@ -1169,8 +1168,8 @@ async def create_payment_link(
             active_provider = PaymentProvider.PRZELEWY24
         else:
             raise HTTPException(
-                status_code=500, 
-                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in settings."
+                status_code=400, 
+                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in Payment Settings and select an active provider."
             )
     
     # Створити посилання на оплату в залежності від вибраної системи

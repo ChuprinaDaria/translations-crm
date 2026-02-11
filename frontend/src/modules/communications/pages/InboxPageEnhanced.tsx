@@ -1445,6 +1445,7 @@ export function InboxPageEnhanced() {
                 clientId={client.id}
                 onSuccess={handleCreateOrderSuccess}
                 conversation={chatConversation}
+                messages={activeChat?.messages || []}
               />
               
               {orders.length > 0 && (
