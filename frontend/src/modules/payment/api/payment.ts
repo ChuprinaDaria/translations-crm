@@ -15,38 +15,35 @@ import {
   PaymentStatus,
 } from './types';
 
-const BASE_URL = '/api/v1/payment';
+const BASE_URL = '/payment';
 
 // Settings
 export const paymentApi = {
   // Settings
   getSettings: async (): Promise<PaymentSettings> => {
-    const response = await apiClient.get(`${BASE_URL}/settings`);
-    return response.data;
+    return await apiClient.get<PaymentSettings>(`${BASE_URL}/settings`);
   },
 
   updateSettings: async (data: PaymentSettingsUpdate): Promise<PaymentSettings> => {
-    const response = await apiClient.put(`${BASE_URL}/settings`, data);
-    return response.data;
+    return await apiClient.put<PaymentSettings>(`${BASE_URL}/settings`, data);
   },
 
   testConnection: async (provider: PaymentProvider): Promise<{ success: boolean; provider: string; error?: string }> => {
-    const response = await apiClient.post(`${BASE_URL}/settings/test-connection`, null, {
-      params: { provider },
-    });
-    return response.data;
+    const params = new URLSearchParams({ provider });
+    return await apiClient.post<{ success: boolean; provider: string; error?: string }>(
+      `${BASE_URL}/settings/test-connection?${params.toString()}`,
+      null
+    );
   },
 
   // Payment methods
   getAvailableMethods: async (): Promise<PaymentMethodsResponse> => {
-    const response = await apiClient.get(`${BASE_URL}/methods`);
-    return response.data;
+    return await apiClient.get<PaymentMethodsResponse>(`${BASE_URL}/methods`);
   },
 
   // Transactions
   createTransaction: async (data: CreatePaymentTransactionRequest): Promise<PaymentTransaction> => {
-    const response = await apiClient.post(`${BASE_URL}/transactions`, data);
-    return response.data;
+    return await apiClient.post<PaymentTransaction>(`${BASE_URL}/transactions`, data);
   },
 
   getTransactions: async (params?: {
@@ -56,19 +53,26 @@ export const paymentApi = {
     skip?: number;
     limit?: number;
   }): Promise<PaymentTransaction[]> => {
-    const response = await apiClient.get(`${BASE_URL}/transactions`, { params });
-    return response.data;
+    const queryParams = new URLSearchParams();
+    if (params) {
+      if (params.order_id) queryParams.append('order_id', params.order_id);
+      if (params.status) queryParams.append('status', params.status);
+      if (params.provider) queryParams.append('provider', params.provider);
+      if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
+      if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    }
+    const queryString = queryParams.toString();
+    const url = queryString ? `${BASE_URL}/transactions?${queryString}` : `${BASE_URL}/transactions`;
+    return await apiClient.get<PaymentTransaction[]>(url);
   },
 
   getTransaction: async (transactionId: string): Promise<PaymentTransaction> => {
-    const response = await apiClient.get(`${BASE_URL}/transactions/${transactionId}`);
-    return response.data;
+    return await apiClient.get<PaymentTransaction>(`${BASE_URL}/transactions/${transactionId}`);
   },
 
   // Payment links
   createPaymentLink: async (data: CreatePaymentLinkRequest): Promise<PaymentLink> => {
-    const response = await apiClient.post(`${BASE_URL}/links`, data);
-    return response.data;
+    return await apiClient.post<PaymentLink>(`${BASE_URL}/links`, data);
   },
 
   getPaymentLinks: async (params?: {
@@ -77,8 +81,16 @@ export const paymentApi = {
     skip?: number;
     limit?: number;
   }): Promise<PaymentLink[]> => {
-    const response = await apiClient.get(`${BASE_URL}/links`, { params });
-    return response.data;
+    const queryParams = new URLSearchParams();
+    if (params) {
+      if (params.order_id) queryParams.append('order_id', params.order_id);
+      if (params.is_used !== undefined) queryParams.append('is_used', params.is_used.toString());
+      if (params.skip !== undefined) queryParams.append('skip', params.skip.toString());
+      if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    }
+    const queryString = queryParams.toString();
+    const url = queryString ? `${BASE_URL}/links?${queryString}` : `${BASE_URL}/links`;
+    return await apiClient.get<PaymentLink[]>(url);
   },
 
   // Statistics
@@ -86,8 +98,14 @@ export const paymentApi = {
     start_date?: string;
     end_date?: string;
   }): Promise<PaymentStats> => {
-    const response = await apiClient.get(`${BASE_URL}/stats`, { params });
-    return response.data;
+    const queryParams = new URLSearchParams();
+    if (params) {
+      if (params.start_date) queryParams.append('start_date', params.start_date);
+      if (params.end_date) queryParams.append('end_date', params.end_date);
+    }
+    const queryString = queryParams.toString();
+    const url = queryString ? `${BASE_URL}/stats?${queryString}` : `${BASE_URL}/stats`;
+    return await apiClient.get<PaymentStats>(url);
   },
 };
 

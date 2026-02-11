@@ -281,6 +281,78 @@
     "notes": "Notatki",
     "settings": "Ustawienia",
     "export": "Eksport"
+  },
+  "payment": {
+    "settings": {
+      "title": "Ustawienia płatności",
+      "description": "Skonfiguruj integrację Stripe i Przelewy24",
+      "configuration": "Konfiguracja",
+      "general": "Ogólne",
+      "generalSettings": "Ustawienia ogólne",
+      "generalDescription": "Domyślna waluta i wspólne ustawienia",
+      "stripeDescription": "Skonfiguruj Stripe do płatności międzynarodowych",
+      "p24Description": "Skonfiguruj Przelewy24 dla rynku polskiego",
+      "publicKey": "Klucz publiczny",
+      "secretKey": "Klucz tajny",
+      "webhookSecret": "Tajny klucz webhook",
+      "merchantId": "ID sprzedawcy",
+      "posId": "POS ID",
+      "crcKey": "Klucz CRC",
+      "apiKey": "Klucz API",
+      "reportKey": "Klucz do raportów (klucz do raportów)",
+      "useSandbox": "Użyj trybu testowego",
+      "sandboxMode": "⚠️ Tryb testowy włączony - środowisko testowe",
+      "productionMode": "✅ Tryb produkcyjny - rzeczywiste transakcje",
+      "defaultCurrency": "Domyślna waluta",
+      "currencyHint": "Kod waluty ISO 4217 (np. PLN, EUR, USD)",
+      "testConnection": "Testuj połączenie",
+      "connected": "Połączono",
+      "notConnected": "Nie połączono",
+      "connectionSuccess": "Pomyślnie połączono z {{provider}}",
+      "connectionFailed": "Nie udało się połączyć z {{provider}}",
+      "updated": "Ustawienia płatności zostały zaktualizowane",
+      "updateError": "Nie udało się zaktualizować ustawień płatności"
+    },
+    "modal": {
+      "title": "Utwórz płatność",
+      "description": "Wygeneruj link do płatności dla klienta",
+      "amount": "Kwota",
+      "provider": "Dostawca płatności",
+      "selectProvider": "Wybierz dostawcę płatności",
+      "descriptionPlaceholder": "Opis płatności...",
+      "customer": "Klient",
+      "email": "Email",
+      "created": "Płatność została utworzona",
+      "redirecting": "Przekierowywanie do strony płatności...",
+      "error": "Nie udało się utworzyć płatności",
+      "invalidAmount": "Kwota musi być większa niż 0",
+      "noProvidersEnabled": "Żaden dostawca płatności nie jest włączony. Najpierw skonfiguruj ustawienia płatności.",
+      "stripeInfo": "Klient zostanie przekierowany do Stripe Checkout",
+      "p24Info": "Klient zostanie przekierowany do strony płatności Przelewy24",
+      "createPayment": "Utwórz płatność"
+    },
+    "sendLink": {
+      "button": "Wyślij link do płatności",
+      "title": "Wygeneruj link do płatności",
+      "description": "Utwórz link do płatności do wysłania klientowi",
+      "generate": "Wygeneruj link",
+      "created": "Link do płatności został utworzony",
+      "copyOrSend": "Skopiuj link lub wyślij go klientowi",
+      "error": "Nie udało się utworzyć linku do płatności",
+      "generatedLink": "Link do płatności",
+      "copyToClipboard": "Skopiuj do schowka",
+      "copied": "Link skopiowany do schowka",
+      "copyError": "Nie udało się skopiować linku",
+      "success": "Link do płatności został pomyślnie wygenerowany!",
+      "shareInstructions": "Udostępnij ten link klientowi przez e-mail, komunikator lub inny kanał.",
+      "openLink": "Otwórz link"
+    }
+  },
+  "common": {
+    "cancel": "Anuluj",
+    "save": "Zapisz",
+    "close": "Zamknij",
+    "optional": "opcjonalne"
   }
 }
 
