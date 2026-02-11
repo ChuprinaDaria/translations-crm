@@ -181,23 +181,235 @@ async def handle_telegram_webhook(
     )
     
     # Обробка фото (Telegram надсилає масив розмірів, беремо найбільший)
+    photo_attempted = False
     if "photo" in message_data and bot_token:
         photos = message_data["photo"]
         if photos:
-            # Беремо найбільший розмір (останній в масиві)
-            largest_photo = photos[-1]
-            file_id = largest_photo["file_id"]
+            photo_attempted = True
+            try:
+                # Беремо найбільший розмір (останній в масиві)
+                largest_photo = photos[-1]
+                file_id = largest_photo["file_id"]
+                
+                file_info = await download_telegram_file(
+                    bot_token=bot_token,
+                    file_id=file_id,
+                    file_type="image",
+                    mime_type="image/jpeg",
+                    filename="photo.jpg",
+                )
+                
+                if file_info:
+                    # Зберегти файл
+                    attachment = save_media_file(
+                        db=db,
+                        message_id=UUID(str(temp_message.id)),
+                        file_data=file_info["file_data"],
+                        mime_type=file_info["mime_type"],
+                        original_name=file_info["filename"],
+                        file_type=file_info["file_type"],
+                    )
+                    
+                    attachments.append({
+                        "id": str(attachment.id),
+                        "type": "image",
+                        "filename": attachment.original_name,
+                        "mime_type": attachment.mime_type,
+                        "size": attachment.file_size,
+                        "url": f"/api/v1/communications/media/{attachment.file_path}",
+                    })
+                    
+                    logger.info(f"✅ Successfully saved photo: {attachment.original_name}")
+                    
+                    # Якщо є caption — використовуємо як текст
+                    if "caption" in message_data:
+                        content = message_data["caption"]
+                    elif not content:
+                        content = ""
+                else:
+                    logger.warning(f"⚠️ Failed to download photo for message {temp_message.id}")
+                    if not content:
+                        content = "[Фото не вдалося завантажити]"
+            except Exception as e:
+                logger.error(f"❌ Error downloading photo for message {temp_message.id}: {e}", exc_info=True)
+                if not content:
+                    content = "[Фото не вдалося завантажити]"
+    
+    # Обробка документів
+    document_attempted = False
+    if "document" in message_data and bot_token:
+        document_attempted = True
+        try:
+            doc = message_data["document"]
+            file_id = doc["file_id"]
+            mime_type = doc.get("mime_type", "application/octet-stream")
+            filename = doc.get("file_name", "document")
+            
+            file_info = await download_telegram_file(
+                bot_token=bot_token,
+                file_id=file_id,
+                file_type="document",
+                mime_type=mime_type,
+                filename=filename,
+            )
+            
+            if file_info:
+                attachment = save_media_file(
+                    db=db,
+                    message_id=UUID(str(temp_message.id)),
+                    file_data=file_info["file_data"],
+                    mime_type=file_info["mime_type"],
+                    original_name=file_info["filename"],
+                    file_type=file_info["file_type"],
+                )
+                
+                attachments.append({
+                    "id": str(attachment.id),
+                    "type": "document",
+                    "filename": attachment.original_name,
+                    "mime_type": attachment.mime_type,
+                    "size": attachment.file_size,
+                    "url": f"/api/v1/communications/media/{attachment.file_path}",
+                })
+                
+                logger.info(f"✅ Successfully saved document: {attachment.original_name}")
+                
+                if "caption" in message_data:
+                    content = message_data["caption"]
+                elif not content:
+                    content = ""
+            else:
+                logger.warning(f"⚠️ Failed to download document for message {temp_message.id}")
+                if not content:
+                    content = "[Документ не вдалося завантажити]"
+        except Exception as e:
+            logger.error(f"❌ Error downloading document for message {temp_message.id}: {e}", exc_info=True)
+            if not content:
+                content = "[Документ не вдалося завантажити]"
+    
+    # Обробка відео
+    video_attempted = False
+    if "video" in message_data and bot_token:
+        video_attempted = True
+        try:
+            video = message_data["video"]
+            file_id = video["file_id"]
+            mime_type = video.get("mime_type", "video/mp4")
+            filename = video.get("file_name", "video.mp4")
+            
+            file_info = await download_telegram_file(
+                bot_token=bot_token,
+                file_id=file_id,
+                file_type="video",
+                mime_type=mime_type,
+                filename=filename,
+            )
+            
+            if file_info:
+                attachment = save_media_file(
+                    db=db,
+                    message_id=UUID(str(temp_message.id)),
+                    file_data=file_info["file_data"],
+                    mime_type=file_info["mime_type"],
+                    original_name=file_info["filename"],
+                    file_type=file_info["file_type"],
+                )
+                
+                attachments.append({
+                    "id": str(attachment.id),
+                    "type": "video",
+                    "filename": attachment.original_name,
+                    "mime_type": attachment.mime_type,
+                    "size": attachment.file_size,
+                    "url": f"/api/v1/communications/media/{attachment.file_path}",
+                })
+                
+                logger.info(f"✅ Successfully saved video: {attachment.original_name}")
+                
+                if "caption" in message_data:
+                    content = message_data["caption"]
+                elif not content:
+                    content = ""
+            else:
+                logger.warning(f"⚠️ Failed to download video for message {temp_message.id}")
+                if not content:
+                    content = "[Відео не вдалося завантажити]"
+        except Exception as e:
+            logger.error(f"❌ Error downloading video for message {temp_message.id}: {e}", exc_info=True)
+            if not content:
+                content = "[Відео не вдалося завантажити]"
+    
+    # Обробка голосових повідомлень
+    voice_attempted = False
+    if "voice" in message_data and bot_token:
+        voice_attempted = True
+        try:
+            voice = message_data["voice"]
+            file_id = voice["file_id"]
+            mime_type = voice.get("mime_type", "audio/ogg")
+            
+            file_info = await download_telegram_file(
+                bot_token=bot_token,
+                file_id=file_id,
+                file_type="audio",
+                mime_type=mime_type,
+                filename="voice.ogg",
+            )
+            
+            if file_info:
+                attachment = save_media_file(
+                    db=db,
+                    message_id=UUID(str(temp_message.id)),
+                    file_data=file_info["file_data"],
+                    mime_type=file_info["mime_type"],
+                    original_name=file_info["filename"],
+                    file_type=file_info["file_type"],
+                )
+                
+                attachments.append({
+                    "id": str(attachment.id),
+                    "type": "audio",
+                    "filename": attachment.original_name,
+                    "mime_type": attachment.mime_type,
+                    "size": attachment.file_size,
+                    "url": f"/api/v1/communications/media/{attachment.file_path}",
+                })
+                
+                logger.info(f"✅ Successfully saved voice: {attachment.original_name}")
+                
+                if not content:
+                    content = ""
+            else:
+                logger.warning(f"⚠️ Failed to download voice for message {temp_message.id}")
+                if not content:
+                    content = "[Голосове повідомлення не вдалося завантажити]"
+        except Exception as e:
+            logger.error(f"❌ Error downloading voice for message {temp_message.id}: {e}", exc_info=True)
+            if not content:
+                content = "[Голосове повідомлення не вдалося завантажити]"
+    
+    # Обробка стікерів
+    sticker_attempted = False
+    if "sticker" in message_data and bot_token:
+        sticker_attempted = True
+        try:
+            sticker = message_data["sticker"]
+            file_id = sticker["file_id"]
+            
+            # Стікери зазвичай webp
+            mime_type = "image/webp"
+            if sticker.get("is_animated"):
+                mime_type = "application/x-tgsticker"
             
             file_info = await download_telegram_file(
                 bot_token=bot_token,
                 file_id=file_id,
                 file_type="image",
-                mime_type="image/jpeg",
-                filename="photo.jpg",
+                mime_type=mime_type,
+                filename="sticker.webp",
             )
             
             if file_info:
-                # Зберегти файл
                 attachment = save_media_file(
                     db=db,
                     message_id=UUID(str(temp_message.id)),
@@ -216,159 +428,18 @@ async def handle_telegram_webhook(
                     "url": f"/api/v1/communications/media/{attachment.file_path}",
                 })
                 
-                # Якщо є caption — використовуємо як текст
-                if "caption" in message_data:
-                    content = message_data["caption"]
-                elif not content:
+                logger.info(f"✅ Successfully saved sticker: {attachment.original_name}")
+                
+                if not content:
                     content = ""
-    
-    # Обробка документів
-    if "document" in message_data and bot_token:
-        doc = message_data["document"]
-        file_id = doc["file_id"]
-        mime_type = doc.get("mime_type", "application/octet-stream")
-        filename = doc.get("file_name", "document")
-        
-        file_info = await download_telegram_file(
-            bot_token=bot_token,
-            file_id=file_id,
-            file_type="document",
-            mime_type=mime_type,
-            filename=filename,
-        )
-        
-        if file_info:
-            attachment = save_media_file(
-                db=db,
-                message_id=UUID(str(temp_message.id)),
-                file_data=file_info["file_data"],
-                mime_type=file_info["mime_type"],
-                original_name=file_info["filename"],
-                file_type=file_info["file_type"],
-            )
-            
-            attachments.append({
-                "id": str(attachment.id),
-                "type": "document",
-                "filename": attachment.original_name,
-                "mime_type": attachment.mime_type,
-                "size": attachment.file_size,
-                "url": f"/api/v1/communications/media/{attachment.file_path}",
-            })
-            
-            if "caption" in message_data:
-                content = message_data["caption"]
-            elif not content:
-                content = ""
-    
-    # Обробка відео
-    if "video" in message_data and bot_token:
-        video = message_data["video"]
-        file_id = video["file_id"]
-        mime_type = video.get("mime_type", "video/mp4")
-        filename = video.get("file_name", "video.mp4")
-        
-        file_info = await download_telegram_file(
-            bot_token=bot_token,
-            file_id=file_id,
-            file_type="video",
-            mime_type=mime_type,
-            filename=filename,
-        )
-        
-        if file_info:
-            attachment = save_media_file(
-                db=db,
-                message_id=UUID(str(temp_message.id)),
-                file_data=file_info["file_data"],
-                mime_type=file_info["mime_type"],
-                original_name=file_info["filename"],
-                file_type=file_info["file_type"],
-            )
-            
-            attachments.append({
-                "id": str(attachment.id),
-                "type": "video",
-                "filename": attachment.original_name,
-                "mime_type": attachment.mime_type,
-                "size": attachment.file_size,
-                "url": f"/api/v1/communications/media/{attachment.file_path}",
-            })
-            
-            if "caption" in message_data:
-                content = message_data["caption"]
-            elif not content:
-                content = ""
-    
-    # Обробка голосових повідомлень
-    if "voice" in message_data and bot_token:
-        voice = message_data["voice"]
-        file_id = voice["file_id"]
-        mime_type = voice.get("mime_type", "audio/ogg")
-        
-        file_info = await download_telegram_file(
-            bot_token=bot_token,
-            file_id=file_id,
-            file_type="audio",
-            mime_type=mime_type,
-            filename="voice.ogg",
-        )
-        
-        if file_info:
-            attachment = save_media_file(
-                db=db,
-                message_id=UUID(str(temp_message.id)),
-                file_data=file_info["file_data"],
-                mime_type=file_info["mime_type"],
-                original_name=file_info["filename"],
-                file_type=file_info["file_type"],
-            )
-            
-            attachments.append({
-                "id": str(attachment.id),
-                "type": "audio",
-                "filename": attachment.original_name,
-                "mime_type": attachment.mime_type,
-                "size": attachment.file_size,
-                "url": f"/api/v1/communications/media/{attachment.file_path}",
-            })
-    
-    # Обробка стікерів
-    if "sticker" in message_data and bot_token:
-        sticker = message_data["sticker"]
-        file_id = sticker["file_id"]
-        
-        # Стікери зазвичай webp
-        mime_type = "image/webp"
-        if sticker.get("is_animated"):
-            mime_type = "application/x-tgsticker"
-        
-        file_info = await download_telegram_file(
-            bot_token=bot_token,
-            file_id=file_id,
-            file_type="image",
-            mime_type=mime_type,
-            filename="sticker.webp",
-        )
-        
-        if file_info:
-            attachment = save_media_file(
-                db=db,
-                message_id=UUID(str(temp_message.id)),
-                file_data=file_info["file_data"],
-                mime_type=file_info["mime_type"],
-                original_name=file_info["filename"],
-                file_type=file_info["file_type"],
-            )
-            
-            attachments.append({
-                "id": str(attachment.id),
-                "type": "image",
-                "filename": attachment.original_name,
-                "mime_type": attachment.mime_type,
-                "size": attachment.file_size,
-                "url": f"/api/v1/communications/media/{attachment.file_path}",
-            })
+            else:
+                logger.warning(f"⚠️ Failed to download sticker for message {temp_message.id}")
+                if not content:
+                    content = "[Стікер не вдалося завантажити]"
+        except Exception as e:
+            logger.error(f"❌ Error downloading sticker for message {temp_message.id}: {e}", exc_info=True)
+            if not content:
+                content = "[Стікер не вдалося завантажити]"
     
     # Оновити повідомлення з інформацією про вкладення
     if attachments:
@@ -390,8 +461,9 @@ async def handle_telegram_webhook(
         })
         db.commit()
         db.refresh(temp_message)
-    elif not content:
-        # Якщо немає тексту і немає attachments — ставимо placeholder
+    elif not content and not attachments and not photo_attempted and not document_attempted and not video_attempted and not voice_attempted and not sticker_attempted:
+        # Якщо немає тексту, немає attachments, і не було спроб завантажити медіа — ставимо placeholder
+        # Але тільки якщо дійсно немає нічого
         content = "[Пусте повідомлення]"
         from sqlalchemy import text
         db.execute(text("""

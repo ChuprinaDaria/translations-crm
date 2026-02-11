@@ -424,31 +424,78 @@ async def run_listener_for_account(account: dict):
                         )
                         
                         # Check for media and download
+                        media_attempted = False
                         if event.message.media:
-                            attachment = await download_media(client, event.message, db, msg_id)
-                            if attachment:
-                                attachments.append(attachment)
-                                msg_type = attachment["type"]
+                            media_attempted = True
+                            try:
+                                attachment = await download_media(client, event.message, db, msg_id)
+                                if attachment:
+                                    attachments.append(attachment)
+                                    msg_type = attachment["type"]
+                                    if not content:
+                                        content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
+                                    
+                                    # Update message with attachment info
+                                    import json
+                                    db.execute(text("""
+                                        UPDATE communications_messages 
+                                        SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
+                                        WHERE id = :msg_id
+                                    """), {
+                                        "content": content,
+                                        "msg_type": msg_type,
+                                        "attachments": json.dumps(attachments),
+                                        "meta_data": json.dumps(meta_data),
+                                        "msg_id": msg_id
+                                    })
+                                    db.commit()
+                                    logger.info(f"✅ Successfully saved message with attachment: {attachment['filename']}")
+                                else:
+                                    logger.warning(f"⚠️ Failed to download media for message {msg_id}, but media was present")
+                                    # If media download failed, set content to indicate file was attempted
+                                    if not content:
+                                        content = "[Файл не вдалося завантажити]"
+                                    import json
+                                    db.execute(text("""
+                                        UPDATE communications_messages 
+                                        SET content = :content, meta_data = CAST(:meta_data AS jsonb)
+                                        WHERE id = :msg_id
+                                    """), {
+                                        "content": content,
+                                        "meta_data": json.dumps(meta_data),
+                                        "msg_id": msg_id
+                                    })
+                                    db.commit()
+                            except Exception as e:
+                                logger.error(f"❌ Error downloading media for message {msg_id}: {e}", exc_info=True)
+                                # If media download failed, set content to indicate file was attempted
                                 if not content:
-                                    content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
-                                
-                                # Update message with attachment info
+                                    content = "[Файл не вдалося завантажити]"
                                 import json
                                 db.execute(text("""
                                     UPDATE communications_messages 
-                                    SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
+                                    SET content = :content, meta_data = CAST(:meta_data AS jsonb)
                                     WHERE id = :msg_id
                                 """), {
                                     "content": content,
-                                    "msg_type": msg_type,
-                                    "attachments": json.dumps(attachments),
                                     "meta_data": json.dumps(meta_data),
                                     "msg_id": msg_id
                                 })
                                 db.commit()
                         
-                        if not content and not attachments:
+                        # Only set "[Пусте повідомлення]" if there's no content, no attachments, and no media was attempted
+                        if not content and not attachments and not media_attempted:
                             content = "[Пусте повідомлення]"
+                            import json
+                            db.execute(text("""
+                                UPDATE communications_messages 
+                                SET content = :content
+                                WHERE id = :msg_id
+                            """), {
+                                "content": content,
+                                "msg_id": msg_id
+                            })
+                            db.commit()
                         
                         logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
                         

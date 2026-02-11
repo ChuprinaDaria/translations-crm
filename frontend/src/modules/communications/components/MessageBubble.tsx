@@ -72,17 +72,21 @@ interface MessageBubbleProps {
  */
 // Check if content is a placeholder for media (e.g., "[Image: photo.jpg]")
 function isMediaPlaceholder(content: string, attachments?: Message['attachments']): boolean {
-  if (!content || !attachments || attachments.length === 0) return false;
+  if (!content) return false;
   
-  // Check for common media placeholder patterns
-  const placeholderPatterns = [
-    /^\[Image:\s*.+\]$/i,
-    /^\[Video:\s*.+\]$/i,
-    /^\[Audio:\s*.+\]$/i,
-    /^\[Document:\s*.+\]$/i,
-    /^\[File:\s*.+\]$/i,
-    /^\[Sticker\]$/i,
-    /^\[Voice\]$/i,
+  // If there are attachments, hide placeholder text
+  if (attachments && attachments.length > 0) {
+    // Check for common media placeholder patterns
+    const placeholderPatterns = [
+      /^\[Image:\s*.+\]$/i,
+      /^\[Video:\s*.+\]$/i,
+      /^\[Audio:\s*.+\]$/i,
+      /^\[Document:\s*.+\]$/i,
+      /^\[File:\s*.+\]$/i,
+      /^\[Sticker\]$/i,
+      /^\[Пусте повідомлення\]$/i,
+      /^\[Empty message\]$/i,
+      /^\[Voice\]$/i,
     /^\[Фото\]$/i,
     /^\[Відео\]$/i,
     /^\[Документ\]$/i,

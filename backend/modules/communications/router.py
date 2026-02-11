@@ -1141,12 +1141,25 @@ async def create_payment_link(
     import os
     from uuid import uuid4
     
+    logger.info(f"Creating payment link for order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
+    
     amount = request.amount
     currency = request.currency or "PLN"
     
+    # Try to find order - log all attempts
+    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
+    
     if not order:
+        # Try to find by string comparison
+        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
+        order_str = str(order_id)
+        all_orders = db.query(Order).limit(5).all()
+        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
+        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
     
     # If amount not provided, calculate from order or use default
     if not amount:
@@ -1276,9 +1289,22 @@ async def get_tracking(
     """Get InPost tracking number for order."""
     from modules.crm.models import Order
     
+    logger.info(f"Getting tracking for order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
+    
+    # Try to find order - log all attempts
+    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
+    
     if not order:
+        # Try to find by string comparison
+        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
+        order_str = str(order_id)
+        all_orders = db.query(Order).limit(5).all()
+        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
+        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
     
     try:
         import httpx
@@ -1437,13 +1463,26 @@ async def add_address_to_order(
     from datetime import date
     from decimal import Decimal
     
+    logger.info(f"Adding address to order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
+    
     address = request.address
     is_paczkomat = request.is_paczkomat
     paczkomat_code = request.paczkomat_code
     
+    # Try to find order - log all attempts
+    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
+    
     if not order:
+        # Try to find by string comparison
+        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
+        order_str = str(order_id)
+        all_orders = db.query(Order).limit(5).all()
+        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
+        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
     
     # Add address/paczkomat to description
     if is_paczkomat and paczkomat_code:

@@ -207,6 +207,45 @@ export function CreateClientDialog({
     }
   }, [phone, open, conversation]);
 
+  // Helper function to validate UUID
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // Helper function to extract error message from API error
+  const getErrorMessage = (error: any): string => {
+    // Check if it's an ApiError with structured detail
+    if (error?.data?.detail) {
+      const detail = error.data.detail;
+      
+      // If detail is an object with a message
+      if (typeof detail === 'object' && detail.message) {
+        return detail.message;
+      }
+      
+      // If detail is an object with type (duplicate_client)
+      if (typeof detail === 'object' && detail.type === 'duplicate_client') {
+        return detail.message || 'Клієнт вже існує';
+      }
+      
+      // If detail is a string
+      if (typeof detail === 'string') {
+        return detail;
+      }
+      
+      // If detail is an array (validation errors)
+      if (Array.isArray(detail)) {
+        return detail.map((err: any) => 
+          err.msg || err.message || JSON.stringify(err)
+        ).join(', ');
+      }
+    }
+    
+    // Fallback to error message
+    return error?.message || 'Помилка створення клієнта';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -225,23 +264,36 @@ export function CreateClientDialog({
       // Визначаємо джерело з платформи conversation
       const source = conversation?.platform || 'manual';
       
-      const client = await clientsApi.createClient({
+      // Prepare client data
+      const clientData: any = {
         name: name.trim(),
         email: email.trim() || undefined,
         phone: phone.trim(),
         source: source, // Telegram, WhatsApp, Email, etc.
-        // Pass conversation info for duplicate checking by external_id
-        conversation_id: conversation?.id,
         external_id: conversation?.external_id,
         platform: conversation?.platform,
-      });
+      };
+      
+      // Only include conversation_id if it's a valid UUID
+      if (conversation?.id) {
+        const convId = conversation.id.toString();
+        if (isValidUUID(convId)) {
+          clientData.conversation_id = convId;
+        } else {
+          console.warn('[CreateClientDialog] Invalid UUID for conversation_id:', convId);
+          // Don't send invalid UUID, but still try to create client
+        }
+      }
+      
+      const client = await clientsApi.createClient(clientData);
 
       toast.success(`Клієнт створено успішно (джерело: ${getSourceLabel()})`);
       onSuccess?.(client.id.toString());
       handleClose();
     } catch (error: any) {
       console.error('Error creating client:', error);
-      toast.error(error?.message || 'Помилка створення клієнта');
+      const errorMessage = getErrorMessage(error);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
