@@ -131,6 +131,17 @@ jobs:
               exit 1
             }
             
+            # Fix git permissions if needed (before any git operations)
+            if [ -d ".git" ]; then
+              echo "Ensuring git permissions are correct..."
+              sudo chown -R $USER:$USER .git 2>/dev/null || {
+                echo "Warning: Cannot fix .git ownership, but continuing..."
+              }
+              chmod -R u+w .git/objects .git/refs 2>/dev/null || {
+                echo "Warning: Cannot fix .git subdirectories permissions, but continuing..."
+              }
+            fi
+            
             # Якщо .env вже існує, зберігаємо його та оновлюємо тільки потрібні значення
             if [ -f .env ]; then
               echo "Existing .env file found, updating with GitHub Secrets..."
@@ -211,6 +222,23 @@ jobs:
               echo "Error: Cannot access directory $DEPLOY_DIR"
               exit 1
             }
+            
+            # Fix git permissions if needed
+            if [ -d ".git" ]; then
+              echo "Fixing git permissions..."
+              # Fix ownership of .git directory
+              sudo chown -R $USER:$USER .git 2>/dev/null || {
+                echo "Warning: Cannot fix .git ownership, trying to continue..."
+              }
+              # Fix permissions for .git/objects
+              chmod -R u+w .git/objects 2>/dev/null || {
+                echo "Warning: Cannot fix .git/objects permissions, trying to continue..."
+              }
+              # Fix permissions for .git/refs
+              chmod -R u+w .git/refs 2>/dev/null || {
+                echo "Warning: Cannot fix .git/refs permissions, trying to continue..."
+              }
+            fi
             
             # Pull latest code
             if [ -d ".git" ]; then
