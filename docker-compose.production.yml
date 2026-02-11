@@ -9,7 +9,12 @@ services:
     ports:
       - "5435:5432"  # Використовуємо 5435 замість 5434, щоб уникнути конфліктів
     volumes:
-      - crm_translations_postgres_data:/var/lib/postgresql/data
+      # Використовуємо bind mount для прямого доступу до даних PostgreSQL
+      # Переконайтеся, що директорія існує та має правильні права доступу:
+      # sudo mkdir -p /var/lib/docker/volumes/translations-crm_crm_translations_postgres_data/_data
+      # sudo chown -R 999:999 /var/lib/docker/volumes/translations-crm_crm_translations_postgres_data/_data
+      # (999 - це UID/GID postgres user в контейнері)
+      - /var/lib/docker/volumes/translations-crm_crm_translations_postgres_data/_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -189,7 +194,7 @@ services:
       - crm_translations_network
 
 volumes:
-  crm_translations_postgres_data:
+  # crm_translations_postgres_data:  # Використовуємо bind mount замість named volume
   crm_translations_redis_data:
 
 networks:
