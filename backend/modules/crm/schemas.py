@@ -8,9 +8,6 @@ from modules.crm.models import (
     TranslatorStatus, TranslationRequestStatus, PaymentMethod, TranslationType
 )
 
-if TYPE_CHECKING:
-    from modules.payment.schemas import PaymentTransactionRead
-
 
 class ClientCreate(BaseModel):
     full_name: str = Field(..., min_length=1)
@@ -526,6 +523,9 @@ class TranslatorLanguageRate(TranslatorLanguageRateBase):
     class Config:
         from_attributes = True
 
+
+# Import PaymentTransactionRead after all models are defined to avoid circular imports
+from modules.payment.schemas import PaymentTransactionRead
 
 # Rebuild models to resolve forward references
 ClientRead.model_rebuild()
