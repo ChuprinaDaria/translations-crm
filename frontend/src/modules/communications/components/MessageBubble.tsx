@@ -87,12 +87,20 @@ function isMediaPlaceholder(content: string, attachments?: Message['attachments'
       /^\[Пусте повідомлення\]$/i,
       /^\[Empty message\]$/i,
       /^\[Voice\]$/i,
-    /^\[Фото\]$/i,
-    /^\[Відео\]$/i,
-    /^\[Документ\]$/i,
-    /^\[Голосове повідомлення\]$/i,
-  ];
+      /^\[Фото\]$/i,
+      /^\[Відео\]$/i,
+      /^\[Документ\]$/i,
+      /^\[Голосове повідомлення\]$/i,
+    ];
+    
+    return placeholderPatterns.some(pattern => pattern.test(content.trim()));
+  }
   
+  // If no attachments, check if content is just a placeholder
+  const placeholderPatterns = [
+    /^\[Пусте повідомлення\]$/i,
+    /^\[Empty message\]$/i,
+  ];
   return placeholderPatterns.some(pattern => pattern.test(content.trim()));
 }
 

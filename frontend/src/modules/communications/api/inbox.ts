@@ -331,20 +331,6 @@ export const inboxApi = {
   },
 
   /**
-   * Add address or paczkomat to order
-   */
-  async addAddressToOrder(orderId: string, address: string, isPaczkomat: boolean, paczkomatCode?: string): Promise<{ order_id: string; message: string }> {
-    return apiFetch(`/communications/orders/${orderId}/add-address`, {
-      method: 'POST',
-      body: JSON.stringify({ 
-        address, 
-        is_paczkomat: isPaczkomat, 
-        paczkomat_code: paczkomatCode 
-      }),
-    });
-  },
-
-  /**
    * Delete message
    */
   async deleteMessage(messageId: string): Promise<{ status: string; message_id: string }> {
