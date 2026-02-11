@@ -1173,6 +1173,14 @@ async def create_payment_link(
     # Визначити активну систему оплати
     active_provider = payment_settings.active_payment_provider
     
+    # Конвертувати рядок в enum, якщо потрібно
+    if active_provider and isinstance(active_provider, str):
+        try:
+            active_provider = PaymentProvider(active_provider)
+        except ValueError:
+            logger.warning(f"Invalid payment provider value: {active_provider}, will try to auto-detect")
+            active_provider = None
+    
     # Якщо не встановлено, вибрати автоматично на основі enabled статусів
     if not active_provider:
         if payment_settings.stripe_enabled and payment_settings.stripe_secret_key:
@@ -1266,12 +1274,15 @@ async def create_payment_link(
         else:
             raise HTTPException(status_code=500, detail=f"Unsupported payment provider: {active_provider}")
 
+        # Convert provider to string (handle both enum and string cases)
+        provider_str = active_provider.value if isinstance(active_provider, PaymentProvider) else str(active_provider)
+        
         return {
             "payment_link": payment_url,
             "order_id": str(order.id),
             "amount": amount,
             "currency": currency,
-            "provider": active_provider.value,
+            "provider": provider_str,
         }
     except ImportError as e:
         raise HTTPException(status_code=500, detail=f"Payment library not installed: {str(e)}")
