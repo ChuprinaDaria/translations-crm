@@ -93,11 +93,24 @@ class InPostService:
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers for API requests."""
         api_key = self.get_api_key()
-        if not api_key:
-            raise ValueError("InPost API key is not configured")
         
-        # InPost ShipX API: try Bearer format first
-        # If numeric ID, InPost might accept it as-is or need different format
+        # Detailed validation and logging
+        logger.info(f"InPost _get_headers: api_key = '{api_key}' (type: {type(api_key).__name__}, len: {len(api_key) if api_key else 0})")
+        print(f"[InPost] _get_headers: api_key = '{api_key}' (type: {type(api_key).__name__}, len: {len(api_key) if api_key else 0})")
+        
+        if not api_key:
+            error_msg = "InPost API key is not configured or is empty"
+            logger.error(error_msg)
+            print(f"[InPost] ERROR: {error_msg}")
+            raise ValueError(error_msg)
+        
+        if api_key.strip() == "":
+            error_msg = "InPost API key is empty after stripping whitespace"
+            logger.error(error_msg)
+            print(f"[InPost] ERROR: {error_msg}")
+            raise ValueError(error_msg)
+        
+        # InPost ShipX API uses Bearer token format: Authorization: Bearer TOKEN
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -105,14 +118,10 @@ class InPostService:
         
         # Log everything for debugging
         logger.info(f"InPost API request headers:")
-        logger.info(f"  API Key (raw): {api_key}")
-        logger.info(f"  API Key type: {type(api_key).__name__}")
-        logger.info(f"  API Key length: {len(api_key)}")
         logger.info(f"  Authorization: Bearer {api_key}")
         logger.info(f"  Content-Type: application/json")
-        print(f"[InPost] API Key: {api_key}")
-        print(f"[InPost] API Key type: {type(api_key).__name__}")
         print(f"[InPost] Authorization header: Bearer {api_key}")
+        print(f"[InPost] Full headers: {headers}")
         
         return headers
     
