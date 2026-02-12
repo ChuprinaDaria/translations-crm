@@ -268,8 +268,21 @@ jobs:
               fi
             done
             
+            # Видаляємо контейнери за точними іменами з docker-compose (на випадок якщо фільтр не спрацював)
+            echo "Removing containers by exact names..."
+            for container_name in crm_translations_backend crm_translations_email_listener crm_translations_telegram_listener crm_translations_celery_worker crm_translations_celery_beat crm_translations_nginx; do
+              if docker ps -a --format "{{.Names}}" | grep -q "^${container_name}$"; then
+                echo "Removing container: $container_name"
+                docker rm -f "$container_name" || true
+              fi
+            done
+            
+            # Видаляємо всі зупинені контейнери, які можуть конфліктувати
+            echo "Cleaning up stopped containers..."
+            docker container prune -f || true
+            
             # Невелика затримка для звільнення портів
-            sleep 2
+            sleep 3
             
             # Очищаємо BuildKit кеш для уникнення помилок snapshot (не торкаємося volumes та контейнерів)
             echo "Cleaning Docker BuildKit cache to prevent snapshot errors..."
