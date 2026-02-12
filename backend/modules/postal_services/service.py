@@ -47,6 +47,23 @@ class InPostService:
             self.db.add(settings)
             self.db.commit()
             self.db.refresh(settings)
+        
+        # Log settings for debugging
+        logger.info(f"InPost settings from DB:")
+        logger.info(f"  id: {settings.id}")
+        logger.info(f"  api_key: '{settings.api_key}' (type: {type(settings.api_key).__name__}, is None: {settings.api_key is None})")
+        logger.info(f"  organization_id: '{settings.organization_id}' (type: {type(settings.organization_id).__name__}, is None: {settings.organization_id is None})")
+        logger.info(f"  sandbox_mode: {settings.sandbox_mode}")
+        logger.info(f"  sandbox_api_key: '{settings.sandbox_api_key}' (type: {type(settings.sandbox_api_key).__name__})")
+        logger.info(f"  is_enabled: {settings.is_enabled}")
+        print(f"[InPost] Settings from DB:")
+        print(f"  id={settings.id}")
+        print(f"  api_key='{settings.api_key}' (type: {type(settings.api_key).__name__}, is None: {settings.api_key is None})")
+        print(f"  organization_id='{settings.organization_id}' (type: {type(settings.organization_id).__name__}, is None: {settings.organization_id is None})")
+        print(f"  sandbox_mode={settings.sandbox_mode}")
+        print(f"  sandbox_api_key='{settings.sandbox_api_key}'")
+        print(f"  is_enabled={settings.is_enabled}")
+        
         return settings
     
     def get_api_url(self) -> str:
@@ -63,7 +80,15 @@ class InPostService:
             api_key = self.settings.api_key or ""
         
         # Convert to string if it's a number (numeric IDs are valid)
-        return str(api_key) if api_key else ""
+        api_key_str = str(api_key).strip() if api_key else ""
+        
+        # Log for debugging
+        logger.info(f"InPost get_api_key: sandbox_mode={self.settings.sandbox_mode}, api_key={api_key_str}")
+        print(f"[InPost] get_api_key: sandbox_mode={self.settings.sandbox_mode}")
+        print(f"[InPost] get_api_key: api_key from DB = '{api_key}' (type: {type(api_key).__name__})")
+        print(f"[InPost] get_api_key: api_key_str = '{api_key_str}'")
+        
+        return api_key_str
     
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers for API requests."""
@@ -71,18 +96,22 @@ class InPostService:
         if not api_key:
             raise ValueError("InPost API key is not configured")
         
-        # InPost ShipX API uses Bearer token format
-        # For numeric IDs, still use Bearer format
+        # InPost ShipX API: try Bearer format first
+        # If numeric ID, InPost might accept it as-is or need different format
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         
-        # Log headers (api_key is numeric, safe to log)
+        # Log everything for debugging
         logger.info(f"InPost API request headers:")
+        logger.info(f"  API Key (raw): {api_key}")
+        logger.info(f"  API Key type: {type(api_key).__name__}")
+        logger.info(f"  API Key length: {len(api_key)}")
         logger.info(f"  Authorization: Bearer {api_key}")
         logger.info(f"  Content-Type: application/json")
         print(f"[InPost] API Key: {api_key}")
+        print(f"[InPost] API Key type: {type(api_key).__name__}")
         print(f"[InPost] Authorization header: Bearer {api_key}")
         
         return headers
@@ -303,11 +332,15 @@ class InPostService:
         """Get organization ID from database or use api_key as fallback."""
         if self._organization_id:
             logger.info(f"InPost organization_id (cached): {self._organization_id}")
+            print(f"[InPost] organization_id (cached): {self._organization_id}")
             return self._organization_id
         
         # First, try to get from database settings
         settings = self.settings
         organization_id = settings.organization_id
+        
+        logger.info(f"InPost _get_organization_id: organization_id from DB = '{organization_id}' (type: {type(organization_id).__name__}, is None: {organization_id is None})")
+        print(f"[InPost] organization_id from DB: '{organization_id}' (type: {type(organization_id).__name__}, is None: {organization_id is None})")
         
         # If organization_id is not set, use api_key (they can be the same numeric ID)
         if not organization_id:
@@ -315,6 +348,7 @@ class InPostService:
             if api_key:
                 organization_id = api_key
                 logger.info(f"InPost organization_id not in DB, using api_key: {organization_id}")
+                print(f"[InPost] organization_id not in DB, using api_key: {organization_id}")
             else:
                 raise ValueError("InPost organization ID and API key are not configured")
         
@@ -326,7 +360,8 @@ class InPostService:
         # Cache it
         self._organization_id = organization_id
         
-        logger.info(f"InPost organization_id: {organization_id}")
+        logger.info(f"InPost organization_id (final): {organization_id}")
+        print(f"[InPost] organization_id (final): {organization_id}")
         return organization_id
     
     async def get_shipment(self, shipment_id: UUID) -> Optional[InPostShipment]:
