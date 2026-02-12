@@ -424,7 +424,8 @@ async def run_listener_for_account(account: dict):
                         )
                         
                         # Check for media and download
-                        if event.message.media:
+                        has_media = bool(event.message.media)
+                        if has_media:
                             attachment = await download_media(client, event.message, db, msg_id)
                             if attachment:
                                 attachments.append(attachment)
@@ -446,9 +447,34 @@ async def run_listener_for_account(account: dict):
                                     "msg_id": msg_id
                                 })
                                 db.commit()
+                            elif not content:
+                                # Media exists but download failed - set placeholder
+                                content = "[Медіа повідомлення]"
+                                import json
+                                db.execute(text("""
+                                    UPDATE communications_messages 
+                                    SET content = :content
+                                    WHERE id = :msg_id
+                                """), {
+                                    "content": content,
+                                    "msg_id": msg_id
+                                })
+                                db.commit()
                         
-                        if not content and not attachments:
+                        # Only set "[Пусте повідомлення]" if there's no media and no content
+                        if not content and not has_media and not attachments:
                             content = "[Пусте повідомлення]"
+                            if content != temp_content:
+                                import json
+                                db.execute(text("""
+                                    UPDATE communications_messages 
+                                    SET content = :content
+                                    WHERE id = :msg_id
+                                """), {
+                                    "content": content,
+                                    "msg_id": msg_id
+                                })
+                                db.commit()
                         
                         logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
                         
