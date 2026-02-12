@@ -259,27 +259,33 @@ jobs:
             echo "Stopping existing crm_translations containers..."
             $DOCKER_COMPOSE_CMD -f docker-compose.production.yml down --remove-orphans || true
             
-            # Додатково перевіряємо та видаляємо тільки контейнери translations-crm які можуть займати порти
-            echo "Checking for crm_translations containers..."
-            docker ps -a --filter "name=crm_translations" --format "{{.Names}}" | while read container; do
-              if [ -n "$container" ]; then
-                echo "Removing container: $container"
-                docker rm -f "$container" || true
-              fi
-            done
-            
-            # Видаляємо контейнери за точними іменами з docker-compose (на випадок якщо фільтр не спрацював)
+            # Видаляємо контейнери за точними іменами з docker-compose (найнадійніший спосіб)
             echo "Removing containers by exact names..."
             for container_name in crm_translations_backend crm_translations_email_listener crm_translations_telegram_listener crm_translations_celery_worker crm_translations_celery_beat crm_translations_nginx; do
-              if docker ps -a --format "{{.Names}}" | grep -q "^${container_name}$"; then
-                echo "Removing container: $container_name"
-                docker rm -f "$container_name" || true
+              echo "Checking and removing container: $container_name"
+              docker rm -f "$container_name" 2>/dev/null || echo "Container $container_name not found or already removed"
+            done
+            
+            # Додатково перевіряємо та видаляємо тільки контейнери translations-crm які можуть займати порти
+            echo "Checking for any remaining crm_translations containers..."
+            docker ps -a --filter "name=crm_translations" --format "{{.Names}}" | while read container; do
+              if [ -n "$container" ]; then
+                echo "Force removing container: $container"
+                docker rm -f "$container" || true
               fi
             done
             
             # Видаляємо всі зупинені контейнери, які можуть конфліктувати
             echo "Cleaning up stopped containers..."
             docker container prune -f || true
+            
+            # Перевіряємо, що контейнери дійсно видалені
+            echo "Verifying containers are removed..."
+            REMAINING=$(docker ps -a --filter "name=crm_translations" --format "{{.Names}}" | wc -l)
+            if [ "$REMAINING" -gt 0 ]; then
+              echo "Warning: $REMAINING containers still exist, force removing..."
+              docker ps -a --filter "name=crm_translations" --format "{{.ID}}" | xargs -r docker rm -f || true
+            fi
             
             # Невелика затримка для звільнення портів
             sleep 3
@@ -290,7 +296,7 @@ jobs:
             
             # Build and start new containers (volumes зберігаються автоматично)
             echo "Building and starting new containers..."
-            if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans; then
+            if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --build --remove-orphans --force-recreate; then
               echo "❌ Docker compose up failed! Trying with --no-cache..."
               echo "Cleaning build cache again and retrying..."
               docker builder prune -af || true
@@ -301,7 +307,7 @@ jobs:
                 exit 1
               fi
               # Якщо build успішний, запускаємо контейнери
-              if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --remove-orphans; then
+              if ! $DOCKER_COMPOSE_CMD -f docker-compose.production.yml up -d --remove-orphans --force-recreate; then
                 echo "❌ Docker compose up failed after rebuild!"
                 $DOCKER_COMPOSE_CMD -f docker-compose.production.yml logs --tail 50 || true
                 exit 1
