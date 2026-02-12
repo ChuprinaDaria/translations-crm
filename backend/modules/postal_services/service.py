@@ -73,20 +73,35 @@ class InPostService:
         return self.settings.api_url
     
     def get_api_key(self) -> str:
-        """Get API key based on sandbox mode."""
+        """
+        Get API token (JWT) for Authorization header.
+        
+        Priority:
+        1. webhook_secret (JWT token) - primary token for API calls
+        2. api_key (numeric ID) - fallback for backward compatibility
+        """
+        # First, try to use webhook_secret as API token (JWT)
+        # This is the actual token for InPost API calls
+        if self.settings.webhook_secret:
+            token = str(self.settings.webhook_secret).strip()
+            logger.info(f"InPost get_api_key: Using webhook_secret as API token (JWT)")
+            print(f"[InPost] get_api_key: Using webhook_secret as API token (JWT)")
+            print(f"[InPost] get_api_key: Token length: {len(token)}")
+            return token
+        
+        # Fallback to api_key (for backward compatibility)
+        # Note: api_key is actually organization_id, not a token
         if self.settings.sandbox_mode:
             api_key = self.settings.sandbox_api_key or ""
         else:
             api_key = self.settings.api_key or ""
         
-        # Convert to string if it's a number (numeric IDs are valid)
         api_key_str = str(api_key).strip() if api_key else ""
         
-        # Log for debugging
-        logger.info(f"InPost get_api_key: sandbox_mode={self.settings.sandbox_mode}, api_key={api_key_str}")
-        print(f"[InPost] get_api_key: sandbox_mode={self.settings.sandbox_mode}")
-        print(f"[InPost] get_api_key: api_key from DB = '{api_key}' (type: {type(api_key).__name__})")
-        print(f"[InPost] get_api_key: api_key_str = '{api_key_str}'")
+        if api_key_str:
+            logger.warning(f"InPost get_api_key: Using api_key as fallback (this is organization_id, not a token!)")
+            print(f"[InPost] get_api_key: WARNING - Using api_key as fallback (this is organization_id, not a token!)")
+            print(f"[InPost] get_api_key: api_key from DB = '{api_key}' (type: {type(api_key).__name__})")
         
         return api_key_str
     
