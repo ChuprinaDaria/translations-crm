@@ -1461,6 +1461,24 @@ async def notify_new_message(message: Message, conversation: Conversation):
         
         platform_str = str(conversation.platform)
         
+        # Prepare attachments from attachment_objects or fallback to JSONB field
+        attachments_data = None
+        if hasattr(message, 'attachment_objects') and message.attachment_objects:
+            from modules.communications.utils.media import get_attachment_url
+            attachments_data = []
+            for att_obj in message.attachment_objects:
+                attachments_data.append({
+                    "id": str(att_obj.id),
+                    "type": att_obj.file_type,
+                    "filename": att_obj.original_name,
+                    "mime_type": att_obj.mime_type,
+                    "size": att_obj.file_size,
+                    "url": f"/media/{att_obj.file_path}",  # Використовуємо повний шлях: attachments/filename
+                })
+        elif message.attachments:
+            # Fallback на старий формат attachments (JSONB)
+            attachments_data = message.attachments
+        
         await messages_manager.broadcast({
             "type": "new_message",
             "conversation_id": str(conversation.id),
@@ -1474,7 +1492,7 @@ async def notify_new_message(message: Message, conversation: Conversation):
                 "type": str(message.type),
                 "content": message.content,
                 "status": str(message.status),
-                "attachments": message.attachments,
+                "attachments": attachments_data,
                 "created_at": message.created_at.isoformat(),
                 "sent_at": message.sent_at.isoformat() if message.sent_at else None,
             },
