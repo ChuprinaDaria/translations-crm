@@ -3,9 +3,11 @@ from fastapi import FastAPI, Request, status, WebSocket, WebSocketDisconnect, Bo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from db import Base, engine
 from core.config import settings
+from pathlib import Path
 from modules.auth.router import router as auth_router
 from modules.auth.models import User
 from modules.crm.router import router as crm_router
@@ -132,6 +134,10 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(postal_services_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
+
+media_dir = settings.get_media_dir()
+media_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(media_dir)), name="media")
 
 
 @app.get("/")

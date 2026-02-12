@@ -32,24 +32,22 @@ class InPostService:
     def __init__(self, db: Session):
         """Initialize InPost service."""
         self.db = db
-        self._settings: Optional[InPostSettings] = None
+        self._organization_id: Optional[str] = None
     
     @property
     def settings(self) -> InPostSettings:
         """Get InPost settings from database."""
-        if self._settings is None:
-            self._settings = self.db.query(InPostSettings).first()
-            if not self._settings:
-                # Create default settings
-                self._settings = InPostSettings(
-                    api_url="https://api-shipx-pl.easypack24.net/v1",
-                    sandbox_api_url="https://sandbox-api-shipx-pl.easypack24.net/v1",
-                    is_enabled=False,
-                )
-                self.db.add(self._settings)
-                self.db.commit()
-                self.db.refresh(self._settings)
-        return self._settings
+        settings = self.db.query(InPostSettings).first()
+        if not settings:
+            settings = InPostSettings(
+                api_url="https://api-shipx-pl.easypack24.net/v1",
+                sandbox_api_url="https://sandbox-api-shipx-pl.easypack24.net/v1",
+                is_enabled=False,
+            )
+            self.db.add(settings)
+            self.db.commit()
+            self.db.refresh(settings)
+        return settings
     
     def get_api_url(self) -> str:
         """Get API URL based on sandbox mode."""
@@ -268,9 +266,41 @@ class InPostService:
     
     async def _get_organization_id(self) -> str:
         """Get organization ID from InPost API."""
-        # For now, return a placeholder. In production, this should be retrieved from settings
-        # or from the API response during authentication
-        return "1"
+        if self._organization_id:
+            return self._organization_id
+        
+        api_key = self.get_api_key()
+        if not api_key:
+            raise ValueError("InPost API key is not configured")
+        
+        api_url = self.get_api_url()
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{api_url}/organizations",
+                    headers=self._get_headers(),
+                )
+                
+                if response.status_code != 200:
+                    error_data = response.json() if response.text else {}
+                    error_message = error_data.get("message", response.text)
+                    raise ValueError(f"InPost API error: {error_message}")
+                
+                data = response.json()
+                items = data.get("items", [])
+                if not items:
+                    raise ValueError("No organizations found in InPost API response")
+                
+                org_id = str(items[0].get("id", ""))
+                if not org_id:
+                    raise ValueError("Organization ID not found in API response")
+                
+                self._organization_id = org_id
+                return org_id
+        except Exception as e:
+            logger.error(f"Failed to get organization ID from InPost API: {e}")
+            raise ValueError(f"InPost organization ID not configured: {str(e)}")
     
     async def get_shipment(self, shipment_id: UUID) -> Optional[InPostShipment]:
         """Get shipment by ID."""

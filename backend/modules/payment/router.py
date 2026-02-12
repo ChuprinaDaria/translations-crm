@@ -522,83 +522,132 @@ async def stripe_webhook(
         session_id = data.get("id")
         metadata = data.get("metadata", {})
         internal_session_id = metadata.get("session_id")
+        order_id_from_metadata = metadata.get("order_id")
         
-        if internal_session_id:
+        if not internal_session_id:
+            logger.warning(f"Stripe webhook: missing session_id in metadata for session {session_id}")
+            return {"received": True}
+        
+        try:
             transaction = db.query(PaymentTransaction).filter(
                 PaymentTransaction.session_id == internal_session_id
             ).first()
             
-            if transaction:
-                transaction.status = PaymentStatus.COMPLETED
-                transaction.provider_transaction_id = session_id
-                transaction.completed_at = datetime.utcnow()
-                
-                # Get payment method from checkout session
-                payment_method_type = data.get("payment_method_types", ["card"])[0] if data.get("payment_method_types") else "card"
-                transaction.payment_method = service.get_payment_method_type(payment_method_type)
-                
-                # Update order status to "oplacone" (paid)
-                order = db.query(Order).filter(Order.id == transaction.order_id).first()
-                if order:
-                    order.status = "oplacone"
-                    # Update payment_method in order based on actual payment method
-                    payment_method_map = {
-                        "card": "card",
-                        "p24_card": "card",
-                        "p24_transfer": "transfer",
-                        "p24_blik": "card",
-                        "sepa": "transfer",
-                    }
-                    order.payment_method = payment_method_map.get(
-                        transaction.payment_method.value if transaction.payment_method else "card",
-                        "card"
-                    )
-                
-                # Create finance transaction (only on successful payment)
-                await create_finance_transaction_from_payment(transaction, db)
-                
-                db.commit()
+            if not transaction:
+                logger.warning(f"Stripe webhook: transaction not found for session_id {internal_session_id}")
+                return {"received": True}
+            
+            # Verify order_id from metadata matches transaction.order_id (if provided)
+            if order_id_from_metadata:
+                try:
+                    metadata_order_id = UUID(order_id_from_metadata)
+                    if metadata_order_id != transaction.order_id:
+                        logger.warning(
+                            f"Stripe webhook: order_id mismatch - metadata: {metadata_order_id}, "
+                            f"transaction: {transaction.order_id}"
+                        )
+                except (ValueError, TypeError):
+                    logger.warning(f"Stripe webhook: invalid order_id in metadata: {order_id_from_metadata}")
+            
+            # Update transaction
+            transaction.status = PaymentStatus.COMPLETED
+            transaction.provider_transaction_id = session_id
+            transaction.completed_at = datetime.utcnow()
+            
+            # Get payment method from checkout session
+            payment_method_type = data.get("payment_method_types", ["card"])[0] if data.get("payment_method_types") else "card"
+            transaction.payment_method = service.get_payment_method_type(payment_method_type)
+            
+            # Update order status to "oplacone" (paid)
+            # Use order_id from metadata if available, otherwise use transaction.order_id
+            order_id_to_use = UUID(order_id_from_metadata) if order_id_from_metadata else transaction.order_id
+            order = db.query(Order).filter(Order.id == order_id_to_use).first()
+            if not order:
+                logger.error(f"Stripe webhook: order not found for transaction {transaction.id}")
+                db.rollback()
+                return {"received": True}
+            
+            order.status = "oplacone"
+            # Update payment_method in order based on actual payment method
+            payment_method_map = {
+                "card": "card",
+                "p24_card": "card",
+                "p24_transfer": "transfer",
+                "p24_blik": "card",
+                "sepa": "transfer",
+            }
+            payment_method_str = get_enum_value(transaction.payment_method) if transaction.payment_method else "card"
+            order.payment_method = payment_method_map.get(payment_method_str, "card")
+            
+            # Create finance transaction (only on successful payment)
+            await create_finance_transaction_from_payment(transaction, db)
+            
+            db.commit()
+            logger.info(f"Stripe webhook: successfully processed payment for order {transaction.order_id}")
+            
+        except Exception as e:
+            logger.error(f"Stripe webhook: error processing checkout.session.completed: {e}", exc_info=True)
+            db.rollback()
+            # Return 200 OK to Stripe to avoid retries, but log the error
+            return {"received": True}
     
     elif event_type == "payment_intent.succeeded":
         payment_intent_id = data.get("id")
         metadata = data.get("metadata", {})
         internal_session_id = metadata.get("session_id")
         
-        if internal_session_id:
+        if not internal_session_id:
+            logger.warning(f"Stripe webhook: missing session_id in metadata for payment_intent {payment_intent_id}")
+            return {"received": True}
+        
+        try:
             transaction = db.query(PaymentTransaction).filter(
                 PaymentTransaction.session_id == internal_session_id
             ).first()
             
-            if transaction:
-                transaction.status = PaymentStatus.COMPLETED
-                transaction.provider_transaction_id = payment_intent_id
-                transaction.completed_at = datetime.utcnow()
-                
-                # Get payment method type
-                payment_method_type = data.get("payment_method_types", ["card"])[0]
-                transaction.payment_method = service.get_payment_method_type(payment_method_type)
-                
-                # Update order status to "oplacone" (paid)
-                order = db.query(Order).filter(Order.id == transaction.order_id).first()
-                if order:
-                    order.status = "oplacone"
-                    # Update payment_method in order based on actual payment method
-                    payment_method_map = {
-                        "card": "card",
-                        "p24_card": "card",
-                        "p24_transfer": "transfer",
-                        "p24_blik": "card",
-                        "sepa": "transfer",
-                    }
-                    order.payment_method = payment_method_map.get(
-                        transaction.payment_method.value if transaction.payment_method else "card",
-                        "card"
-                    )
-                
-                # Create finance transaction (only on successful payment)
-                await create_finance_transaction_from_payment(transaction, db)
-                
-                db.commit()
+            if not transaction:
+                logger.warning(f"Stripe webhook: transaction not found for session_id {internal_session_id}")
+                return {"received": True}
+            
+            # Update transaction
+            transaction.status = PaymentStatus.COMPLETED
+            transaction.provider_transaction_id = payment_intent_id
+            transaction.completed_at = datetime.utcnow()
+            
+            # Get payment method type
+            payment_method_type = data.get("payment_method_types", ["card"])[0]
+            transaction.payment_method = service.get_payment_method_type(payment_method_type)
+            
+            # Update order status to "oplacone" (paid)
+            order = db.query(Order).filter(Order.id == transaction.order_id).first()
+            if not order:
+                logger.error(f"Stripe webhook: order not found for transaction {transaction.id}")
+                db.rollback()
+                return {"received": True}
+            
+            order.status = "oplacone"
+            # Update payment_method in order based on actual payment method
+            payment_method_map = {
+                "card": "card",
+                "p24_card": "card",
+                "p24_transfer": "transfer",
+                "p24_blik": "card",
+                "sepa": "transfer",
+            }
+            payment_method_str = get_enum_value(transaction.payment_method) if transaction.payment_method else "card"
+            order.payment_method = payment_method_map.get(payment_method_str, "card")
+            
+            # Create finance transaction (only on successful payment)
+            await create_finance_transaction_from_payment(transaction, db)
+            
+            db.commit()
+            logger.info(f"Stripe webhook: successfully processed payment_intent.succeeded for order {transaction.order_id}")
+            
+        except Exception as e:
+            logger.error(f"Stripe webhook: error processing payment_intent.succeeded: {e}", exc_info=True)
+            db.rollback()
+            # Return 200 OK to Stripe to avoid retries, but log the error
+            return {"received": True}
     
     elif event_type == "payment_intent.payment_failed":
         payment_intent_id = data.get("id")
@@ -606,18 +655,23 @@ async def stripe_webhook(
         internal_session_id = metadata.get("session_id")
         
         if internal_session_id:
-            transaction = db.query(PaymentTransaction).filter(
-                PaymentTransaction.session_id == internal_session_id
-            ).first()
-            
-            if transaction:
-                transaction.status = PaymentStatus.FAILED
-                transaction.error_message = data.get("last_payment_error", {}).get("message")
+            try:
+                transaction = db.query(PaymentTransaction).filter(
+                    PaymentTransaction.session_id == internal_session_id
+                ).first()
                 
-                # Order status remains unchanged on failed payment
-                # (stays as "do_wykonania" or current status)
-                
-                db.commit()
+                if transaction:
+                    transaction.status = PaymentStatus.FAILED
+                    transaction.error_message = data.get("last_payment_error", {}).get("message")
+                    
+                    # Order status remains unchanged on failed payment
+                    # (stays as "do_wykonania" or current status)
+                    
+                    db.commit()
+                    logger.info(f"Stripe webhook: marked transaction {transaction.id} as failed")
+            except Exception as e:
+                logger.error(f"Stripe webhook: error processing payment_intent.payment_failed: {e}", exc_info=True)
+                db.rollback()
     
     return {"received": True}
 
@@ -667,17 +721,22 @@ async def przelewy24_webhook(
         db.commit()
         raise HTTPException(status_code=400, detail="Verification failed")
     
-    # Update transaction
-    transaction.status = PaymentStatus.COMPLETED
-    transaction.provider_transaction_id = str(webhook_data.orderId)
-    transaction.completed_at = datetime.utcnow()
-    
-    # Map method ID to type
-    transaction.payment_method = service.map_method_id_to_type(webhook_data.methodId)
-    
-    # Update order status to "oplacone" (paid)
-    order = db.query(Order).filter(Order.id == transaction.order_id).first()
-    if order:
+    try:
+        # Update transaction
+        transaction.status = PaymentStatus.COMPLETED
+        transaction.provider_transaction_id = str(webhook_data.orderId)
+        transaction.completed_at = datetime.utcnow()
+        
+        # Map method ID to type
+        transaction.payment_method = service.map_method_id_to_type(webhook_data.methodId)
+        
+        # Update order status to "oplacone" (paid)
+        order = db.query(Order).filter(Order.id == transaction.order_id).first()
+        if not order:
+            logger.error(f"P24 webhook: order not found for transaction {transaction.id}")
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Order not found")
+        
         order.status = "oplacone"
         # Update payment_method in order based on actual payment method
         payment_method_map = {
@@ -687,17 +746,33 @@ async def przelewy24_webhook(
             "p24_paypo": "card",
             "p24_installments": "card",
         }
-        order.payment_method = payment_method_map.get(
-            transaction.payment_method.value if transaction.payment_method else "transfer",
-            "transfer"
-        )
+        payment_method_str = get_enum_value(transaction.payment_method) if transaction.payment_method else "transfer"
+        order.payment_method = payment_method_map.get(payment_method_str, "transfer")
+        
+        # Create finance transaction (only on successful payment)
+        await create_finance_transaction_from_payment(transaction, db)
+        
+        db.commit()
+        logger.info(f"P24 webhook: successfully processed payment for order {transaction.order_id}")
+        
+        return {"received": True, "verified": True}
     
-    # Create finance transaction (only on successful payment)
-    await create_finance_transaction_from_payment(transaction, db)
-    
-    db.commit()
-    
-    return {"received": True, "verified": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"P24 webhook: error processing payment: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Internal error processing payment: {str(e)}")
+
+
+# Helper function to safely extract Enum value
+def get_enum_value(value) -> str:
+    """Safely extract value from Enum or return string as-is."""
+    if value is None:
+        return ""
+    if hasattr(value, 'value'):
+        return value.value
+    return str(value)
 
 
 # Helper function to create finance transaction
@@ -713,8 +788,10 @@ async def create_finance_transaction_from_payment(transaction: PaymentTransactio
             "sepa": PaymentMethod.TRANSFER,
         }
         
+        # Safely extract payment method value
+        payment_method_str = get_enum_value(transaction.payment_method) if transaction.payment_method else "transfer"
         payment_method = payment_method_map.get(
-            transaction.payment_method.value if transaction.payment_method else "transfer",
+            payment_method_str,
             PaymentMethod.TRANSFER
         )
         
@@ -730,6 +807,9 @@ async def create_finance_transaction_from_payment(transaction: PaymentTransactio
             logger.info(f"Finance transaction already exists for payment {transaction.id}")
             return
         
+        # Safely extract provider value
+        provider_str = get_enum_value(transaction.provider)
+        
         # Create finance transaction
         finance_transaction = FinanceTransaction(
             order_id=transaction.order_id,
@@ -738,14 +818,15 @@ async def create_finance_transaction_from_payment(transaction: PaymentTransactio
             service_date=datetime.utcnow().date(),
             receipt_number=f"PAY-{transaction.session_id}",
             payment_method=payment_method,
-            notes=f"Automatic payment via {transaction.provider.value}",
+            notes=f"Automatic payment via {provider_str}",
         )
         
         db.add(finance_transaction)
         logger.info(f"Created finance transaction for payment {transaction.id}")
     
     except Exception as e:
-        logger.error(f"Failed to create finance transaction: {e}")
+        logger.error(f"Failed to create finance transaction: {e}", exc_info=True)
+        raise
 
 
 # Statistics endpoint
@@ -782,11 +863,11 @@ def get_payment_stats(
     
     for t in transactions:
         # Count by provider
-        provider_key = t.provider.value
+        provider_key = get_enum_value(t.provider)
         by_provider[provider_key] = by_provider.get(provider_key, 0) + 1
         
         # Count by status
-        status_key = t.status.value
+        status_key = get_enum_value(t.status)
         by_status[status_key] = by_status.get(status_key, 0) + 1
     
     successful = sum(1 for t in transactions if t.status == PaymentStatus.COMPLETED)
