@@ -136,8 +136,22 @@ app.include_router(postal_services_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
 
 media_dir = settings.get_media_dir()
-media_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=str(media_dir)), name="media")
+try:
+    media_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Media directory ensured: {media_dir}")
+except (PermissionError, OSError) as e:
+    logger.warning(f"Could not create media directory {media_dir}: {e}. Static files might not be served correctly.")
+    # In CI environments, this is expected and not critical
+    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        logger.info("Running in CI environment, skipping media directory creation")
+    else:
+        logger.error(f"Failed to create media directory in non-CI environment: {e}")
+
+try:
+    app.mount("/media", StaticFiles(directory=str(media_dir)), name="media")
+    logger.info(f"Mounted /media to {media_dir}")
+except Exception as e:
+    logger.warning(f"Could not mount /media static files: {e}. This may be expected in CI environments.")
 
 
 @app.get("/")

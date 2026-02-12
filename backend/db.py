@@ -8,6 +8,7 @@ import os
 load_dotenv()
 
 DATABASE_URL = os.getenv('DATABASE_URL', '')
+IS_CI = os.getenv('CI') == 'true' or os.getenv('GITHUB_ACTIONS') == 'true'
 
 # Initialize Base first
 Base = declarative_base()
@@ -18,40 +19,49 @@ if DATABASE_URL:
         engine = create_engine(DATABASE_URL)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-        import models
-        
-        Base.metadata.create_all(bind=engine)
-
-        # --- Lightweight auto-migrations (safe add-column) ---
-        # Ми не використовуємо Alembic, тому робимо мінімальні міграції для критичних полів.
-        try:
-            insp = inspect(engine)
-            if "recipes" in insp.get_table_names():
-                cols = {c["name"] for c in insp.get_columns("recipes")}
-                if "notes" not in cols:
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE recipes ADD COLUMN notes TEXT"))
-        except Exception as e:
-            # Не блокуємо старт, якщо міграція не вдалась (може бути керована вручну).
-            print(f"Warning: auto-migration skipped/failed: {e}")
-
-        print("Database setup completed successfully.")
-    except Exception as e:
-        print(f"Error setting up the database: {e}")
-        # Create a dummy engine if connection fails (for development)
-        engine = create_engine("sqlite:///./temp.db")
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        try:
+        # In CI, skip database operations during import
+        if not IS_CI:
             import models
+            
             Base.metadata.create_all(bind=engine)
-            insp = inspect(engine)
-            if "recipes" in insp.get_table_names():
-                cols = {c["name"] for c in insp.get_columns("recipes")}
-                if "notes" not in cols:
-                    with engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE recipes ADD COLUMN notes TEXT"))
-        except Exception as e2:
-            print(f"Warning: fallback DB auto-migration skipped/failed: {e2}")
+
+            # --- Lightweight auto-migrations (safe add-column) ---
+            # Ми не використовуємо Alembic, тому робимо мінімальні міграції для критичних полів.
+            try:
+                insp = inspect(engine)
+                if "recipes" in insp.get_table_names():
+                    cols = {c["name"] for c in insp.get_columns("recipes")}
+                    if "notes" not in cols:
+                        with engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE recipes ADD COLUMN notes TEXT"))
+            except Exception as e:
+                # Не блокуємо старт, якщо міграція не вдалась (може бути керована вручну).
+                print(f"Warning: auto-migration skipped/failed: {e}")
+
+            print("Database setup completed successfully.")
+    except Exception as e:
+        # In CI, database connection failures are expected
+        if IS_CI:
+            print(f"CI environment: Database connection skipped (expected): {e}")
+            # Create a dummy engine for CI (won't be used, but prevents errors)
+            engine = create_engine("sqlite:///./temp.db")
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        else:
+            print(f"Error setting up the database: {e}")
+            # Create a dummy engine if connection fails (for development)
+            engine = create_engine("sqlite:///./temp.db")
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            try:
+                import models
+                Base.metadata.create_all(bind=engine)
+                insp = inspect(engine)
+                if "recipes" in insp.get_table_names():
+                    cols = {c["name"] for c in insp.get_columns("recipes")}
+                    if "notes" not in cols:
+                        with engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE recipes ADD COLUMN notes TEXT"))
+            except Exception as e2:
+                print(f"Warning: fallback DB auto-migration skipped/failed: {e2}")
 else:
     # Fallback for development
     engine = create_engine("sqlite:///./temp.db")
