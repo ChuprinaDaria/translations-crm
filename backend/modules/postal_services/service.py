@@ -196,7 +196,10 @@ class InPostService:
         """Create shipment in InPost API."""
         api_url = self.get_api_url()
         
-        # Build request payload
+        # Build request payload according to InPost API documentation
+        # Use template for parcels (small, medium, large) instead of manual dimensions
+        parcel_template = shipment.package_size or "small"
+        
         payload: Dict[str, Any] = {
             "receiver": {
                 "email": shipment.receiver_email,
@@ -204,19 +207,20 @@ class InPostService:
             },
             "parcels": [
                 {
-                    "dimensions": {
-                        "unit": "mm",
-                    },
-                    "weight": {
-                        "amount": shipment.package_weight or 1.0,
-                        "unit": "kg",
-                    },
+                    "template": parcel_template,
                     "is_non_standard": False,
                 }
             ],
             "service": "inpost_locker_standard",
             "reference": str(shipment.id),
         }
+        
+        # Add weight if specified (will override template default)
+        if shipment.package_weight:
+            payload["parcels"][0]["weight"] = {
+                "amount": shipment.package_weight,
+                "unit": "kg",
+            }
         
         # Add receiver name if provided
         if shipment.receiver_name:
