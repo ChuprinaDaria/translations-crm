@@ -71,13 +71,20 @@ class InPostService:
         if not api_key:
             raise ValueError("InPost API key is not configured")
         
-        # Use api_key directly in Authorization header (can be numeric ID like 124089)
+        # InPost ShipX API uses Bearer token format
+        # For numeric IDs, still use Bearer format
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         
-        logger.info(f"InPost API headers: Authorization=Bearer {api_key}")
+        # Log headers (api_key is numeric, safe to log)
+        logger.info(f"InPost API request headers:")
+        logger.info(f"  Authorization: Bearer {api_key}")
+        logger.info(f"  Content-Type: application/json")
+        print(f"[InPost] API Key: {api_key}")
+        print(f"[InPost] Authorization header: Bearer {api_key}")
+        
         return headers
     
     async def create_shipment(
@@ -231,16 +238,36 @@ class InPostService:
             }
         
         # Make API request
+        organization_id = await self._get_organization_id()
+        headers = self._get_headers()
+        request_url = f"{api_url}/organizations/{organization_id}/shipments"
+        
+        logger.info(f"InPost API request:")
+        logger.info(f"  URL: {request_url}")
+        logger.info(f"  Method: POST")
+        logger.info(f"  Organization ID: {organization_id}")
+        print(f"[InPost] Request URL: {request_url}")
+        print(f"[InPost] Organization ID: {organization_id}")
+        print(f"[InPost] Payload keys: {list(payload.keys())}")
+        
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{api_url}/organizations/{await self._get_organization_id()}/shipments",
+                request_url,
                 json=payload,
-                headers=self._get_headers(),
+                headers=headers,
             )
+            
+            logger.info(f"InPost API response:")
+            logger.info(f"  Status: {response.status_code}")
+            logger.info(f"  Response text: {response.text[:500]}")
+            print(f"[InPost] Response status: {response.status_code}")
+            print(f"[InPost] Response text: {response.text[:200]}")
             
             if response.status_code not in [200, 201]:
                 error_data = response.json() if response.text else {}
-                error_message = error_data.get("message", response.text)
+                error_message = error_data.get("message", error_data.get("detail", response.text))
+                logger.error(f"InPost API error: {error_message}")
+                logger.error(f"Full response: {response.text}")
                 raise Exception(f"InPost API error: {error_message}")
             
             data = response.json()
