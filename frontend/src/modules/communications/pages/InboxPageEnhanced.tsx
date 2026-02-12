@@ -14,7 +14,7 @@ import { useMessagesWebSocket } from '../hooks/useMessagesWebSocket';
 import { inboxApi, type ConversationListItem, type ConversationWithMessages, type Message as InboxMessage } from '../api/inbox';
 import { ordersApi } from '../../crm/api/orders';
 import { getUserIdFromToken } from '../../notifications/utils/userId';
-import { api } from '../../../lib/api';
+import { settingsApi } from '../../../lib/api';
 import { CreateClientDialog } from '../components/SmartActions/CreateClientDialog';
 import { CreateOrderDialog } from '../components/SmartActions/CreateOrderDialog';
 import { SendPaymentLinkDialog } from '../components/SmartActions/SendPaymentLinkDialog';
@@ -1118,7 +1118,7 @@ export function InboxPageEnhanced() {
             };
 
             toast.info('Створюємо відправлення...');
-            const shipment = await api.createShipment(shipmentData);
+            const shipment = await settingsApi.createShipment(shipmentData);
             
             if (shipment && shipment.tracking_number) {
               const trackingNumber = shipment.tracking_number;
