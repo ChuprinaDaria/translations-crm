@@ -77,10 +77,12 @@ celery_app.conf.update(
         
         # Середній пріоритет - обробка webhook
         'process_webhook_task': {'queue': 'default'},
+        'update_shipment_status_task': {'queue': 'default'},
         
         # Низький пріоритет - фонові задачі
         'download_and_save_media_task': {'queue': 'low_priority'},
         'archive_old_conversations_task': {'queue': 'low_priority'},
+        'update_all_active_shipments_task': {'queue': 'low_priority'},
     },
     
     # Broker налаштування для Redis
@@ -93,8 +95,16 @@ celery_app.conf.update(
     # Connection pool
     broker_pool_limit=10,
     redis_max_connections=20,
+    
+    # Beat schedule для періодичних задач
+    beat_schedule={
+        'update-all-active-shipments': {
+            'task': 'update_all_active_shipments_task',
+            'schedule': 300.0,  # Кожні 5 хвилин
+        },
+    },
 )
 
 # Import tasks to register them
-from tasks import messaging_tasks, ai_tasks, media_tasks, autobot_tasks, webhook_tasks  # noqa: F401, E402
+from tasks import messaging_tasks, ai_tasks, media_tasks, autobot_tasks, webhook_tasks, postal_tasks  # noqa: F401, E402
 

@@ -392,7 +392,6 @@ class InPostService:
             
             data = response.json()
             
-            # Update status
             old_status = shipment.status
             new_status = self._map_inpost_status(data.get("status"))
             
@@ -400,7 +399,6 @@ class InPostService:
                 shipment.status = new_status
                 shipment.status_description = data.get("status_description")
                 
-                # Add to status history
                 status_entry = {
                     "status": new_status.value,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -410,14 +408,20 @@ class InPostService:
                     shipment.status_history = []
                 shipment.status_history.append(status_entry)
                 
-                # Update delivered_at if delivered
                 if new_status == ShipmentStatus.DELIVERED and not shipment.delivered_at:
                     shipment.delivered_at = datetime.now(timezone.utc)
+                elif new_status == ShipmentStatus.DISPATCHED_BY_SENDER and not shipment.dispatched_at:
+                    shipment.dispatched_at = datetime.now(timezone.utc)
             
-            # Update tracking number if not set
-            if not shipment.tracking_number and data.get("tracking_number"):
+            if data.get("tracking_number") and data.get("tracking_number") != shipment.tracking_number:
                 shipment.tracking_number = data.get("tracking_number")
                 shipment.tracking_url = f"https://inpost.pl/sledzenie-przesylek?number={shipment.tracking_number}"
+            
+            if data.get("cost") is not None:
+                shipment.cost = data.get("cost")
+            
+            if "href" in data.get("_links", {}).get("label", {}):
+                shipment.label_url = data["_links"]["label"]["href"]
             
             shipment.inpost_response = data
             self.db.commit()
@@ -585,15 +589,16 @@ class InPostService:
                 logger.warning(f"Shipment not found for webhook event: {event_type}")
                 return
             
-            # Update status based on event
             if event_type in ["status.updated", "shipment.updated"]:
                 new_status = self._map_inpost_status(shipment_data.get("status", ""))
+                
+                updated = False
                 
                 if new_status != shipment.status:
                     shipment.status = new_status
                     shipment.status_description = shipment_data.get("status_description")
+                    updated = True
                     
-                    # Add to status history
                     status_entry = {
                         "status": new_status.value,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -604,12 +609,32 @@ class InPostService:
                         shipment.status_history = []
                     shipment.status_history.append(status_entry)
                     
-                    # Update delivered_at if delivered
                     if new_status == ShipmentStatus.DELIVERED and not shipment.delivered_at:
                         shipment.delivered_at = datetime.now(timezone.utc)
-                    
+                    elif new_status == ShipmentStatus.DISPATCHED_BY_SENDER and not shipment.dispatched_at:
+                        shipment.dispatched_at = datetime.now(timezone.utc)
+                
+                if shipment_data.get("tracking_number") and shipment_data.get("tracking_number") != shipment.tracking_number:
+                    shipment.tracking_number = shipment_data.get("tracking_number")
+                    shipment.tracking_url = f"https://inpost.pl/sledzenie-przesylek?number={shipment.tracking_number}"
+                    updated = True
+                
+                if shipment_data.get("cost") is not None and shipment_data.get("cost") != shipment.cost:
+                    shipment.cost = shipment_data.get("cost")
+                    updated = True
+                
+                if "label" in shipment_data.get("_links", {}):
+                    label_url = shipment_data["_links"]["label"].get("href")
+                    if label_url and label_url != shipment.label_url:
+                        shipment.label_url = label_url
+                        updated = True
+                
+                if shipment_data.get("inpost_response"):
+                    shipment.inpost_response = shipment_data
+                    updated = True
+                
+                if updated:
                     self.db.commit()
-                    
                     logger.info(f"Updated shipment {shipment.id} status to {new_status}")
         
         except Exception as e:

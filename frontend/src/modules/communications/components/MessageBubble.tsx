@@ -72,35 +72,23 @@ interface MessageBubbleProps {
  */
 // Check if content is a placeholder for media (e.g., "[Image: photo.jpg]")
 function isMediaPlaceholder(content: string, attachments?: Message['attachments']): boolean {
-  if (!content) return false;
+  if (!content || !attachments || attachments.length === 0) return false;
   
-  // If there are attachments, hide placeholder text
-  if (attachments && attachments.length > 0) {
-    // Check for common media placeholder patterns
-    const placeholderPatterns = [
-      /^\[Image:\s*.+\]$/i,
-      /^\[Video:\s*.+\]$/i,
-      /^\[Audio:\s*.+\]$/i,
-      /^\[Document:\s*.+\]$/i,
-      /^\[File:\s*.+\]$/i,
-      /^\[Sticker\]$/i,
-      /^\[Пусте повідомлення\]$/i,
-      /^\[Empty message\]$/i,
-      /^\[Voice\]$/i,
-      /^\[Фото\]$/i,
-      /^\[Відео\]$/i,
-      /^\[Документ\]$/i,
-      /^\[Голосове повідомлення\]$/i,
-    ];
-    
-    return placeholderPatterns.some(pattern => pattern.test(content.trim()));
-  }
-  
-  // If no attachments, check if content is just a placeholder
+  // Check for common media placeholder patterns
   const placeholderPatterns = [
-    /^\[Пусте повідомлення\]$/i,
-    /^\[Empty message\]$/i,
+    /^\[Image:\s*.+\]$/i,
+    /^\[Video:\s*.+\]$/i,
+    /^\[Audio:\s*.+\]$/i,
+    /^\[Document:\s*.+\]$/i,
+    /^\[File:\s*.+\]$/i,
+    /^\[Sticker\]$/i,
+    /^\[Voice\]$/i,
+    /^\[Фото\]$/i,
+    /^\[Відео\]$/i,
+    /^\[Документ\]$/i,
+    /^\[Голосове повідомлення\]$/i,
   ];
+  
   return placeholderPatterns.some(pattern => pattern.test(content.trim()));
 }
 
@@ -235,60 +223,40 @@ export function MessageBubble({
         });
       }
 
-      // InPost Paczkomat detection
-      // Формат 1: Повна адреса пачкомату (WRO01M, 51-180 Wrocław, Pełczyńska 63)
-      const paczkomatFullPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
-      let paczkomatFullMatch;
-      while ((paczkomatFullMatch = paczkomatFullPattern.exec(message.content)) !== null) {
-        const code = paczkomatFullMatch[1].trim();
-        const postalCode = paczkomatFullMatch[2].trim();
-        const city = paczkomatFullMatch[3].trim().replace(/\*\*/g, '');
-        const street = paczkomatFullMatch[4].trim();
+      // InPost Paczkomat detection (format: WRO01M, WNC01M, etc. - код з 3-6 букв/цифр, потім поштовий індекс, місто, вулиця)
+      // Pattern: код (3-6 символів), поштовий індекс (XX-XXX), місто (жирний або звичайний), вулиця з номером
+      // Можливі формати:
+      // - WRO01M, 51-180 **Wrocław**, Pełczyńska 63
+      // - WRO01M, 51-180 Wrocław, Pełczyńska 63
+      const paczkomatPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let paczkomatMatch;
+      while ((paczkomatMatch = paczkomatPattern.exec(message.content)) !== null) {
+        const code = paczkomatMatch[1].trim();
+        const postalCode = paczkomatMatch[2].trim();
+        const city = paczkomatMatch[3].trim().replace(/\*\*/g, '');
+        const street = paczkomatMatch[4].trim();
         const fullAddress = `${code}, ${postalCode} ${city}, ${street}`;
         detected.push({
           type: 'paczkomat',
           value: fullAddress,
-          original: paczkomatFullMatch[0],
+          original: paczkomatMatch[0],
           isPaczkomat: true,
           paczkomatCode: code,
         });
       }
-      
-      // Формат 2: Просто код пачкомату (WRO304M, WRO01M, KRA010, etc.)
-      // Паттерн: 3-6 великих літер, 0-3 цифри, 0-3 великі літери (наприклад: WRO304M, KRA010, WRO01M)
-      const paczkomatCodePattern = /\b([A-Z]{3,6}\d{0,3}[A-Z]{0,3})\b/g;
-      let paczkomatCodeMatch;
-      while ((paczkomatCodeMatch = paczkomatCodePattern.exec(message.content)) !== null) {
-        const code = paczkomatCodeMatch[1].trim();
-        // Перевіряємо, чи це не вже визначений пачкомат
-        const isAlreadyDetected = detected.some(d => d.isPaczkomat && d.paczkomatCode === code);
-        // Перевіряємо, чи це не частина іншого слова (наприклад, не "WRO" в "WROCLAW")
-        const beforeCode = message.content.substring(Math.max(0, paczkomatCodeMatch.index - 1), paczkomatCodeMatch.index);
-        const afterCode = message.content.substring(paczkomatCodeMatch.index + code.length, paczkomatCodeMatch.index + code.length + 1);
-        const isWordBoundary = (!beforeCode || /[\s,;:!?.\n]/.test(beforeCode)) && (!afterCode || /[\s,;:!?.\n]/.test(afterCode));
-        
-        if (!isAlreadyDetected && isWordBoundary && code.length >= 5) { // Мінімум 5 символів для пачкомату
-          detected.push({
-            type: 'paczkomat',
-            value: code,
-            original: code,
-            isPaczkomat: true,
-            paczkomatCode: code,
-          });
-        }
-      }
 
-      // Regular address detection
-      // Формат 1: Поштовий індекс, місто, вулиця (51-664 Wrocław, Gersona 7/9)
-      const addressPattern1 = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
-      let addressMatch1;
-      while ((addressMatch1 = addressPattern1.exec(message.content)) !== null) {
-        const postalCode = addressMatch1[1].trim();
-        const city = addressMatch1[2].trim().replace(/\*\*/g, '');
-        const street = addressMatch1[3].trim();
+      // Regular address detection (поштовий індекс, місто, вулиця)
+      // Pattern: поштовий індекс (XX-XXX), місто, вулиця з номером (без коду пачкомату)
+      // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
+      const addressPattern = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+      let addressMatch;
+      while ((addressMatch = addressPattern.exec(message.content)) !== null) {
+        const postalCode = addressMatch[1].trim();
+        const city = addressMatch[2].trim().replace(/\*\*/g, '');
+        const street = addressMatch[3].trim();
         
         // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
-        const beforeAddress = message.content.substring(Math.max(0, addressMatch1.index - 30), addressMatch1.index);
+        const beforeAddress = message.content.substring(Math.max(0, addressMatch.index - 30), addressMatch.index);
         const hasPaczkomatCode = /[A-Z]{3,6}\d{0,3}[A-Z]{0,3},/.test(beforeAddress);
         
         // Перевіряємо, чи це не вже визначений пачкомат
@@ -299,34 +267,7 @@ export function MessageBubble({
           detected.push({
             type: 'address',
             value: fullAddress,
-            original: addressMatch1[0],
-            isPaczkomat: false,
-          });
-        }
-      }
-      
-      // Формат 2: Місто, Вулиця, Номер, Поштовий індекс (Wrocław, Gersona, 7/9, 51-664)
-      const addressPattern2 = /([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)*),\s*([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)*),\s*([^,]+),\s*(\d{2}-\d{3})/g;
-      let addressMatch2;
-      while ((addressMatch2 = addressPattern2.exec(message.content)) !== null) {
-        const city = addressMatch2[1].trim();
-        const street = addressMatch2[2].trim();
-        const number = addressMatch2[3].trim();
-        const postalCode = addressMatch2[4].trim();
-        
-        // Перевіряємо, чи це не вже визначена адреса
-        const isAlreadyDetected = detected.some(d => 
-          d.type === 'address' && 
-          d.value.includes(postalCode) && 
-          d.value.includes(city)
-        );
-        
-        if (!isAlreadyDetected) {
-          const fullAddress = `${postalCode} ${city}, ${street} ${number}`;
-          detected.push({
-            type: 'address',
-            value: fullAddress,
-            original: addressMatch2[0],
+            original: addressMatch[0],
             isPaczkomat: false,
           });
         }

@@ -51,6 +51,8 @@ services:
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
       - shared_media:/app/media
@@ -74,6 +76,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
       - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-60}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - shared_media:/app/media
     working_dir: /app
@@ -97,6 +101,8 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
       - shared_media:/app/media
@@ -129,6 +135,8 @@ services:
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
       - shared_media:/app/media
@@ -158,6 +166,8 @@ services:
       - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=${FRONTEND_URL}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
       - shared_media:/app/media

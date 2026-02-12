@@ -10,37 +10,7 @@ export class ApiError extends Error {
     public statusText: string,
     public data?: any
   ) {
-    // Extract meaningful error message from data.detail
-    let errorMessage = statusText || 'API Error';
-    
-    if (data?.detail) {
-      const detail = data.detail;
-      
-      // If detail is an object with a message property
-      if (typeof detail === 'object' && detail.message) {
-        errorMessage = detail.message;
-      }
-      // If detail is an object with type (e.g., duplicate_client)
-      else if (typeof detail === 'object' && detail.type) {
-        errorMessage = detail.message || `Помилка: ${detail.type}`;
-      }
-      // If detail is a string
-      else if (typeof detail === 'string') {
-        errorMessage = detail;
-      }
-      // If detail is an array (validation errors)
-      else if (Array.isArray(detail)) {
-        errorMessage = detail.map((err: any) => 
-          err.msg || err.message || JSON.stringify(err)
-        ).join(', ');
-      }
-      // If detail is an object but no message, try to stringify
-      else if (typeof detail === 'object') {
-        errorMessage = JSON.stringify(detail);
-      }
-    }
-    
-    super(errorMessage);
+    super(data?.detail || statusText || 'API Error');
     this.name = 'ApiError';
   }
 }
@@ -138,14 +108,6 @@ export async function apiFetch<T>(
     // Log detailed validation errors for 422
     if (response.status === 422 && errorData.detail && Array.isArray(errorData.detail)) {
       console.error('[API] Validation errors:', JSON.stringify(errorData.detail, null, 2));
-    }
-    
-    // Log detailed error information for 400 Bad Request
-    if (response.status === 400) {
-      console.error('[API] Bad Request (400) - Error details:', JSON.stringify(errorData, null, 2));
-      if (errorData.detail && typeof errorData.detail === 'object') {
-        console.error('[API] Error detail object:', errorData.detail);
-      }
     }
     
     // Handle 502 Bad Gateway - backend server is down

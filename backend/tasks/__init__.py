@@ -6,7 +6,7 @@ Background tasks module - Celery для асинхронних задач.
 from tasks.celery_app import celery_app
 
 # Import all tasks to register them
-from tasks import messaging_tasks, ai_tasks, media_tasks, autobot_tasks, webhook_tasks  # noqa: F401, E402
+from tasks import messaging_tasks, ai_tasks, media_tasks, autobot_tasks, webhook_tasks, postal_tasks  # noqa: F401, E402
 
 __all__ = [
     "celery_app",
@@ -15,5 +15,6 @@ __all__ = [
     "media_tasks",
     "autobot_tasks",
     "webhook_tasks",
+    "postal_tasks",
 ]
 

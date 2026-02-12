@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
-import { Menu, CreditCard, Package, UserPlus, User, StickyNote, FolderOpen, ClipboardList, MapPin } from 'lucide-react';
+import { Menu, CreditCard, Package, UserPlus, User, StickyNote, FolderOpen, ClipboardList } from 'lucide-react';
 import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
 import { ConversationsSidebar, type FilterState, type Conversation } from '../components/ConversationsSidebar';
 import { ChatTabsArea } from '../components/ChatTabsArea';
@@ -14,12 +14,12 @@ import { useMessagesWebSocket } from '../hooks/useMessagesWebSocket';
 import { inboxApi, type ConversationListItem, type ConversationWithMessages, type Message as InboxMessage } from '../api/inbox';
 import { ordersApi } from '../../crm/api/orders';
 import { getUserIdFromToken } from '../../notifications/utils/userId';
+import { api } from '../../../lib/api';
 import { CreateClientDialog } from '../components/SmartActions/CreateClientDialog';
 import { CreateOrderDialog } from '../components/SmartActions/CreateOrderDialog';
 import { SendPaymentLinkDialog } from '../components/SmartActions/SendPaymentLinkDialog';
 import { SendTrackingStatusDialog } from '../components/SmartActions/SendTrackingStatusDialog';
 import { AddInternalNoteDialog } from '../components/SmartActions/AddInternalNoteDialog';
-import { AddAddressDialog } from '../components/SmartActions/AddAddressDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../../components/ui/dialog';
 import { DeadlineDialogContent } from '../components/SmartActions/DeadlineDialogContent';
 import { NotificationToast, type NotificationData } from '../components/NotificationToast';
@@ -117,7 +117,6 @@ export function InboxPageEnhanced() {
   const [sendPaymentLinkDialogOpen, setSendPaymentLinkDialogOpen] = useState(false);
   const [sendTrackingStatusDialogOpen, setSendTrackingStatusDialogOpen] = useState(false);
   const [addInternalNoteDialogOpen, setAddInternalNoteDialogOpen] = useState(false);
-  const [addAddressDialogOpen, setAddAddressDialogOpen] = useState(false);
   
   // Deadline dialog state for auto-create order
   const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
@@ -152,49 +151,16 @@ export function InboxPageEnhanced() {
           // Завантажуємо замовлення клієнта
           try {
             const clientOrders = await ordersApi.getOrders({ client_id: conversation.client_id });
-            console.log('[InboxPage] Loaded orders for client:', conversation.client_id, 'orders:', clientOrders);
-            orders = clientOrders.map((order: any) => {
-              // Ensure order.id is converted to string properly
-              let orderId: string;
-              if (order.id) {
-                if (typeof order.id === 'string') {
-                  orderId = order.id;
-                } else if (typeof order.id === 'object' && order.id.toString) {
-                  orderId = order.id.toString();
-                } else {
-                  orderId = String(order.id);
-                }
-              } else {
-                console.error('[InboxPage] Order without ID:', order);
-                orderId = '';
-              }
-              
-              // Validate UUID format
-              const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-              if (!uuidRegex.test(orderId)) {
-                console.warn('[InboxPage] Invalid UUID format for order:', orderId, 'order:', order);
-              }
-              
-              console.log('[InboxPage] Processing order:', {
-                id: orderId,
-                type: typeof orderId,
-                originalId: order.id,
-                originalType: typeof order.id,
-                order_number: order.order_number
-              });
-              
-              return {
-                id: orderId,
-                title: order.order_number,
-                status: order.status,
-                created_at: order.created_at,
-                total_amount: order.transactions?.reduce((sum: number, t: any) => 
-                  t.type === 'income' ? sum + t.amount : sum, 0) || 0,
-                file_url: order.file_url,
-                description: order.description,
-              };
-            });
-            console.log('[InboxPage] Mapped orders:', orders.map(o => ({ id: o.id, title: o.title })));
+            orders = clientOrders.map((order: any) => ({
+              id: order.id,
+              title: order.order_number,
+              status: order.status,
+              created_at: order.created_at,
+              total_amount: order.transactions?.reduce((sum: number, t: any) => 
+                t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+              file_url: order.file_url,
+              description: order.description,
+            }));
           } catch (orderError) {
             console.error('Error loading client orders:', orderError);
           }
@@ -1027,17 +993,8 @@ export function InboxPageEnhanced() {
       toast.error('Немає замовлень для додавання адреси');
       return;
     }
-
-    // Validate order ID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      console.error('Invalid order ID format:', orderId);
-      toast.error('Помилка: невалідний ID замовлення. Спробуйте оновити сторінку.');
-      return;
-    }
     
     try {
-      console.log('[InboxPage] Adding address to order:', orderId, 'isPaczkomat:', isPaczkomat, 'code:', paczkomatCode);
       // Add address/paczkomat to order via API
       const result = await inboxApi.addAddressToOrder(orderId, address, isPaczkomat, paczkomatCode);
       
@@ -1053,10 +1010,9 @@ export function InboxPageEnhanced() {
         const { orders: updatedOrders } = await loadConversationData(activeTabId);
         setOrders(updatedOrders);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error adding address:', error);
-      const errorMessage = error?.message || error?.data?.detail || 'Помилка додавання адреси';
-      toast.error(errorMessage);
+      toast.error('Помилка додавання адреси');
     }
   };
 
@@ -1070,14 +1026,6 @@ export function InboxPageEnhanced() {
     const orderId = orders[0]?.id;
     if (!orderId) {
       toast.error('Немає замовлень для відправки оплати');
-      return;
-    }
-
-    // Validate order ID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      console.error('Invalid order ID format:', orderId);
-      toast.error('Помилка: невалідний ID замовлення. Спробуйте оновити сторінку.');
       return;
     }
 
@@ -1095,7 +1043,6 @@ export function InboxPageEnhanced() {
         }
       }
 
-      console.log('[InboxPage] Creating payment link for order:', orderId, 'amount:', amount);
       const { payment_link } = await inboxApi.createPaymentLink(orderId, amount);
       
       // Створити чернетку в чаті замість відправки
@@ -1121,12 +1068,9 @@ export function InboxPageEnhanced() {
       }
       
       toast.success('Посилання на оплату створено. Натисніть "Відправити клієнту" для надсилання.');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating payment link:', error);
-      
-      // Extract error message
-      const errorMessage = error?.message || error?.data?.detail || 'Помилка створення посилання на оплату';
-      toast.error(errorMessage);
+      toast.error('Помилка створення посилання на оплату');
     }
   };
 
@@ -1136,27 +1080,75 @@ export function InboxPageEnhanced() {
       return;
     }
     
-    // Use first order
-    const orderId = orders[0]?.id;
+    const order = orders[0];
+    const orderId = order?.id;
     if (!orderId) {
       toast.error('Немає замовлень для відправки трекінгу');
       return;
     }
 
-    // Validate order ID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      console.error('Invalid order ID format:', orderId);
-      toast.error('Помилка: невалідний ID замовлення. Спробуйте оновити сторінку.');
-      return;
-    }
-
     try {
-      console.log('[InboxPage] Getting tracking for order:', orderId);
-      const tracking = await inboxApi.getTracking(orderId);
+      let tracking = await inboxApi.getTracking(orderId);
       
+      if (!tracking.number || !tracking.trackingUrl) {
+        if (tracking.message?.includes('not created') || tracking.message?.includes('Shipment not created')) {
+          try {
+            const activeChat = openChats.find(c => c.conversationId === conversationId);
+            const currentConversation = activeChat?.conversation;
+            
+            const receiverEmail = client?.email || currentConversation?.external_id || '';
+            const receiverPhone = client?.phone || currentConversation?.external_id || '';
+            const receiverName = client?.full_name || client?.name || 'Klient';
+
+            if (!receiverEmail && !receiverPhone) {
+              toast.error('Немає email або телефону клієнта для створення відправлення. Додайте контактні дані клієнта.');
+              return;
+            }
+
+            const shipmentData = {
+              order_id: orderId,
+              delivery_type: 'parcel_locker' as const,
+              parcel_locker_code: 'KRA010',
+              receiver: {
+                email: receiverEmail || 'client@example.com',
+                phone: receiverPhone || '+48123456789',
+                name: receiverName,
+              },
+              package_size: 'small' as const,
+            };
+
+            toast.info('Створюємо відправлення...');
+            const shipment = await api.createShipment(shipmentData);
+            
+            if (shipment && shipment.tracking_number) {
+              const trackingNumber = shipment.tracking_number;
+              const trackingUrl = shipment.tracking_url || `https://inpost.pl/sledzenie-przesylek?number=${trackingNumber}`;
+              
+              tracking = {
+                number: trackingNumber,
+                trackingUrl: trackingUrl,
+                order_id: orderId,
+              };
+              
+              toast.success(`✅ Відправлення створено! Номер трекінгу: ${trackingNumber}`);
+            } else {
+              console.error('Shipment response:', shipment);
+              toast.error('Не вдалося отримати номер трекінгу після створення відправлення. Спробуйте пізніше.');
+              return;
+            }
+          } catch (createError: any) {
+            console.error('Error creating shipment:', createError);
+            const errorMessage = createError.response?.data?.detail || createError.message || 'Невідома помилка';
+            toast.error(`Помилка створення відправлення: ${errorMessage}`);
+            return;
+          }
+        } else {
+          toast.error(tracking.message || 'Трекінг номер ще не створений');
+          return;
+        }
+      }
+
       if (tracking.number && tracking.trackingUrl) {
-        // Створити чернетку в чаті замість відправки
         const draftMessage: Message = {
           id: `draft-${Date.now()}`,
           conversation_id: conversationId,
@@ -1172,22 +1164,16 @@ export function InboxPageEnhanced() {
           },
         };
         
-        // Додати чернетку до чату
         const chat = openChats.find(c => c.conversationId === conversationId);
         if (chat) {
           updateChatMessages(conversationId, [...chat.messages, draftMessage]);
         }
         
         toast.success('Трекінг номер створено. Натисніть "Відправити клієнту" для надсилання.');
-      } else {
-        toast.error('Трекінг номер ще не створений');
       }
     } catch (error: any) {
       console.error('Error getting tracking:', error);
-      
-      // Extract error message
-      const errorMessage = error?.message || error?.data?.detail || 'Помилка отримання трекінг номера';
-      toast.error(errorMessage);
+      toast.error(`Помилка отримання трекінг номера: ${error.message || 'Невідома помилка'}`);
     }
   };
 
@@ -1256,7 +1242,6 @@ export function InboxPageEnhanced() {
           break;
         case 'tracking':
         case 'payment':
-        case 'address':
           disabled = !activeTabId || !hasOrders;
           break;
         case 'notes':
@@ -1335,14 +1320,6 @@ export function InboxPageEnhanced() {
     if (tabId === 'payment') {
       if (conversationId) {
         handlePaymentClick(conversationId);
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    if (tabId === 'address') {
-      if (conversationId && orders && orders.length > 0) {
-        setAddAddressDialogOpen(true);
       }
       setSidePanelTab(null);
       return;
@@ -1523,7 +1500,6 @@ export function InboxPageEnhanced() {
                 clientId={client.id}
                 onSuccess={handleCreateOrderSuccess}
                 conversation={chatConversation}
-                messages={activeChat?.messages || []}
               />
               
               {orders.length > 0 && (
@@ -1579,19 +1555,6 @@ export function InboxPageEnhanced() {
             }))}
             onSuccess={() => {
               toast.success('Нотатку збережено');
-            }}
-          />
-
-          <AddAddressDialog
-            open={addAddressDialogOpen}
-            onOpenChange={setAddAddressDialogOpen}
-            orderId={orders && orders.length > 0 ? orders[0].id : ''}
-            onSuccess={async () => {
-              // Reload orders
-              if (activeTabId) {
-                const { orders: updatedOrders } = await loadConversationData(activeTabId);
-                setOrders(updatedOrders);
-              }
             }}
           />
         </>

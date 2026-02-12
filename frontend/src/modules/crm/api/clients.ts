@@ -76,27 +76,6 @@ export interface Order {
   timeline_steps?: TimelineStep[];
   translation_requests?: TranslationRequest[];
   transactions?: Transaction[];
-  payment_transactions?: PaymentTransaction[];
-}
-
-export interface PaymentTransaction {
-  id: string;
-  order_id: string;
-  provider: 'stripe' | 'przelewy24';
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded' | 'cancelled';
-  payment_method?: string;
-  amount: number;
-  currency: string;
-  session_id: string;
-  provider_transaction_id?: string;
-  payment_url?: string;
-  customer_email: string;
-  customer_name?: string;
-  description?: string;
-  error_message?: string;
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
 }
 
 export interface Office {
@@ -162,12 +141,6 @@ export const clientsApi = {
       throw new Error('full_name and phone are required');
     }
     
-    // Helper to validate UUID format
-    const isValidUUID = (str: string): boolean => {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      return uuidRegex.test(str);
-    };
-    
     // Filter out empty strings for optional fields
     const cleanedClient: any = {
       full_name: trimmedFullName,
@@ -187,14 +160,8 @@ export const clientsApi = {
     cleanedClient.source = sourceValue;
     
     // Add conversation info for duplicate checking by external_id
-    // Only include conversation_id if it's a valid UUID
     if (client.conversation_id) {
-      const convId = client.conversation_id.toString();
-      if (isValidUUID(convId)) {
-        cleanedClient.conversation_id = convId;
-      } else {
-        console.warn('[API] Invalid UUID format for conversation_id:', convId, '- skipping');
-      }
+      cleanedClient.conversation_id = client.conversation_id;
     }
     if (client.external_id) {
       cleanedClient.external_id = client.external_id;
@@ -206,21 +173,10 @@ export const clientsApi = {
     console.log('[API] Creating client with data:', cleanedClient);
     console.log('[API] Original client data:', client);
     
-    try {
-      return await apiFetch<Client>("/crm/clients", {
-        method: "POST",
-        body: JSON.stringify(cleanedClient),
-      });
-    } catch (error: any) {
-      // Log detailed error information
-      console.error('[API] Error creating client:', {
-        status: error?.status,
-        statusText: error?.statusText,
-        data: error?.data,
-        cleanedClient,
-      });
-      throw error;
-    }
+    return apiFetch<Client>("/crm/clients", {
+      method: "POST",
+      body: JSON.stringify(cleanedClient),
+    });
   },
 
   /**

@@ -57,8 +57,11 @@ services:
       - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=${FRONTEND_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
+      - shared_media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,6 +84,10 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
       - EMAIL_CHECK_INTERVAL=${EMAIL_CHECK_INTERVAL:-60}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
+    volumes:
+      - shared_media:/app/media
     working_dir: /app
     command: python email_imap_listener.py
     depends_on:
@@ -102,8 +109,11 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
+      - shared_media:/app/media
     working_dir: /app
     command: python telegram_listener.py
     depends_on:
@@ -129,8 +139,11 @@ services:
       - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=${FRONTEND_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
+      - shared_media:/app/media
     working_dir: /app
     command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4
     depends_on:
@@ -160,8 +173,11 @@ services:
       - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=${FRONTEND_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
     volumes:
       - ./backend/uploads:/app/uploads
+      - shared_media:/app/media
     working_dir: /app
     command: celery -A tasks.celery_app beat --loglevel=info
     depends_on:
@@ -187,6 +203,7 @@ services:
     volumes:
       - ./frontend/build:/usr/share/nginx/html:ro
       - ./nginx-production.conf:/etc/nginx/conf.d/default.conf:ro
+      - shared_media:/app/media:ro
     depends_on:
       - backend
     restart: unless-stopped
@@ -196,6 +213,7 @@ services:
 volumes:
   # crm_translations_postgres_data:  # Використовуємо bind mount замість named volume
   crm_translations_redis_data:
+  shared_media:
 
 networks:
   crm_translations_network:

@@ -105,23 +105,12 @@ def save_media_file(
     )
     
     # Додати до сесії, але НЕ робити commit - це зробить викликаючий код
-    try:
-        db.add(attachment)
-        db.flush()  # Flush щоб отримати ID, але не commit
-        
-        logger.info(f"💾 Saved media file: {original_name} ({file_size} bytes) -> {file_path}")
-        
-        return attachment
-    except Exception as e:
-        logger.error(f"❌ Failed to save attachment to database: {e}", exc_info=True)
-        # Try to remove file if DB save failed
-        try:
-            if file_path.exists():
-                file_path.unlink()
-                logger.info(f"🗑️ Removed file after DB save failure: {file_path}")
-        except Exception as cleanup_error:
-            logger.warning(f"⚠️ Failed to cleanup file after DB error: {cleanup_error}")
-        raise  # Re-raise the exception so caller knows it failed
+    db.add(attachment)
+    db.flush()  # Flush щоб отримати ID, але не commit
+    
+    logger.info(f"💾 Saved media file: {original_name} ({file_size} bytes) -> {file_path}")
+    
+    return attachment
 
 
 async def download_and_save_media(

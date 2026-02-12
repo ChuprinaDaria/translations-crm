@@ -237,12 +237,6 @@ class InPostSettings(Base):
         comment="InPost API key (Organization token)"
     )
     
-    organization_id: Mapped[Optional[str]] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="InPost Organization ID for ShipX API"
-    )
-    
     api_url: Mapped[str] = mapped_column(
         String(500),
         nullable=False,

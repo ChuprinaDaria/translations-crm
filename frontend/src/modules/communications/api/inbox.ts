@@ -206,108 +206,17 @@ export const inboxApi = {
    * Create payment link for order
    */
   async createPaymentLink(orderId: string, amount?: number, currency: string = 'pln'): Promise<{ payment_link: string; order_id: string; amount: number; currency: string }> {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      throw new Error(`Invalid order ID format: ${orderId}. Expected UUID format.`);
-    }
-    
-    console.log('[API] Creating payment link for order:', orderId, 'amount:', amount, 'currency:', currency);
-    
-    try {
-      return await apiFetch(`/communications/orders/${orderId}/payment-link`, {
-        method: 'POST',
-        body: JSON.stringify({ amount, currency }),
-      });
-    } catch (error: any) {
-      console.error('[API] Error creating payment link:', {
-        orderId,
-        status: error?.status,
-        statusText: error?.statusText,
-        data: error?.data,
-      });
-      
-      // Provide more specific error messages
-      if (error?.status === 404) {
-        throw new Error(`Замовлення не знайдено. Перевірте, чи замовлення існує в системі.`);
-      }
-      
-      throw error;
-    }
-  },
-
-  /**
-   * Add address or paczkomat to order
-   */
-  async addAddressToOrder(
-    orderId: string,
-    address: string,
-    isPaczkomat: boolean,
-    paczkomatCode?: string
-  ): Promise<{ order_id: string; message: string; delivery_cost?: number }> {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      throw new Error(`Invalid order ID format: ${orderId}. Expected UUID format.`);
-    }
-    
-    console.log('[API] Adding address to order:', orderId, 'isPaczkomat:', isPaczkomat, 'code:', paczkomatCode);
-    
-    try {
-      return await apiFetch(`/communications/orders/${orderId}/add-address`, {
-        method: 'POST',
-        body: JSON.stringify({
-          address,
-          is_paczkomat: isPaczkomat,
-          paczkomat_code: paczkomatCode,
-        }),
-      });
-    } catch (error: any) {
-      console.error('[API] Error adding address to order:', {
-        orderId,
-        status: error?.status,
-        statusText: error?.statusText,
-        data: error?.data,
-      });
-      
-      // Provide more specific error messages
-      if (error?.status === 404) {
-        throw new Error(`Замовлення не знайдено. Перевірте, чи замовлення існує в системі.`);
-      }
-      
-      throw error;
-    }
+    return apiFetch(`/communications/orders/${orderId}/payment-link`, {
+      method: 'POST',
+      body: JSON.stringify({ amount, currency }),
+    });
   },
 
   /**
    * Get tracking number for order
    */
   async getTracking(orderId: string): Promise<{ number: string | null; trackingUrl: string | null; order_id: string }> {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(orderId)) {
-      throw new Error(`Invalid order ID format: ${orderId}. Expected UUID format.`);
-    }
-    
-    console.log('[API] Getting tracking for order:', orderId);
-    
-    try {
-      return await apiFetch(`/communications/orders/${orderId}/tracking`);
-    } catch (error: any) {
-      console.error('[API] Error getting tracking:', {
-        orderId,
-        status: error?.status,
-        statusText: error?.statusText,
-        data: error?.data,
-      });
-      
-      // Provide more specific error messages
-      if (error?.status === 404) {
-        throw new Error(`Замовлення не знайдено. Перевірте, чи замовлення існує в системі.`);
-      }
-      
-      throw error;
-    }
+    return apiFetch(`/communications/orders/${orderId}/tracking`);
   },
 
   /**
@@ -327,6 +236,20 @@ export const inboxApi = {
     return apiFetch(`/communications/orders/${orderId}/add-file`, {
       method: 'POST',
       body: JSON.stringify({ file_url: fileUrl, file_name: fileName }),
+    });
+  },
+
+  /**
+   * Add address or paczkomat to order
+   */
+  async addAddressToOrder(orderId: string, address: string, isPaczkomat: boolean, paczkomatCode?: string): Promise<{ order_id: string; message: string }> {
+    return apiFetch(`/communications/orders/${orderId}/add-address`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        address, 
+        is_paczkomat: isPaczkomat, 
+        paczkomat_code: paczkomatCode 
+      }),
     });
   },
 

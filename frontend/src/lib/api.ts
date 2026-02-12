@@ -1795,6 +1795,26 @@ export const settingsApi = {
       body: JSON.stringify(data),
     });
   },
+  async createShipment(data: {
+    order_id: string;
+    delivery_type: "parcel_locker" | "courier";
+    parcel_locker_code?: string;
+    receiver: {
+      email: string;
+      phone: string;
+      name: string;
+    };
+    package_size?: "small" | "medium" | "large";
+    package_weight?: number;
+  }): Promise<any> {
+    return apiFetch("/postal-services/inpost/shipments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  async getShipmentByOrder(orderId: string): Promise<any> {
+    return apiFetch(`/postal-services/inpost/shipments/by-order/${orderId}`);
+  },
 
   // AI Integration API
   async getAISettings(): Promise<AISettings> {

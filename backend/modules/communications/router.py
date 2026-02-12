@@ -1141,45 +1141,25 @@ async def create_payment_link(
     import os
     from uuid import uuid4
     
-    logger.info(f"Creating payment link for order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
-    
     amount = request.amount
     currency = request.currency or "PLN"
     
-    # Try to find order - log all attempts
-    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
-    
     if not order:
-        # Try to find by string comparison
-        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
-        order_str = str(order_id)
-        all_orders = db.query(Order).limit(5).all()
-        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
-        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
-    
-    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
     
     # If amount not provided, calculate from order or use default
     if not amount:
         # Try to get amount from order transactions or use a default
         amount = float(order.price_brutto) if order.price_brutto else 100.0
     
-    # Отримати налаштування оплати (створити дефолтні, якщо не існують)
-    from modules.payment.router import get_or_create_settings
-    payment_settings = get_or_create_settings(db)
+    # Отримати налаштування оплати
+    payment_settings = db.query(PaymentSettings).first()
+    if not payment_settings:
+        raise HTTPException(status_code=500, detail="Payment settings not configured")
     
     # Визначити активну систему оплати
     active_provider = payment_settings.active_payment_provider
-    
-    # Конвертувати рядок в enum, якщо потрібно
-    if active_provider and isinstance(active_provider, str):
-        try:
-            active_provider = PaymentProvider(active_provider)
-        except ValueError:
-            logger.warning(f"Invalid payment provider value: {active_provider}, will try to auto-detect")
-            active_provider = None
     
     # Якщо не встановлено, вибрати автоматично на основі enabled статусів
     if not active_provider:
@@ -1189,8 +1169,8 @@ async def create_payment_link(
             active_provider = PaymentProvider.PRZELEWY24
         else:
             raise HTTPException(
-                status_code=400, 
-                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in Payment Settings and select an active provider."
+                status_code=500, 
+                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in settings."
             )
     
     # Створити посилання на оплату в залежності від вибраної системи
@@ -1203,29 +1183,6 @@ async def create_payment_link(
             import stripe
             stripe.api_key = payment_settings.stripe_secret_key
             
-            # Create internal session ID for tracking
-            session_id = str(uuid4())
-            
-            # Create PaymentTransaction record
-            from modules.payment.models import PaymentTransaction, PaymentStatus, PaymentProvider
-            from datetime import datetime
-            
-            transaction = PaymentTransaction(
-                order_id=order.id,
-                provider=PaymentProvider.STRIPE,
-                status=PaymentStatus.PENDING,
-                amount=Decimal(str(amount)),
-                currency=currency.upper(),
-                session_id=session_id,
-                customer_email=order.client.email if order.client and order.client.email else "customer@example.com",
-                customer_name=order.client.full_name if order.client and order.client.full_name else "Customer",
-                description=f"Payment for order {order.order_number}",
-            )
-            db.add(transaction)
-            db.flush()
-            
-            logger.info(f"Created PaymentTransaction {transaction.id} with session_id {session_id} for order {order.id}")
-            
             # Create Price
             price = stripe.Price.create(
                 unit_amount=int(amount * 100),  # Stripe works in cents
@@ -1235,7 +1192,7 @@ async def create_payment_link(
                 },
             )
 
-            # Create Payment Link with session_id in metadata
+            # Create Payment Link
             payment_link_obj = stripe.PaymentLink.create(
                 line_items=[
                     {
@@ -1245,7 +1202,6 @@ async def create_payment_link(
                 ],
                 metadata={
                     "order_id": str(order.id),
-                    "session_id": session_id,
                 },
                 after_completion={
                     "type": "redirect",
@@ -1255,10 +1211,6 @@ async def create_payment_link(
                 }
             )
 
-            # Update transaction with payment URL
-            transaction.payment_url = payment_link_obj.url
-            db.commit()
-            
             payment_url = payment_link_obj.url
             
         elif active_provider == PaymentProvider.PRZELEWY24:
@@ -1302,15 +1254,12 @@ async def create_payment_link(
         else:
             raise HTTPException(status_code=500, detail=f"Unsupported payment provider: {active_provider}")
 
-        # Convert provider to string (handle both enum and string cases)
-        provider_str = active_provider.value if isinstance(active_provider, PaymentProvider) else str(active_provider)
-        
         return {
             "payment_link": payment_url,
             "order_id": str(order.id),
             "amount": amount,
             "currency": currency,
-            "provider": provider_str,
+            "provider": active_provider.value,
         }
     except ImportError as e:
         raise HTTPException(status_code=500, detail=f"Payment library not installed: {str(e)}")
@@ -1325,152 +1274,31 @@ async def get_tracking(
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """
-    Get InPost tracking number for order.
-    If tracking number doesn't exist and order has address/paczkomat, automatically creates shipment via InPost ShipX API.
-    """
+    """Get InPost tracking number for order."""
     from modules.crm.models import Order
-    from modules.communications.services.inpost_shipx import InPostShipXService
-    import os
+    from modules.postal_services.models import InPostShipment
     
-    logger.info(f"Getting tracking for order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
-    
-    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
-    
     if not order:
-        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
-        order_str = str(order_id)
-        all_orders = db.query(Order).limit(5).all()
-        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
-        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
     
-    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
+    shipment = db.query(InPostShipment).filter(
+        InPostShipment.order_id == order_id
+    ).order_by(InPostShipment.created_at.desc()).first()
     
-    try:
-        import httpx
-        
-        inpost_settings = crud.get_inpost_settings(db)
-        inpost_api_key = inpost_settings.get("inpost_api_key") or os.getenv("INPOST_API_KEY", "")
-        organization_id = os.getenv("INPOST_ORGANIZATION_ID", "")
-        
-        if inpost_api_key and organization_id:
-            base_url = "https://api-shipx-pl.easypack24.net/v1"
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{base_url}/organizations/{organization_id}/shipments",
-                    headers={
-                        "Authorization": f"Bearer {inpost_api_key}",
-                    },
-                    params={
-                        "reference": order.order_number,
-                    }
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    items = data.get("items", [])
-                    if items and len(items) > 0:
-                        tracking_number = items[0].get("tracking_number") or items[0].get("number")
-                        if tracking_number:
-                            logger.info(f"Found existing tracking number: {tracking_number}")
-                            return {
-                                "number": tracking_number,
-                                "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-                                "order_id": str(order.id),
-                            }
-    except Exception as e:
-        logger.warning(f"Error checking ShipX API for existing tracking: {e}")
-    
-    if not order.description:
+    if shipment and shipment.tracking_number:
         return {
-            "number": None,
-            "trackingUrl": None,
-            "message": "Order has no delivery address. Please add address or paczkomat first.",
+            "number": shipment.tracking_number,
+            "trackingUrl": shipment.tracking_url or f"https://inpost.pl/sledzenie-przesylek?number={shipment.tracking_number}",
             "order_id": str(order.id),
         }
     
-    inpost_service = InPostShipXService(db=db)
-    delivery_address, paczkomat_code, is_paczkomat = inpost_service.parse_address_from_description(order.description)
-    
-    if not delivery_address and not paczkomat_code:
-        return {
-            "number": None,
-            "trackingUrl": None,
-            "message": "No delivery address or paczkomat found in order description.",
-            "order_id": str(order.id),
-        }
-    
-    if not order.client:
-        return {
-            "number": None,
-            "trackingUrl": None,
-            "message": "Order has no client information.",
-            "order_id": str(order.id),
-        }
-    
-    client = order.client
-    client_name = (client.full_name or "").split()[0] if client.full_name else "Client"
-    client_surname = " ".join((client.full_name or "").split()[1:]) if client.full_name and len(client.full_name.split()) > 1 else "Name"
-    client_phone = client.phone or "+48123456789"
-    client_email = client.email or "client@example.com"
-    
-    try:
-        logger.info(f"Creating InPost ShipX shipment for order_id: {order.id}, is_paczkomat: {is_paczkomat}, paczkomat_code: {paczkomat_code}")
-        
-        result = await inpost_service.create_shipment(
-            receiver_name=client_name,
-            receiver_surname=client_surname,
-            receiver_phone=client_phone,
-            receiver_email=client_email,
-            delivery_address=delivery_address,
-            paczkomat_code=paczkomat_code,
-            is_paczkomat=is_paczkomat,
-            reference=order.order_number,
-            parcel_template="medium",
-        )
-        
-        tracking_number = result.get("tracking_number")
-        
-        if tracking_number:
-            if order.description and f"Трекінг: {tracking_number}" not in order.description:
-                order.description += f"\n\nТрекінг: {tracking_number}"
-                db.commit()
-            
-            logger.info(f"Successfully created InPost ShipX shipment with tracking: {tracking_number}")
-            return {
-                "number": tracking_number,
-                "trackingUrl": f"https://inpost.pl/sledzenie-przesylek?number={tracking_number}",
-                "order_id": str(order.id),
-                "message": "Shipment created automatically via InPost ShipX",
-            }
-        else:
-            logger.warning(f"InPost ShipX shipment created but no tracking number in response")
-            return {
-                "number": None,
-                "trackingUrl": None,
-                "message": "Shipment created but tracking number not available yet. Please try again later.",
-                "order_id": str(order.id),
-            }
-            
-    except ValueError as e:
-        logger.error(f"InPost ShipX configuration error: {e}")
-        return {
-            "number": None,
-            "trackingUrl": None,
-            "message": f"InPost ShipX configuration error: {str(e)}",
-            "order_id": str(order.id),
-        }
-    except Exception as e:
-        logger.error(f"Error creating InPost ShipX shipment: {e}", exc_info=True)
-        return {
-            "number": None,
-            "trackingUrl": None,
-            "message": f"Error creating shipment: {str(e)}",
-            "order_id": str(order.id),
-        }
+    return {
+        "number": None,
+        "trackingUrl": None,
+        "message": "Shipment not created yet. Please create shipment first.",
+        "order_id": str(order.id),
+    }
 
 
 @router.post("/clients/{client_id}/update-contact")
@@ -1578,26 +1406,13 @@ async def add_address_to_order(
     from datetime import date
     from decimal import Decimal
     
-    logger.info(f"Adding address to order_id: {order_id} (type: {type(order_id)}, str: {str(order_id)})")
-    
     address = request.address
     is_paczkomat = request.is_paczkomat
     paczkomat_code = request.paczkomat_code
     
-    # Try to find order - log all attempts
-    logger.info(f"Querying Order table with id: {order_id}")
     order = db.query(Order).filter(Order.id == order_id).first()
-    
     if not order:
-        # Try to find by string comparison
-        logger.warning(f"Order not found with UUID filter. Trying alternative search...")
-        order_str = str(order_id)
-        all_orders = db.query(Order).limit(5).all()
-        logger.info(f"Sample orders in DB: {[(str(o.id), o.order_number) for o in all_orders]}")
-        logger.error(f"Order not found: {order_id} (str: {order_str})")
         raise HTTPException(status_code=404, detail="Order not found")
-    
-    logger.info(f"Found order: {order.id} (order_number: {order.order_number}, type: {type(order.id)})")
     
     # Add address/paczkomat to description
     if is_paczkomat and paczkomat_code:

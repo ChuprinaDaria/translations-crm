@@ -198,7 +198,6 @@ async def get_inpost_settings(
     return schemas.InPostSettingsResponse(
         id=settings.id,
         api_key=masked_key,
-        organization_id=settings.organization_id,
         api_url=settings.api_url,
         sandbox_mode=settings.sandbox_mode,
         webhook_url=settings.webhook_url,
@@ -222,8 +221,6 @@ async def update_inpost_settings(
     # Update fields
     if update.api_key is not None:
         settings.api_key = update.api_key
-    if update.organization_id is not None:
-        settings.organization_id = update.organization_id
     if update.sandbox_mode is not None:
         settings.sandbox_mode = update.sandbox_mode
     if update.sandbox_api_key is not None:
@@ -252,7 +249,6 @@ async def update_inpost_settings(
     return schemas.InPostSettingsResponse(
         id=settings.id,
         api_key=masked_key,
-        organization_id=settings.organization_id,
         api_url=settings.api_url,
         sandbox_mode=settings.sandbox_mode,
         webhook_url=settings.webhook_url,
