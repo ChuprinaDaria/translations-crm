@@ -58,8 +58,12 @@ class InPostService:
     def get_api_key(self) -> str:
         """Get API key based on sandbox mode."""
         if self.settings.sandbox_mode:
-            return self.settings.sandbox_api_key or ""
-        return self.settings.api_key or ""
+            api_key = self.settings.sandbox_api_key or ""
+        else:
+            api_key = self.settings.api_key or ""
+        
+        # Convert to string if it's a number (numeric IDs are valid)
+        return str(api_key) if api_key else ""
     
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers for API requests."""
@@ -67,10 +71,14 @@ class InPostService:
         if not api_key:
             raise ValueError("InPost API key is not configured")
         
-        return {
+        # Use api_key directly in Authorization header (can be numeric ID like 124089)
+        headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
+        
+        logger.info(f"InPost API headers: Authorization=Bearer {api_key}")
+        return headers
     
     async def create_shipment(
         self,
@@ -265,42 +273,34 @@ class InPostService:
             self.db.refresh(shipment)
     
     async def _get_organization_id(self) -> str:
-        """Get organization ID from InPost API."""
+        """Get organization ID from database or use api_key as fallback."""
         if self._organization_id:
+            logger.info(f"InPost organization_id (cached): {self._organization_id}")
             return self._organization_id
         
-        api_key = self.get_api_key()
-        if not api_key:
-            raise ValueError("InPost API key is not configured")
+        # First, try to get from database settings
+        settings = self.settings
+        organization_id = settings.organization_id
         
-        api_url = self.get_api_url()
+        # If organization_id is not set, use api_key (they can be the same numeric ID)
+        if not organization_id:
+            api_key = self.get_api_key()
+            if api_key:
+                organization_id = api_key
+                logger.info(f"InPost organization_id not in DB, using api_key: {organization_id}")
+            else:
+                raise ValueError("InPost organization ID and API key are not configured")
         
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{api_url}/organizations",
-                    headers=self._get_headers(),
-                )
-                
-                if response.status_code != 200:
-                    error_data = response.json() if response.text else {}
-                    error_message = error_data.get("message", response.text)
-                    raise ValueError(f"InPost API error: {error_message}")
-                
-                data = response.json()
-                items = data.get("items", [])
-                if not items:
-                    raise ValueError("No organizations found in InPost API response")
-                
-                org_id = str(items[0].get("id", ""))
-                if not org_id:
-                    raise ValueError("Organization ID not found in API response")
-                
-                self._organization_id = org_id
-                return org_id
-        except Exception as e:
-            logger.error(f"Failed to get organization ID from InPost API: {e}")
-            raise ValueError(f"InPost organization ID not configured: {str(e)}")
+        # Convert to string and ensure it's not empty
+        organization_id = str(organization_id).strip()
+        if not organization_id:
+            raise ValueError("InPost organization ID is empty")
+        
+        # Cache it
+        self._organization_id = organization_id
+        
+        logger.info(f"InPost organization_id: {organization_id}")
+        return organization_id
     
     async def get_shipment(self, shipment_id: UUID) -> Optional[InPostShipment]:
         """Get shipment by ID."""

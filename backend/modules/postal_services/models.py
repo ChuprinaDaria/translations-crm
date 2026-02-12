@@ -234,7 +234,13 @@ class InPostSettings(Base):
     api_key: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
-        comment="InPost API key (Organization token)"
+        comment="InPost API key (Organization token - can be numeric ID like 124089)"
+    )
+    
+    organization_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="InPost organization ID (can be same as api_key, e.g., 124089)"
     )
     
     api_url: Mapped[str] = mapped_column(
