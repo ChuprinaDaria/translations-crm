@@ -2378,6 +2378,7 @@ async def instagram_disconnect(
     crud.set_setting(db, "instagram_page_name", "")
     crud.set_setting(db, "instagram_business_id", "")
     crud.set_setting(db, "instagram_page_access_token", "")
+    crud.set_setting(db, "instagram_user_access_token", "")
     
     logger.info("Instagram disconnected")
     
@@ -2613,7 +2614,7 @@ async def instagram_oauth_start(
     }
     
     # Meta OAuth URL
-    oauth_url = "https://www.facebook.com/v18.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
+    oauth_url = "https://www.facebook.com/v22.0/dialog/oauth?" + urllib.parse.urlencode(oauth_params)
     
     logger.info(f"Instagram OAuth redirect: {oauth_url}")
     return RedirectResponse(url=oauth_url)
@@ -2621,6 +2622,7 @@ async def instagram_oauth_start(
 
 @router.get("/instagram/callback")
 async def instagram_oauth_callback(
+    request: Request,
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
@@ -2671,13 +2673,19 @@ async def instagram_oauth_callback(
         )
     
     try:
-        # Обмінюємо code на access_token (використовуємо v22.0)
+        # Відтворюємо redirect_uri (має збігатися з тим, що був при авторизації)
+        base_url = str(request.base_url).rstrip('/')
+        base_url = base_url.replace("http://", "https://", 1)
+        redirect_uri = f"{base_url}/api/v1/communications/instagram/callback"
+        
+        # Крок 1: Обмінюємо code на short-lived access_token (використовуємо v22.0)
         token_url = "https://graph.facebook.com/v22.0/oauth/access_token"
         token_params = {
             "client_id": app_id,
             "client_secret": app_secret,
             "grant_type": "authorization_code",
             "code": code,
+            "redirect_uri": redirect_uri,
         }
         
         async with httpx.AsyncClient() as client:
@@ -2685,14 +2693,43 @@ async def instagram_oauth_callback(
             response.raise_for_status()
             token_data = response.json()
         
-        access_token = token_data.get("access_token")
-        if not access_token:
+        short_lived_token = token_data.get("access_token")
+        if not short_lived_token:
             raise HTTPException(status_code=400, detail="Access token не отримано від Meta")
         
-        # Отримуємо інформацію про сторінку Instagram
-        # Спочатку отримуємо список сторінок користувача (використовуємо v22.0)
+        logger.info(f"[Instagram OAuth] Short-lived token obtained, expires_in={token_data.get('expires_in')}")
+        
+        # Крок 2: Обмінюємо short-lived token на long-lived token (~60 днів)
+        access_token = short_lived_token  # fallback якщо обмін не вдасться
+        try:
+            ll_url = "https://graph.facebook.com/v22.0/oauth/access_token"
+            ll_params = {
+                "grant_type": "fb_exchange_token",
+                "client_id": app_id,
+                "client_secret": app_secret,
+                "fb_exchange_token": short_lived_token,
+            }
+            async with httpx.AsyncClient() as client:
+                ll_response = await client.get(ll_url, params=ll_params)
+                ll_response.raise_for_status()
+                ll_data = ll_response.json()
+            
+            long_lived_token = ll_data.get("access_token")
+            if long_lived_token:
+                access_token = long_lived_token
+                logger.info(f"[Instagram OAuth] Long-lived user token obtained, expires_in={ll_data.get('expires_in')} seconds (~{(ll_data.get('expires_in', 0)) // 86400} days)")
+            else:
+                logger.warning("[Instagram OAuth] Long-lived token exchange returned no token, using short-lived")
+        except Exception as e:
+            logger.warning(f"[Instagram OAuth] Failed to exchange for long-lived token: {e}. Using short-lived token.")
+        
+        # Крок 3: Отримуємо список сторінок користувача з Instagram Business акаунтами
+        # При використанні long-lived user token, page access tokens будуть БЕЗСТРОКОВІ
         pages_url = "https://graph.facebook.com/v22.0/me/accounts"
-        pages_params = {"access_token": access_token}
+        pages_params = {
+            "access_token": access_token,
+            "fields": "id,name,access_token,instagram_business_account",
+        }
         
         async with httpx.AsyncClient() as client:
             pages_response = await client.get(pages_url, params=pages_params)
@@ -2710,8 +2747,8 @@ async def instagram_oauth_callback(
                     "page_access_token": page.get("access_token", ""),
                 })
         
-        # Зберігаємо access_token в налаштуваннях
-        crud.set_setting(db, "instagram_access_token", access_token)
+        # Зберігаємо long-lived user token (для backup)
+        crud.set_setting(db, "instagram_user_access_token", access_token)
         
         # Якщо знайдено тільки одну сторінку - зберігаємо автоматично
         if len(instagram_pages) == 1:
@@ -2721,10 +2758,14 @@ async def instagram_oauth_callback(
                 crud.set_setting(db, "instagram_page_name", page["page_name"])
             if page["business_id"]:
                 crud.set_setting(db, "instagram_business_id", page["business_id"])
-            if page["page_access_token"]:
-                crud.set_setting(db, "instagram_page_access_token", page["page_access_token"])
             
-            logger.info(f"Instagram OAuth successful. Access token saved. Page ID: {page['page_id']}")
+            # Page Access Token — це основний токен для відправки повідомлень.
+            # При отриманні через long-lived user token, він БЕЗСТРОКОВИЙ.
+            page_token = page.get("page_access_token") or access_token
+            crud.set_setting(db, "instagram_access_token", page_token)
+            crud.set_setting(db, "instagram_page_access_token", page_token)
+            
+            logger.info(f"Instagram OAuth successful. Page access token saved (permanent). Page ID: {page['page_id']}")
             
             return HTMLResponse(
                 content=f"""
@@ -2841,6 +2882,8 @@ async def instagram_oauth_callback(
         
         # Якщо сторінок не знайдено
         else:
+            # Зберігаємо хоча б user access token (як fallback)
+            crud.set_setting(db, "instagram_access_token", access_token)
             logger.warning("Instagram OAuth: не знайдено сторінок з Instagram Business акаунтами")
             return HTMLResponse(
                 content=f"""
@@ -2849,6 +2892,7 @@ async def instagram_oauth_callback(
                     <body>
                         <h1>⚠️ Сторінки не знайдено</h1>
                         <p>Не знайдено жодної сторінки Facebook з підключеним Instagram Business акаунтом.</p>
+                        <p>Токен збережено, але для роботи потрібна Facebook сторінка з Instagram Business акаунтом.</p>
                         <p>Переконайтеся, що:</p>
                         <ul>
                             <li>У вас є Facebook сторінка</li>
@@ -2931,7 +2975,10 @@ async def instagram_select_page(
             crud.set_setting(db, "instagram_page_name", selected_page["page_name"])
         if selected_page["business_id"]:
             crud.set_setting(db, "instagram_business_id", selected_page["business_id"])
-        if selected_page["page_access_token"]:
+        
+        # Page Access Token — основний токен для відправки повідомлень (безстроковий)
+        if selected_page.get("page_access_token"):
+            crud.set_setting(db, "instagram_access_token", selected_page["page_access_token"])
             crud.set_setting(db, "instagram_page_access_token", selected_page["page_access_token"])
         
         logger.info(f"Instagram page selected: {selected_page['page_name']} (ID: {selected_page['page_id']})")

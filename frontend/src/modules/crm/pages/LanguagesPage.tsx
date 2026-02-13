@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Globe, Plus, Edit, Trash2, Loader2, FileText, StickyNote, Settings } from 'lucide-react';
-import { SideTabs, SidePanel, type SideTab, type QuickAction } from '../../../components/ui';
+import { SidePanel } from '../../../components/ui';
 import { useI18n } from '../../../lib/i18n';
+import { QuickActionsSidebar, type QuickAction } from '../../communications/components/QuickActionsSidebar';
 
-// Конфігурація табів для Languages
-const getLanguagesSideTabs = (t: (key: string) => string): SideTab[] => [
-  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
-  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
+// Конфігурація для панелі бічних табів
+const getLanguagesSidePanelTabs = (t: (key: string) => string) => [
+  { id: 'info', icon: FileText, label: t('tabs.info') },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes') },
+  { id: 'settings', icon: Settings, label: t('tabs.settings') },
 ];
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -32,7 +33,7 @@ export function LanguagesPage() {
   const [editingLanguage, setEditingLanguage] = useState<Language | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  const LANGUAGES_SIDE_TABS = getLanguagesSideTabs(t);
+  const LANGUAGES_SIDE_PANEL_TABS = getLanguagesSidePanelTabs(t);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [formData, setFormData] = useState<LanguageCreate>({
     name_pl: '',
@@ -124,6 +125,41 @@ export function LanguagesPage() {
     setFormData({ name_pl: '', name_en: '', base_client_price: 0 });
     setShowModal(true);
   };
+  
+  // Quick Actions для LanguagesPage
+  const quickActions = useMemo<QuickAction[]>(() => [
+    {
+      id: 'add-language',
+      icon: Plus,
+      tooltip: 'Додати мову',
+      onClick: handleOpenCreate,
+      disabled: false,
+    },
+    {
+      id: 'info',
+      icon: FileText,
+      tooltip: t('tabs.info'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'info' ? null : 'info'),
+      disabled: false,
+      isActive: sidePanelTab === 'info',
+    },
+    {
+      id: 'notes',
+      icon: StickyNote,
+      tooltip: t('tabs.notes'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'notes' ? null : 'notes'),
+      disabled: false,
+      isActive: sidePanelTab === 'notes',
+    },
+    {
+      id: 'settings',
+      icon: Settings,
+      tooltip: t('tabs.settings'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'settings' ? null : 'settings'),
+      disabled: false,
+      isActive: sidePanelTab === 'settings',
+    },
+  ], [t, sidePanelTab, handleOpenCreate]);
 
   if (isLoading) {
     return (
@@ -136,7 +172,7 @@ export function LanguagesPage() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto pr-[64px]">
+      <div className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Globe className="w-8 h-8 text-[#FF5A00]" />
@@ -298,31 +334,16 @@ export function LanguagesPage() {
         </DialogContent>
       </Dialog>
 
-      </main>
-
-      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
-      <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
-        <SideTabs
-          tabs={LANGUAGES_SIDE_TABS}
-          activeTab={sidePanelTab}
-          onTabChange={setSidePanelTab}
-          position="right"
-          quickActions={[
-            {
-              id: 'add-language',
-              icon: Plus,
-              label: 'Додати мову',
-              onClick: handleOpenCreate,
-            },
-          ]}
-        />
-      </aside>
+      {/* QuickActionsSidebar - full height, right side */}
+      <div className="flex-shrink-0 h-full">
+        <QuickActionsSidebar actions={quickActions} />
+      </div>
 
       {/* SidePanel - Бокова панель з контентом */}
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={LANGUAGES_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
+        title={LANGUAGES_SIDE_PANEL_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (

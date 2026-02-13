@@ -10,4 +10,5 @@ export { ClientsSidebar, type ClientListItem, type FilterState } from './Clients
 export { ClientTabsArea } from './ClientTabsArea';
 export { ClientTabContent } from './ClientTabContent';
 export { OrderTabContent } from './OrderTabContent';
+export { ClientsTable } from './ClientsTable';
 

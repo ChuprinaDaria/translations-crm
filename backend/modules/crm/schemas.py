@@ -11,7 +11,7 @@ from modules.crm.models import (
 
 class ClientCreate(BaseModel):
     full_name: str = Field(..., min_length=1)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None  # Changed from EmailStr to str to allow flexible validation
     phone: str = Field(..., min_length=1)
     source: Optional[ClientSource] = ClientSource.MANUAL
     conversation_id: Optional[UUID] = None  # Optional conversation ID for duplicate checking
@@ -21,9 +21,88 @@ class ClientCreate(BaseModel):
     @field_validator('email', mode='before')
     @classmethod
     def validate_email(cls, v):
-        """Convert empty string to None for optional email field"""
+        """Convert empty string to None for optional email field, validate format if provided"""
         if v == '' or v is None:
             return None
+        # If email is provided, validate it's a valid format
+        if isinstance(v, str) and v.strip():
+            # Basic email validation (more lenient than EmailStr)
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, v.strip()):
+                # If invalid format, return None instead of raising error
+                # This allows creating clients with invalid emails (they just won't have email)
+                return None
+        return v.strip() if isinstance(v, str) else v
+    
+    @field_validator('source', mode='before')
+    @classmethod
+    def validate_source(cls, v):
+        """Convert string to ClientSource enum, default to MANUAL if invalid"""
+        if v is None:
+            return ClientSource.MANUAL
+        if isinstance(v, ClientSource):
+            return v
+        if isinstance(v, str):
+            v_upper = v.upper()
+            # Try to match enum value
+            try:
+                return ClientSource(v.lower())  # ClientSource values are lowercase
+            except ValueError:
+                # If invalid, try common variations
+                source_map = {
+                    'email': ClientSource.EMAIL,
+                    'telegram': ClientSource.TELEGRAM,
+                    'whatsapp': ClientSource.WHATSAPP,
+                    'instagram': ClientSource.INSTAGRAM,
+                    'facebook': ClientSource.FACEBOOK,
+                    'manual': ClientSource.MANUAL,
+                    'office_visit': ClientSource.OFFICE_VISIT,
+                }
+                return source_map.get(v.lower(), ClientSource.MANUAL)
+        return ClientSource.MANUAL
+    
+    @field_validator('phone', mode='before')
+    @classmethod
+    def validate_phone(cls, v):
+        """Trim phone and ensure it's not empty"""
+        if v is None:
+            raise ValueError('phone is required')
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                raise ValueError('phone cannot be empty')
+        return v
+    
+    @field_validator('full_name', mode='before')
+    @classmethod
+    def validate_full_name(cls, v):
+        """Trim full_name and ensure it's not empty"""
+        if v is None:
+            raise ValueError('full_name is required')
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                raise ValueError('full_name cannot be empty')
+        return v
+    
+    @field_validator('conversation_id', mode='before')
+    @classmethod
+    def validate_conversation_id(cls, v):
+        """Convert string UUID to UUID object, or None if invalid/empty"""
+        if v is None or v == '':
+            return None
+        if isinstance(v, UUID):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return None
+            try:
+                return UUID(v)
+            except (ValueError, AttributeError):
+                # Invalid UUID format, return None instead of raising error
+                return None
         return v
 
 

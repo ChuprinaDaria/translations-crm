@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Wallet, FileText, StickyNote, Settings, Download } from "lucide-react";
 import { FinancePaymentsTable } from "../components/FinancePaymentsTable";
 import { ShipmentsTable } from "../components/ShipmentsTable";
@@ -10,15 +10,16 @@ import { ordersApi } from "../../crm/api/orders";
 import { toast } from "sonner";
 import { useI18n } from "../../../lib/i18n";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs";
-import { SideTabs, SidePanel, type SideTab } from "../../../components/ui";
+import { SidePanel } from "../../../components/ui";
 import { Button } from "../../../components/ui/button";
+import { QuickActionsSidebar, type QuickAction } from "../../communications/components/QuickActionsSidebar";
 
-// Конфігурація табів для Finance
-const getFinanceSideTabs = (t: (key: string) => string): SideTab[] => [
-  { id: 'info', icon: FileText, label: t('tabs.info'), color: 'blue' },
-  { id: 'notes', icon: StickyNote, label: t('tabs.notes'), color: 'green' },
-  { id: 'settings', icon: Settings, label: t('tabs.settings'), color: 'gray' },
-  { id: 'export', icon: Download, label: t('tabs.export'), color: 'orange' },
+// Конфігурація для панелі бічних табів
+const getFinanceSidePanelTabs = (t: (key: string) => string) => [
+  { id: 'info', icon: FileText, label: t('tabs.info') },
+  { id: 'notes', icon: StickyNote, label: t('tabs.notes') },
+  { id: 'settings', icon: Settings, label: t('tabs.settings') },
+  { id: 'export', icon: Download, label: t('tabs.export') },
 ];
 
 // Використовувати мокові дані для тестування (встановіть в true для розробки)
@@ -30,12 +31,48 @@ export function FinancePage() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [orderProfits, setOrderProfits] = useState<OrderProfit[]>([]);
   
-  const FINANCE_SIDE_TABS = getFinanceSideTabs(t);
+  const FINANCE_SIDE_PANEL_TABS = getFinanceSidePanelTabs(t);
   const [loading, setLoading] = useState(true);
   const [loadingShipments, setLoadingShipments] = useState(true);
   const [loadingProfits, setLoadingProfits] = useState(true);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  
+  // Quick Actions для FinancePage
+  const quickActions = useMemo<QuickAction[]>(() => [
+    {
+      id: 'info',
+      icon: FileText,
+      tooltip: t('tabs.info'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'info' ? null : 'info'),
+      disabled: false,
+      isActive: sidePanelTab === 'info',
+    },
+    {
+      id: 'notes',
+      icon: StickyNote,
+      tooltip: t('tabs.notes'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'notes' ? null : 'notes'),
+      disabled: false,
+      isActive: sidePanelTab === 'notes',
+    },
+    {
+      id: 'settings',
+      icon: Settings,
+      tooltip: t('tabs.settings'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'settings' ? null : 'settings'),
+      disabled: false,
+      isActive: sidePanelTab === 'settings',
+    },
+    {
+      id: 'export',
+      icon: Download,
+      tooltip: t('tabs.export'),
+      onClick: () => setSidePanelTab(sidePanelTab === 'export' ? null : 'export'),
+      disabled: false,
+      isActive: sidePanelTab === 'export',
+    },
+  ], [t, sidePanelTab]);
 
   useEffect(() => {
     loadPayments();
@@ -192,7 +229,7 @@ export function FinancePage() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto pr-[64px]">
+      <div className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden">
         <div className="flex items-center gap-3 mb-6">
           <Wallet className="w-8 h-8 text-[#FF5A00]" />
           <h1 className="text-2xl font-semibold text-gray-900">{t('finance.title')}</h1>
@@ -224,23 +261,18 @@ export function FinancePage() {
             </div>
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
 
-      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
-      <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
-        <SideTabs
-          tabs={FINANCE_SIDE_TABS}
-          activeTab={sidePanelTab}
-          onTabChange={setSidePanelTab}
-          position="right"
-        />
-      </aside>
+      {/* QuickActionsSidebar - full height, right side */}
+      <div className="flex-shrink-0 h-full">
+        <QuickActionsSidebar actions={quickActions} />
+      </div>
 
       {/* SidePanel - Бокова панель з контентом */}
       <SidePanel
         open={sidePanelTab !== null}
         onClose={() => setSidePanelTab(null)}
-        title={FINANCE_SIDE_TABS.find(tab => tab.id === sidePanelTab)?.label}
+        title={FINANCE_SIDE_PANEL_TABS.find(tab => tab.id === sidePanelTab)?.label}
         width="md"
       >
         {sidePanelTab === 'info' && (

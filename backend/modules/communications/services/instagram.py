@@ -34,7 +34,7 @@ class InstagramService(MessengerService):
         if config is None:
             config = self._load_config(db)
         super().__init__(db, config)
-        self.base_url = "https://graph.facebook.com/v18.0"
+        self.base_url = "https://graph.facebook.com/v22.0"
     
     def get_platform(self) -> PlatformEnum:
         return PlatformEnum.INSTAGRAM
@@ -55,14 +55,21 @@ class InstagramService(MessengerService):
             
             # Перевіряємо чи є хоча б один ключ (не обов'язково app_secret)
             if any(settings.values()):
+                # Пріоритет: page_access_token > access_token
+                # Page Access Token — безстроковий токен для відправки повідомлень
+                access_token = (
+                    settings.get("instagram_page_access_token")
+                    or settings.get("instagram_access_token")
+                    or ""
+                )
                 config = {
-                    "access_token": settings.get("instagram_access_token") or "",
+                    "access_token": access_token,
                     "app_secret": settings.get("instagram_app_secret") or "",
                     "verify_token": settings.get("instagram_verify_token") or "",
                     "app_id": settings.get("instagram_app_id") or "",
                     "page_id": page_id,
                 }
-                logger.info(f"[Instagram Config] Using DB config, verify_token length: {len(config.get('verify_token', ''))}, page_id: {bool(config.get('page_id'))}")
+                logger.info(f"[Instagram Config] Using DB config, has_token={bool(access_token)}, verify_token length: {len(config.get('verify_token', ''))}, page_id: {bool(config.get('page_id'))}")
                 return config
         except Exception as e:
             logger.warning(f"[Instagram Config] Error loading from DB: {e}")
@@ -131,7 +138,7 @@ class InstagramService(MessengerService):
         try:
             # Для Instagram потрібно використовувати Instagram Graph API endpoint, а не Facebook
             # Використовуємо graph.instagram.com замість graph.facebook.com
-            url = f"https://graph.instagram.com/v18.0/{igsid}"
+            url = f"https://graph.instagram.com/v22.0/{igsid}"
             params = {
                 "fields": "username,name,profile_pic",
                 "access_token": access_token,

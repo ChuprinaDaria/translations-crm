@@ -1012,6 +1012,9 @@ def get_instagram_settings(db: Session) -> dict[str, str | None]:
         "instagram_app_secret",
         "instagram_verify_token",
         "instagram_page_id",
+        "instagram_page_access_token",
+        "instagram_page_name",
+        "instagram_business_id",
     ]
     return get_settings(db, keys)
 

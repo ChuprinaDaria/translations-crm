@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard, UserPlus } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { X, Plus, Users, MessageSquare, Phone, Building, List, FileText, StickyNote, CreditCard, UserPlus, Menu } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
-import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
+import { SidePanel } from '../../../components/ui';
+import { QuickActionsSidebar, type QuickAction } from '../../communications/components/QuickActionsSidebar';
 import {
   Sheet,
   SheetContent,
@@ -33,6 +34,7 @@ import { ClientTabContent } from '../components/ClientTabContent';
 import { OrderTabContent } from '../components/OrderTabContent';
 import { OrderDetailSheet } from '../components/OrderDetailSheet';
 import { ClientNotes } from '../components/ClientNotes';
+import { ClientsTable } from '../components/ClientsTable';
 import type { Order as KanbanOrder } from '../components/KanbanCard';
 import { useClientTabs, type ClientTabData, type OrderTabData } from '../hooks/useClientTabs';
 import { clientsApi, type Client, type Order } from '../api/clients';
@@ -40,14 +42,12 @@ import { ordersApi } from '../api/orders';
 import { cn } from '../../../components/ui/utils';
 import { CreateOrderDialog } from '../../communications/components/SmartActions/CreateOrderDialog';
 
-// Конфігурація табів для сторінки Клієнтів
-const CLIENT_SIDE_TABS: SideTab[] = [
-  { id: 'sidebar', icon: List, label: 'Список клієнтів', color: 'gray' },
-  { id: 'new', icon: UserPlus, label: 'Новий клієнт', color: 'gray' },
-  { id: 'details', icon: FileText, label: 'Дані клієнта', color: 'gray' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'gray' },
-  { id: 'payments', icon: CreditCard, label: 'Оплати', color: 'gray' },
-  { id: 'translators', icon: Users, label: 'Перекладачі', color: 'gray' },
+// Конфігурація для панелі бічних табів
+const CLIENT_SIDE_PANEL_TABS = [
+  { id: 'details', icon: FileText, label: 'Дані клієнта' },
+  { id: 'notes', icon: StickyNote, label: 'Нотатки' },
+  { id: 'payments', icon: CreditCard, label: 'Оплати' },
+  { id: 'translators', icon: Users, label: 'Перекладачі' },
 ];
 
 /**
@@ -370,6 +370,77 @@ export function ClientsPageEnhanced() {
     setIsCreateClientOpen(true);
   };
 
+  // Quick Actions для ClientsPage
+  const quickActions = useMemo<QuickAction[]>(() => [
+    {
+      id: 'sidebar',
+      icon: Menu,
+      tooltip: 'Відкрити список клієнтів',
+      onClick: () => setIsDesktopSidebarOpen(!isDesktopSidebarOpen),
+      disabled: false,
+      isActive: isDesktopSidebarOpen,
+    },
+    {
+      id: 'new',
+      icon: UserPlus,
+      tooltip: 'Новий клієнт',
+      onClick: handleNewClient,
+      disabled: false,
+    },
+    {
+      id: 'details',
+      icon: FileText,
+      tooltip: 'Дані клієнта',
+      onClick: () => {
+        if (activeClient) {
+          setSidePanelTab(sidePanelTab === 'details' ? null : 'details');
+          setIsDesktopSidebarOpen(false);
+        }
+      },
+      disabled: !activeClient,
+      disabledMessage: 'Виберіть клієнта',
+    },
+    {
+      id: 'notes',
+      icon: StickyNote,
+      tooltip: 'Нотатки',
+      onClick: () => {
+        if (activeClient) {
+          setSidePanelTab(sidePanelTab === 'notes' ? null : 'notes');
+          setIsDesktopSidebarOpen(false);
+        }
+      },
+      disabled: !activeClient,
+      disabledMessage: 'Виберіть клієнта',
+    },
+    {
+      id: 'payments',
+      icon: CreditCard,
+      tooltip: 'Оплати',
+      onClick: () => {
+        if (activeClient) {
+          setSidePanelTab(sidePanelTab === 'payments' ? null : 'payments');
+          setIsDesktopSidebarOpen(false);
+        }
+      },
+      disabled: !activeClient,
+      disabledMessage: 'Виберіть клієнта',
+    },
+    {
+      id: 'translators',
+      icon: Users,
+      tooltip: 'Перекладачі',
+      onClick: () => {
+        if (activeClient) {
+          setSidePanelTab(sidePanelTab === 'translators' ? null : 'translators');
+          setIsDesktopSidebarOpen(false);
+        }
+      },
+      disabled: !activeClient,
+      disabledMessage: 'Виберіть клієнта',
+    },
+  ], [isDesktopSidebarOpen, activeClient, sidePanelTab, handleNewClient]);
+
   const handleCreateOrder = () => {
     if (!activeClient) return;
     setIsCreateOrderOpen(true);
@@ -509,78 +580,20 @@ export function ClientsPageEnhanced() {
 
   // Render tab content
   const renderTabContent = () => {
-    // If no active tab, show client list in main area
+    // If no active tab, show clients table
     if (!activeTab) {
       return (
-        <div className="h-full flex flex-col">
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">Всі клієнти</h2>
-            <p className="text-sm text-gray-500 mt-1">Оберіть клієнта зі списку або створіть нового</p>
+        <div className="h-full flex flex-col overflow-hidden">
+          <div className="p-6 border-b bg-white">
+            <h2 className="text-lg font-semibold text-gray-900">Wszystkie klienci</h2>
+            <p className="text-sm text-gray-500 mt-1">Kliknij na klienta, aby otworzyć jego kartę</p>
           </div>
           <div className="flex-1 overflow-auto p-6">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-                  <p className="text-gray-500">Завантаження клієнтів...</p>
-                </div>
-              </div>
-            ) : clients.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                <Users className="w-16 h-16 mb-4 text-[#FF5A00] opacity-30" />
-                <h3 className="text-lg font-medium mb-2">Немає клієнтів</h3>
-                <p className="text-sm text-gray-400 mb-4">Створіть першого клієнта</p>
-                <Button onClick={handleNewClient} className="bg-[#FF5A00] hover:bg-[#FF5A00]/90">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Новий клієнт
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {clients.map((client) => {
-                  const iconConfig = platformIcons[client.source] || platformIcons.manual;
-                  const Icon = iconConfig.icon;
-                  return (
-                    <div
-                      key={client.id}
-                      onClick={() => handleSelectClient(client.id)}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-[#FF5A00] hover:shadow-md transition-all cursor-pointer bg-white"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                            <Users className="w-5 h-5 text-[#FF5A00]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-gray-900 truncate">{client.full_name}</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {new Date(client.created_at).toLocaleDateString('uk-UA')}
-                            </p>
-                          </div>
-                        </div>
-                        <Icon className={cn('w-4 h-4 shrink-0', iconConfig.color)} />
-                      </div>
-                      {client.phone && (
-                        <div className="text-sm text-gray-600 mb-1 truncate">{client.phone}</div>
-                      )}
-                      {client.email && (
-                        <div className="text-sm text-gray-500 truncate">{client.email}</div>
-                      )}
-                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                        <span className="text-gray-500">
-                          Замовлень: <span className="font-medium text-gray-700">{client.orders_count || 0}</span>
-                        </span>
-                        {client.total_amount && client.total_amount > 0 && (
-                          <span className="text-gray-700 font-medium">
-                            {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(client.total_amount)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <ClientsTable
+              clients={clients}
+              loading={isLoading}
+              onClientClick={handleSelectClient}
+            />
           </div>
         </div>
       );
@@ -634,7 +647,7 @@ export function ClientsPageEnhanced() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gray-50">
       {/* Ліва частина: Основний контент */}
-      <main className="flex-1 min-w-0 flex flex-col p-6 overflow-y-auto pr-[64px]">
+      <div className="flex-1 min-w-0 flex flex-col p-6 overflow-hidden">
         {/* Page Header */}
         <div className="flex items-center gap-3 mb-6">
           <Users className="w-8 h-8 text-[#FF5A00]" />
@@ -642,7 +655,7 @@ export function ClientsPageEnhanced() {
         </div>
 
         {/* Main content */}
-        <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
         {/* Tabs + Content Area - LEFT */}
         <main className="flex-1 flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white">
           <ClientTabsArea
@@ -669,45 +682,13 @@ export function ClientsPageEnhanced() {
           </aside>
         )}
         </div>
-      </main>
+      </div>
 
-      {/* Права частина: Бокова панель (тепер вона в потоці!) */}
+      {/* QuickActionsSidebar - full height, right side */}
       {!isMobile && (
-        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
-          <SideTabs
-            tabs={CLIENT_SIDE_TABS}
-            activeTab={
-              sidePanelTab 
-                ? sidePanelTab 
-                : (isDesktopSidebarOpen ? 'sidebar' : null)
-            }
-            onTabChange={(tabId) => {
-              if (tabId === 'sidebar') {
-                // Перемикаємо сайдбар
-                if (isDesktopSidebarOpen && sidePanelTab === null) {
-                  // Якщо сайдбар відкритий і це клік на активний таб - закриваємо
-                  setIsDesktopSidebarOpen(false);
-                } else {
-                  // Відкриваємо сайдбар
-                  setIsDesktopSidebarOpen(true);
-                  setSidePanelTab(null);
-                }
-              } else if (tabId === 'new') {
-                handleNewClient();
-                setSidePanelTab(null);
-              } else {
-                // Для інших табів потрібен активний клієнт
-                if (activeClient) {
-                  setSidePanelTab(tabId);
-                  setIsDesktopSidebarOpen(false); // Закриваємо сайдбар коли відкриваємо панель
-                } else {
-                  setSidePanelTab(null);
-                }
-              }
-            }}
-            position="right"
-          />
-        </aside>
+        <div className="flex-shrink-0 h-full">
+          <QuickActionsSidebar actions={quickActions} />
+        </div>
       )}
 
       {/* Mobile Sidebar Drawer - Opens from RIGHT */}
@@ -726,11 +707,11 @@ export function ClientsPageEnhanced() {
       </Sheet>
 
       {/* SidePanel - Бокова панель з контентом */}
-      {!isMobile && activeClient && sidePanelTab && sidePanelTab !== 'sidebar' && sidePanelTab !== 'new' && (
+      {!isMobile && activeClient && sidePanelTab && (
         <SidePanel
           open={sidePanelTab !== null}
           onClose={() => setSidePanelTab(null)}
-          title={CLIENT_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
+          title={CLIENT_SIDE_PANEL_TABS.find(t => t.id === sidePanelTab)?.label}
           width="md"
         >
           {sidePanelTab === 'details' && activeClient && (

@@ -241,7 +241,32 @@ export function CreateClientDialog({
       handleClose();
     } catch (error: any) {
       console.error('Error creating client:', error);
-      toast.error(error?.message || 'Помилка створення клієнта');
+      
+      // Handle duplicate client error (400 with detail object)
+      if (error?.data?.detail) {
+        const detail = error.data.detail;
+        if (typeof detail === 'object' && detail.type === 'duplicate_client') {
+          const message = detail.message || `Клієнт вже існує`;
+          toast.error(message);
+          // If client_id is provided, we could navigate to that client
+          if (detail.client_id) {
+            console.log('Duplicate client ID:', detail.client_id);
+          }
+        } else if (typeof detail === 'string') {
+          toast.error(detail);
+        } else if (Array.isArray(detail)) {
+          // Validation errors
+          const firstError = detail[0];
+          const errorMsg = firstError?.msg || 'Помилка валідації даних';
+          toast.error(errorMsg);
+        } else {
+          toast.error('Помилка створення клієнта');
+        }
+      } else if (error?.message) {
+        toast.error(error.message);
+      } else {
+        toast.error('Помилка створення клієнта');
+      }
     } finally {
       setIsLoading(false);
     }
