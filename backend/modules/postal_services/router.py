@@ -13,7 +13,7 @@ from modules.auth import models as auth_models
 from modules.postal_services.service import InPostService
 from modules.postal_services import schemas
 from modules.postal_services.models import InPostSettings, InPostShipment
-from backend import crud
+import crud
 
 logger = logging.getLogger(__name__)
 
