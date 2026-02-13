@@ -233,6 +233,31 @@ export function CreateOrderDialog({
         order_source: orderSource || undefined,
       });
 
+      // Автоматично створюємо Shipment запис з даними доставки, якщо вибрано InPost
+      if (deliveryMethod === 'inpost_locker' || deliveryMethod === 'inpost_courier') {
+        try {
+          const { inboxApi } = await import('../../api/inbox');
+          
+          // Визначаємо адресу та пачкомат
+          const address = deliveryMethod === 'inpost_courier' ? courierAddress : undefined;
+          const paczkomatCode = deliveryMethod === 'inpost_locker' ? lockerNumber : undefined;
+          const isPaczkomat = deliveryMethod === 'inpost_locker';
+          
+          // Створюємо Shipment запис через API
+          // Дані про email та телефон будуть взяті з клієнта автоматично на бекенді
+          await inboxApi.addAddressToOrder(
+            order.id,
+            address || paczkomatCode || '',
+            isPaczkomat,
+            paczkomatCode
+          );
+        } catch (shipmentError) {
+          console.error('Error creating shipment record:', shipmentError);
+          // Не блокуємо створення замовлення, якщо не вдалося створити shipment
+          toast.warning('Замовлення створено, але не вдалося зберегти дані доставки. Можна додати їх пізніше.');
+        }
+      }
+
       // Якщо вибрано оплату картою або лінк на оплату, створюємо payment transaction/link
       if ((paymentMethod === 'card' || paymentMethod === 'payment_link') && priceBrutto && parseFloat(priceBrutto) > 0) {
         try {

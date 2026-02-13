@@ -1324,6 +1324,17 @@ export function InboxPageEnhanced() {
       if (!tracking.number || !tracking.trackingUrl) {
         if (tracking.message?.includes('not created') || tracking.message?.includes('Shipment not created')) {
           try {
+            // Завантажуємо дані замовлення з клієнтом, якщо ще не завантажені
+            let orderWithClient = order;
+            if (!order.client) {
+              try {
+                const fullOrder = await ordersApi.getOrder(orderId);
+                orderWithClient = fullOrder;
+              } catch (err) {
+                console.error('Error loading order with client:', err);
+              }
+            }
+            
             const activeChat = openChats.find(c => c.conversationId === conversationId);
             const currentConversation = activeChat?.conversation;
             
@@ -1332,9 +1343,11 @@ export function InboxPageEnhanced() {
             const isEmailLike = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
             const isPhoneLike = (v: string) => /^\+?[0-9]{9,15}$/.test(v);
 
-            const receiverEmail = client?.email || (isEmailLike(externalId) ? externalId : '');
-            const receiverPhone = client?.phone || (isPhoneLike(externalId) ? externalId : '');
-            const receiverName = client?.full_name || client?.name || 'Klient';
+            // Пріоритет: order.client > client (зі стану) > externalId
+            const orderClient = orderWithClient?.client;
+            const receiverEmail = orderClient?.email || client?.email || (isEmailLike(externalId) ? externalId : '');
+            const receiverPhone = orderClient?.phone || client?.phone || (isPhoneLike(externalId) ? externalId : '');
+            const receiverName = orderClient?.full_name || client?.full_name || client?.name || 'Klient';
 
             if (!receiverEmail && !receiverPhone) {
               toast.error('Немає email або телефону клієнта для створення відправлення. Додайте контактні дані клієнта.');

@@ -393,12 +393,15 @@ def get_order(
 ):
     """Get order by ID with all related data."""
     from uuid import UUID
+    from sqlalchemy.orm import joinedload
+    
     try:
         order_uuid = UUID(order_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid order_id format")
     
-    order = db.query(models.Order).filter(models.Order.id == order_uuid).first()
+    # Явно завантажуємо клієнта, щоб переконатися, що дані доступні
+    order = db.query(models.Order).options(joinedload(models.Order.client)).filter(models.Order.id == order_uuid).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     

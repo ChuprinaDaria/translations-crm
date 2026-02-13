@@ -653,7 +653,16 @@ async def create_payment_link(
     
     # If amount not provided, calculate from order or use default
     if not amount:
-        amount = float(order.price_brutto) if order.price_brutto else 100.0
+        if order.price_brutto:
+            amount = float(order.price_brutto)
+            logger.info(f"Payment link: using order.price_brutto = {amount} for order {order_id}")
+        else:
+            amount = 100.0
+            logger.warning(f"Payment link: order.price_brutto is None, using default 100.0 for order {order_id}")
+    else:
+        logger.info(f"Payment link: using provided amount = {amount} for order {order_id}")
+    
+    logger.info(f"Payment link: final amount = {amount} for order {order_id} (order.price_brutto = {order.price_brutto})")
     
     # Get payment settings
     payment_settings = db.query(PaymentSettings).first()
@@ -874,8 +883,8 @@ async def create_shipment(
     user: models.User = Depends(role_required([UserRole.OWNER, UserRole.MANAGER])),
 ):
     """Створити відправку. Можна одразу створити InPost shipment через API."""
-    # Перевіряємо замовлення
-    order = db.query(Order).filter(Order.id == shipment_data.order_id).first()
+    # Перевіряємо замовлення з явним завантаженням клієнта
+    order = db.query(Order).options(joinedload(Order.client)).filter(Order.id == shipment_data.order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -907,7 +916,7 @@ async def create_shipment(
     if shipment_data.create_inpost_shipment and shipment_data.method in [ShipmentMethod.INPOST_LOCKER, ShipmentMethod.INPOST_COURIER]:
         try:
             from modules.postal_services.service import InPostService
-            from modules.postal_services.schemas import CreateShipmentRequest
+            from modules.postal_services.schemas import CreateShipmentRequest, ReceiverInfo, AddressInfo
             from modules.postal_services.models import DeliveryType
             
             inpost_service = InPostService(db)
@@ -915,14 +924,133 @@ async def create_shipment(
             # Створюємо запит для InPost
             delivery_type = DeliveryType.PARCEL_LOCKER if shipment_data.method == ShipmentMethod.INPOST_LOCKER else DeliveryType.COURIER
             
+            # Перевіряємо, чи є існуючий Shipment запис для цього замовлення
+            existing_shipment = db.query(Shipment).filter(
+                Shipment.order_id == order.id,
+                Shipment.method.in_([ShipmentMethod.INPOST_LOCKER, ShipmentMethod.INPOST_COURIER])
+            ).order_by(Shipment.created_at.desc()).first()
+            
+            # Отримуємо дані отримувача
+            # Перевіряємо, чи завантажений клієнт
+            if not order.client:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Клієнт не знайдений для цього замовлення."
+                )
+            
+            # Отримуємо email та телефон, перевіряючи на порожні рядки
+            client_email = order.client.email.strip() if order.client.email and order.client.email.strip() else None
+            client_phone = order.client.phone.strip() if order.client.phone and order.client.phone.strip() else None
+            client_name = order.client.full_name if order.client.full_name else "Клієнт"
+            
+            # Використовуємо дані з існуючого Shipment, якщо вони є, інакше з shipment_data або з клієнта
+            recipient_email = shipment_data.recipient_email or (existing_shipment.recipient_email if existing_shipment and existing_shipment.recipient_email else None) or client_email
+            recipient_phone = shipment_data.recipient_phone or (existing_shipment.recipient_phone if existing_shipment and existing_shipment.recipient_phone else None) or client_phone
+            recipient_name = shipment_data.recipient_name or (existing_shipment.recipient_name if existing_shipment and existing_shipment.recipient_name else None) or client_name
+            
+            # Використовуємо пачкомат та адресу з існуючого Shipment, якщо вони є
+            paczkomat_code = shipment_data.paczkomat_code or (existing_shipment.paczkomat_code if existing_shipment else None)
+            delivery_address = shipment_data.delivery_address or (existing_shipment.delivery_address if existing_shipment else None)
+            
+            # Логування для діагностики
+            logger.info(f"Creating shipment for order {order.id}: client_id={order.client_id}, client_email={client_email}, client_phone={client_phone}")
+            logger.info(f"Final recipient data: email={recipient_email}, phone={recipient_phone}, name={recipient_name}")
+            
+            # Перевіряємо, чи є email та телефон (перевіряємо на None та порожні рядки)
+            if not recipient_email or not recipient_email.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Email клієнта обов'язковий для створення відправлення InPost. Додайте email до картки клієнта. (Client ID: {order.client_id}, Current email: '{client_email}')"
+                )
+            if not recipient_phone or not recipient_phone.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Телефон клієнта обов'язковий для створення відправлення InPost. Додайте телефон до картки клієнта. (Client ID: {order.client_id}, Current phone: '{client_phone}')"
+                )
+            
+            # Створюємо об'єкт ReceiverInfo
+            receiver = ReceiverInfo(
+                email=recipient_email,
+                phone=recipient_phone,
+                name=recipient_name,
+            )
+            
+            # Обробляємо адресу для кур'єрської доставки
+            courier_address_obj = None
+            if shipment_data.method == ShipmentMethod.INPOST_COURIER:
+                if not shipment_data.delivery_address:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Адреса доставки обов'язкова для кур'єрської доставки InPost."
+                    )
+                # Якщо delivery_address - це рядок, спробуємо розпарсити його
+                # Формат може бути: "XX-XXX Місто, Вулиця Номер/Квартира" або просто текст
+                # Для InPost API потрібна структурована адреса, тому спробуємо розпарсити
+                import re
+                address_str = shipment_data.delivery_address
+                
+                # Спроба розпарсити польський формат адреси: "XX-XXX Місто, Вулиця Номер/Квартира"
+                # Або "XX-XXX Місто, Вулиця Номер"
+                post_code_match = re.search(r'(\d{2}-\d{3})', address_str)
+                if post_code_match:
+                    post_code = post_code_match.group(1)
+                    # Видаляємо поштовий індекс з рядка для подальшого парсингу
+                    remaining = address_str.replace(post_code, '').strip()
+                    
+                    # Спроба знайти місто та вулицю
+                    # Формат може бути: "Місто, Вулиця Номер" або "Місто Вулиця Номер"
+                    parts = [p.strip() for p in remaining.split(',') if p.strip()]
+                    if len(parts) >= 2:
+                        city = parts[0]
+                        street_part = parts[1]
+                    elif len(parts) == 1:
+                        # Спроба розділити по пробілах
+                        words = parts[0].split()
+                        if len(words) >= 3:
+                            city = ' '.join(words[:-2])
+                            street_part = ' '.join(words[-2:])
+                        else:
+                            city = parts[0]
+                            street_part = ""
+                    else:
+                        city = ""
+                        street_part = remaining
+                    
+                    # Парсинг вулиці та номера будинку
+                    street_match = re.match(r'^(.+?)\s+(\d+[A-Za-z]?)(?:/(\d+))?$', street_part.strip())
+                    if street_match:
+                        street = street_match.group(1).strip()
+                        building_number = street_match.group(2)
+                        flat_number = street_match.group(3) if street_match.group(3) else None
+                    else:
+                        # Якщо не вдалося розпарсити, використовуємо весь рядок як вулицю
+                        street = street_part.strip() or remaining
+                        building_number = "1"
+                        flat_number = None
+                    
+                    if city and street and building_number:
+                        courier_address_obj = AddressInfo(
+                            street=street,
+                            building_number=building_number,
+                            flat_number=flat_number,
+                            city=city,
+                            post_code=post_code,
+                            country="PL"
+                        )
+                
+                # Якщо не вдалося розпарсити адресу, показуємо помилку
+                if not courier_address_obj:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Не вдалося розпарсити адресу доставки. Потрібен формат: 'XX-XXX Місто, Вулиця Номер/Квартира'. Отримано: {shipment_data.delivery_address}"
+                    )
+            
             create_request = CreateShipmentRequest(
                 order_id=order.id,
                 delivery_type=delivery_type,
-                parcel_locker_code=shipment_data.paczkomat_code if shipment_data.method == ShipmentMethod.INPOST_LOCKER else None,
-                receiver_name=shipment_data.recipient_name or order.client.full_name if order.client else "Клієнт",
-                receiver_email=shipment_data.recipient_email or order.client.email if order.client else None,
-                receiver_phone=shipment_data.recipient_phone or order.client.phone if order.client else None,
-                courier_address=shipment_data.delivery_address if shipment_data.method == ShipmentMethod.INPOST_COURIER else None,
+                parcel_locker_code=paczkomat_code if shipment_data.method == ShipmentMethod.INPOST_LOCKER else None,
+                receiver=receiver,
+                courier_address=courier_address_obj,
             )
             
             # Створюємо відправку в InPost

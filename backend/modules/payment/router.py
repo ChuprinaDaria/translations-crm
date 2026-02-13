@@ -541,6 +541,9 @@ async def stripe_webhook(
                     customer_email = data.get("customer_email")
                     payment_intent_id = data.get("payment_intent")
                     
+                    # Log payment details for debugging
+                    logger.info(f"Stripe webhook payment link: order_id={order_id}, amount_total={amount_total}, order.price_brutto={order.price_brutto}")
+                    
                     # Update order status
                     order.status = "oplacone"
                     order.payment_method = "card"
@@ -562,7 +565,7 @@ async def stripe_webhook(
                             service_date=date.today(),
                             receipt_number=f"STRIPE-{session_id[:8]}",
                             payment_method=PaymentMethod.CARD,
-                            notes=f"Automatic payment via Stripe Payment Link",
+                            notes=f"Automatic payment via Stripe Payment Link (paid {amount_total}, order price: {order.price_brutto})",
                             stripe_session_id=session_id,
                             stripe_payment_intent_id=payment_intent_id,
                             stripe_customer_email=customer_email,
@@ -570,7 +573,7 @@ async def stripe_webhook(
                             payment_status=FinancePaymentStatus.SUCCEEDED,
                         )
                         db.add(finance_transaction)
-                        logger.info(f"Created finance transaction for payment link order {order_id}")
+                        logger.info(f"Created finance transaction for payment link order {order_id}: amount_gross={amount_total}, order.price_brutto={order.price_brutto}")
                     
                     db.commit()
                     logger.info(f"Stripe webhook: successfully processed payment link for order {order_id}")
@@ -658,7 +661,6 @@ async def stripe_webhook(
                 logger.info(f"Stripe webhook: no session_id in payment_intent, but order_id found: {order_id_from_metadata}. Processing as payment link.")
                 try:
                     order_id = UUID(order_id_from_metadata)
-                    from modules.crm.models import Order
                     order = db.query(Order).filter(Order.id == order_id).first()
                     if not order:
                         logger.warning(f"Stripe webhook: order not found: {order_id}")
