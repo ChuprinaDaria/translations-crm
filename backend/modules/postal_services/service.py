@@ -76,21 +76,10 @@ class InPostService:
         """
         Get API token (JWT) for Authorization header.
         
-        Priority:
-        1. webhook_secret (JWT token) - primary token for API calls
-        2. api_key (numeric ID) - fallback for backward compatibility
+        Returns the Organization Token (JWT) needed for InPost API authentication.
+        Note: webhook_secret is NOT used here - it's only for webhook verification.
         """
-        # First, try to use webhook_secret as API token (JWT)
-        # This is the actual token for InPost API calls
-        if self.settings.webhook_secret:
-            token = str(self.settings.webhook_secret).strip()
-            logger.info(f"InPost get_api_key: Using webhook_secret as API token (JWT)")
-            print(f"[InPost] get_api_key: Using webhook_secret as API token (JWT)")
-            print(f"[InPost] get_api_key: Token length: {len(token)}")
-            return token
-        
-        # Fallback to api_key (for backward compatibility)
-        # Note: api_key is actually organization_id, not a token
+        # Get the appropriate API key based on sandbox mode
         if self.settings.sandbox_mode:
             api_key = self.settings.sandbox_api_key or ""
         else:
@@ -99,9 +88,11 @@ class InPostService:
         api_key_str = str(api_key).strip() if api_key else ""
         
         if api_key_str:
-            logger.warning(f"InPost get_api_key: Using api_key as fallback (this is organization_id, not a token!)")
-            print(f"[InPost] get_api_key: WARNING - Using api_key as fallback (this is organization_id, not a token!)")
-            print(f"[InPost] get_api_key: api_key from DB = '{api_key}' (type: {type(api_key).__name__})")
+            logger.info(f"InPost get_api_key: Using api_key (JWT token), length: {len(api_key_str)}")
+            print(f"[InPost] get_api_key: Using api_key (JWT token), length: {len(api_key_str)}")
+        else:
+            logger.error(f"InPost get_api_key: No API key configured!")
+            print(f"[InPost] get_api_key: ERROR - No API key configured!")
         
         return api_key_str
     
@@ -214,7 +205,90 @@ class InPostService:
             self.db.commit()
             raise
         
+        # Create corresponding finance.shipments record
+        self._sync_to_finance_shipment(shipment)
+        
         return shipment
+    
+    def _sync_to_finance_shipment(self, inpost_shipment: InPostShipment) -> None:
+        """
+        Create or update finance.shipments record from InPost shipment.
+        
+        Args:
+            inpost_shipment: InPost shipment record
+        """
+        try:
+            from modules.finance.models import Shipment as FinanceShipment, ShipmentMethod, ShipmentStatus as FinanceShipmentStatus
+            
+            # Map delivery type to shipment method
+            method_map = {
+                "parcel_locker": ShipmentMethod.INPOST_LOCKER,
+                "courier": ShipmentMethod.INPOST_COURIER,
+            }
+            method = method_map.get(inpost_shipment.delivery_type, ShipmentMethod.INPOST_LOCKER)
+            
+            # Map InPost status to finance status
+            status_map = {
+                ShipmentStatus.CREATED: FinanceShipmentStatus.CREATED,
+                ShipmentStatus.CONFIRMED: FinanceShipmentStatus.LABEL_PRINTED,
+                ShipmentStatus.DISPATCHED_BY_SENDER: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.COLLECTED_FROM_SENDER: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.TAKEN_BY_COURIER: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.ADOPTED_AT_SOURCE_BRANCH: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.SENT_FROM_SOURCE_BRANCH: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.READY_TO_PICKUP: FinanceShipmentStatus.READY_FOR_PICKUP,
+                ShipmentStatus.OUT_FOR_DELIVERY: FinanceShipmentStatus.IN_TRANSIT,
+                ShipmentStatus.DELIVERED: FinanceShipmentStatus.DELIVERED,
+                ShipmentStatus.RETURNED_TO_SENDER: FinanceShipmentStatus.RETURNED,
+                ShipmentStatus.CANCELED: FinanceShipmentStatus.RETURNED,
+                ShipmentStatus.ERROR: FinanceShipmentStatus.CREATED,
+            }
+            finance_status = status_map.get(inpost_shipment.status, FinanceShipmentStatus.CREATED)
+            
+            # Check if finance shipment already exists
+            finance_shipment = self.db.query(FinanceShipment).filter(
+                FinanceShipment.inpost_shipment_id == inpost_shipment.shipment_id
+            ).first()
+            
+            if not finance_shipment:
+                # Create new finance shipment
+                finance_shipment = FinanceShipment(
+                    order_id=inpost_shipment.order_id,
+                    method=method,
+                    tracking_number=inpost_shipment.tracking_number,
+                    tracking_url=inpost_shipment.tracking_url,
+                    status=finance_status,
+                    paczkomat_code=inpost_shipment.parcel_locker_code,
+                    delivery_address=inpost_shipment.courier_address,
+                    recipient_name=inpost_shipment.receiver_name,
+                    recipient_email=inpost_shipment.receiver_email,
+                    recipient_phone=inpost_shipment.receiver_phone,
+                    shipping_cost=inpost_shipment.cost,
+                    label_url=inpost_shipment.label_url,
+                    inpost_shipment_id=inpost_shipment.shipment_id,
+                )
+                self.db.add(finance_shipment)
+            else:
+                # Update existing finance shipment
+                finance_shipment.tracking_number = inpost_shipment.tracking_number
+                finance_shipment.tracking_url = inpost_shipment.tracking_url
+                finance_shipment.status = finance_status
+                finance_shipment.label_url = inpost_shipment.label_url
+                finance_shipment.shipping_cost = inpost_shipment.cost
+                
+                # Update timestamps based on status
+                if finance_status == FinanceShipmentStatus.DELIVERED and not finance_shipment.delivered_at:
+                    finance_shipment.delivered_at = inpost_shipment.delivered_at or datetime.now(timezone.utc)
+                elif finance_status == FinanceShipmentStatus.IN_TRANSIT and not finance_shipment.shipped_at:
+                    finance_shipment.shipped_at = inpost_shipment.dispatched_at or datetime.now(timezone.utc)
+            
+            self.db.commit()
+            logger.info(f"Synced InPost shipment {inpost_shipment.id} to finance.shipments")
+            
+        except Exception as e:
+            logger.error(f"Failed to sync to finance.shipments: {e}", exc_info=True)
+            # Don't fail the main operation if sync fails
+            self.db.rollback()
     
     async def _create_shipment_in_inpost(self, shipment: InPostShipment) -> None:
         """Create shipment in InPost API."""
@@ -229,28 +303,37 @@ class InPostService:
                 "email": shipment.receiver_email,
                 "phone": shipment.receiver_phone,
             },
-            "parcels": [
-                {
-                    "template": parcel_template,
-                    "is_non_standard": False,
-                }
-            ],
+            # According to InPost API: parcels can be object or array
+            # Using object format as shown in Postman collection
+            "parcels": {
+                "template": parcel_template,
+            },
             "service": "inpost_locker_standard",
             "reference": str(shipment.id),
         }
         
         # Add weight if specified (will override template default)
         if shipment.package_weight:
-            payload["parcels"][0]["weight"] = {
+            payload["parcels"]["weight"] = {
                 "amount": shipment.package_weight,
                 "unit": "kg",
             }
         
-        # Add receiver name if provided
+        # Add receiver name - split into first_name and last_name if possible
+        # According to InPost API documentation, receiver can have:
+        # - name (single field) OR
+        # - first_name and last_name (preferred)
         if shipment.receiver_name:
-            payload["receiver"]["name"] = shipment.receiver_name
+            name_parts = shipment.receiver_name.strip().split(maxsplit=1)
+            if len(name_parts) >= 2:
+                payload["receiver"]["first_name"] = name_parts[0]
+                payload["receiver"]["last_name"] = name_parts[1]
+            else:
+                # If only one name part, use as first_name
+                payload["receiver"]["first_name"] = shipment.receiver_name
         
         # Add sender info
+        # According to InPost API, sender should have address
         if shipment.sender_email or shipment.sender_phone:
             payload["sender"] = {}
             if shipment.sender_email:
@@ -258,12 +341,24 @@ class InPostService:
             if shipment.sender_phone:
                 payload["sender"]["phone"] = shipment.sender_phone
             if shipment.sender_name:
-                payload["sender"]["name"] = shipment.sender_name
+                # Split sender name into first_name and last_name
+                name_parts = shipment.sender_name.strip().split(maxsplit=1)
+                if len(name_parts) >= 2:
+                    payload["sender"]["first_name"] = name_parts[0]
+                    payload["sender"]["last_name"] = name_parts[1]
+                else:
+                    payload["sender"]["first_name"] = shipment.sender_name
+            
+            # Add sender address if available (from settings or order)
+            # Note: InPost API requires sender address, but we may not have it
+            # If not provided, InPost will use organization default address
         
         # Set delivery point based on type
         if shipment.delivery_type == DeliveryType.PARCEL_LOCKER.value:
             payload["custom_attributes"] = {
                 "target_point": shipment.parcel_locker_code,
+                # Optional: sending_method can be "dispatch_order" or omitted
+                # "sending_method": "dispatch_order",  # Uncomment if needed
             }
         elif shipment.delivery_type == DeliveryType.COURIER.value:
             payload["service"] = "inpost_courier_standard"
@@ -726,6 +821,9 @@ class InPostService:
                 if updated:
                     self.db.commit()
                     logger.info(f"Updated shipment {shipment.id} status to {new_status}")
+                    
+                    # Sync status to finance.shipments
+                    self._sync_to_finance_shipment(shipment)
         
         except Exception as e:
             logger.error(f"Error handling webhook: {e}")

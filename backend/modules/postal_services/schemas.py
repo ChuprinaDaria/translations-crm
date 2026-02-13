@@ -191,8 +191,8 @@ class TrackingInfoResponse(BaseModel):
 class InPostSettingsResponse(BaseModel):
     """InPost settings response."""
     id: int
-    api_key: Optional[str] = Field(None, description="Masked API key")
-    organization_id: Optional[str] = Field(None, description="Organization ID (can be same as api_key)")
+    api_key: Optional[str] = Field(None, description="Masked JWT Organization Token for API authentication")
+    organization_id: Optional[str] = Field(None, description="Organization ID (numeric ID used in API URLs)")
     api_url: str
     sandbox_mode: bool
     webhook_url: Optional[str]
@@ -207,12 +207,12 @@ class InPostSettingsResponse(BaseModel):
 
 class InPostSettingsUpdate(BaseModel):
     """Update InPost settings."""
-    api_key: Optional[str] = None
-    organization_id: Optional[str] = None
+    api_key: Optional[str] = Field(None, description="JWT Organization Token for API authentication")
+    organization_id: Optional[str] = Field(None, description="Organization ID (numeric ID)")
     sandbox_mode: Optional[bool] = None
-    sandbox_api_key: Optional[str] = None
+    sandbox_api_key: Optional[str] = Field(None, description="Sandbox JWT token")
     webhook_url: Optional[str] = None
-    webhook_secret: Optional[str] = None
+    webhook_secret: Optional[str] = Field(None, description="Secret for webhook verification (NOT for API auth)")
     default_sender_email: Optional[EmailStr] = None
     default_sender_phone: Optional[str] = None
     default_sender_name: Optional[str] = None

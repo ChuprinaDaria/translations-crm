@@ -234,13 +234,13 @@ class InPostSettings(Base):
     api_key: Mapped[Optional[str]] = mapped_column(
         String(255),
         nullable=True,
-        comment="InPost API key (Organization token - can be numeric ID like 124089)"
+        comment="InPost API key (JWT Organization Token for API authentication)"
     )
     
     organization_id: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
-        comment="InPost organization ID (can be same as api_key, e.g., 124089)"
+        comment="InPost organization ID (numeric ID like 124089, used in API URLs)"
     )
     
     api_url: Mapped[str] = mapped_column(
@@ -281,7 +281,7 @@ class InPostSettings(Base):
     webhook_secret: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        comment="Webhook secret for verification"
+        comment="Webhook secret for verification (NOT used for API authentication)"
     )
     
     # Default sender info

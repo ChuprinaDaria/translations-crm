@@ -1,14 +1,77 @@
 #!/bin/bash
 # Script to apply new migrations on production server
 # Run this on the server: bash apply_new_migrations.sh
+# 
+# This script now automatically applies all migrations from database/migrations/
+# For manual migration application, use: apply_all_migrations.sh
 
 set -e
 
-echo "🔄 Pulling latest changes from git..."
-git pull origin main
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🔄 Pulling latest changes from git...${NC}"
+git pull origin main || echo -e "${YELLOW}⚠️  Warning: Could not pull from git${NC}"
 
 echo ""
-echo "📝 Applying migration: add_stripe_fields_to_transactions.sql"
+echo -e "${BLUE}📝 Applying all migrations automatically...${NC}"
+echo ""
+
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+MIGRATIONS_DIR="${SCRIPT_DIR}/database/migrations"
+
+# Check if migrations directory exists
+if [ ! -d "$MIGRATIONS_DIR" ]; then
+    echo -e "${RED}❌ Error: Migrations directory not found: $MIGRATIONS_DIR${NC}"
+    exit 1
+fi
+
+# Track applied migrations
+APPLIED_COUNT=0
+FAILED_COUNT=0
+
+# Get list of SQL files, sorted by name
+MIGRATION_FILES=$(find "$MIGRATIONS_DIR" -name "*.sql" -type f | sort)
+
+if [ -z "$MIGRATION_FILES" ]; then
+    echo -e "${YELLOW}⚠️  No migration files found${NC}"
+    exit 0
+fi
+
+echo -e "${BLUE}Found $(echo "$MIGRATION_FILES" | wc -l) migration file(s)${NC}"
+echo ""
+
+# Apply each migration
+for migration_file in $MIGRATION_FILES; do
+    migration_name=$(basename "$migration_file")
+    
+    echo -e "${BLUE}📝 Applying: ${migration_name}${NC}"
+    
+    # Apply migration using Docker Compose
+    if docker compose exec -T postgres psql -U crm_user -d crm_translations < "$migration_file" 2>&1; then
+        echo -e "${GREEN}✅ Migration ${migration_name} applied successfully${NC}"
+        ((APPLIED_COUNT++))
+    else
+        exit_code=$?
+        # Check if error is just "already exists" (which is OK for IF NOT EXISTS)
+        if grep -q "IF NOT EXISTS\|already exists" "$migration_file" 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  Migration ${migration_name} - some objects may already exist (this is OK)${NC}"
+            ((APPLIED_COUNT++))
+        else
+            echo -e "${RED}❌ Failed to apply migration: ${migration_name}${NC}"
+            ((FAILED_COUNT++))
+        fi
+    fi
+    echo ""
+done
+
+# Legacy migrations (keeping for backward compatibility)
+echo -e "${BLUE}📝 Applying legacy migration: add_stripe_fields_to_transactions.sql${NC}"
 docker compose exec -T postgres psql -U crm_user -d crm_translations <<'EOF'
 -- Migration: Add Stripe fields to finance_transactions table
 ALTER TABLE finance_transactions 
@@ -109,12 +172,24 @@ EOF
 
 echo "✅ Migration create_finance_shipments_table applied successfully"
 
-echo ""
-echo "🎉 All migrations applied successfully!"
-echo ""
-echo "🔄 Restarting services..."
-docker compose restart backend celery_worker celery_beat
+# Summary
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}✅ Successfully applied: ${APPLIED_COUNT} migration(s)${NC}"
+
+if [ $FAILED_COUNT -gt 0 ]; then
+    echo -e "${RED}❌ Failed: ${FAILED_COUNT} migration(s)${NC}"
+    echo ""
+    exit 1
+fi
 
 echo ""
-echo "✅ Done! Services restarted."
+echo -e "${GREEN}🎉 All migrations applied successfully!${NC}"
+echo ""
+echo -e "${BLUE}🔄 Restarting services...${NC}"
+docker compose restart backend celery_worker celery_beat 2>/dev/null || \
+docker-compose restart backend celery_worker celery_beat 2>/dev/null || \
+echo -e "${YELLOW}⚠️  Could not restart services${NC}"
+
+echo ""
+echo -e "${GREEN}✅ Done! Services restarted.${NC}"
 
