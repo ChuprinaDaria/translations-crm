@@ -67,6 +67,8 @@ export function InboxPageEnhanced() {
   const [filters, setFilters] = useState<FilterState>({ type: 'all' });
   const [isSending, setIsSending] = useState(false);
   const [loadingConversationIds, setLoadingConversationIds] = useState<Set<string>>(new Set());
+  const paymentLoadingRef = useRef(false);
+  const trackingLoadingRef = useRef(false);
   
   // State for pagination
   const [offset, setOffset] = useState(0);
@@ -201,32 +203,70 @@ export function InboxPageEnhanced() {
       console.error('Failed to mark conversation as read:', error);
     });
     
-    if (existingChat) {
-      // Просто переключитись на існуючий таб - повідомлення вже завантажені, не завантажуємо знову
+    if (existingChat && existingChat.messages.length > 0) {
+      // Таб вже відкритий І повідомлення завантажені — просто переключитись
       switchToChat(conversationId);
       
       // Оновити client/orders для context panel (тільки якщо потрібно і не завантажували нещодавно)
-      // Використовуємо кеш для швидкого доступу
       const cachedData = queryClient.getQueryData(getConversationQueryKey(conversationId)) as { conversation?: ConversationWithMessages, client?: Client, orders?: any[] } | undefined;
       
       if (cachedData?.client && cachedData?.orders) {
-        // Використовуємо кешовані дані - не завантажуємо знову
         setClient(cachedData.client);
         setOrders(cachedData.orders);
       } else if (existingChat.conversation.client_id && (!client || client.id !== existingChat.conversation.client_id)) {
-        // Завантажуємо тільки якщо немає в кеші і потрібно оновити
         const { client: clientData, orders: ordersData } = await loadConversationData(conversationId);
         setClient(clientData);
         setOrders(ordersData);
-        // Кешуємо для наступного разу
         queryClient.setQueryData(getConversationQueryKey(conversationId), {
           conversation: cachedData?.conversation,
           client: clientData,
           orders: ordersData,
         });
-      } else {
-        // Використовуємо поточні дані якщо вони вже встановлені
-        // Не завантажуємо нічого
+      }
+    } else if (existingChat) {
+      // Таб відкритий але повідомлення НЕ завантажені (restored shell) — завантажити
+      switchToChat(conversationId);
+      setLoadingConversationIds((prev) => { const n = new Set(prev); n.add(conversationId); return n; });
+      try {
+        const cacheKey = getConversationQueryKey(conversationId);
+        const cached = queryClient.getQueryData(cacheKey) as { conversation?: ConversationWithMessages } | undefined;
+        const conversation = cached?.conversation
+          ? cached.conversation
+          : await queryClient.fetchQuery({
+              queryKey: cacheKey,
+              queryFn: async () => ({ conversation: await inboxApi.getConversation(conversationId) }),
+              staleTime: 5 * 60 * 1000,
+            }).then((r: any) => r.conversation as ConversationWithMessages);
+
+        updateChatMessages(conversationId, conversation.messages || [], {
+          ...existingChat.conversation,
+          id: conversation.id,
+          platform: conversation.platform as any,
+          external_id: conversation.external_id,
+          subject: conversation.subject,
+          client_id: conversation.client_id,
+        });
+
+        // Load context in background
+        if (conversation.client_id) {
+          (async () => {
+            try {
+              const { clientsApi } = await import('../../crm/api/clients');
+              const [clientData, clientOrders] = await Promise.all([
+                clientsApi.getClient(conversation.client_id!),
+                ordersApi.getOrders({ client_id: conversation.client_id! }).catch(() => []),
+              ]);
+              const clientMapped: Client = { id: clientData.id, full_name: clientData.full_name, email: clientData.email, phone: clientData.phone, company_name: clientData.company_name };
+              const ordersMapped = (clientOrders as any[]).map((order: any) => ({ id: order.id, title: order.order_number, status: order.status, created_at: order.created_at, total_amount: order.transactions?.reduce((sum: number, t: any) => t.type === 'income' ? sum + t.amount : sum, 0) || 0, file_url: order.file_url, description: order.description }));
+              queryClient.setQueryData(cacheKey, (old: any) => ({ ...(old || {}), conversation, client: clientMapped, orders: ordersMapped }));
+              if (activeTabIdRef.current === conversationId) { setClient(clientMapped); setOrders(ordersMapped); }
+            } catch (e) { console.error('Error loading client context:', e); }
+          })();
+        }
+      } catch (error) {
+        toast.error('Помилка завантаження розмови');
+      } finally {
+        setLoadingConversationIds((prev) => { const n = new Set(prev); n.delete(conversationId); return n; });
       }
     } else {
       // Завантажити розмову та додати новий таб
@@ -521,44 +561,66 @@ export function InboxPageEnhanced() {
 
   // React Query автоматично оновлює conversations при зміні filters
 
-  // Відновити раніше відкриті чати з localStorage
+  // Відновити раніше відкриті чати з localStorage (lightweight — без flood API)
+  const restoreInitiatedRef = useRef(false);
   useEffect(() => {
-    if (conversations && conversations.length > 0 && openChats.length === 0 && !isLoading) {
-      const storedIds = getStoredConversationIds();
-      const storedActiveTabId = getStoredActiveTabId();
-      
-      if (storedIds.length > 0) {
-        // Restore previously open chats
-        const restoreChats = async () => {
-          for (const convId of storedIds) {
-            // Check if conversation still exists
-            if (conversations.some(c => c.id === convId)) {
-              try {
-                await handleOpenChat(convId);
-              } catch (e) {
-                console.warn('Failed to restore chat:', convId, e);
-              }
-            }
-          }
-          
-          // Restore active tab after all chats are restored
-          if (storedActiveTabId && storedIds.includes(storedActiveTabId)) {
-            // Wait a bit for chats to be fully loaded
-            setTimeout(() => {
-              switchToChat(storedActiveTabId);
-            }, 100);
-          }
+    if (restoreInitiatedRef.current) return;
+    if (!conversations || conversations.length === 0 || isLoading) return;
+    if (openChats.length > 0) return;
+
+    restoreInitiatedRef.current = true;
+
+    const storedIds = getStoredConversationIds();
+    const storedActiveTabId = getStoredActiveTabId();
+
+    if (storedIds.length > 0) {
+      // 1. Open tab shells immediately from inbox data — NO API calls
+      const MAX_RESTORE = 7;
+      const idsToRestore = storedIds.slice(0, MAX_RESTORE);
+
+      for (const convId of idsToRestore) {
+        const convListItem = conversations.find(c => c.id === convId);
+        if (!convListItem) continue;
+
+        const quickConversation: Conversation = {
+          id: convId,
+          platform: (convListItem.platform || 'telegram') as any,
+          external_id: convListItem.external_id || convId,
+          subject: convListItem.subject,
+          client_id: convListItem.client_id,
+          client_name: convListItem.client_name,
+          client_avatar: undefined,
+          unread_count: convListItem.unread_count || 0,
+          last_message: convListItem.last_message,
+          last_message_at: convListItem.last_message_at,
+          updated_at: convListItem.updated_at || new Date().toISOString(),
         };
-        restoreChats();
-      } else {
-        // No stored chats - open first conversation
-        const firstConversation = conversations[0];
-        if (firstConversation) {
-          handleOpenChat(firstConversation.id);
-        }
+        openChat(quickConversation, []);
+        addTab({
+          conversationId: convId,
+          platform: quickConversation.platform,
+          externalId: quickConversation.external_id,
+        });
+      }
+
+      // 2. Load full data ONLY for the active tab (or first restored)
+      const activeId = (storedActiveTabId && idsToRestore.includes(storedActiveTabId))
+        ? storedActiveTabId
+        : idsToRestore[0];
+
+      if (activeId) {
+        switchToChat(activeId);
+        // Use handleOpenChat only for the active tab — loads messages + context
+        handleOpenChat(activeId).catch(e => console.warn('Failed to load active tab:', e));
+      }
+    } else {
+      // No stored chats — open the first conversation
+      const firstConversation = conversations[0];
+      if (firstConversation) {
+        handleOpenChat(firstConversation.id);
       }
     }
-  }, [conversations, openChats.length, isLoading, getStoredConversationIds, getStoredActiveTabId, switchToChat, handleOpenChat]);
+  }, [conversations, isLoading]); // minimal deps — ref guards against re-execution
 
   // Listen for navigation events to open conversation
   useEffect(() => {
@@ -1096,6 +1158,16 @@ export function InboxPageEnhanced() {
   };
 
   const handlePaymentClick = async (conversationId: string) => {
+    if (paymentLoadingRef.current) return;
+    paymentLoadingRef.current = true;
+    try {
+      return await _handlePaymentClickInner(conversationId);
+    } finally {
+      paymentLoadingRef.current = false;
+    }
+  };
+
+  const _handlePaymentClickInner = async (conversationId: string) => {
     let currentOrders = orders;
     
     // Якщо замовлення не завантажені, спробувати завантажити
@@ -1189,6 +1261,16 @@ export function InboxPageEnhanced() {
   };
 
   const handleTrackingClick = async (conversationId: string) => {
+    if (trackingLoadingRef.current) return;
+    trackingLoadingRef.current = true;
+    try {
+      return await _handleTrackingClickInner(conversationId);
+    } finally {
+      trackingLoadingRef.current = false;
+    }
+  };
+
+  const _handleTrackingClickInner = async (conversationId: string) => {
     let currentOrders = orders;
     
     // Якщо замовлення не завантажені, спробувати завантажити
@@ -1245,8 +1327,13 @@ export function InboxPageEnhanced() {
             const activeChat = openChats.find(c => c.conversationId === conversationId);
             const currentConversation = activeChat?.conversation;
             
-            const receiverEmail = client?.email || currentConversation?.external_id || '';
-            const receiverPhone = client?.phone || currentConversation?.external_id || '';
+            const externalId = currentConversation?.external_id || '';
+            // Only use external_id as fallback if it looks like a valid email/phone
+            const isEmailLike = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+            const isPhoneLike = (v: string) => /^\+?[0-9]{9,15}$/.test(v);
+
+            const receiverEmail = client?.email || (isEmailLike(externalId) ? externalId : '');
+            const receiverPhone = client?.phone || (isPhoneLike(externalId) ? externalId : '');
             const receiverName = client?.full_name || client?.name || 'Klient';
 
             if (!receiverEmail && !receiverPhone) {
@@ -1472,7 +1559,7 @@ export function InboxPageEnhanced() {
           <ChatTabsArea
             openChats={openChats}
             activeTabId={activeTabId}
-            onTabChange={switchToChat}
+            onTabChange={handleOpenChat}
             onTabClose={(conversationId) => {
               removeTab(conversationId);
               closeChat(conversationId);

@@ -14,6 +14,7 @@ import { AutobotSettingsPage } from "./modules/autobot/pages/AutobotSettingsPage
 import { AuthPage } from "./components/auth/AuthPage";
 import { TermsOfService } from "./pages/TermsOfService";
 import { GDPRPolicy } from "./pages/GDPRPolicy";
+import { PaymentSuccessPage } from "./pages/PaymentSuccessPage";
 import { Toaster } from "./components/ui/sonner";
 import { tokenManager, authApi, settingsApi } from "./lib/api";
 import { I18nProvider, useI18n } from "./lib/i18n";
@@ -326,8 +327,8 @@ function App() {
     );
   }
 
-  // Show auth page if not authenticated
-  if (!isAuthenticated) {
+  // Show auth page if not authenticated (except for public pages)
+  if (!isAuthenticated && !currentPath.startsWith("/payments/success") && !currentPath.match(/^\/orders\/[^/]+\/success$/) && currentPath !== "/terms" && currentPath !== "/gdpr") {
     return (
       <I18nProvider>
         <AuthPage onAuthSuccess={handleAuthSuccess} />
@@ -345,7 +346,7 @@ function App() {
   };
 
   const renderContent = () => {
-    // Перевірка чи це сторінка з документацією (не потребує sidebar)
+    // Перевірка чи це сторінка з документацією або оплатою (не потребує sidebar)
     if (currentPath === "/terms" || currentPath === "/gdpr") {
       if (currentPath === "/terms") {
         return <TermsOfService />;
@@ -353,6 +354,11 @@ function App() {
       if (currentPath === "/gdpr") {
         return <GDPRPolicy />;
       }
+    }
+
+    // Payment success page (no sidebar needed)
+    if (currentPath.startsWith("/payments/success") || currentPath.match(/^\/orders\/[^/]+\/success$/)) {
+      return <PaymentSuccessPage />;
     }
 
     switch (activeItem) {
@@ -388,8 +394,8 @@ function App() {
     }
   };
 
-  // Якщо це сторінка документації - показуємо без sidebar
-  if (isAuthenticated && (currentPath === "/terms" || currentPath === "/gdpr")) {
+  // Якщо це сторінка документації або оплати - показуємо без sidebar
+  if (isAuthenticated && (currentPath === "/terms" || currentPath === "/gdpr" || currentPath.startsWith("/payments/success") || currentPath.match(/^\/orders\/[^/]+\/success$/))) {
     return (
       <I18nProvider>
         <div className="min-h-screen bg-gray-50 flex flex-col">

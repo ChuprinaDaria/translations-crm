@@ -232,7 +232,7 @@ class InPostSettings(Base):
     
     # API Configuration
     api_key: Mapped[Optional[str]] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
         comment="InPost API key (JWT Organization Token for API authentication)"
     )
@@ -259,9 +259,9 @@ class InPostSettings(Base):
     )
     
     sandbox_api_key: Mapped[Optional[str]] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
-        comment="InPost sandbox API key"
+        comment="InPost sandbox API key (JWT token)"
     )
     
     sandbox_api_url: Mapped[str] = mapped_column(

@@ -105,6 +105,18 @@ celery_app.conf.update(
     },
 )
 
+# Import ALL models that share core.db.Base so SQLAlchemy can resolve
+# cross-module string relationships (e.g. Conversation -> "Client").
+import modules.auth.models  # noqa: F401, E402
+import modules.crm.models  # noqa: F401, E402
+import modules.communications.models  # noqa: F401, E402
+import modules.postal_services.models  # noqa: F401, E402
+import modules.finance.models  # noqa: F401, E402
+import modules.payment.models  # noqa: F401, E402
+import modules.autobot.models  # noqa: F401, E402
+import modules.ai_integration.models  # noqa: F401, E402
+import modules.notifications.models  # noqa: F401, E402
+
 # Import tasks to register them
 from tasks import messaging_tasks, ai_tasks, media_tasks, autobot_tasks, webhook_tasks, postal_tasks  # noqa: F401, E402
 
