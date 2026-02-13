@@ -116,7 +116,7 @@ def fix_instagram_profiles(db, rate_limit_delay=1.0):
             if conv.client_id:
                 try:
                     client = db.query(Client).filter(Client.id == conv.client_id).first()
-                    if client and (client.name or client.full_name):
+                    if client and client.full_name:
                         has_name = True
                 except Exception as e:
                     logger.warning(f"Error checking client for conversation {conv.id}: {e}")

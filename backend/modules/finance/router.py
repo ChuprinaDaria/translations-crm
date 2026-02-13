@@ -712,6 +712,11 @@ async def create_payment_link(
                 metadata={
                     "order_id": str(order.id),
                 },
+                payment_intent_data={
+                    "metadata": {
+                        "order_id": str(order.id),
+                    }
+                },
                 after_completion={
                     "type": "redirect",
                     "redirect": {

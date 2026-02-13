@@ -131,8 +131,149 @@ class CancelShipmentRequest(BaseModel):
 
 
 # Response Schemas
+# InPost API Shipment schemas (full structure from API documentation)
+class MoneyData(BaseModel):
+    """Money data structure."""
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+
+
+class Address(BaseModel):
+    """Address structure."""
+    id: Optional[str] = None
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    street: Optional[str] = None
+    building_number: Optional[str] = None
+    city: Optional[str] = None
+    post_code: Optional[str] = None
+    country_code: Optional[str] = None
+
+
+class Peer(BaseModel):
+    """Peer (sender/receiver) structure."""
+    id: Optional[str] = None
+    name: Optional[str] = None
+    company_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[Address] = None
+
+
+class Service(BaseModel):
+    """Service structure."""
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class Carrier(BaseModel):
+    """Carrier structure."""
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class Offer(BaseModel):
+    """Offer structure."""
+    id: Optional[int] = None
+    status: Optional[str] = None
+    expires_at: Optional[str] = None
+    rate: Optional[float] = None
+    currency: Optional[str] = None
+    additional_services: Optional[List[str]] = []
+    service: Optional[Service] = None
+    carrier: Optional[Carrier] = None
+    unavailability_reasons: Optional[List[Any]] = None
+
+
+class Transaction(BaseModel):
+    """Transaction structure."""
+    id: Optional[str] = None
+    status: Optional[str] = None
+    offer_id: Optional[int] = None
+    details: Optional[Dict[str, Any]] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ParcelDimensions(BaseModel):
+    """Parcel dimensions."""
+    length: Optional[float] = None
+    width: Optional[float] = None
+    height: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class ParcelWeight(BaseModel):
+    """Parcel weight."""
+    amount: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class Parcel(BaseModel):
+    """Parcel structure."""
+    id: Optional[str] = None
+    identify_number: Optional[str] = None
+    tracking_number: Optional[str] = None
+    is_non_standard: Optional[bool] = False
+    template: Optional[str] = None
+    dimensions: Optional[ParcelDimensions] = None
+    weight: Optional[ParcelWeight] = None
+
+
+class ShipmentCustomAttributes(BaseModel):
+    """Custom attributes for shipment."""
+    target_point: Optional[str] = None
+    sending_method: Optional[str] = None
+    dropoff_point: Optional[str] = None
+    dispatch_order_id: Optional[int] = None
+
+
+class InPostShipmentFull(BaseModel):
+    """Full InPost shipment structure from API."""
+    href: Optional[str] = None
+    id: Optional[int] = None
+    status: Optional[str] = None
+    tracking_number: Optional[str] = None
+    return_tracking_number: Optional[str] = None
+    service: Optional[str] = None
+    reference: Optional[str] = None
+    is_return: Optional[bool] = False
+    application_id: Optional[int] = None
+    created_by_id: Optional[int] = None
+    external_customer_id: Optional[str] = None
+    sending_method: Optional[str] = None
+    end_of_week_collection: Optional[bool] = False
+    comments: Optional[str] = None
+    mpk: Optional[str] = None
+    additional_services: Optional[List[str]] = []
+    custom_attributes: Optional[ShipmentCustomAttributes] = None
+    cod: Optional[MoneyData] = None
+    insurance: Optional[MoneyData] = None
+    sender: Optional[Peer] = None
+    receiver: Optional[Peer] = None
+    selected_offer: Optional[Offer] = None
+    offers: Optional[List[Offer]] = []
+    transactions: Optional[List[Transaction]] = []
+    parcels: Optional[List[Parcel]] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ShipmentListResponse(BaseModel):
+    """Response with list of shipments."""
+    href: Optional[str] = None
+    count: Optional[int] = None
+    page: Optional[int] = None
+    per_page: Optional[int] = None
+    items: List[InPostShipmentFull] = []
+
+
 class ShipmentResponse(BaseModel):
-    """Shipment response."""
+    """Shipment response (simplified for internal use)."""
     id: UUID
     order_id: Optional[UUID]
     shipment_id: Optional[str]
@@ -178,14 +319,54 @@ class ShipmentStatusResponse(BaseModel):
     status_history: Optional[List[Dict[str, Any]]] = None
 
 
-class TrackingInfoResponse(BaseModel):
-    """Tracking information response."""
-    tracking_number: Optional[str]
-    tracking_url: Optional[str]
+class TrackingDetail(BaseModel):
+    """Single tracking detail entry."""
     status: str
-    status_description: Optional[str]
-    last_update: datetime
-    events: Optional[List[Dict[str, Any]]] = None
+    origin_status: Optional[str] = None
+    agency: Optional[str] = None
+    location: Optional[str] = None
+    datetime: str
+
+
+class CustomAttributes(BaseModel):
+    """Custom attributes for Paczkomat shipments."""
+    size: Optional[str] = None
+    target_machine_id: Optional[str] = None
+    target_machine_detail: Optional[Dict[str, Any]] = None
+    dropoff_machine_id: Optional[str] = None
+    dropoff_machine_detail: Optional[Dict[str, Any]] = None
+    end_of_week_collection: Optional[bool] = None
+
+
+class TrackingInfoResponse(BaseModel):
+    """Tracking information response from InPost API."""
+    tracking_number: str
+    service: Optional[str] = None
+    type: Optional[str] = None
+    status: str
+    custom_attributes: Optional[CustomAttributes] = None
+    tracking_details: List[TrackingDetail] = []
+    expected_flow: List[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    # Computed fields
+    tracking_url: Optional[str] = None
+    status_description: Optional[str] = None
+    last_update: Optional[datetime] = None
+    events: Optional[List[Dict[str, Any]]] = None  # Legacy field for backward compatibility
+
+
+class StatusItem(BaseModel):
+    """Single status item from InPost API."""
+    name: str
+    title: str
+    description: str
+
+
+class StatusListResponse(BaseModel):
+    """Response with list of InPost statuses."""
+    href: str
+    items: List[StatusItem]
 
 
 class InPostSettingsResponse(BaseModel):

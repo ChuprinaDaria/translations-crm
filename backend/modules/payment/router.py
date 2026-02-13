@@ -43,7 +43,7 @@ from modules.payment.schemas import (
 from modules.payment.services.stripe_service import StripeService
 from modules.payment.services.przelewy24_service import Przelewy24Service
 from modules.crm.models import Order
-from modules.finance.models import Transaction as FinanceTransaction, PaymentMethod
+from modules.finance.models import Transaction as FinanceTransaction, PaymentMethod, PaymentStatus as FinancePaymentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -524,9 +524,64 @@ async def stripe_webhook(
         internal_session_id = metadata.get("session_id")
         order_id_from_metadata = metadata.get("order_id")
         
+        # If no internal session_id, try to handle via order_id (for payment links created directly)
         if not internal_session_id:
-            logger.warning(f"Stripe webhook: missing session_id in metadata for session {session_id}")
-            return {"received": True}
+            if order_id_from_metadata:
+                logger.info(f"Stripe webhook: no session_id, but order_id found: {order_id_from_metadata}. Processing as payment link.")
+                try:
+                    order_id = UUID(order_id_from_metadata)
+                    order = db.query(Order).filter(Order.id == order_id).first()
+                    if not order:
+                        logger.warning(f"Stripe webhook: order not found: {order_id}")
+                        return {"received": True}
+                    
+                    # Extract payment details
+                    amount_total = Decimal(str(data.get("amount_total", 0))) / 100
+                    currency = data.get("currency", "pln").upper()
+                    customer_email = data.get("customer_email")
+                    payment_intent_id = data.get("payment_intent")
+                    
+                    # Update order status
+                    order.status = "oplacone"
+                    order.payment_method = "card"
+                    
+                    # Create finance transaction directly (since no PaymentTransaction exists)
+                    from datetime import date
+                    
+                    # Check if finance transaction already exists
+                    existing = db.query(FinanceTransaction).filter(
+                        FinanceTransaction.order_id == order_id,
+                        FinanceTransaction.stripe_session_id == session_id
+                    ).first()
+                    
+                    if not existing:
+                        finance_transaction = FinanceTransaction(
+                            order_id=order_id,
+                            amount_gross=amount_total,
+                            payment_date=date.today(),
+                            service_date=date.today(),
+                            receipt_number=f"STRIPE-{session_id[:8]}",
+                            payment_method=PaymentMethod.CARD,
+                            notes=f"Automatic payment via Stripe Payment Link",
+                            stripe_session_id=session_id,
+                            stripe_payment_intent_id=payment_intent_id,
+                            stripe_customer_email=customer_email,
+                            currency=currency,
+                            payment_status=FinancePaymentStatus.SUCCEEDED,
+                        )
+                        db.add(finance_transaction)
+                        logger.info(f"Created finance transaction for payment link order {order_id}")
+                    
+                    db.commit()
+                    logger.info(f"Stripe webhook: successfully processed payment link for order {order_id}")
+                    return {"received": True}
+                except Exception as e:
+                    logger.error(f"Stripe webhook: error processing payment link: {e}", exc_info=True)
+                    db.rollback()
+                    return {"received": True}
+            else:
+                logger.warning(f"Stripe webhook: missing session_id in metadata for session {session_id}")
+                return {"received": True}
         
         try:
             transaction = db.query(PaymentTransaction).filter(
@@ -595,10 +650,65 @@ async def stripe_webhook(
         payment_intent_id = data.get("id")
         metadata = data.get("metadata", {})
         internal_session_id = metadata.get("session_id")
+        order_id_from_metadata = metadata.get("order_id")
         
+        # If no internal session_id, try to handle via order_id (for payment links created directly)
         if not internal_session_id:
-            logger.warning(f"Stripe webhook: missing session_id in metadata for payment_intent {payment_intent_id}")
-            return {"received": True}
+            if order_id_from_metadata:
+                logger.info(f"Stripe webhook: no session_id in payment_intent, but order_id found: {order_id_from_metadata}. Processing as payment link.")
+                try:
+                    order_id = UUID(order_id_from_metadata)
+                    from modules.crm.models import Order
+                    order = db.query(Order).filter(Order.id == order_id).first()
+                    if not order:
+                        logger.warning(f"Stripe webhook: order not found: {order_id}")
+                        return {"received": True}
+                    
+                    # Extract payment details
+                    amount_total = Decimal(str(data.get("amount", 0))) / 100
+                    currency = data.get("currency", "pln").upper()
+                    customer_email = data.get("receipt_email")
+                    
+                    # Update order status
+                    order.status = "oplacone"
+                    order.payment_method = "card"
+                    
+                    # Create finance transaction directly
+                    from datetime import date
+                    
+                    # Check if finance transaction already exists
+                    existing = db.query(FinanceTransaction).filter(
+                        FinanceTransaction.order_id == order_id,
+                        FinanceTransaction.stripe_payment_intent_id == payment_intent_id
+                    ).first()
+                    
+                    if not existing:
+                        finance_transaction = FinanceTransaction(
+                            order_id=order_id,
+                            amount_gross=amount_total,
+                            payment_date=date.today(),
+                            service_date=date.today(),
+                            receipt_number=f"STRIPE-{payment_intent_id[:8]}",
+                            payment_method=PaymentMethod.CARD,
+                            notes=f"Automatic payment via Stripe Payment Link",
+                            stripe_payment_intent_id=payment_intent_id,
+                            stripe_customer_email=customer_email,
+                            currency=currency,
+                            payment_status=FinancePaymentStatus.SUCCEEDED,
+                        )
+                        db.add(finance_transaction)
+                        logger.info(f"Created finance transaction for payment link order {order_id}")
+                    
+                    db.commit()
+                    logger.info(f"Stripe webhook: successfully processed payment_intent for payment link order {order_id}")
+                    return {"received": True}
+                except Exception as e:
+                    logger.error(f"Stripe webhook: error processing payment_intent payment link: {e}", exc_info=True)
+                    db.rollback()
+                    return {"received": True}
+            else:
+                logger.warning(f"Stripe webhook: missing session_id in metadata for payment_intent {payment_intent_id}")
+                return {"received": True}
         
         try:
             transaction = db.query(PaymentTransaction).filter(

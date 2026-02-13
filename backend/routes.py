@@ -2372,6 +2372,28 @@ def update_inpost_config(
     crud.set_setting(db, "inpost_organization_id", organization_id)
     crud.set_setting(db, "inpost_webhook_secret", webhook_secret)
     crud.set_setting(db, "inpost_sandbox_mode", str(sandbox_mode).lower())
+    
+    # Sync to InPostSettings table (legacy) for backward compatibility
+    from modules.postal_services.models import InPostSettings
+    settings = db.query(InPostSettings).first()
+    if not settings:
+        settings = InPostSettings(
+            api_url="https://api-shipx-pl.easypack24.net/v1",
+            sandbox_api_url="https://sandbox-api-shipx-pl.easypack24.net/v1",
+            is_enabled=False,
+        )
+        db.add(settings)
+    
+    if token:
+        settings.api_key = token
+    if organization_id:
+        settings.organization_id = organization_id
+    if webhook_secret:
+        settings.webhook_secret = webhook_secret
+    settings.sandbox_mode = sandbox_mode
+    
+    db.commit()
+    
     return {"status": "success"}
 
 
@@ -4288,7 +4310,7 @@ def get_clients(
     if search:
         query = query.filter(
             or_(
-                models.Client.name.ilike(f"%{search}%"),
+                models.Client.full_name.ilike(f"%{search}%"),
                 models.Client.company_name.ilike(f"%{search}%"),
                 models.Client.phone.ilike(f"%{search}%"),
                 models.Client.email.ilike(f"%{search}%")
@@ -4310,7 +4332,7 @@ def get_clients(
         
         client_dict = {
             "id": client.id,
-            "name": client.name,
+            "name": client.full_name,
             "company_name": client.company_name,
             "phone": client.phone,
             "email": client.email,
@@ -4550,7 +4572,7 @@ def get_all_questionnaires(
         
         q_dict = {
             **q.__dict__,
-            "client_name": client.name if client else None,
+            "client_name": client.full_name if client else None,
             "client_phone": client.phone if client else None,
             "client_company": client.company_name if client else None,
             "manager_name": manager_name,
@@ -4707,7 +4729,7 @@ def generate_questionnaire_pdf(
         
         {% if client %}
         <table>
-            <tr><td>Клієнт:</td><td class="value">{{ client.name }}</td></tr>
+            <tr><td>Клієнт:</td><td class="value">{{ client.full_name }}</td></tr>
             <tr><td>Телефон:</td><td class="value">{{ client.phone }}</td></tr>
             {% if client.email %}<tr><td>Email:</td><td class="value">{{ client.email }}</td></tr>{% endif %}
             {% if client.company_name %}<tr><td>Компанія:</td><td class="value">{{ client.company_name }}</td></tr>{% endif %}
@@ -5043,7 +5065,7 @@ def get_all_checklists(
         
         c_dict = {
             **{k: v for k, v in c.__dict__.items() if not k.startswith('_')},
-            "client_name": client.name if client else c.contact_name,
+            "client_name": client.full_name if client else c.contact_name,
             "manager_name": manager_name,
         }
         result.append(c_dict)
@@ -5085,7 +5107,7 @@ def get_checklist_by_id(
     
     result = {
         **{k: v for k, v in checklist.__dict__.items() if not k.startswith('_')},
-        "client_name": client.name if client else checklist.contact_name,
+        "client_name": client.full_name if client else checklist.contact_name,
         "manager_name": manager_name,
     }
     

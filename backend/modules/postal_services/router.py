@@ -13,6 +13,7 @@ from modules.auth import models as auth_models
 from modules.postal_services.service import InPostService
 from modules.postal_services import schemas
 from modules.postal_services.models import InPostSettings, InPostShipment
+from backend import crud
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,33 @@ async def create_shipment(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating shipment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/inpost/shipments", response_model=schemas.ShipmentListResponse)
+async def list_organization_shipments(
+    page: int = 1,
+    per_page: int = 100,
+    sort_by: str = "id",
+    sort_order: str = "desc",
+    owner_id: Optional[int] = None,
+    service: InPostService = Depends(get_inpost_service),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Get list of shipments for the organization."""
+    try:
+        shipments = await service.get_organization_shipments(
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            owner_id=owner_id,
+        )
+        return shipments
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting shipments list: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -143,6 +171,21 @@ async def get_tracking_info(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Status endpoints
+@router.get("/inpost/statuses", response_model=schemas.StatusListResponse)
+async def get_statuses(
+    service: InPostService = Depends(get_inpost_service),
+    user: auth_models.User = Depends(get_current_user_db),
+):
+    """Get list of all available InPost shipment statuses."""
+    try:
+        statuses = await service.get_statuses()
+        return statuses
+    except Exception as e:
+        logger.error(f"Error getting statuses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Parcel locker search
 @router.get("/inpost/parcel-lockers", response_model=List[schemas.ParcelLockerSearchResponse])
 async def search_parcel_lockers(
@@ -222,10 +265,16 @@ async def update_inpost_settings(
     # Update fields
     if update.api_key is not None:
         settings.api_key = update.api_key
+        # Sync to AppSetting (new system) for consistency
+        crud.set_setting(db, "inpost_token", update.api_key)
     if update.organization_id is not None:
         settings.organization_id = update.organization_id
+        # Sync to AppSetting
+        crud.set_setting(db, "inpost_organization_id", update.organization_id)
     if update.sandbox_mode is not None:
         settings.sandbox_mode = update.sandbox_mode
+        # Sync to AppSetting
+        crud.set_setting(db, "inpost_sandbox_mode", str(update.sandbox_mode).lower())
     if update.sandbox_api_key is not None:
         settings.sandbox_api_key = update.sandbox_api_key
     if update.webhook_url is not None:

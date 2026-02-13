@@ -1218,7 +1218,7 @@ def upsert_client_from_kp(db: Session, kp: models.KP):
     if not client and kp.client_email:
         client = query.filter(models.Client.email == kp.client_email).first()
     if not client and kp.client_name:
-        client = query.filter(models.Client.name == kp.client_name).first()
+        client = query.filter(models.Client.full_name == kp.client_name).first()
 
     is_new_client = False
     if not client:

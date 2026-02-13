@@ -247,7 +247,6 @@ def get_inbox(
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(or_(
-            Client.name.ilike(search_pattern),
             Client.full_name.ilike(search_pattern),
             Conversation.external_id.ilike(search_pattern),
             Conversation.subject.ilike(search_pattern),
@@ -268,7 +267,7 @@ def get_inbox(
         Conversation.last_message_at,
     ]
     if search:
-        group_by_cols.extend([Client.id, Client.name, Client.full_name])
+        group_by_cols.extend([Client.id, Client.full_name])
     
     query = query.group_by(*group_by_cols)
     
@@ -1389,7 +1388,7 @@ async def notify_new_message(message: Message, conversation: Conversation):
                 "id": str(conversation.id),
                 "platform": platform_str,
                 "external_id": conversation.external_id,
-                "client_name": conversation.client.name if conversation.client else None,
+                "client_name": conversation.client.full_name if conversation.client else None,
             }
         })
         logger.info(f"WebSocket notification sent for new message {message.id}")

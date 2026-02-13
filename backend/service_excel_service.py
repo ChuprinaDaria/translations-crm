@@ -115,7 +115,7 @@ def generate_service_excel(db: Session, kp_ids: List[int]) -> Tuple[bytes, str]:
     
     # Дані
     for idx, kp in enumerate(kps, 1):
-        client_name = kp.client_name or (kp.client.name if kp.client else "")
+        client_name = kp.client_name or (kp.client.full_name if kp.client else "")
         event_date_str = ""
         if kp.event_date:
             if isinstance(kp.event_date, datetime):
@@ -260,7 +260,7 @@ def generate_service_excel(db: Session, kp_ids: List[int]) -> Tuple[bytes, str]:
     total_transport = 0
     
     for idx, kp in enumerate(kps, 1):
-        client_name = kp.client_name or (kp.client.name if kp.client else "")
+        client_name = kp.client_name or (kp.client.full_name if kp.client else "")
         eq_cost = float(kp.transport_equipment_total or 0)
         pers_cost = float(kp.transport_personnel_total or 0)
         total_cost = float(kp.transport_total or 0) or (eq_cost + pers_cost)
@@ -297,7 +297,7 @@ def generate_service_excel(db: Session, kp_ids: List[int]) -> Tuple[bytes, str]:
 
     # ---------- Окремі листи для кожного КП ----------
     for kp in kps:
-        client_name = kp.client_name or (kp.client.name if kp.client else "")
+        client_name = kp.client_name or (kp.client.full_name if kp.client else "")
         sheet_title = client_name or kp.title or f"KP {kp.id}"
         ws_kp = wb.create_sheet(_safe_sheet_title(sheet_title))
         
