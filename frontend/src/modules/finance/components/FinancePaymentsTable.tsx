@@ -155,18 +155,20 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
   const getPaymentStatusBadge = (status: string | null | undefined) => {
     if (!status) return null;
     
-    const statusConfig: Record<string, { label: string; className: string }> = {
-      'pending': { label: 'Очікує', className: 'bg-yellow-100 text-yellow-800' },
-      'succeeded': { label: 'Оплачено', className: 'bg-green-100 text-green-800' },
-      'failed': { label: 'Помилка', className: 'bg-red-100 text-red-800' },
-      'refunded': { label: 'Повернено', className: 'bg-gray-100 text-gray-800' },
+    const statusConfig: Record<string, { className: string }> = {
+      'pending': { className: 'bg-yellow-100 text-yellow-800' },
+      'succeeded': { className: 'bg-green-100 text-green-800' },
+      'failed': { className: 'bg-red-100 text-red-800' },
+      'refunded': { className: 'bg-gray-100 text-gray-800' },
     };
     
-    const config = statusConfig[status] || { label: status, className: 'bg-gray-100 text-gray-800' };
+    const config = statusConfig[status] || { className: 'bg-gray-100 text-gray-800' };
+    const statusKey = `finance.payments.paymentStatuses.${status}`;
+    const label = t(statusKey) !== statusKey ? t(statusKey) : status;
     
     return (
       <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-medium", config.className)}>
-        {config.label}
+        {label}
       </span>
     );
   };
@@ -195,11 +197,11 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
                 <TableHead className={cn("px-2 text-[10px] border-r w-[75px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[5])} onClick={() => handleSort('payment_date')}>Płatność</TableHead>
                 <TableHead className={cn("px-2 text-[10px] border-r w-[80px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[6])} onClick={() => handleSort('payment_method')}>Metoda</TableHead>
                 <TableHead className={cn("px-2 text-[10px] border-r w-[90px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[7])} onClick={() => handleSort('receipt_number')}>Dowód</TableHead>
-                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[8])}>Валюта</TableHead>
-                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-center", headerColors[9])}>Статус</TableHead>
-                <TableHead className={cn("px-2 text-[10px] border-r w-[70px] text-right", headerColors[10])}>Fee</TableHead>
-                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-right", headerColors[11])}>Нетто</TableHead>
-                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[12])}>Receipt</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[8])}>{t('finance.payments.columns.currency')}</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-center", headerColors[9])}>{t('finance.payments.columns.paymentStatus')}</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[70px] text-right", headerColors[10])}>{t('finance.payments.columns.stripeFee')}</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-right", headerColors[11])}>{t('finance.payments.columns.netAmount')}</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[12])}>{t('finance.payments.columns.receiptUrl')}</TableHead>
                 <TableHead className="w-[40px] px-0" />
               </TableRow>
             </TableHeader>

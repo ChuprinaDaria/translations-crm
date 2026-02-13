@@ -213,13 +213,24 @@
         "postingDate": "Posting Date to KF",
         "paymentMethod": "Payment Method",
         "receiptNumber": "Receipt Number",
-        "notes": "Notes"
+        "notes": "Notes",
+        "currency": "Currency",
+        "paymentStatus": "Status",
+        "stripeFee": "Fee",
+        "netAmount": "Net",
+        "receiptUrl": "Receipt"
       },
       "paymentMethods": {
         "transfer": "Transfer",
         "card": "Card",
         "blik": "BLIK",
         "cash": "Cash"
+      },
+      "paymentStatuses": {
+        "pending": "Pending",
+        "succeeded": "Paid",
+        "failed": "Failed",
+        "refunded": "Refunded"
       },
       "editPayment": "Edit Payment",
       "rowColor": "Row Color",

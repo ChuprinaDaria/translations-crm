@@ -213,13 +213,24 @@
         "postingDate": "Дата нарахування на КФ",
         "paymentMethod": "Спосіб оплати",
         "receiptNumber": "Номер документа продажу",
-        "notes": "Примітки"
+        "notes": "Примітки",
+        "currency": "Валюта",
+        "paymentStatus": "Статус",
+        "stripeFee": "Комісія",
+        "netAmount": "Нетто",
+        "receiptUrl": "Квитанція"
       },
       "paymentMethods": {
         "transfer": "Переказ",
         "card": "Картка",
         "blik": "BLIK",
         "cash": "Готівка"
+      },
+      "paymentStatuses": {
+        "pending": "Очікує",
+        "succeeded": "Оплачено",
+        "failed": "Помилка",
+        "refunded": "Повернено"
       },
       "editPayment": "Редагувати платіж",
       "rowColor": "Колір рядка",

@@ -213,13 +213,24 @@
         "postingDate": "Data nabicia na KF",
         "paymentMethod": "Sposób płatności",
         "receiptNumber": "Numer dowodu sprzedaży",
-        "notes": "Uwagi"
+        "notes": "Uwagi",
+        "currency": "Waluta",
+        "paymentStatus": "Status",
+        "stripeFee": "Prowizja",
+        "netAmount": "Netto",
+        "receiptUrl": "Paragon"
       },
       "paymentMethods": {
         "transfer": "Przelew",
         "card": "Karta",
         "blik": "BLIK",
         "cash": "Gotówka"
+      },
+      "paymentStatuses": {
+        "pending": "Oczekuje",
+        "succeeded": "Opłacono",
+        "failed": "Błąd",
+        "refunded": "Zwrócono"
       },
       "editPayment": "Edytuj płatność",
       "rowColor": "Kolor wiersza",
