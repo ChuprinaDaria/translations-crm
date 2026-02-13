@@ -1096,13 +1096,48 @@ export function InboxPageEnhanced() {
   };
 
   const handlePaymentClick = async (conversationId: string) => {
-    if (!orders || orders.length === 0) {
-      toast.error('Немає замовлень для відправки оплати');
-      return;
+    let currentOrders = orders;
+    
+    // Якщо замовлення не завантажені, спробувати завантажити
+    if (!currentOrders || currentOrders.length === 0) {
+      const activeChat = openChats.find(c => c.conversationId === conversationId);
+      const conversationClientId = activeChat?.conversation.client_id;
+      
+      if (conversationClientId) {
+        try {
+          toast.info('Завантаження замовлень...');
+          const clientOrders = await ordersApi.getOrders({ client_id: conversationClientId });
+          const loadedOrders = clientOrders.map((order: any) => ({
+            id: order.id,
+            title: order.order_number,
+            status: order.status,
+            created_at: order.created_at,
+            total_amount: order.transactions?.reduce((sum: number, t: any) => 
+              t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+            file_url: order.file_url,
+            description: order.description,
+          }));
+          
+          if (loadedOrders.length === 0) {
+            toast.error('Немає замовлень для відправки оплати');
+            return;
+          }
+          
+          setOrders(loadedOrders);
+          currentOrders = loadedOrders; // Використовуємо завантажені замовлення
+        } catch (error) {
+          console.error('Error loading orders:', error);
+          toast.error('Помилка завантаження замовлень');
+          return;
+        }
+      } else {
+        toast.error('Немає замовлень для відправки оплати');
+        return;
+      }
     }
     
     // Use first order
-    const orderId = orders[0]?.id;
+    const orderId = currentOrders[0]?.id;
     if (!orderId) {
       toast.error('Немає замовлень для відправки оплати');
       return;
@@ -1154,12 +1189,47 @@ export function InboxPageEnhanced() {
   };
 
   const handleTrackingClick = async (conversationId: string) => {
-    if (!orders || orders.length === 0) {
-      toast.error('Немає замовлень для відправки трекінгу');
-      return;
+    let currentOrders = orders;
+    
+    // Якщо замовлення не завантажені, спробувати завантажити
+    if (!currentOrders || currentOrders.length === 0) {
+      const activeChat = openChats.find(c => c.conversationId === conversationId);
+      const conversationClientId = activeChat?.conversation.client_id;
+      
+      if (conversationClientId) {
+        try {
+          toast.info('Завантаження замовлень...');
+          const clientOrders = await ordersApi.getOrders({ client_id: conversationClientId });
+          const loadedOrders = clientOrders.map((order: any) => ({
+            id: order.id,
+            title: order.order_number,
+            status: order.status,
+            created_at: order.created_at,
+            total_amount: order.transactions?.reduce((sum: number, t: any) => 
+              t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+            file_url: order.file_url,
+            description: order.description,
+          }));
+          
+          if (loadedOrders.length === 0) {
+            toast.error('Немає замовлень для відправки трекінгу');
+            return;
+          }
+          
+          setOrders(loadedOrders);
+          currentOrders = loadedOrders; // Використовуємо завантажені замовлення
+        } catch (error) {
+          console.error('Error loading orders:', error);
+          toast.error('Помилка завантаження замовлень');
+          return;
+        }
+      } else {
+        toast.error('Немає замовлень для відправки трекінгу');
+        return;
+      }
     }
     
-    const order = orders[0];
+    const order = currentOrders[0];
     const orderId = order?.id;
     if (!orderId) {
       toast.error('Немає замовлень для відправки трекінгу');
@@ -1265,10 +1335,40 @@ export function InboxPageEnhanced() {
     }
   };
 
-  const handleOrderClick = (_conversationId: string) => {
-    if (orders && orders.length > 0) {
+  const handleOrderClick = async (_conversationId: string) => {
+    let currentOrders = orders;
+    
+    // Якщо замовлення не завантажені, спробувати завантажити
+    if (!currentOrders || currentOrders.length === 0) {
+      const activeChat = openChats.find(c => c.conversationId === activeTabId);
+      const conversationClientId = activeChat?.conversation.client_id || client?.id;
+      
+      if (conversationClientId) {
+        try {
+          const clientOrders = await ordersApi.getOrders({ client_id: conversationClientId });
+          const loadedOrders = clientOrders.map((order: any) => ({
+            id: order.id,
+            title: order.order_number,
+            status: order.status,
+            created_at: order.created_at,
+            total_amount: order.transactions?.reduce((sum: number, t: any) => 
+              t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+            file_url: order.file_url,
+            description: order.description,
+          }));
+          
+          setOrders(loadedOrders);
+          currentOrders = loadedOrders;
+        } catch (error) {
+          console.error('Error loading orders:', error);
+          // Продовжити - можливо замовлень немає, відкриємо діалог створення
+        }
+      }
+    }
+    
+    if (currentOrders && currentOrders.length > 0) {
       // Navigate to order page
-      const orderId = orders[0].id;
+      const orderId = currentOrders[0].id;
       window.dispatchEvent(
         new CustomEvent('command:navigate', {
           detail: { path: '/crm', kpId: orderId }

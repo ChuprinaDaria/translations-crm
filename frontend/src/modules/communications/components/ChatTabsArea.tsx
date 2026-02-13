@@ -78,6 +78,15 @@ export function ChatTabsArea({
   const quickActions = useMemo<QuickAction[]>(() => {
     const clientId = activeTabId ? getClientId?.(activeTabId) : undefined;
     const orderId = activeTabId ? getOrderId?.(activeTabId) : undefined;
+    
+    // Перевіряємо, чи є client_id в conversation (навіть якщо дані ще не завантажені)
+    const activeChat = openChats.find(chat => chat.conversationId === activeTabId);
+    const hasClientInConversation = activeChat?.conversation.client_id !== undefined;
+    const hasClient = clientId || hasClientInConversation;
+    
+    // Кнопки оплати та трекінгу активні, якщо є відкрита conversation з client_id
+    // (перевірка наявності замовлення буде всередині handler'ів)
+    const canHaveOrders = hasClient;
 
     return [
       {
@@ -93,7 +102,7 @@ export function ChatTabsArea({
         icon: CreditCard,
         tooltip: 'Оплата',
         onClick: () => activeTabId && onPaymentClick?.(activeTabId),
-        disabled: !activeTabId || !orderId,
+        disabled: !activeTabId || !canHaveOrders,
         disabledMessage: 'Najpierw utwórz zlecenie',
       },
       {
@@ -101,7 +110,7 @@ export function ChatTabsArea({
         icon: Package,
         tooltip: 'Трекінг',
         onClick: () => activeTabId && onTrackingClick?.(activeTabId),
-        disabled: !activeTabId || !orderId,
+        disabled: !activeTabId || !canHaveOrders,
         disabledMessage: 'Najpierw utwórz zlecenie',
       },
       {
@@ -116,7 +125,7 @@ export function ChatTabsArea({
         icon: FileText,
         tooltip: 'Utwórz zlecenie',
         onClick: () => activeTabId && onOrderClick?.(activeTabId),
-        disabled: !activeTabId || !clientId,
+        disabled: !activeTabId || !hasClient,
         disabledMessage: 'Спочатку створіть клієнта',
       },
       {
@@ -130,6 +139,7 @@ export function ChatTabsArea({
   }, [
     activeTabId,
     isSidebarOpen,
+    openChats,
     getClientId,
     getOrderId,
     onToggleSidebar,

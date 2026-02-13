@@ -663,6 +663,13 @@ async def create_payment_link(
     # Determine active payment provider
     active_provider = payment_settings.active_payment_provider
     
+    # Convert string to Enum if needed
+    if isinstance(active_provider, str):
+        try:
+            active_provider = PaymentProvider(active_provider.lower())
+        except ValueError:
+            active_provider = None
+    
     # If not set, auto-select based on enabled statuses
     if not active_provider:
         if payment_settings.stripe_enabled and payment_settings.stripe_secret_key:
@@ -758,12 +765,15 @@ async def create_payment_link(
         else:
             raise HTTPException(status_code=500, detail=f"Unsupported payment provider: {active_provider}")
 
+        # Convert provider to string (handle both Enum and str)
+        provider_str = active_provider.value if hasattr(active_provider, 'value') else str(active_provider)
+        
         return {
             "payment_link": payment_url,
             "order_id": str(order.id),
             "amount": amount,
             "currency": currency,
-            "provider": active_provider.value,
+            "provider": provider_str,
             "payment_link_id": payment_link_id,  # Stripe Payment Link ID
         }
     except ImportError as e:
