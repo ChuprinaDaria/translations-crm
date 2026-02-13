@@ -8,6 +8,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+import crud
 
 from modules.postal_services.models import (
     InPostShipment,
@@ -36,7 +37,8 @@ class InPostService:
     
     @property
     def settings(self) -> InPostSettings:
-        """Get InPost settings from database."""
+        """Get InPost settings from database (legacy compatibility)."""
+        # Try to get from InPostSettings table first (for backward compatibility)
         settings = self.db.query(InPostSettings).first()
         if not settings:
             settings = InPostSettings(
@@ -47,6 +49,15 @@ class InPostService:
             self.db.add(settings)
             self.db.commit()
             self.db.refresh(settings)
+        
+        # Sync from AppSetting if available (new system)
+        app_settings = crud.get_inpost_settings(self.db)
+        if app_settings.get("inpost_token"):
+            settings.api_key = app_settings.get("inpost_token")
+        if app_settings.get("inpost_organization_id"):
+            settings.organization_id = app_settings.get("inpost_organization_id")
+        if app_settings.get("inpost_sandbox_mode"):
+            settings.sandbox_mode = (app_settings.get("inpost_sandbox_mode") or "false").lower() == "true"
         
         # Log settings for debugging
         logger.info(f"InPost settings from DB:")
@@ -68,9 +79,12 @@ class InPostService:
     
     def get_api_url(self) -> str:
         """Get API URL based on sandbox mode."""
-        if self.settings.sandbox_mode:
-            return self.settings.sandbox_api_url
-        return self.settings.api_url
+        app_settings = crud.get_inpost_settings(self.db)
+        sandbox_mode = (app_settings.get("inpost_sandbox_mode") or "false").lower() == "true"
+        
+        if sandbox_mode:
+            return "https://sandbox-api-shipx-pl.easypack24.net/v1"
+        return "https://api-shipx-pl.easypack24.net/v1"
     
     def get_api_key(self) -> str:
         """
@@ -79,22 +93,27 @@ class InPostService:
         Returns the Organization Token (JWT) needed for InPost API authentication.
         Note: webhook_secret is NOT used here - it's only for webhook verification.
         """
-        # Get the appropriate API key based on sandbox mode
-        if self.settings.sandbox_mode:
-            api_key = self.settings.sandbox_api_key or ""
+        # Get settings from AppSetting (new system)
+        app_settings = crud.get_inpost_settings(self.db)
+        token = app_settings.get("inpost_token") or ""
+        
+        # Fallback to InPostSettings for backward compatibility
+        if not token:
+            if self.settings.sandbox_mode:
+                token = self.settings.sandbox_api_key or ""
+            else:
+                token = self.settings.api_key or ""
+        
+        token_str = str(token).strip() if token else ""
+        
+        if token_str:
+            logger.info(f"InPost get_api_key: Using token (JWT), length: {len(token_str)}")
+            print(f"[InPost] get_api_key: Using token (JWT), length: {len(token_str)}")
         else:
-            api_key = self.settings.api_key or ""
+            logger.error(f"InPost get_api_key: No API token configured!")
+            print(f"[InPost] get_api_key: ERROR - No API token configured!")
         
-        api_key_str = str(api_key).strip() if api_key else ""
-        
-        if api_key_str:
-            logger.info(f"InPost get_api_key: Using api_key (JWT token), length: {len(api_key_str)}")
-            print(f"[InPost] get_api_key: Using api_key (JWT token), length: {len(api_key_str)}")
-        else:
-            logger.error(f"InPost get_api_key: No API key configured!")
-            print(f"[InPost] get_api_key: ERROR - No API key configured!")
-        
-        return api_key_str
+        return token_str
     
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers for API requests."""
@@ -452,33 +471,27 @@ class InPostService:
             self.db.refresh(shipment)
     
     async def _get_organization_id(self) -> str:
-        """Get organization ID from database or use api_key as fallback."""
+        """Get organization ID from database."""
         if self._organization_id:
             logger.info(f"InPost organization_id (cached): {self._organization_id}")
             print(f"[InPost] organization_id (cached): {self._organization_id}")
             return self._organization_id
         
-        # First, try to get from database settings
-        settings = self.settings
-        organization_id = settings.organization_id
+        # Get from AppSetting (new system)
+        app_settings = crud.get_inpost_settings(self.db)
+        organization_id = app_settings.get("inpost_organization_id") or ""
+        
+        # Fallback to InPostSettings for backward compatibility
+        if not organization_id:
+            organization_id = self.settings.organization_id or ""
         
         logger.info(f"InPost _get_organization_id: organization_id from DB = '{organization_id}' (type: {type(organization_id).__name__}, is None: {organization_id is None})")
         print(f"[InPost] organization_id from DB: '{organization_id}' (type: {type(organization_id).__name__}, is None: {organization_id is None})")
         
-        # If organization_id is not set, use api_key (they can be the same numeric ID)
-        if not organization_id:
-            api_key = self.get_api_key()
-            if api_key:
-                organization_id = api_key
-                logger.info(f"InPost organization_id not in DB, using api_key: {organization_id}")
-                print(f"[InPost] organization_id not in DB, using api_key: {organization_id}")
-            else:
-                raise ValueError("InPost organization ID and API key are not configured")
-        
         # Convert to string and ensure it's not empty
         organization_id = str(organization_id).strip()
         if not organization_id:
-            raise ValueError("InPost organization ID is empty")
+            raise ValueError("InPost organization ID is not configured")
         
         # Cache it
         self._organization_id = organization_id

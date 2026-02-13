@@ -2348,21 +2348,30 @@ def update_stripe_config(
 
 @router.get("/settings/inpost-config")
 def get_inpost_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
-    """Повертає налаштування InPost API."""
+    """Повертає налаштування InPost ShipX API."""
     settings = crud.get_inpost_settings(db)
     return {
-        "api_key": settings.get("inpost_api_key") or "",
+        "token": settings.get("inpost_token") or "",
+        "organization_id": settings.get("inpost_organization_id") or "",
+        "webhook_secret": settings.get("inpost_webhook_secret") or "",
+        "sandbox_mode": (settings.get("inpost_sandbox_mode") or "false").lower() == "true",
     }
 
 
 @router.post("/settings/inpost-config")
 def update_inpost_config(
-    api_key: str = Form(""),
+    token: str = Form(""),
+    organization_id: str = Form(""),
+    webhook_secret: str = Form(""),
+    sandbox_mode: bool = Form(False),
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
-    """Оновлює налаштування InPost API."""
-    crud.set_setting(db, "inpost_api_key", api_key)
+    """Оновлює налаштування InPost ShipX API."""
+    crud.set_setting(db, "inpost_token", token)
+    crud.set_setting(db, "inpost_organization_id", organization_id)
+    crud.set_setting(db, "inpost_webhook_secret", webhook_secret)
+    crud.set_setting(db, "inpost_sandbox_mode", str(sandbox_mode).lower())
     return {"status": "success"}
 
 

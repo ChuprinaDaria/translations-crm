@@ -1039,10 +1039,29 @@ def get_stripe_settings(db: Session) -> dict[str, str | None]:
 
 
 def get_inpost_settings(db: Session) -> dict[str, str | None]:
+    """Отримати налаштування InPost ShipX API."""
     keys = [
-        "inpost_api_key",
+        "inpost_token",
+        "inpost_organization_id",
+        "inpost_webhook_secret",
+        "inpost_sandbox_mode",
     ]
-    return get_settings(db, keys)
+    settings = get_settings(db, keys)
+    
+    # Міграція: якщо є старе значення inpost_api_key, але немає нового token,
+    # спробуємо використати його як organization_id (якщо це числовий ID)
+    # або як token (якщо це довгий JWT)
+    if not settings.get("inpost_token") and not settings.get("inpost_organization_id"):
+        old_api_key = get_setting(db, "inpost_api_key")
+        if old_api_key:
+            # Якщо це короткий числовий ID (наприклад, 12404089), це organization_id
+            if old_api_key.isdigit() and len(old_api_key) <= 20:
+                settings["inpost_organization_id"] = old_api_key
+            # Інакше це може бути token (JWT зазвичай довгий)
+            elif len(old_api_key) > 50:
+                settings["inpost_token"] = old_api_key
+    
+    return settings
 
 
 ############################################################

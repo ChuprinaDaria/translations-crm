@@ -1230,7 +1230,8 @@ export interface StripeConfig {
 }
 
 export interface InPostConfig {
-  api_key?: string;
+  token?: string;  // Bearer JWT token (renamed from api_key for InPost ShipX API terminology)
+  organization_id?: string;  // Organization ID (numeric ID used in API URLs)
   sandbox_mode?: boolean;
   sandbox_api_key?: string;
   webhook_url?: string;
@@ -1787,13 +1788,15 @@ export const settingsApi = {
 
   // InPost API
   async getInPostConfig(): Promise<InPostConfig> {
-    return apiFetch<InPostConfig>("/postal-services/inpost/settings");
+    return apiFetch<InPostConfig>("/settings/inpost-config");
   },
-  async updateInPostConfig(data: InPostConfig): Promise<InPostConfig> {
-    return apiFetch<InPostConfig>("/postal-services/inpost/settings", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+  async updateInPostConfig(data: InPostConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("token", data.token || "");
+    formData.append("organization_id", data.organization_id || "");
+    formData.append("webhook_secret", data.webhook_secret || "");
+    formData.append("sandbox_mode", String(data.sandbox_mode || false));
+    return apiFetchMultipart<{ status: string }>("/settings/inpost-config", formData, "POST");
   },
   async createShipment(data: {
     order_id: string;

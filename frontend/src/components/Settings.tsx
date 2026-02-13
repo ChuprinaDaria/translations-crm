@@ -7,6 +7,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Checkbox } from "./ui/checkbox";
+import { Switch } from "./ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { toast } from "sonner";
 import {
@@ -153,7 +154,8 @@ export function Settings() {
 
   // InPost state
   const [inpost, setInpost] = useState<InPostConfig>({
-    api_key: "",
+    token: "",
+    organization_id: "",
     sandbox_mode: false,
     sandbox_api_key: "",
     webhook_url: `${API_BASE_URL}/postal-services/inpost/webhook`,
@@ -280,7 +282,8 @@ export function Settings() {
           settingsApi.getFacebookConfig().catch(() => ({ app_id: "", access_token: "", app_secret: "", verify_token: "", page_id: "", config_id: "" })),
           settingsApi.getStripeConfig().catch(() => ({ secret_key: "" })),
           settingsApi.getInPostConfig().catch(() => ({
-            api_key: "",
+            token: "",
+            organization_id: "",
             sandbox_mode: false,
             sandbox_api_key: "",
             webhook_url: `${API_BASE_URL}/postal-services/inpost/webhook`,
@@ -2296,10 +2299,7 @@ export function Settings() {
         <TabsContent value="inpost" className="mt-0">
           <Card>
             <CardHeader>
-              <CardTitle>InPost API налаштування</CardTitle>
-              <p className="text-sm text-gray-500 mt-2">
-                Налаштування інтеграції з InPost для автоматичного створення та відстеження відправлень
-              </p>
+              <CardTitle>InPost ShipX API</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Enable/Disable */}
@@ -2323,49 +2323,54 @@ export function Settings() {
               <div className="space-y-4 border-t pt-4">
                 <h3 className="text-sm font-semibold">API налаштування</h3>
                 
+                {/* Token (Bearer JWT) */}
                 <div className="space-y-2">
-                  <Label htmlFor="inpost-api-key">
-                    Production API Key (Organization Token)
+                  <Label htmlFor="inpost-token">
+                    Token (API ShipX)
                   </Label>
                   <Input
-                    id="inpost-api-key"
+                    id="inpost-token"
                     type="password"
-                    placeholder="Введіть ваш InPost API ключ"
-                    value={inpost.api_key || ""}
-                    onChange={(e) => setInpost({ ...inpost, api_key: e.target.value })}
+                    placeholder="Bearer JWT token z panelu ShipX"
+                    value={inpost.token || ""}
+                    onChange={(e) => setInpost({ ...inpost, token: e.target.value })}
                   />
                   <p className="text-xs text-gray-500">
-                    Отримайте ключ у вашому InPost Organization панелі
+                    Znajdziesz w InPost Manager → ShipX API → Tokeny
                   </p>
                 </div>
 
+                {/* Organization ID */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="inpost-sandbox"
-                      checked={inpost.sandbox_mode || false}
-                      onCheckedChange={(checked) => setInpost({ ...inpost, sandbox_mode: checked as boolean })}
-                    />
-                    <Label htmlFor="inpost-sandbox">
-                      Використовувати Sandbox режим (тестування)
-                    </Label>
-                  </div>
+                  <Label htmlFor="inpost-org-id">
+                    Organization ID
+                  </Label>
+                  <Input
+                    id="inpost-org-id"
+                    type="text"
+                    placeholder="np. 12404089"
+                    value={inpost.organization_id || ""}
+                    onChange={(e) => setInpost({ ...inpost, organization_id: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-500">
+                    ID organizacji w InPost ShipX
+                  </p>
                 </div>
 
-                {inpost.sandbox_mode && (
-                  <div className="space-y-2 ml-6">
-                    <Label htmlFor="inpost-sandbox-key">
-                      Sandbox API Key
-                    </Label>
-                    <Input
-                      id="inpost-sandbox-key"
-                      type="password"
-                      placeholder="Введіть ваш Sandbox API ключ"
-                      value={inpost.sandbox_api_key || ""}
-                      onChange={(e) => setInpost({ ...inpost, sandbox_api_key: e.target.value })}
-                    />
+                {/* Sandbox Mode Toggle */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <Label htmlFor="inpost-sandbox">Tryb Sandbox</Label>
+                    <p className="text-xs text-gray-500">
+                      Użyj sandbox API do testów (sandbox-api-shipx-pl.easypack24.net)
+                    </p>
                   </div>
-                )}
+                  <Switch
+                    id="inpost-sandbox"
+                    checked={inpost.sandbox_mode || false}
+                    onCheckedChange={(checked) => setInpost({ ...inpost, sandbox_mode: checked })}
+                  />
+                </div>
               </div>
 
               {/* Webhook Configuration */}
@@ -2462,16 +2467,16 @@ export function Settings() {
                     setIsSavingInPost(true);
                     try {
                       await settingsApi.updateInPostConfig(inpost);
-                      toast.success("InPost налаштування збережено");
+                      toast.success("InPost ShipX nalaashtowannya zberezheno");
                     } catch (error) {
                       console.error(error);
-                      toast.error("Не вдалося зберегти InPost налаштування");
+                      toast.error("Nie udało się zapisać ustawień InPost");
                     } finally {
                       setIsSavingInPost(false);
                     }
                   }}
                 >
-                  {isSavingInPost ? "Збереження..." : "Зберегти InPost налаштування"}
+                  {isSavingInPost ? "Zapisywanie..." : "Zapisz InPost"}
                 </Button>
               </div>
             </CardContent>

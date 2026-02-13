@@ -23,11 +23,12 @@ import httpx
 
 # Імпортуємо моделі щоб SQLAlchemy знав про них для relationship
 from modules.auth.models import User  # noqa: F401
-from modules.crm.models import Client, Office, Order  # noqa: F401 - Office потребує AutobotSettings, Order потребує Transaction
+from modules.crm.models import Client, Office, Order  # noqa: F401 - Office потребує AutobotSettings, Order потребує Transaction та PaymentTransaction
 from modules.communications.models import Conversation, Message  # noqa: F401
 from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
 from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog  # noqa: F401 - для Office relationship
 from modules.finance.models import Transaction  # noqa: F401 - для Order relationship
+from modules.payment.models import PaymentTransaction  # noqa: F401 - для Order.payment_transactions relationship
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
@@ -100,9 +101,10 @@ def get_or_create_conversation(db, external_id: str, sender_name: str = None, su
     return conv_id
 
 
-def save_message(db, conv_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text", meta_data: dict = None):
+def save_message(db, conv_id: str, content: str, sender_name: str, external_id: str, attachments: list = None, msg_type: str = "text", meta_data: dict = None, msg_id: str = None):
     """Save incoming message to database."""
-    msg_id = str(uuid4())
+    if msg_id is None:
+        msg_id = str(uuid4())
     now = datetime.now(timezone.utc)
     
     attachments_json = json.dumps(attachments) if attachments else None
@@ -130,6 +132,20 @@ async def download_media(client, message, db, message_id) -> dict:
     """Download media from Telegram message and return attachment info."""
     try:
         if not message.media:
+            logger.info("📎 No media in message")
+            return None
+        
+        media_type = type(message.media).__name__
+        logger.info(f"📎 Media detected: {media_type}, photo={bool(message.photo)}, "
+                     f"document={bool(message.document)}")
+        
+        # Skip non-downloadable media
+        # MessageMediaWebPage = посилання з превью (не потрібно завантажувати)
+        skip_types = ['MessageMediaWebPage', 'MessageMediaContact', 
+                      'MessageMediaGeo', 'MessageMediaGeoLive', 
+                      'MessageMediaPoll', 'MessageMediaUnsupported']
+        if media_type in skip_types:
+            logger.info(f"📎 Skipping non-downloadable media: {media_type}")
             return None
         
         # Generate unique filename
@@ -188,11 +204,26 @@ async def download_media(client, message, db, message_id) -> dict:
         
         # Download to temporary location first
         temp_path = UPLOADS_DIR / f"temp_{uuid4()}{ext}"
-        await client.download_media(message, file=str(temp_path))
+        logger.info(f"📎 Downloading to: {temp_path}")
+        downloaded_path = await client.download_media(message, file=str(temp_path))
+        
+        if downloaded_path is None:
+            logger.error("📎 ❌ download_media returned None!")
+            return None
         
         # Read file data
+        if not temp_path.exists():
+            logger.error(f"📎 ❌ Downloaded file does not exist: {temp_path}")
+            return None
+        
         with open(temp_path, "rb") as f:
             file_data = f.read()
+        
+        file_size = len(file_data)
+        if file_size == 0:
+            logger.error(f"📎 ❌ Downloaded file is 0 bytes: {temp_path}")
+            temp_path.unlink()
+            return None
         
         # Remove temp file
         temp_path.unlink()
@@ -210,7 +241,7 @@ async def download_media(client, message, db, message_id) -> dict:
             file_type=file_type,
         )
         
-        logger.info(f"📎 Downloaded and saved media: {original_name} ({attachment.file_size} bytes)")
+        logger.info(f"📎 ✅ Downloaded: {original_name} ({file_size} bytes) -> {attachment.file_path}")
         
         return {
             "id": str(attachment.id),
@@ -222,7 +253,7 @@ async def download_media(client, message, db, message_id) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Error downloading media: {e}")
+        logger.error(f"📎 ❌ Error downloading media: {e}", exc_info=True)
         return None
 
 
@@ -409,21 +440,15 @@ async def run_listener_for_account(account: dict):
                     if phone:
                         meta_data["telegram_phone"] = phone
                     
-                    # Save to database first to get message_id
+                    # Open database connection
                     db = Session()
                     try:
                         conv_id = get_or_create_conversation(db, external_id, sender_name, conversation_subject)
                         
-                        # Save message first (will update if media found)
-                        temp_content = content or "[Медіа повідомлення]"
-                        msg_id = save_message(
-                            db, conv_id, temp_content, sender_name, external_id, 
-                            attachments=None,  # Will be updated after media download
-                            msg_type=msg_type,
-                            meta_data=meta_data
-                        )
+                        # Generate message_id upfront for attachment saving
+                        msg_id = str(uuid4())
                         
-                        # Check for media and download
+                        # Check for media and download FIRST (before saving message)
                         has_media = bool(event.message.media)
                         if has_media:
                             attachment = await download_media(client, event.message, db, msg_id)
@@ -432,49 +457,22 @@ async def run_listener_for_account(account: dict):
                                 msg_type = attachment["type"]
                                 if not content:
                                     content = f"[{attachment['type'].capitalize()}: {attachment['filename']}]"
-                                
-                                # Update message with attachment info
-                                import json
-                                db.execute(text("""
-                                    UPDATE communications_messages 
-                                    SET content = :content, type = :msg_type, attachments = CAST(:attachments AS jsonb), meta_data = CAST(:meta_data AS jsonb)
-                                    WHERE id = :msg_id
-                                """), {
-                                    "content": content,
-                                    "msg_type": msg_type,
-                                    "attachments": json.dumps(attachments),
-                                    "meta_data": json.dumps(meta_data),
-                                    "msg_id": msg_id
-                                })
-                                db.commit()
                             elif not content:
                                 # Media exists but download failed - set placeholder
                                 content = "[Медіа повідомлення]"
-                                import json
-                                db.execute(text("""
-                                    UPDATE communications_messages 
-                                    SET content = :content
-                                    WHERE id = :msg_id
-                                """), {
-                                    "content": content,
-                                    "msg_id": msg_id
-                                })
-                                db.commit()
                         
                         # Only set "[Пусте повідомлення]" if there's no media and no content
                         if not content and not has_media and not attachments:
                             content = "[Пусте повідомлення]"
-                            if content != temp_content:
-                                import json
-                                db.execute(text("""
-                                    UPDATE communications_messages 
-                                    SET content = :content
-                                    WHERE id = :msg_id
-                                """), {
-                                    "content": content,
-                                    "msg_id": msg_id
-                                })
-                                db.commit()
+                        
+                        # Save message with attachments (after download)
+                        save_message(
+                            db, conv_id, content, sender_name, external_id, 
+                            attachments=attachments if attachments else None,
+                            msg_type=msg_type,
+                            meta_data=meta_data,
+                            msg_id=msg_id
+                        )
                         
                         logger.info(f"📩 New message from {sender_name or external_id}: {content[:50]}...")
                         
