@@ -256,6 +256,7 @@ class OrderRead(BaseModel):
     office: Optional["OfficeRead"] = None
     timeline_steps: list["TimelineStepRead"] = []
     payment_transactions: Optional[list["PaymentTransactionRead"]] = []  # Payment transactions from Stripe/P24
+    shipments: Optional[list["ShipmentReadSimple"]] = []  # Shipments (delivery information)
     
     class Config:
         from_attributes = True
@@ -598,6 +599,26 @@ class TranslatorLanguageRate(TranslatorLanguageRateBase):
         client_price = self.client_price
         translator_rate = Decimal(str(self.translator_rate)) if isinstance(self.translator_rate, float) else Decimal(self.translator_rate)
         return client_price - translator_rate
+    
+    class Config:
+        from_attributes = True
+
+
+# Shipment schema (simplified to avoid circular imports)
+class ShipmentReadSimple(BaseModel):
+    """Simplified shipment schema for including in OrderRead"""
+    id: UUID
+    method: str  # inpost_locker, inpost_courier, office_pickup, courier
+    status: str  # created, label_printed, in_transit, ready_for_pickup, delivered, returned
+    paczkomat_code: Optional[str] = None
+    delivery_address: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    tracking_number: Optional[str] = None
+    tracking_url: Optional[str] = None
+    shipping_cost: Optional[float] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True

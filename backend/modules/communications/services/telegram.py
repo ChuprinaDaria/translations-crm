@@ -206,7 +206,12 @@ class TelegramService(MessengerService):
                 
                 MEDIA_DIR = get_media_dir()
                 
+                if not MEDIA_DIR or not MEDIA_DIR.exists():
+                    logger.error(f"❌ MEDIA_DIR is not configured or doesn't exist: {MEDIA_DIR}")
+                    raise ValueError(f"Media directory not configured: {MEDIA_DIR}")
+                
                 logger.info(f"📎 Processing {len(attachments)} attachments for Telegram message")
+                logger.info(f"📎 MEDIA_DIR: {MEDIA_DIR}")
                 logger.info(f"📎 Attachments data: {attachments}")
                 files = []
                 for att in attachments:
@@ -223,12 +228,13 @@ class TelegramService(MessengerService):
                             attachment_obj = self.db.query(Attachment).filter(
                                 Attachment.id == UUID(att_id)
                             ).first()
-                            if attachment_obj:
+                            if attachment_obj and attachment_obj.file_path:
                                 # Склеюємо базовий шлях з тим, що зберігається в БД
                                 # В БД зберігається як "attachments/filename.pdf"
-                                filename = attachment_obj.original_name or Path(attachment_obj.file_path).name
-                                file_path = MEDIA_DIR / attachment_obj.file_path
+                                file_path = MEDIA_DIR / attachment_obj.file_path if attachment_obj.file_path else None
                                 logger.info(f"📁 Found attachment in DB: {file_path} (from DB: {attachment_obj.file_path})")
+                            else:
+                                logger.warning(f"⚠️ Attachment object found but file_path is empty: {att_id}")
                         except Exception as e:
                             logger.warning(f"⚠️ Failed to load attachment by ID {att_id}: {e}")
                     
@@ -248,20 +254,29 @@ class TelegramService(MessengerService):
                                 attachment_obj = self.db.query(Attachment).filter(
                                     Attachment.id == UUID(file_id)
                                 ).first()
-                                if attachment_obj:
-                                    filename = Path(attachment_obj.file_path).name
-                                else:
-                                    filename = file_id
+                                if attachment_obj and attachment_obj.file_path:
+                                    file_path = MEDIA_DIR / attachment_obj.file_path
+                                    logger.info(f"📁 Found attachment via /files/ URL: {file_path}")
                             except:
-                                filename = file_id
+                                logger.warning(f"⚠️ Failed to parse file_id from URL: {file_id}")
                         else:
                             # Якщо URL не містить /media/, спробувати як прямий шлях
                             file_path = MEDIA_DIR / url_clean.lstrip("/")
                             logger.info(f"📁 Looking for file from URL (direct path): {file_path}")
                     
                     if file_path and file_path.exists():
+                        file_size = file_path.stat().st_size
+                        size_mb = file_size / (1024 * 1024)
+                        logger.info(f"✅ File found: {file_path} ({size_mb:.2f} MB)")
+                        
+                        # Telegram limits: 20MB for photos, 50MB for documents/videos
+                        if size_mb > 50:
+                            logger.error(f"❌ File too large for Telegram: {size_mb:.2f} MB (max 50 MB)")
+                            continue
+                        elif size_mb > 20:
+                            logger.warning(f"⚠️ File larger than 20 MB, will send as document: {size_mb:.2f} MB")
+                        
                         files.append(str(file_path))
-                        logger.info(f"✅ File found: {file_path}")
                     else:
                         logger.error(f"❌ File not found: {file_path}")
                 

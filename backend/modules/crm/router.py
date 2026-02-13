@@ -364,7 +364,17 @@ def get_orders(
         except ValueError:
             pass
     
-    orders = query.order_by(models.Order.created_at.desc()).offset(skip).limit(limit).all()
+    # Завантажуємо shipments для всіх замовлень
+    from sqlalchemy.orm import joinedload
+    from modules.finance.models import Shipment
+    orders = (
+        query
+        .options(joinedload(models.Order.shipments))
+        .order_by(models.Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     
     # Fix timeline_steps metadata for response - використовуємо get_attribute для прямого доступу
     from sqlalchemy.orm.attributes import get_attribute
@@ -400,8 +410,17 @@ def get_order(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid order_id format")
     
-    # Явно завантажуємо клієнта, щоб переконатися, що дані доступні
-    order = db.query(models.Order).options(joinedload(models.Order.client)).filter(models.Order.id == order_uuid).first()
+    # Явно завантажуємо клієнта та shipments, щоб переконатися, що дані доступні
+    from modules.finance.models import Shipment
+    order = (
+        db.query(models.Order)
+        .options(
+            joinedload(models.Order.client),
+            joinedload(models.Order.shipments)
+        )
+        .filter(models.Order.id == order_uuid)
+        .first()
+    )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     

@@ -1023,16 +1023,6 @@ async def upload_file(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)} MB")
     
-    # Generate unique filename
-    ext = Path(file.filename).suffix.lower() if file.filename else ''
-    unique_id = str(uuid_module.uuid4())
-    filename = f"{unique_id}{ext}"
-    
-    # Save file
-    file_path = UPLOADS_DIR / filename
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
     # Determine file type category
     mime_type = file.content_type or ''
     if mime_type.startswith('image/'):
@@ -1045,6 +1035,62 @@ async def upload_file(
         file_type = 'document'
     else:
         file_type = 'file'
+    
+    # Compress images if they are too large
+    if file_type == 'image' and len(content) > 5 * 1024 * 1024:  # 5MB threshold
+        try:
+            from PIL import Image
+            import io
+            
+            original_size = len(content)
+            logger.info(f"🖼️ Image is large ({original_size / (1024*1024):.2f} MB), attempting compression")
+            
+            # Open image
+            img = Image.open(io.BytesIO(content))
+            
+            # Convert RGBA to RGB if saving as JPEG
+            if img.mode == 'RGBA' and mime_type == 'image/jpeg':
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[3])
+                img = background
+            
+            # Resize if too large (max 4096px on longest side)
+            max_dimension = 4096
+            if max(img.size) > max_dimension:
+                ratio = max_dimension / max(img.size)
+                new_size = tuple(int(dim * ratio) for dim in img.size)
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+                logger.info(f"🖼️ Resized image to {new_size}")
+            
+            # Save with compression
+            output = io.BytesIO()
+            save_format = 'JPEG' if mime_type in ['image/jpeg', 'image/jpg'] else 'PNG'
+            if save_format == 'JPEG':
+                img.save(output, format=save_format, quality=85, optimize=True)
+            else:
+                img.save(output, format=save_format, optimize=True)
+            
+            compressed_content = output.getvalue()
+            compressed_size = len(compressed_content)
+            
+            # Use compressed version if it's smaller
+            if compressed_size < original_size:
+                content = compressed_content
+                logger.info(f"✅ Image compressed: {original_size / (1024*1024):.2f} MB → {compressed_size / (1024*1024):.2f} MB")
+            else:
+                logger.info(f"⚠️ Compression didn't reduce size, keeping original")
+        except Exception as e:
+            logger.warning(f"⚠️ Image compression failed: {e}, using original")
+    
+    # Generate unique filename
+    ext = Path(file.filename).suffix.lower() if file.filename else ''
+    unique_id = str(uuid_module.uuid4())
+    filename = f"{unique_id}{ext}"
+    
+    # Save file
+    file_path = UPLOADS_DIR / filename
+    with open(file_path, "wb") as f:
+        f.write(content)
     
     return {
         "id": unique_id,
@@ -1272,6 +1318,8 @@ class AddAddressRequest(BaseModel):
     address: str
     is_paczkomat: bool
     paczkomat_code: Optional[str] = None
+    recipient_email: Optional[str] = None
+    recipient_phone: Optional[str] = None
 
 
 @router.post("/orders/{order_id}/add-file")
@@ -1341,10 +1389,25 @@ async def add_address_to_order(
         paczkomat_code = None
         delivery_address = request.address
     
-    # Отримуємо дані клієнта
+    # Отримуємо дані клієнта (переконаємося, що клієнт завантажений)
+    if not order.client:
+        db.refresh(order, ["client"])
+    
+    # Використовуємо передані email/phone якщо вони є, інакше беремо з клієнта
     recipient_name = order.client.full_name if order.client else None
-    recipient_email = order.client.email if order.client else None
-    recipient_phone = order.client.phone if order.client else None
+    recipient_email = (
+        request.recipient_email.strip() if request.recipient_email and request.recipient_email.strip() 
+        else (order.client.email.strip() if order.client and order.client.email and order.client.email.strip() else None)
+    )
+    recipient_phone = (
+        request.recipient_phone.strip() if request.recipient_phone and request.recipient_phone.strip()
+        else (order.client.phone.strip() if order.client and order.client.phone and order.client.phone.strip() else None)
+    )
+    
+    # Логування для відладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"📦 Creating shipment for order {order_id}: email={recipient_email}, phone={recipient_phone}, name={recipient_name}")
     
     # Створюємо Shipment запис
     shipment = Shipment(

@@ -149,6 +149,11 @@ class EmailService(MessengerService):
                 from modules.communications.utils.media import get_media_dir
                 
                 MEDIA_DIR = get_media_dir()
+                
+                if not MEDIA_DIR or not MEDIA_DIR.exists():
+                    logger.error(f"❌ MEDIA_DIR is not configured or doesn't exist: {MEDIA_DIR}")
+                    raise ValueError(f"Media directory not configured: {MEDIA_DIR}")
+                
                 logger.info(f"📎 Processing {len(attachments)} attachment(s) for email. MEDIA_DIR: {MEDIA_DIR}")
                 
                 for att in attachments:
@@ -176,7 +181,7 @@ class EmailService(MessengerService):
                                 Attachment.id == att_uuid
                             ).first()
                             
-                            if attachment_obj:
+                            if attachment_obj and attachment_obj.file_path:
                                 logger.info(f"✅ Found attachment in DB: {attachment_obj.id}, file_path: {attachment_obj.file_path}")
                                 filename = attachment_obj.original_name
                                 mime_type = attachment_obj.mime_type
@@ -187,7 +192,7 @@ class EmailService(MessengerService):
                                 
                                 logger.info(f"📁 Constructed file path: {file_path} (from DB path: {attachment_obj.file_path})")
                             else:
-                                logger.warning(f"⚠️ Attachment not found in DB for ID: {att_id}")
+                                logger.warning(f"⚠️ Attachment not found in DB or file_path is empty for ID: {att_id}")
                         except Exception as e:
                             logger.warning(f"⚠️ Failed to load attachment by ID {att_id}: {e}", exc_info=True)
                     
@@ -226,7 +231,7 @@ class EmailService(MessengerService):
                                 attachment_obj = self.db.query(Attachment).filter(
                                     Attachment.id == file_uuid
                                 ).first()
-                                if attachment_obj:
+                                if attachment_obj and attachment_obj.file_path:
                                     filename = attachment_obj.original_name
                                     mime_type = attachment_obj.mime_type
                                     # Склеюємо базовий шлях з тим, що зберігається в БД
@@ -249,12 +254,19 @@ class EmailService(MessengerService):
                                     if media_file_path.exists():
                                         file_path = media_file_path
                                         logger.info(f"📁 Found file in MEDIA_DIR: {file_path}")
-                                        logger.warning(f"⚠️ Failed to parse file_id from URL or find in DB: {e}")
                     
                     # Завантажити файл
                     if file_path:
                         if file_path.exists():
                             try:
+                                file_size = file_path.stat().st_size
+                                size_mb = file_size / (1024 * 1024)
+                                logger.info(f"✅ File found: {file_path} ({size_mb:.2f} MB)")
+                                
+                                # Most email servers have a 25-50MB limit
+                                if size_mb > 25:
+                                    logger.warning(f"⚠️ File is large for email: {size_mb:.2f} MB (max recommended 25 MB)")
+                                
                                 with open(file_path, "rb") as f:
                                     file_data = f.read()
                                 logger.info(f"✅ Loaded file: {file_path} ({len(file_data)} bytes)")

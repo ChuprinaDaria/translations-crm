@@ -304,6 +304,11 @@ class InstagramService(MessengerService):
                 from modules.communications.utils.media import get_media_dir
                 
                 MEDIA_DIR = get_media_dir()
+                
+                if not MEDIA_DIR or not MEDIA_DIR.exists():
+                    logger.error(f"[Instagram Send] ❌ MEDIA_DIR is not configured or doesn't exist: {MEDIA_DIR}")
+                    raise ValueError(f"Media directory not configured: {MEDIA_DIR}")
+                
                 file_path = None
                 file_data = None
                 
@@ -313,12 +318,15 @@ class InstagramService(MessengerService):
                         attachment_obj = self.db.query(Attachment).filter(
                             Attachment.id == UUID(att_id)
                         ).first()
-                        if attachment_obj:
+                        if attachment_obj and attachment_obj.file_path:
                             filename = attachment_obj.original_name
                             mime_type = attachment_obj.mime_type
                             att_type = attachment_obj.file_type
                             # Склеюємо базовий шлях з тим, що зберігається в БД
                             file_path = MEDIA_DIR / attachment_obj.file_path
+                            logger.info(f"[Instagram Send] 📁 Found attachment in DB: {file_path}")
+                        else:
+                            logger.warning(f"[Instagram Send] ⚠️ Attachment object found but file_path is empty: {att_id}")
                     except Exception as e:
                         logger.warning(f"[Instagram Send] Failed to load attachment by ID {att_id}: {e}")
                 
@@ -329,25 +337,37 @@ class InstagramService(MessengerService):
                         # Використовуємо повний шлях з URL (attachments/filename)
                         file_path_str = url_clean.split("/media/")[-1]
                         file_path = MEDIA_DIR / file_path_str
+                        logger.info(f"[Instagram Send] 📁 Looking for file from /media/ URL: {file_path}")
                     elif "/files/" in url_clean:
                         file_id = url_clean.split("/files/")[-1]
                         try:
                             attachment_obj = self.db.query(Attachment).filter(
                                 Attachment.id == UUID(file_id)
                             ).first()
-                            if attachment_obj:
+                            if attachment_obj and attachment_obj.file_path:
                                 filename = attachment_obj.original_name
                                 mime_type = attachment_obj.mime_type
                                 att_type = attachment_obj.file_type
                                 # Склеюємо базовий шлях з тим, що зберігається в БД
                                 file_path = MEDIA_DIR / attachment_obj.file_path
-                        except:
-                            pass
+                                logger.info(f"[Instagram Send] 📁 Found attachment via /files/ URL: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"[Instagram Send] ⚠️ Failed to parse file_id from URL: {e}")
                 
                 # Завантажити файл
                 if file_path and file_path.exists():
-                    with open(file_path, "rb") as f:
-                        file_data = f.read()
+                    file_size = file_path.stat().st_size
+                    size_mb = file_size / (1024 * 1024)
+                    logger.info(f"[Instagram Send] ✅ File found: {file_path} ({size_mb:.2f} MB)")
+                    
+                    if size_mb > 25:
+                        logger.error(f"[Instagram Send] ❌ File too large for Instagram: {size_mb:.2f} MB (max 25 MB)")
+                        file_data = None
+                    else:
+                        with open(file_path, "rb") as f:
+                            file_data = f.read()
+                else:
+                    logger.error(f"[Instagram Send] ❌ File not found: {file_path}")
                 
                 if file_data:
                     # Завантажити файл на Meta сервер через Instagram Media API
