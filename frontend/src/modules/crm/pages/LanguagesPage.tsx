@@ -245,6 +245,7 @@ export function LanguagesPage() {
           ))}
         </div>
       )}
+      </div>
 
       {/* Create/Edit Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
