@@ -242,7 +242,7 @@ export const inboxApi = {
   /**
    * Add address or paczkomat to order
    */
-  async addAddressToOrder(orderId: string, address: string, isPaczkomat: boolean, paczkomatCode?: string): Promise<{ order_id: string; message: string }> {
+  async addAddressToOrder(orderId: string, address: string, isPaczkomat: boolean, paczkomatCode?: string): Promise<{ order_id: string; message: string; shipment_id?: string; delivery_cost?: number }> {
     return apiFetch(`/communications/orders/${orderId}/add-address`, {
       method: 'POST',
       body: JSON.stringify({ 

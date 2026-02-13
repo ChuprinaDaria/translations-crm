@@ -243,18 +243,35 @@ export function CreateOrderDialog({
           const paczkomatCode = deliveryMethod === 'inpost_locker' ? lockerNumber : undefined;
           const isPaczkomat = deliveryMethod === 'inpost_locker';
           
+          // Перевіряємо, що для пачкомату є код
+          if (isPaczkomat && !paczkomatCode) {
+            throw new Error('Номер пачкомату обов\'язковий для доставки InPost автомат');
+          }
+          
+          // Перевіряємо, що для кур\'єра є адреса
+          if (!isPaczkomat && !address) {
+            throw new Error('Адреса доставки обов\'язкова для кур\'єрської доставки InPost');
+          }
+          
           // Створюємо Shipment запис через API
           // Дані про email та телефон будуть взяті з клієнта автоматично на бекенді
-          await inboxApi.addAddressToOrder(
+          const shipmentResult = await inboxApi.addAddressToOrder(
             order.id,
             address || paczkomatCode || '',
             isPaczkomat,
             paczkomatCode
           );
-        } catch (shipmentError) {
+          
+          if (!shipmentResult) {
+            throw new Error('Не вдалося створити запис відправки');
+          }
+          
+          console.log('Shipment created successfully:', shipmentResult);
+        } catch (shipmentError: any) {
           console.error('Error creating shipment record:', shipmentError);
-          // Не блокуємо створення замовлення, якщо не вдалося створити shipment
-          toast.warning('Замовлення створено, але не вдалося зберегти дані доставки. Можна додати їх пізніше.');
+          const errorMessage = shipmentError?.response?.data?.detail || shipmentError?.message || 'Невідома помилка';
+          // Показуємо помилку, але не блокуємо створення замовлення
+          toast.error(`Замовлення створено, але не вдалося зберегти дані доставки: ${errorMessage}. Будь ласка, додайте їх вручну.`);
         }
       }
 

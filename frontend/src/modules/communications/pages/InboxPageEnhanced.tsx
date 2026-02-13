@@ -11,6 +11,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useMessagesWebSocket } from '../hooks/useMessagesWebSocket';
 import { inboxApi, type ConversationListItem, type ConversationWithMessages, type Message as InboxMessage } from '../api/inbox';
 import { ordersApi } from '../../crm/api/orders';
+import { shipmentsApi } from '../../finance/api/shipments';
 import { getUserIdFromToken } from '../../notifications/utils/userId';
 import { settingsApi } from '../../../lib/api';
 import { CreateClientDialog } from '../components/SmartActions/CreateClientDialog';
@@ -1158,24 +1159,48 @@ export function InboxPageEnhanced() {
     }
     
     try {
-      // Add address/paczkomat to order via API
-      const result = await inboxApi.addAddressToOrder(orderId, address, isPaczkomat, paczkomatCode);
+      // Для пачкомату використовуємо код, для кур'єра - повну адресу
+      // Нормалізуємо код пачкомату: uppercase, trim
+      const normalizedPaczkomatCode = isPaczkomat && paczkomatCode 
+        ? paczkomatCode.trim().toUpperCase() 
+        : undefined;
       
-      // Show success message with delivery cost if paczkomat
-      if (isPaczkomat) {
-        toast.success(`Paczkomat ${paczkomatCode} dodano do zlecenia. Koszt dostawy: 13.99 zł`);
-      } else {
-        toast.success(`Adres dodano do zlecenia`);
+      // Перевіряємо, що для пачкомату є код
+      if (isPaczkomat && !normalizedPaczkomatCode) {
+        toast.error('Номер пачкомату обов\'язковий для додавання пачкомату до замовлення');
+        return;
       }
       
-      // Reload orders
+      // Для пачкомату передаємо код як адресу (для сумісності з API)
+      // але також передаємо окремо paczkomatCode
+      const addressToSend = isPaczkomat && normalizedPaczkomatCode 
+        ? normalizedPaczkomatCode 
+        : address;
+      
+      // Add address/paczkomat to order via API
+      const result = await inboxApi.addAddressToOrder(
+        orderId, 
+        addressToSend, 
+        isPaczkomat, 
+        normalizedPaczkomatCode
+      );
+      
+      // Show success message with delivery cost if paczkomat
+      if (isPaczkomat && normalizedPaczkomatCode) {
+        toast.success(`Пачкомат ${normalizedPaczkomatCode} додано до замовлення. Вартість доставки: 13.99 zł`);
+      } else {
+        toast.success(`Адресу додано до замовлення`);
+      }
+      
+      // Reload orders to get updated shipment data
       if (activeTabId) {
         const { orders: updatedOrders } = await loadConversationData(activeTabId);
         setOrders(updatedOrders);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding address:', error);
-      toast.error('Помилка додавання адреси');
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Невідома помилка';
+      toast.error(`Помилка додавання адреси: ${errorMessage}`);
     }
   };
 
@@ -1376,10 +1401,39 @@ export function InboxPageEnhanced() {
               return;
             }
 
+            // Отримуємо існуючі відправки для замовлення, щоб знайти код пачкомату
+            let parcelLockerCode: string | null = null;
+            let deliveryType: 'parcel_locker' | 'courier' = 'parcel_locker';
+            try {
+              const existingShipments = await shipmentsApi.getShipments({ order_id: orderId });
+              if (existingShipments && existingShipments.length > 0) {
+                // Шукаємо відправку з кодом пачкомату (найновішу, створену першою)
+                // Сортуємо за датою створення, щоб взяти найпершу (оригінальну)
+                const sortedShipments = [...existingShipments].sort((a, b) => 
+                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
+                const inpostShipment = sortedShipments.find(s => 
+                  s.paczkomat_code && s.paczkomat_code.trim() && 
+                  (s.method === 'inpost_locker' || s.method === 'inpost_courier')
+                );
+                if (inpostShipment) {
+                  parcelLockerCode = inpostShipment.paczkomat_code.trim().toUpperCase();
+                  deliveryType = inpostShipment.method === 'inpost_courier' ? 'courier' : 'parcel_locker';
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching existing shipments:', err);
+            }
+
+            if (!parcelLockerCode) {
+              toast.error('Не знайдено код пачкомату для цього замовлення. Спочатку додайте адресу доставки (пачкомат) до замовлення при його створенні.');
+              return;
+            }
+
             const shipmentData = {
               order_id: orderId,
-              delivery_type: 'parcel_locker' as const,
-              parcel_locker_code: 'KRA010',
+              delivery_type: deliveryType,
+              parcel_locker_code: parcelLockerCode,
               receiver: {
                 email: receiverEmail || 'client@example.com',
                 phone: receiverPhone || '+48123456789',
