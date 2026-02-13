@@ -6,6 +6,7 @@ import {
   UserPlus,
   FileText, 
   FolderOpen,
+  Trash2,
 } from 'lucide-react';
 import { ChatTab, type Conversation } from './ChatTab';
 import { ChatArea, type Message } from './ChatArea';
@@ -134,6 +135,14 @@ export function ChatTabsArea({
         tooltip: 'Завантажити документи',
         onClick: () => activeTabId && onDocumentsClick?.(activeTabId),
         disabled: !activeTabId,
+      },
+      {
+        id: 'delete_conversation',
+        icon: Trash2,
+        tooltip: 'Видалити весь діалог',
+        onClick: () => activeTabId && onQuickAction?.(activeTabId, 'delete_conversation'),
+        disabled: !activeTabId,
+        variant: 'destructive' as const,
       },
     ];
   }, [

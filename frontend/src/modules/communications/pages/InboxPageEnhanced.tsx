@@ -810,6 +810,28 @@ export function InboxPageEnhanced() {
           toast.success('Позначено як важливе');
           break;
         
+        case 'delete_conversation':
+          // Підтвердження перед видаленням
+          const confirmed = window.confirm('Ви впевнені, що хочете видалити весь діалог? Цю дію неможливо скасувати.');
+          if (!confirmed) {
+            return;
+          }
+          
+          try {
+            const result = await inboxApi.quickAction(conversationId, 'delete_conversation');
+            toast.success(`Діалог видалено: ${result.deleted?.messages || 0} повідомлень, ${result.deleted?.attachments || 0} файлів`);
+            
+            // Закриваємо вкладку з видаленим діалогом
+            closeChat(conversationId);
+            
+            // Оновлюємо список діалогів
+            refreshConversations();
+          } catch (error: any) {
+            console.error('Error deleting conversation:', error);
+            toast.error(error?.response?.data?.detail || 'Помилка видалення діалогу');
+          }
+          break;
+        
         default:
           toast.error('Невідома дія');
       }

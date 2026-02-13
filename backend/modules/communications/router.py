@@ -934,6 +934,50 @@ def quick_action(
         # Mark conversation as important (would need a field for this)
         return {"status": "success", "important": True}
     
+    elif action == "delete_conversation":
+        # Delete conversation with all messages and attachments
+        from modules.communications.models import Attachment
+        
+        # Get all messages in this conversation
+        messages = db.query(Message).filter(Message.conversation_id == conversation_id).all()
+        message_count = len(messages)
+        
+        # Count and delete attachments
+        attachment_count = 0
+        for msg in messages:
+            # Use relationship to get attachment objects
+            for attachment in msg.attachment_objects:
+                # Delete physical file
+                try:
+                    file_path = Path("/app/media") / attachment.file_path
+                    if file_path.exists():
+                        file_path.unlink()
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {attachment.file_path}: {e}")
+                db.delete(attachment)
+                attachment_count += 1
+        
+        # Delete all messages (cascade will also handle attachments, but we already deleted them)
+        db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+        
+        # Delete conversation
+        db.delete(conversation)
+        db.commit()
+        
+        if user:
+            logger.info(f"Conversation {conversation_id} deleted by user {user.id}: {message_count} messages, {attachment_count} attachments")
+        else:
+            logger.info(f"Conversation {conversation_id} deleted by RAG: {message_count} messages, {attachment_count} attachments")
+        
+        return {
+            "status": "success",
+            "conversation_id": str(conversation_id),
+            "deleted": {
+                "messages": message_count,
+                "attachments": attachment_count
+            }
+        }
+    
     return {"status": "error", "message": f"Unknown action: {action}"}
 
 

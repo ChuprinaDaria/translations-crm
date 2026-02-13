@@ -11,6 +11,7 @@ export interface QuickAction {
   disabled?: boolean;
   isActive?: boolean;
   disabledMessage?: string;
+  variant?: 'default' | 'destructive';
 }
 
 interface QuickActionsSidebarProps {
@@ -36,6 +37,7 @@ export function QuickActionsSidebar({
         const Icon = action.icon;
         const isDisabled = action.disabled;
         const isActive = action.isActive;
+        const isDestructive = action.variant === 'destructive';
         
         return (
           <button
@@ -48,15 +50,25 @@ export function QuickActionsSidebar({
               'w-10 h-10 rounded-xl flex items-center justify-center',
               'transition-all duration-150 ring-1 ring-black/5',
               isActive
-                ? 'bg-gray-100 border border-gray-300 cursor-pointer hover:scale-105 active:scale-95 shadow-sm'
+                ? isDestructive
+                  ? 'bg-red-100 border border-red-300 cursor-pointer hover:scale-105 active:scale-95 shadow-sm'
+                  : 'bg-gray-100 border border-gray-300 cursor-pointer hover:scale-105 active:scale-95 shadow-sm'
                 : isDisabled 
                 ? 'bg-gray-100 border border-gray-200 cursor-not-allowed opacity-80'
+                : isDestructive
+                ? 'bg-white border border-red-200 hover:bg-red-50 cursor-pointer hover:scale-105 active:scale-95 shadow-sm'
                 : 'bg-white border border-gray-200 hover:bg-gray-50 cursor-pointer hover:scale-105 active:scale-95 shadow-sm'
             )}
           >
             <Icon 
               className="w-5 h-5"
-              style={{ color: isDisabled ? '#9ca3af' : '#374151' }}
+              style={{ 
+                color: isDisabled 
+                  ? '#9ca3af' 
+                  : isDestructive 
+                    ? '#dc2626' 
+                    : '#374151' 
+              }}
               strokeWidth={isActive ? 2.5 : 2} 
             />
           </button>
