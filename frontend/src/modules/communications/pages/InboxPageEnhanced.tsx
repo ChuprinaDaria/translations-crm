@@ -49,6 +49,8 @@ const INBOX_SIDE_TABS: SideTab[] = [
 export function InboxPageEnhanced() {
   const queryClient = useQueryClient();
   const lastMessageCheckRef = useRef<Map<string, Date>>(new Map());
+  const prefetchedConversationIdsRef = useRef<Set<string>>(new Set());
+  const activeTabIdRef = useRef<string | null>(null);
   
   // Нотифікації
   const { notifications, addNotification, removeNotification } = useNotifications({
@@ -66,6 +68,9 @@ export function InboxPageEnhanced() {
     getStoredConversationIds,
     getStoredActiveTabId,
   } = useOpenChats();
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
   const { openTabs, addTab, removeTab } = useTabsState();
   const [client, setClient] = useState<Client | undefined>(undefined);
   const [orders, setOrders] = useState<Array<{
@@ -77,13 +82,24 @@ export function InboxPageEnhanced() {
   }>>([]);
   const [filters, setFilters] = useState<FilterState>({ type: 'all' });
   const [isSending, setIsSending] = useState(false);
+  const [loadingConversationIds, setLoadingConversationIds] = useState<Set<string>>(new Set());
   
   // State for pagination
   const [offset, setOffset] = useState(0);
 
+  const getConversationsQueryKey = useCallback(
+    (f: FilterState, o: number) => ['conversations', f, o] as const,
+    []
+  );
+
+  const getConversationQueryKey = useCallback(
+    (conversationId: string) => ['conversation', conversationId] as const,
+    []
+  );
+
   // React Query для conversations
   const { data: conversationsData, isLoading } = useQuery({
-    queryKey: ['conversations', filters, offset],
+    queryKey: getConversationsQueryKey(filters, offset),
     queryFn: () => inboxApi.getInbox({
       filter: filters.type,
       platform: filters.platform,
@@ -182,32 +198,25 @@ export function InboxPageEnhanced() {
     // Перевірити чи вже відкритий
     const existingChat = openChats.find(chat => chat.conversationId === conversationId);
     
-    // Призначити менеджера при відкритті діалогу
-    try {
-      await inboxApi.assignManager(conversationId);
-    } catch (error) {
+    // Fire-and-forget: призначення менеджера та mark-read не мають блокувати відкриття повідомлень
+    inboxApi.assignManager(conversationId).catch((error) => {
       console.error('Failed to assign manager:', error);
-      // Не блокуємо відкриття діалогу, якщо призначення не вдалося
-    }
-    
-    // Позначити як прочитане та оновити локальний стан
-    try {
-      await inboxApi.markConversationRead(conversationId);
-      // Оновити unread_count в списку розмов через React Query
-      queryClient.setQueryData(['conversations', filters], (old: any) => {
-        if (!old?.conversations) return old;
-        return {
-          ...old,
-          conversations: old.conversations.map((conv: ConversationListItem) => 
-            conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
-          ),
-        };
-      });
-      // Оновити unread_count у відкритому табі
-      markChatAsRead(conversationId);
-    } catch (error) {
+    });
+
+    // Optimistic mark-as-read (UI first), API in background
+    markChatAsRead(conversationId);
+    queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
+      if (!old?.conversations) return old;
+      return {
+        ...old,
+        conversations: old.conversations.map((conv: ConversationListItem) =>
+          conv.id === conversationId ? { ...conv, unread_count: 0 } : conv
+        ),
+      };
+    });
+    inboxApi.markConversationRead(conversationId).catch((error) => {
       console.error('Failed to mark conversation as read:', error);
-    }
+    });
     
     if (existingChat) {
       // Просто переключитись на існуючий таб - повідомлення вже завантажені, не завантажуємо знову
@@ -215,7 +224,7 @@ export function InboxPageEnhanced() {
       
       // Оновити client/orders для context panel (тільки якщо потрібно і не завантажували нещодавно)
       // Використовуємо кеш для швидкого доступу
-      const cachedData = queryClient.getQueryData(['conversation', conversationId]) as { client?: Client, orders?: any[] } | undefined;
+      const cachedData = queryClient.getQueryData(getConversationQueryKey(conversationId)) as { conversation?: ConversationWithMessages, client?: Client, orders?: any[] } | undefined;
       
       if (cachedData?.client && cachedData?.orders) {
         // Використовуємо кешовані дані - не завантажуємо знову
@@ -227,8 +236,8 @@ export function InboxPageEnhanced() {
         setClient(clientData);
         setOrders(ordersData);
         // Кешуємо для наступного разу
-        queryClient.setQueryData(['conversation', conversationId], {
-          conversation: { id: conversationId } as ConversationWithMessages,
+        queryClient.setQueryData(getConversationQueryKey(conversationId), {
+          conversation: cachedData?.conversation,
           client: clientData,
           orders: ordersData,
         });
@@ -238,63 +247,141 @@ export function InboxPageEnhanced() {
       }
     } else {
       // Завантажити розмову та додати новий таб
-      // Використовуємо React Query для кешування повідомлень
       try {
-        // Перевіряємо чи є кешовані повідомлення
-        const cachedData = queryClient.getQueryData(['conversation', conversationId]) as { conversation: ConversationWithMessages, client?: Client, orders: any[] } | undefined;
-        
-        let conversationData;
-        if (cachedData) {
-          // Використовуємо кешовані дані - не завантажуємо знову
-          conversationData = cachedData;
-          console.log('[InboxPage] Using cached conversation data for:', conversationId);
-        } else {
-          // Завантажуємо нові дані тільки якщо немає в кеші
-          conversationData = await loadConversationData(conversationId);
-          // Кешуємо дані для наступного разу
-          queryClient.setQueryData(['conversation', conversationId], conversationData);
-        }
-        
-        const { conversation, client: clientData, orders: ordersData } = conversationData;
-        
-        // Знайти conversation list item для додаткових даних
+        // 1) Open tab immediately with skeleton (no waiting for network)
         const convListItem = conversations.find(c => c.id === conversationId);
-        
-        const chatConversation: Conversation = {
+        const quickConversation: Conversation = {
+          id: conversationId,
+          platform: (convListItem?.platform || 'telegram') as any,
+          external_id: convListItem?.external_id || conversationId,
+          subject: convListItem?.subject,
+          client_id: convListItem?.client_id,
+          client_name: convListItem?.client_name,
+          client_avatar: undefined,
+          unread_count: 0,
+          last_message: convListItem?.last_message,
+          last_message_at: convListItem?.last_message_at,
+          updated_at: convListItem?.updated_at || new Date().toISOString(),
+        };
+        openChat(quickConversation, []);
+        addTab({
+          conversationId: conversationId,
+          platform: quickConversation.platform,
+          externalId: quickConversation.external_id,
+        });
+
+        setLoadingConversationIds((prev) => {
+          const next = new Set(prev);
+          next.add(conversationId);
+          return next;
+        });
+
+        // 2) Load messages (prefer cache), then update tab
+        const cacheKey = getConversationQueryKey(conversationId);
+        const cached = queryClient.getQueryData(cacheKey) as { conversation?: ConversationWithMessages, client?: Client, orders?: any[] } | undefined;
+
+        const conversation = cached?.conversation
+          ? cached.conversation
+          : await queryClient.fetchQuery({
+              queryKey: cacheKey,
+              queryFn: async () => {
+                const conv = await inboxApi.getConversation(conversationId);
+                return { conversation: conv } as { conversation: ConversationWithMessages };
+              },
+              staleTime: 5 * 60 * 1000,
+            }).then((r: any) => r.conversation as ConversationWithMessages);
+
+        // Update messages in open chat
+        updateChatMessages(conversationId, conversation.messages || [], {
+          ...quickConversation,
           id: conversation.id,
           platform: conversation.platform as any,
           external_id: conversation.external_id,
           subject: conversation.subject,
           client_id: conversation.client_id,
-          client_name: convListItem?.client_name,
-          client_avatar: undefined,
-          unread_count: 0, // Вже прочитано
-          last_message: convListItem?.last_message,
-          last_message_at: convListItem?.last_message_at,
-          updated_at: convListItem?.updated_at || new Date().toISOString(),
-        };
-        
-        openChat(chatConversation, conversation.messages || []);
-        // Зберігаємо таб в useTabsState
-        addTab({
-          conversationId: conversation.id,
-          platform: conversation.platform,
-          externalId: conversation.external_id,
         });
-        setClient(clientData);
-        setOrders(ordersData);
-        
-        // Кешуємо дані розмови для швидкого доступу при переключенні
-        queryClient.setQueryData(['conversation', conversationId], {
-          conversation,
-          client: clientData,
-          orders: ordersData,
+
+        // 3) Load context data (client/orders) in background (don’t block messages)
+        const contextPromise = (async () => {
+          if (!conversation.client_id) return;
+          try {
+            const { clientsApi } = await import('../../crm/api/clients');
+            const [clientData, clientOrders] = await Promise.all([
+              clientsApi.getClient(conversation.client_id),
+              ordersApi.getOrders({ client_id: conversation.client_id }).catch((e) => {
+                console.error('Error loading client orders:', e);
+                return [];
+              }),
+            ]);
+
+            const clientMapped: Client = {
+              id: clientData.id,
+              full_name: clientData.full_name,
+              email: clientData.email,
+              phone: clientData.phone,
+              company_name: clientData.company_name,
+            };
+
+            const ordersMapped = (clientOrders as any[]).map((order: any) => ({
+              id: order.id,
+              title: order.order_number,
+              status: order.status,
+              created_at: order.created_at,
+              total_amount: order.transactions?.reduce((sum: number, t: any) =>
+                t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+              file_url: order.file_url,
+              description: order.description,
+            }));
+
+            // cache context + set local state for active tab
+            queryClient.setQueryData(cacheKey, (old: any) => ({
+              ...(old || {}),
+              conversation,
+              client: clientMapped,
+              orders: ordersMapped,
+            }));
+
+            // Update local state only if this conversation is still active
+            if (activeTabIdRef.current === conversationId) {
+              setClient(clientMapped);
+              setOrders(ordersMapped);
+            }
+          } catch (e) {
+            console.error('Error loading client context:', e);
+          }
+        })();
+
+        void contextPromise;
+
+        setLoadingConversationIds((prev) => {
+          const next = new Set(prev);
+          next.delete(conversationId);
+          return next;
         });
       } catch (error) {
+        setLoadingConversationIds((prev) => {
+          const next = new Set(prev);
+          next.delete(conversationId);
+          return next;
+        });
         toast.error('Помилка завантаження розмови');
       }
     }
-  }, [openChats, openChat, switchToChat, markChatAsRead, conversations, setClient, setOrders, queryClient, filters]);
+  }, [
+    openChats,
+    openChat,
+    switchToChat,
+    addTab,
+    updateChatMessages,
+    markChatAsRead,
+    conversations,
+    client,
+    setClient,
+    setOrders,
+    queryClient,
+    filters,
+    getConversationQueryKey,
+  ]);
 
   // Handle new message from WebSocket
   const handleWebSocketNewMessage = useCallback((message: InboxMessage, conversationId: string) => {
@@ -307,7 +394,7 @@ export function InboxPageEnhanced() {
     }
     
     // Оновлюємо кеш повідомлень для цього діалогу (real-time оновлення через WebSocket)
-    queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+    queryClient.setQueryData(getConversationQueryKey(conversationId), (old: any) => {
       if (!old?.conversation) return old;
       // Перевіряємо чи повідомлення вже є (щоб уникнути дублікатів)
       const existingMessage = old.conversation.messages?.find((m: InboxMessage) => m.id === message.id);
@@ -324,7 +411,7 @@ export function InboxPageEnhanced() {
     });
     
     // Update conversations list через React Query
-    queryClient.setQueryData(['conversations', filters], (old: any) => {
+    queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
       if (!old?.conversations) return old;
       const updated = [...old.conversations];
       const convIndex = updated.findIndex(c => c.id === conversationId);
@@ -375,7 +462,16 @@ export function InboxPageEnhanced() {
         },
       });
     }
-  }, [openChats, updateChatMessages, conversations, addNotification, handleOpenChat, queryClient, filters]);
+  }, [
+    openChats,
+    updateChatMessages,
+    conversations,
+    addNotification,
+    handleOpenChat,
+    queryClient,
+    filters,
+    getConversationQueryKey,
+  ]);
 
   // Handle conversation updates from WebSocket (e.g., manager assignment)
   const handleWebSocketConversationUpdate = useCallback((conversation: Partial<ConversationListItem>) => {
@@ -383,7 +479,7 @@ export function InboxPageEnhanced() {
     
     // Update conversations list через React Query
     if (conversation.id) {
-      queryClient.setQueryData(['conversations', filters], (old: any) => {
+      queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
         if (!old?.conversations) return old;
         return {
           ...old,
@@ -572,7 +668,7 @@ export function InboxPageEnhanced() {
       }
       
       // Оновлюємо кеш повідомлень для цього діалогу
-      queryClient.setQueryData(['conversation', conversationId], (old: any) => {
+      queryClient.setQueryData(getConversationQueryKey(conversationId), (old: any) => {
         if (!old?.conversation) return old;
         return {
           ...old,
@@ -714,7 +810,7 @@ export function InboxPageEnhanced() {
       }
       
       // 5. Оновлюємо список conversations через React Query
-      queryClient.setQueryData(['conversations', filters], (old: any) => {
+      queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
         if (!old?.conversations) return old;
         return {
           ...old,
@@ -815,7 +911,7 @@ export function InboxPageEnhanced() {
       
       // Оновлюємо conversation в списку, якщо він прив'язаний через React Query
       if (result.conversation_linked) {
-        queryClient.setQueryData(['conversations', filters], (old: any) => {
+        queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
           if (!old?.conversations) return old;
           return {
             ...old,
@@ -862,7 +958,7 @@ export function InboxPageEnhanced() {
       
       // Оновлюємо conversation в списку, якщо він прив'язаний через React Query
       if (result.conversation_linked) {
-        queryClient.setQueryData(['conversations', filters], (old: any) => {
+        queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
           if (!old?.conversations) return old;
           return {
             ...old,
@@ -1391,6 +1487,18 @@ export function InboxPageEnhanced() {
               conversations={sidebarConversations}
               selectedId={activeTabId || undefined}
               onSelect={handleOpenChat}
+              onPrefetch={(id) => {
+                if (prefetchedConversationIdsRef.current.has(id)) return;
+                prefetchedConversationIdsRef.current.add(id);
+                queryClient.prefetchQuery({
+                  queryKey: getConversationQueryKey(id),
+                  queryFn: async () => ({ conversation: await inboxApi.getConversation(id) }),
+                  staleTime: 5 * 60 * 1000,
+                }).catch(() => {
+                  // prefetch is best-effort; allow retry later
+                  prefetchedConversationIdsRef.current.delete(id);
+                });
+              }}
               filters={filters}
               onFilterChange={setFilters}
               isLoading={isLoading}
@@ -1409,10 +1517,19 @@ export function InboxPageEnhanced() {
             onTabClose={(conversationId) => {
               removeTab(conversationId);
               closeChat(conversationId);
+              setLoadingConversationIds((prev) => {
+                if (!prev.has(conversationId)) return prev;
+                const next = new Set(prev);
+                next.delete(conversationId);
+                return next;
+              });
             }}
             onSendMessage={handleSendMessage}
             onQuickAction={handleQuickAction}
-            isLoading={isSending}
+            isLoading={
+              !!activeTabId &&
+              (loadingConversationIds.has(activeTabId) || isSending)
+            }
             isSidebarOpen={isSidebarOpen}
             getClientId={getClientIdForConversation}
             getOrderId={getOrderIdForConversation}
@@ -1424,9 +1541,11 @@ export function InboxPageEnhanced() {
             onAddFileAutoCreateOrder={handleAddFileAutoCreateOrder}
             onAddAddress={handleAddAddress}
             onPaymentClick={handlePaymentClick}
+            onTrackingClick={handleTrackingClick}
             onClientClick={handleClientClick}
             onOrderClick={handleOrderClick}
             onDocumentsClick={handleDocumentsClick}
+            onToggleSidebar={handleToggleSidebar}
             onDeleteMessage={handleDeleteMessage}
             onSendDraft={handleSendDraft}
           />

@@ -32,6 +32,7 @@ interface ConversationsSidebarProps {
   conversations: Conversation[];
   selectedId?: string;
   onSelect: (id: string) => void;
+  onPrefetch?: (id: string) => void;
   filters: FilterState;
   onFilterChange: (filters: FilterState) => void;
   isLoading?: boolean;
@@ -52,6 +53,7 @@ export function ConversationsSidebar({
   conversations,
   selectedId,
   onSelect,
+  onPrefetch,
   filters,
   onFilterChange,
   isLoading = false,
@@ -243,6 +245,7 @@ export function ConversationsSidebar({
                   conversation={conversation}
                   isSelected={selectedId === conversation.id}
                   onClick={() => onSelect(conversation.id)}
+                  onPrefetch={onPrefetch ? () => onPrefetch(conversation.id) : undefined}
                 />
               ))}
               

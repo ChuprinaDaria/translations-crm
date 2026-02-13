@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Check, CheckCheck, Plus, Mail, Phone, MapPin, Package, Trash2, Send } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { PlatformIcon } from './PlatformIcon';
@@ -92,7 +92,12 @@ function isMediaPlaceholder(content: string, attachments?: Message['attachments'
   return placeholderPatterns.some(pattern => pattern.test(content.trim()));
 }
 
-export function MessageBubble({ 
+// Normalize phone for comparisons
+function normalizePhone(phone: string): string {
+  return phone.replace(/[\s-()]/g, '').toLowerCase();
+}
+
+export const MessageBubble = React.memo(function MessageBubble({ 
   message, 
   platform,
   clientId,
@@ -111,191 +116,140 @@ export function MessageBubble({
   const isRead = message.status === 'read';
   const isFailed = message.status === 'failed';
   const isDraft = message.status === 'draft';
-  const [detectedData, setDetectedData] = useState<DetectedData[]>([]);
   const [addedItems, setAddedItems] = useState<Set<string>>(new Set());
 
-  // Тимчасово для діагностики
-  useEffect(() => {
-    if (isOutbound) {
-      console.log('🔍 MessageBubble platform:', platform, 'isOutbound:', isOutbound);
-    }
-  }, [platform, isOutbound]);
-
-  // Функція для нормалізації телефону для порівняння
-  const normalizePhone = (phone: string): string => {
-    return phone.replace(/[\s-()]/g, '').toLowerCase();
-  };
-
   // Auto-detect email, phone, and amounts in inbound messages
-  useEffect(() => {
-    if (!isOutbound && message.content) {
-      const detected: DetectedData[] = [];
+  const detectedData: DetectedData[] = useMemo(() => {
+    if (isOutbound || !message.content) return [];
 
-      // Email detection - з дедуплікацією (lowercase)
-      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-      const emails = message.content.match(emailRegex);
-      if (emails) {
-        const uniqueEmails = new Map<string, string>(); // lowercase -> original
-        emails.forEach(email => {
-          const lower = email.toLowerCase();
-          if (!uniqueEmails.has(lower)) {
-            uniqueEmails.set(lower, email);
-          }
-        });
-        uniqueEmails.forEach((original) => {
-          detected.push({ type: 'email', value: original });
-        });
-      }
+    const detected: DetectedData[] = [];
 
-      // Phone detection - міжнародні формати (ЄС, Україна, Білорусь, Росія, Азія)
-      // Міжнародні формати телефонів
-      const phonePatterns = [
-        // Польща: +48 або 48, потім 9 цифр
-        /(?:\+48|48)[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
-        // Україна: +380, потім 9 цифр
-        /\+380[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
-        // Білорусь: +375, потім 9 цифр
-        /\+375[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
-        // Росія: +7, потім 10 цифр
-        /\+7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
-        // Німеччина: +49
-        /\+49[\s-]?\d{3,4}[\s-]?\d{6,8}/g,
-        // Франція: +33
-        /\+33[\s-]?\d[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}/g,
-        // Італія: +39
-        /\+39[\s-]?\d{2,3}[\s-]?\d{6,8}/g,
-        // Іспанія: +34
-        /\+34[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
-        // UK: +44
-        /\+44[\s-]?\d{4}[\s-]?\d{6}/g,
-        // Загальний міжнародний: + і 10-15 цифр (але не починається з 0)
-        /\+\d{1,3}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{0,4}/g,
-      ];
-
-      // Збираємо всі знайдені телефони з нормалізацією
-      const normalizedPhones = new Map<string, string>(); // normalized -> original
-      phonePatterns.forEach(pattern => {
-        const matches = message.content.match(pattern);
-        if (matches) {
-          matches.forEach(phone => {
-            // Нормалізуємо: видаляємо всі символи крім цифр та +
-            let normalized = phone.replace(/[\s\-\(\)]/g, '');
-            const digits = normalized.replace(/\+/g, '');
-            
-            // Перевіряємо що це дійсно телефон (мінімум 10 цифр, максимум 15)
-            if (digits.length < 10 || digits.length > 15) return;
-            
-            // Форматуємо: додаємо + якщо потрібно
-            if (!normalized.startsWith('+')) {
-              if (/^[1-9]\d{1,2}/.test(normalized)) {
-                normalized = `+${normalized}`;
-              } else {
-                return; // Пропускаємо телефони без коду країни
-              }
-            }
-            
-            // Зберігаємо тільки унікальні нормалізовані номери
-            if (!normalizedPhones.has(normalized)) {
-              normalizedPhones.set(normalized, phone);
-            }
-          });
-        }
+    // Email detection - з дедуплікацією (lowercase)
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const emails = message.content.match(emailRegex);
+    if (emails) {
+      const uniqueEmails = new Map<string, string>(); // lowercase -> original
+      emails.forEach((email) => {
+        const lower = email.toLowerCase();
+        if (!uniqueEmails.has(lower)) uniqueEmails.set(lower, email);
       });
-
-      // Додаємо унікальні телефони до detected
-      normalizedPhones.forEach((original, formatted) => {
-        detected.push({ 
-          type: 'phone', 
-          value: formatted,
-          original: original 
-        });
+      uniqueEmails.forEach((original) => {
+        detected.push({ type: 'email', value: original });
       });
-
-      // Amount detection (Polish zł format)
-      const amountRegex = /(\d+)\s*(zł|zl|złotych|pln)/gi;
-      const amounts = message.content.match(amountRegex);
-      if (amounts) {
-        amounts.forEach(amount => {
-          const value = amount.replace(/[^\d]/g, '');
-          if (parseInt(value) > 0 && parseInt(value) < 100000) {
-            detected.push({ type: 'amount', value, original: amount });
-          }
-        });
-      }
-
-      // InPost Paczkomat detection (format: WRO01M, WNC01M, etc. - код з 3-6 букв/цифр, потім поштовий індекс, місто, вулиця)
-      // Pattern: код (3-6 символів), поштовий індекс (XX-XXX), місто (жирний або звичайний), вулиця з номером
-      // Можливі формати:
-      // - WRO01M, 51-180 **Wrocław**, Pełczyńska 63
-      // - WRO01M, 51-180 Wrocław, Pełczyńska 63
-      const paczkomatPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
-      let paczkomatMatch;
-      while ((paczkomatMatch = paczkomatPattern.exec(message.content)) !== null) {
-        const code = paczkomatMatch[1].trim();
-        const postalCode = paczkomatMatch[2].trim();
-        const city = paczkomatMatch[3].trim().replace(/\*\*/g, '');
-        const street = paczkomatMatch[4].trim();
-        const fullAddress = `${code}, ${postalCode} ${city}, ${street}`;
-        detected.push({
-          type: 'paczkomat',
-          value: fullAddress,
-          original: paczkomatMatch[0],
-          isPaczkomat: true,
-          paczkomatCode: code,
-        });
-      }
-
-      // Regular address detection (поштовий індекс, місто, вулиця)
-      // Pattern: поштовий індекс (XX-XXX), місто, вулиця з номером (без коду пачкомату)
-      // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
-      const addressPattern = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
-      let addressMatch;
-      while ((addressMatch = addressPattern.exec(message.content)) !== null) {
-        const postalCode = addressMatch[1].trim();
-        const city = addressMatch[2].trim().replace(/\*\*/g, '');
-        const street = addressMatch[3].trim();
-        
-        // Перевіряємо, чи це не пачкомат (якщо перед адресою є код пачкомату)
-        const beforeAddress = message.content.substring(Math.max(0, addressMatch.index - 30), addressMatch.index);
-        const hasPaczkomatCode = /[A-Z]{3,6}\d{0,3}[A-Z]{0,3},/.test(beforeAddress);
-        
-        // Перевіряємо, чи це не вже визначений пачкомат
-        const isAlreadyPaczkomat = detected.some(d => d.isPaczkomat && d.value.includes(postalCode) && d.value.includes(city));
-        
-        if (!hasPaczkomatCode && !isAlreadyPaczkomat) {
-          const fullAddress = `${postalCode} ${city}, ${street}`;
-          detected.push({
-            type: 'address',
-            value: fullAddress,
-            original: addressMatch[0],
-            isPaczkomat: false,
-          });
-        }
-      }
-
-      setDetectedData(detected);
     }
-  }, [message.content, isOutbound]);
+
+    // Phone detection - міжнародні формати (ЄС, Україна, Білорусь, Росія, Азія)
+    const phonePatterns = [
+      /(?:\+48|48)[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
+      /\+380[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+      /\+375[\s-]?\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+      /\+7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g,
+      /\+49[\s-]?\d{3,4}[\s-]?\d{6,8}/g,
+      /\+33[\s-]?\d[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}/g,
+      /\+39[\s-]?\d{2,3}[\s-]?\d{6,8}/g,
+      /\+34[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3}/g,
+      /\+44[\s-]?\d{4}[\s-]?\d{6}/g,
+      /\+\d{1,3}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{2,4}[\s-]?\d{0,4}/g,
+    ];
+
+    const normalizedPhones = new Map<string, string>(); // normalized -> original
+    phonePatterns.forEach((pattern) => {
+      const matches = message.content.match(pattern);
+      if (!matches) return;
+      matches.forEach((phone) => {
+        let normalized = phone.replace(/[\s\-\(\)]/g, '');
+        const digits = normalized.replace(/\+/g, '');
+        if (digits.length < 10 || digits.length > 15) return;
+
+        if (!normalized.startsWith('+')) {
+          if (/^[1-9]\d{1,2}/.test(normalized)) normalized = `+${normalized}`;
+          else return;
+        }
+
+        if (!normalizedPhones.has(normalized)) {
+          normalizedPhones.set(normalized, phone);
+        }
+      });
+    });
+
+    normalizedPhones.forEach((original, formatted) => {
+      detected.push({ type: 'phone', value: formatted, original });
+    });
+
+    // Amount detection (Polish zł format)
+    const amountRegex = /(\d+)\s*(zł|zl|złotych|pln)/gi;
+    const amounts = message.content.match(amountRegex);
+    if (amounts) {
+      amounts.forEach((amount) => {
+        const value = amount.replace(/[^\d]/g, '');
+        const n = parseInt(value);
+        if (n > 0 && n < 100000) detected.push({ type: 'amount', value, original: amount });
+      });
+    }
+
+    // InPost Paczkomat detection
+    const paczkomatPattern = /([A-Z]{3,6}\d{0,3}[A-Z]{0,3}),\s*(\d{2}-\d{3})\s*(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+    let paczkomatMatch;
+    while ((paczkomatMatch = paczkomatPattern.exec(message.content)) !== null) {
+      const code = paczkomatMatch[1].trim();
+      const postalCode = paczkomatMatch[2].trim();
+      const city = paczkomatMatch[3].trim().replace(/\*\*/g, '');
+      const street = paczkomatMatch[4].trim();
+      const fullAddress = `${code}, ${postalCode} ${city}, ${street}`;
+      detected.push({
+        type: 'paczkomat',
+        value: fullAddress,
+        original: paczkomatMatch[0],
+        isPaczkomat: true,
+        paczkomatCode: code,
+      });
+    }
+
+    // Regular address detection
+    const addressPattern = /(\d{2}-\d{3})\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?,\s*([^,\n]+)/g;
+    let addressMatch;
+    while ((addressMatch = addressPattern.exec(message.content)) !== null) {
+      const postalCode = addressMatch[1].trim();
+      const city = addressMatch[2].trim().replace(/\*\*/g, '');
+      const street = addressMatch[3].trim();
+
+      const beforeAddress = message.content.substring(Math.max(0, addressMatch.index - 30), addressMatch.index);
+      const hasPaczkomatCode = /[A-Z]{3,6}\d{0,3}[A-Z]{0,3},/.test(beforeAddress);
+      const isAlreadyPaczkomat = detected.some((d) => d.isPaczkomat && d.value.includes(postalCode) && d.value.includes(city));
+
+      if (!hasPaczkomatCode && !isAlreadyPaczkomat) {
+        const fullAddress = `${postalCode} ${city}, ${street}`;
+        detected.push({
+          type: 'address',
+          value: fullAddress,
+          original: addressMatch[0],
+          isPaczkomat: false,
+        });
+      }
+    }
+
+    return detected;
+  }, [isOutbound, message.content]);
 
   const handleAdd = (item: DetectedData) => {
-    console.log('handleAdd called:', item, { onAddEmail: !!onAddEmail, onAddPhone: !!onAddPhone });
-    
     // Перевіряємо, чи є callback перед викликом
     if (item.type === 'email') {
       if (onAddEmail) {
-        console.log('Calling onAddEmail with:', item.value);
         onAddEmail(item.value);
-        setAddedItems(new Set(addedItems).add(item.value));
-      } else {
-        console.warn('onAddEmail callback is not provided');
+        setAddedItems((prev) => {
+          const next = new Set(prev);
+          next.add(item.value);
+          return next;
+        });
       }
     } else if (item.type === 'phone') {
       if (onAddPhone) {
-        console.log('Calling onAddPhone with:', item.value);
         onAddPhone(item.value);
-        setAddedItems(new Set(addedItems).add(item.value));
-      } else {
-        console.warn('onAddPhone callback is not provided');
+        setAddedItems((prev) => {
+          const next = new Set(prev);
+          next.add(item.value);
+          return next;
+        });
       }
     }
   };
@@ -309,7 +263,7 @@ export function MessageBubble({
     }
   };
 
-  const timeStr = formatTime(message.sent_at || message.created_at);
+  const timeStr = useMemo(() => formatTime(message.sent_at || message.created_at), [message.sent_at, message.created_at]);
 
   // Отримати колір border-l для inline styles (fallback)
   const getBorderLeftColor = (): string | undefined => {
@@ -386,16 +340,6 @@ export function MessageBubble({
         styles = 'bg-gray-100 border-l-[4px] border-l-gray-400 text-gray-900 shadow-sm';
     }
     
-    // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🎨 MessageBubble outbound styles:', { 
-        platform, 
-        isOutbound, 
-        styles,
-        borderColor: getBorderLeftColor()
-      });
-    }
-    
     return styles;
   };
 
@@ -422,13 +366,32 @@ export function MessageBubble({
         styles = 'bg-white border border-gray-200';
     }
     
-    // Debug logging
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🎨 MessageBubble inbound styles:', { platform, isOutbound, styles });
-    }
-    
     return styles;
   };
+
+  const renderedContent = useMemo(() => {
+    if (!message.content) return { kind: 'none' as const };
+    if (isMediaPlaceholder(message.content, message.attachments)) return { kind: 'none' as const };
+
+    // Email with HTML content in meta_data
+    if (platform === 'email' && message.meta_data?.html_content) {
+      return {
+        kind: 'html' as const,
+        html: sanitizeEmailHtml(message.meta_data.html_content),
+        className: 'text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all email-html-content',
+      };
+    }
+
+    if (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) {
+      return {
+        kind: 'html' as const,
+        html: platform === 'email' ? parseEmailToHtml(message.content) : parseMessageToHtml(message.content, platform),
+        className: 'text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all',
+      };
+    }
+
+    return { kind: 'text' as const, text: message.content };
+  }, [message.content, message.attachments, message.meta_data, platform]);
 
   return (
     <div
@@ -455,20 +418,6 @@ export function MessageBubble({
         } : {
           // Fallback: ensure background color is applied via inline style for inbound messages
           ...getInboundMessageBgStyle(),
-        }}
-        ref={(el) => {
-          // Debug: log computed styles in development
-          if (process.env.NODE_ENV === 'development' && el && typeof window !== 'undefined' && window.getComputedStyle) {
-            const computed = window.getComputedStyle(el);
-            console.log('🎨 MessageBubble computed styles:', {
-              platform,
-              isOutbound,
-              backgroundColor: computed.backgroundColor,
-              borderLeftWidth: computed.borderLeftWidth,
-              borderLeftColor: computed.borderLeftColor,
-              borderLeftStyle: computed.borderLeftStyle,
-            });
-          }
         }}
       >
         {/* Platform icon for inbound messages */}
@@ -523,29 +472,16 @@ export function MessageBubble({
           )}
           
           {/* Text content - hide placeholder text for media messages */}
-          {message.content && !isMediaPlaceholder(message.content, message.attachments) && (
-            // Для email з HTML контентом в meta_data - рендеримо HTML напряму
-            platform === 'email' && message.meta_data?.html_content ? (
-              <div 
-                className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all email-html-content"
-                dangerouslySetInnerHTML={{ 
-                  __html: sanitizeEmailHtml(message.meta_data.html_content)
-                }}
-              />
-            ) : (platform === 'email' || platform === 'telegram' || hasMarkdown(message.content)) ? (
-              <div 
-                className="text-sm prose prose-sm max-w-none prose-a:text-blue-600 prose-a:break-all"
-                dangerouslySetInnerHTML={{ 
-                  __html: platform === 'email' 
-                    ? parseEmailToHtml(message.content)
-                    : parseMessageToHtml(message.content, platform)
-                }}
-              />
-            ) : (
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {message.content}
-              </p>
-            )
+          {renderedContent.kind === 'html' && (
+            <div
+              className={renderedContent.className}
+              dangerouslySetInnerHTML={{ __html: renderedContent.html }}
+            />
+          )}
+          {renderedContent.kind === 'text' && (
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {renderedContent.text}
+            </p>
           )}
 
           {/* Detected email/phone/address buttons (only for inbound) */}
@@ -583,7 +519,11 @@ export function MessageBubble({
                         handleAdd(item);
                         } else if ((item.type === 'address' || item.type === 'paczkomat') && onAddAddress) {
                           onAddAddress(item.value, item.isPaczkomat || false, item.paczkomatCode);
-                          setAddedItems(new Set(addedItems).add(item.value));
+                          setAddedItems((prev) => {
+                            const next = new Set(prev);
+                            next.add(item.value);
+                            return next;
+                          });
                         }
                       }
                     }}
@@ -643,7 +583,11 @@ export function MessageBubble({
                           <button
                             onClick={() => {
                               onAddFile(attachment.url!, attachment.filename || 'file');
-                              setAddedItems(new Set(addedItems).add(fileKey));
+                              setAddedItems((prev) => {
+                                const next = new Set(prev);
+                                next.add(fileKey);
+                                return next;
+                              });
                             }}
                             disabled={isFileAdded}
                             className={cn(
@@ -669,7 +613,11 @@ export function MessageBubble({
                           <button
                             onClick={() => {
                               onAddFileAutoCreateOrder(attachment.url!, attachment.filename || 'file');
-                              setAddedItems(new Set(addedItems).add(fileKey));
+                              setAddedItems((prev) => {
+                                const next = new Set(prev);
+                                next.add(fileKey);
+                                return next;
+                              });
                             }}
                             disabled={isFileAdded}
                             className={cn(
@@ -748,5 +696,5 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
 

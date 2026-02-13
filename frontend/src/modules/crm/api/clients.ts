@@ -54,7 +54,7 @@ export interface Order {
   manager_id: string;
   order_number: string;
   description?: string;
-  status: "do_wykonania" | "do_poswiadczenia" | "do_wydania" | "ustne" | "closed";
+  status: "do_wykonania" | "oplacone" | "do_poswiadczenia" | "do_wydania" | "ustne" | "closed";
   deadline?: string;
   file_url?: string;
   office_id?: number;

@@ -145,7 +145,39 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
     'bg-red-200',        // Data płatności - червоний
     'bg-pink-200',       // Sposób płatności - рожевий
     'bg-red-200',        // Numer dowodu sprzedaży - червоний
+    'bg-cyan-200',       // Валюта - блакитний
+    'bg-indigo-200',     // Статус оплати - індиго
+    'bg-teal-200',       // Stripe fee - бірюзовий
+    'bg-emerald-200',   // Нетто-сума - смарагдовий
+    'bg-violet-200',     // Receipt link - фіолетовий
   ];
+
+  const getPaymentStatusBadge = (status: string | null | undefined) => {
+    if (!status) return null;
+    
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      'pending': { label: 'Очікує', className: 'bg-yellow-100 text-yellow-800' },
+      'succeeded': { label: 'Оплачено', className: 'bg-green-100 text-green-800' },
+      'failed': { label: 'Помилка', className: 'bg-red-100 text-red-800' },
+      'refunded': { label: 'Повернено', className: 'bg-gray-100 text-gray-800' },
+    };
+    
+    const config = statusConfig[status] || { label: status, className: 'bg-gray-100 text-gray-800' };
+    
+    return (
+      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-medium", config.className)}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const getCardBrandIcon = (brand: string | null | undefined) => {
+    if (!brand) return null;
+    const brandLower = brand.toLowerCase();
+    if (brandLower.includes('visa')) return '💳';
+    if (brandLower.includes('mastercard') || brandLower.includes('master')) return '💳';
+    return '💳';
+  };
 
   return (
     <Card className="border shadow-sm bg-white overflow-hidden">
@@ -163,13 +195,18 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
                 <TableHead className={cn("px-2 text-[10px] border-r w-[75px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[5])} onClick={() => handleSort('payment_date')}>Płatność</TableHead>
                 <TableHead className={cn("px-2 text-[10px] border-r w-[80px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[6])} onClick={() => handleSort('payment_method')}>Metoda</TableHead>
                 <TableHead className={cn("px-2 text-[10px] border-r w-[90px] cursor-pointer select-none hover:bg-opacity-80 transition-colors", headerColors[7])} onClick={() => handleSort('receipt_number')}>Dowód</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[8])}>Валюта</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-center", headerColors[9])}>Статус</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[70px] text-right", headerColors[10])}>Fee</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[80px] text-right", headerColors[11])}>Нетто</TableHead>
+                <TableHead className={cn("px-2 text-[10px] border-r w-[60px] text-center", headerColors[12])}>Receipt</TableHead>
                 <TableHead className="w-[40px] px-0" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={15} className="text-center py-8">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-6 w-6 border-2 border-orange-500 border-t-transparent" />
                       <span className="ml-2">{t('finance.payments.loading')}</span>
@@ -178,7 +215,7 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
                 </TableRow>
               ) : sortedPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={15} className="text-center py-8 text-gray-500">
                     {t('finance.payments.noPayments')}
                   </TableCell>
                 </TableRow>
@@ -201,11 +238,48 @@ export function FinancePaymentsTable({ payments, loading }: FinancePaymentsTable
                         <TableCell className="px-2 text-[10px] border-r">{formatDate(payment.service_date)}</TableCell>
                         <TableCell className="px-2 text-[10px] truncate border-r" title={payment.buyer_name}>{payment.buyer_name}</TableCell>
                         <TableCell className="px-2 text-[10px] text-right border-r font-semibold">
-                          {payment.amount_gross.toFixed(2)} ₴
+                          {payment.amount_gross.toFixed(2)} {payment.currency || 'PLN'}
                         </TableCell>
                         <TableCell className="px-2 text-[10px] border-r">{formatDate(payment.payment_date)}</TableCell>
-                        <TableCell className="px-2 text-[10px] truncate border-r" title={formatPaymentMethod(payment.payment_method)}>{formatPaymentMethod(payment.payment_method)}</TableCell>
+                        <TableCell className="px-2 text-[10px] truncate border-r" title={formatPaymentMethod(payment.payment_method)}>
+                          {payment.card_brand && payment.card_last4 ? (
+                            <span className="flex items-center gap-1">
+                              {getCardBrandIcon(payment.card_brand)}
+                              <span className="text-[9px]">****{payment.card_last4}</span>
+                            </span>
+                          ) : (
+                            formatPaymentMethod(payment.payment_method)
+                          )}
+                        </TableCell>
                         <TableCell className="px-2 text-[10px] truncate border-r text-center" title={payment.receipt_number}>{payment.receipt_number}</TableCell>
+                        <TableCell className="px-2 text-[10px] border-r text-center font-mono">
+                          {payment.currency || 'PLN'}
+                        </TableCell>
+                        <TableCell className="px-2 text-[10px] border-r text-center">
+                          {getPaymentStatusBadge(payment.payment_status)}
+                        </TableCell>
+                        <TableCell className="px-2 text-[10px] border-r text-right">
+                          {payment.stripe_fee ? `${payment.stripe_fee.toFixed(2)} ${payment.currency || 'PLN'}` : '-'}
+                        </TableCell>
+                        <TableCell className="px-2 text-[10px] border-r text-right font-semibold">
+                          {payment.net_amount ? `${payment.net_amount.toFixed(2)} ${payment.currency || 'PLN'}` : '-'}
+                        </TableCell>
+                        <TableCell className="px-2 text-[10px] border-r text-center">
+                          {payment.stripe_receipt_url ? (
+                            <a
+                              href={payment.stripe_receipt_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-600 hover:text-blue-800 underline text-[9px]"
+                              title="Відкрити receipt в Stripe"
+                            >
+                              📄
+                            </a>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
                         <TableCell className="p-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center items-center">
                             {payment?.id ? (

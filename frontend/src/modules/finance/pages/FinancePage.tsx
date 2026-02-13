@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Wallet, FileText, StickyNote, Settings, Download } from "lucide-react";
 import { FinancePaymentsTable } from "../components/FinancePaymentsTable";
+import { ShipmentsTable } from "../components/ShipmentsTable";
 import { OrderProfitTable, type OrderProfit } from "../components/OrderProfitTable";
 import { financeApi, Payment } from "../api/transactions";
+import { shipmentsApi, Shipment } from "../api/shipments";
 import { mockPayments } from "../api/mockData";
 import { ordersApi } from "../../crm/api/orders";
 import { toast } from "sonner";
@@ -25,16 +27,19 @@ const USE_MOCK_DATA = false;
 export function FinancePage() {
   const { t } = useI18n();
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [orderProfits, setOrderProfits] = useState<OrderProfit[]>([]);
   
   const FINANCE_SIDE_TABS = getFinanceSideTabs(t);
   const [loading, setLoading] = useState(true);
+  const [loadingShipments, setLoadingShipments] = useState(true);
   const [loadingProfits, setLoadingProfits] = useState(true);
   const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadPayments();
+    loadShipments();
     loadOrderProfits();
     
     // Слухаємо події зміни payment_method для оновлення даних
@@ -89,6 +94,20 @@ export function FinancePage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadShipments = async () => {
+    try {
+      setLoadingShipments(true);
+      const data = await shipmentsApi.getShipments({ limit: 1000 });
+      setShipments(data);
+    } catch (error: any) {
+      console.error("Error loading shipments:", error);
+      toast.error("Помилка завантаження відправок");
+      setShipments([]);
+    } finally {
+      setLoadingShipments(false);
     }
   };
 
@@ -182,6 +201,7 @@ export function FinancePage() {
         <Tabs defaultValue="payments" className="w-full flex-1 flex flex-col">
           <TabsList className="w-max">
             <TabsTrigger value="payments">Płatności</TabsTrigger>
+            <TabsTrigger value="shipments">Відправки</TabsTrigger>
             <TabsTrigger value="profits">Різниця оплат</TabsTrigger>
           </TabsList>
           
@@ -189,6 +209,12 @@ export function FinancePage() {
             {/* min-w-0 тут критично важливий для вкладених флексів */}
             <div className="min-w-0 w-full">
               <FinancePaymentsTable payments={payments || []} loading={loading} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="shipments" className="flex-1 mt-6 min-h-0">
+            <div className="min-w-0 w-full">
+              <ShipmentsTable shipments={shipments || []} loading={loadingShipments} />
             </div>
           </TabsContent>
           
@@ -224,6 +250,10 @@ export function FinancePage() {
               <div>
                 <span className="text-gray-500">Всього платежів:</span>
                 <span className="ml-2 font-medium text-gray-900">{payments.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Відправок:</span>
+                <span className="ml-2 font-medium text-gray-900">{shipments.length}</span>
               </div>
               <div>
                 <span className="text-gray-500">Замовлень з прибутком:</span>

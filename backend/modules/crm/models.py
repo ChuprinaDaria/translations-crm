@@ -11,7 +11,7 @@ from core.db import Base
 if TYPE_CHECKING:
     from modules.auth.models import User
     from modules.communications.models import Conversation
-    from modules.finance.models import Transaction
+    from modules.finance.models import Transaction, Shipment
     from modules.autobot.models import AutobotSettings
     from modules.postal_services.models import InPostShipment
     from modules.payment.models import PaymentTransaction
@@ -149,6 +149,7 @@ class Order(Base):
     timeline_steps: Mapped[list["TimelineStep"]] = relationship("TimelineStep", back_populates="order", lazy="selectin", cascade="all, delete-orphan", order_by="TimelineStep.created_at")
     translation_requests: Mapped[list["TranslationRequest"]] = relationship("TranslationRequest", back_populates="order", lazy="selectin", cascade="all, delete-orphan")
     inpost_shipments: Mapped[list["InPostShipment"]] = relationship("InPostShipment", back_populates="order", lazy="selectin", cascade="all, delete-orphan", foreign_keys="[InPostShipment.order_id]")
+    shipments: Mapped[list["Shipment"]] = relationship("Shipment", back_populates="order", lazy="selectin", cascade="all, delete-orphan", foreign_keys="[Shipment.order_id]")
 
 
 class InternalNote(Base):

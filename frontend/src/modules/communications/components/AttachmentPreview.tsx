@@ -35,6 +35,17 @@ export function AttachmentPreview({
 }: AttachmentPreviewProps) {
   const [imageError, setImageError] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  
+  const normalizeUrl = (url?: string) => {
+    if (!url) return url;
+    // Already full API path
+    if (url.startsWith('/api/')) return url;
+    // Legacy backend sometimes returned "/media/..." or "/files/..." without router prefix
+    if (url.startsWith('/media/') || url.startsWith('/files/')) {
+      return `/api/v1/communications${url}`;
+    }
+    return url;
+  };
 
   const getFileIcon = (type?: string, mimeType?: string) => {
     if (mimeType?.startsWith('image/') || type === 'image') return FileImage;
@@ -68,14 +79,10 @@ export function AttachmentPreview({
     }
     if (attachment?.url) {
       // Ensure proper API URL
-      const url = attachment.url;
-      if (url.startsWith('/api/')) {
-        return url; // Already has API prefix
-      }
-      return url;
+      return normalizeUrl(attachment.url);
     }
     if (attachment?.thumbnail_url) {
-      return attachment.thumbnail_url;
+      return normalizeUrl(attachment.thumbnail_url);
     }
     return null;
   };
@@ -89,7 +96,7 @@ export function AttachmentPreview({
     if (attachment?.url) {
       // Open in new tab or download
       const link = document.createElement('a');
-      link.href = attachment.url;
+      link.href = normalizeUrl(attachment.url) || attachment.url;
       link.download = displayName;
       link.target = '_blank';
       link.click();
@@ -106,8 +113,8 @@ export function AttachmentPreview({
   // Image preview with zoom - compact thumbnail in chat
   if (isImage && imageUrl && !imageError) {
     // Use thumbnail_url if available, otherwise use full image
-    const thumbnailUrl = attachment?.thumbnail_url || imageUrl;
-    const fullImageUrl = attachment?.url || imageUrl;
+    const thumbnailUrl = normalizeUrl(attachment?.thumbnail_url) || imageUrl;
+    const fullImageUrl = normalizeUrl(attachment?.url) || imageUrl;
 
     return (
       <>
@@ -209,7 +216,7 @@ export function AttachmentPreview({
         isPreview ? 'w-[140px]' : 'max-w-[250px]'
       )}>
         <video
-          src={attachment.url}
+          src={normalizeUrl(attachment.url)}
           className="w-full h-auto max-h-[200px] rounded-lg"
           controls
           preload="metadata"
@@ -251,7 +258,7 @@ export function AttachmentPreview({
           <Music className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <audio src={attachment.url} controls className="w-full h-8" preload="metadata" />
+          <audio src={normalizeUrl(attachment.url)} controls className="w-full h-8" preload="metadata" />
           {displayName && displayName !== 'Файл' && (
             <p className="text-xs text-gray-500 truncate mt-1">{displayName}</p>
           )}

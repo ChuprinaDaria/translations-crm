@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { Plus, Download, FileText, Star, User } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import {
@@ -48,7 +48,6 @@ interface ChatAreaProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
   isLoading?: boolean;
   onQuickAction?: (action: string, data?: Record<string, any>) => void;
-  isSidebarOpen?: boolean;
   clientId?: string;
   orderId?: string;
   clientEmail?: string;
@@ -58,11 +57,6 @@ interface ChatAreaProps {
   onAddFile?: (fileUrl: string, fileName: string) => void;
   onAddFileAutoCreateOrder?: (fileUrl: string, fileName: string) => void;
   onAddAddress?: (address: string, isPaczkomat: boolean, paczkomatCode?: string) => void;
-  onPaymentClick?: () => void;
-  onTrackingClick?: () => void;
-  onClientClick?: () => void;
-  onOrderClick?: () => void;
-  onDocumentsClick?: () => void;
   onDeleteMessage?: (messageId: string) => void;
   onSendDraft?: (messageId: string, content: string) => void;
 }
@@ -73,7 +67,6 @@ export function ChatArea({
   onSendMessage,
   isLoading = false,
   onQuickAction,
-  isSidebarOpen,
   clientId,
   orderId,
   clientEmail,
@@ -83,16 +76,23 @@ export function ChatArea({
   onAddFile,
   onAddFileAutoCreateOrder,
   onAddAddress,
-  onPaymentClick,
-  onTrackingClick,
-  onClientClick,
-  onOrderClick,
-  onDocumentsClick,
   onDeleteMessage,
   onSendDraft,
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(100);
+
+  // Reset visible window when switching conversations
+  useEffect(() => {
+    setVisibleCount(100);
+  }, [conversation?.id]);
+
+  const visibleMessages = useMemo(() => {
+    if (!messages || messages.length === 0) return [];
+    if (visibleCount >= messages.length) return messages;
+    return messages.slice(Math.max(0, messages.length - visibleCount));
+  }, [messages, visibleCount]);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
@@ -102,7 +102,7 @@ export function ChatArea({
 
   useEffect(() => {
     scrollToBottom('smooth');
-  }, [messages]);
+  }, [messages.length]);
 
   useLayoutEffect(() => {
     scrollToBottom('auto');
@@ -117,16 +117,10 @@ export function ChatArea({
   }
 
   return (
-    <div className="h-full w-full overflow-hidden">
-      {/* Main Chat Column - use grid for stable layout */}
-      <div 
-        className="flex-1 min-w-0 overflow-hidden"
-        style={{
-          display: 'grid',
-          gridTemplateRows: '48px 1fr auto',
-          height: '100%',
-        }}
-      >
+    <div 
+      className="h-full w-full overflow-hidden"
+      style={{ display: 'grid', gridTemplateRows: '48px 1fr auto', height: '100%' }}
+    >
         {/* Header - row 1: fixed 48px */}
         <header className="border-b border-gray-200 bg-white flex items-center justify-between px-4">
           <div className="flex-1" />
@@ -171,24 +165,38 @@ export function ChatArea({
                 <EmptyStates.NoMessages />
               </div>
             ) : (
-              messages.map((message) => (
-                <MessageBubble 
-                  key={message.id} 
-                  message={message} 
-                  platform={conversation.platform}
-                  clientId={clientId}
-                  orderId={orderId}
-                  clientEmail={clientEmail}
-                  clientPhone={clientPhone}
-                  onAddEmail={onAddEmail}
-                  onAddPhone={onAddPhone}
-                  onAddFile={onAddFile}
-                  onAddFileAutoCreateOrder={onAddFileAutoCreateOrder}
-                  onAddAddress={onAddAddress}
-                  onDeleteMessage={onDeleteMessage}
-                  onSendDraft={onSendDraft}
-                />
-              ))
+              <>
+                {visibleCount < messages.length && (
+                  <div className="flex justify-center pb-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-300 hover:bg-gray-50"
+                      onClick={() => setVisibleCount((c) => Math.min(messages.length, c + 200))}
+                    >
+                      Показати ще ({messages.length - visibleCount})
+                    </Button>
+                  </div>
+                )}
+                {visibleMessages.map((message) => (
+                  <MessageBubble 
+                    key={message.id} 
+                    message={message} 
+                    platform={conversation.platform}
+                    clientId={clientId}
+                    orderId={orderId}
+                    clientEmail={clientEmail}
+                    clientPhone={clientPhone}
+                    onAddEmail={onAddEmail}
+                    onAddPhone={onAddPhone}
+                    onAddFile={onAddFile}
+                    onAddFileAutoCreateOrder={onAddFileAutoCreateOrder}
+                    onAddAddress={onAddAddress}
+                    onDeleteMessage={onDeleteMessage}
+                    onSendDraft={onSendDraft}
+                  />
+                ))}
+              </>
             )}
             <div ref={messagesEndRef} className="h-1" />
           </div>
@@ -202,8 +210,6 @@ export function ChatArea({
             isLoading={isLoading}
           />
         </div>
-      </div>
-
     </div>
   );
 }

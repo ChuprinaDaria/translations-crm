@@ -15,6 +15,18 @@ export interface Payment {
   color?: string | null; // RGB колір для виділення рядка (наприклад, "rgb(255, 200, 100)")
   hidden_notes?: string | null; // Приховані примітки, які показуються при наведенні (legacy - рядок)
   hidden_notes_list?: Array<{ id: string; text: string; created_by: string; created_at: string }> | null; // Масив нотаток
+  // Stripe fields
+  stripe_payment_intent_id?: string | null;
+  stripe_session_id?: string | null;
+  stripe_customer_email?: string | null;
+  currency?: string; // Default: PLN
+  stripe_fee?: number | null; // Комісія Stripe
+  net_amount?: number | null; // Нетто-сума після комісії
+  card_brand?: string | null; // Visa, Mastercard, etc.
+  card_last4?: string | null; // Останні 4 цифри картки
+  stripe_receipt_url?: string | null; // URL receipt від Stripe
+  payment_status?: 'pending' | 'succeeded' | 'failed' | 'refunded' | null; // Статус оплати
+  stripe_payment_link_id?: string | null; // ID Stripe Payment Link
 }
 
 export interface PaymentsResponse {

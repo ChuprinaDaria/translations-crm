@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../../components/ui/dialog';
-import { Button } from '../../../../components/ui/button';
-import { Input } from '../../../../components/ui/input';
-import { Label } from '../../../../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
-import { Textarea } from '../../../../components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { FileText, Calendar, DollarSign, MapPin, Truck, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { officesApi, type Office } from '../../../crm/api/offices';
@@ -14,7 +14,7 @@ import { clientsApi } from '../../../crm/api/clients';
 import { languagesApi, type Language } from '../../../crm/api/languages';
 import { paymentApi } from '../../../payment/api/payment';
 import { PaymentProvider } from '../../../payment/api/types';
-import { cn } from '../../../../components/ui/utils';
+import { cn } from '@/components/ui/utils';
 
 interface Conversation {
   id: string;
@@ -237,9 +237,9 @@ export function CreateOrderDialog({
       if ((paymentMethod === 'card' || paymentMethod === 'payment_link') && priceBrutto && parseFloat(priceBrutto) > 0) {
         try {
           // Отримуємо дані клієнта
-          const client = await clientsApi.getClient(parseInt(clientId));
-          const customerEmail = client.client.email || conversation?.client_id || 'customer@example.com';
-          const customerName = client.client.full_name || conversation?.client_name || 'Клієнт';
+          const client = await clientsApi.getClient(clientId);
+          const customerEmail = client.email || conversation?.client_id || 'customer@example.com';
+          const customerName = client.full_name || conversation?.client_name || 'Клієнт';
 
           // Отримуємо активний payment provider
           const methods = await paymentApi.getAvailableMethods();

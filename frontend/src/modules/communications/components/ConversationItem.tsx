@@ -25,6 +25,7 @@ interface ConversationItemProps {
   conversation: Conversation;
   isSelected: boolean;
   onClick: () => void;
+  onPrefetch?: () => void;
 }
 
 /**
@@ -40,6 +41,7 @@ export function ConversationItem({
   conversation,
   isSelected,
   onClick,
+  onPrefetch,
 }: ConversationItemProps) {
   const platformColor = getPlatformColor(conversation.platform);
   
@@ -114,6 +116,8 @@ export function ConversationItem({
   return (
     <button
       onClick={onClick}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
       className={cn(
         'w-full flex items-start gap-3 p-3 rounded-lg transition-colors text-left',
         'hover:bg-gray-50 active:bg-gray-100',

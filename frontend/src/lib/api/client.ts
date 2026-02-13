@@ -3,6 +3,8 @@
 import { API_BASE_URL } from './config';
 import { tokenManager } from './token';
 
+const isDev = import.meta.env?.DEV === true;
+
 // Custom error class
 export class ApiError extends Error {
   constructor(
@@ -22,7 +24,7 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const token = tokenManager.getToken();
   
-  console.log(`[API] ${options.method || 'GET'} ${endpoint}`);
+  if (isDev) console.log(`[API] ${options.method || 'GET'} ${endpoint}`);
   
   // Якщо body є FormData, не встановлюємо Content-Type (браузер сам додасть multipart/form-data з boundary)
   const isFormData = options.body instanceof FormData;
@@ -34,9 +36,9 @@ export async function apiFetch<T>(
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    console.log('[API] Authorization header added');
+    if (isDev) console.log('[API] Authorization header added');
   } else {
-    console.log('[API] No token available');
+    if (isDev) console.log('[API] No token available');
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -45,11 +47,11 @@ export async function apiFetch<T>(
     mode: 'cors',
   });
 
-  console.log(`[API] Response status: ${response.status}`);
+  if (isDev) console.log(`[API] Response status: ${response.status}`);
 
   // Handle 401 Unauthorized - token expired or invalid
   if (response.status === 401) {
-    console.log('[API] Unauthorized (401) - clearing token and dispatching event');
+    if (isDev) console.log('[API] Unauthorized (401) - clearing token and dispatching event');
     tokenManager.removeToken();
     
     // Dispatch custom event for auth state change
@@ -102,7 +104,7 @@ export async function apiFetch<T>(
     
     // Для інших 403 помилок (наприклад, Permission denied) - просто кидаємо помилку
     if (response.status === 403 && !isAuthError) {
-      console.log('[API] Forbidden (403) - not an auth error, throwing error');
+      if (isDev) console.log('[API] Forbidden (403) - not an auth error, throwing error');
     }
     
     // Log detailed validation errors for 422
@@ -143,14 +145,14 @@ export async function apiFetch<T>(
   // Handle text/plain response
   if (contentType.includes('text/plain')) {
     const text = await response.text();
-    console.log('[API] Plain text response received');
+    if (isDev) console.log('[API] Plain text response received');
     return text as T;
   }
 
   // Handle JSON response (default)
   try {
     const jsonData = await response.json();
-    console.log('[API] JSON response received');
+    if (isDev) console.log('[API] JSON response received');
     return jsonData;
   } catch (jsonError) {
     // Якщо не вдалося розпарсити JSON, спробуємо прочитати текст для діагностики
@@ -184,13 +186,13 @@ export async function apiFetchMultipart<T>(
 ): Promise<T> {
   const token = tokenManager.getToken();
   
-  console.log(`[API] ${method} ${endpoint} (multipart/form-data)`);
+  if (isDev) console.log(`[API] ${method} ${endpoint} (multipart/form-data)`);
   
   const headers: Record<string, string> = {};
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    console.log('[API] Authorization header added');
+    if (isDev) console.log('[API] Authorization header added');
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -200,11 +202,11 @@ export async function apiFetchMultipart<T>(
     mode: 'cors',
   });
 
-  console.log(`[API] Response status: ${response.status}`);
+  if (isDev) console.log(`[API] Response status: ${response.status}`);
 
   // Handle 401 Unauthorized
   if (response.status === 401) {
-    console.log('[API] Unauthorized (401) - clearing token and dispatching event');
+    if (isDev) console.log('[API] Unauthorized (401) - clearing token and dispatching event');
     tokenManager.removeToken();
     window.dispatchEvent(new CustomEvent('auth:token-changed'));
   }
@@ -258,7 +260,7 @@ export async function apiFetchMultipart<T>(
 
   try {
     const jsonData = await response.json();
-    console.log('[API] JSON response received');
+    if (isDev) console.log('[API] JSON response received');
     return jsonData;
   } catch (jsonError) {
     // Якщо не вдалося розпарсити JSON, спробуємо прочитати текст для діагностики

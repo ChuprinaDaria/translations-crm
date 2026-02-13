@@ -1131,141 +1131,15 @@ async def create_payment_link(
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """Create payment link for order using active payment provider (Stripe or Przelewy24)."""
-    from modules.crm.models import Order
-    from modules.payment.models import PaymentSettings, PaymentProvider
-    from modules.payment.services.stripe_service import StripeService
-    from modules.payment.services.przelewy24_service import Przelewy24Service
-    from modules.payment.schemas import P24TransactionRegisterRequest
-    from decimal import Decimal
-    import os
-    from uuid import uuid4
+    """
+    Create payment link for order - wrapper for backward compatibility.
+    This endpoint redirects to finance module where payment operations belong.
+    """
+    # Import finance router function
+    from modules.finance.router import create_payment_link as finance_create_payment_link
     
-    amount = request.amount
-    currency = request.currency or "PLN"
-    
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # If amount not provided, calculate from order or use default
-    if not amount:
-        # Try to get amount from order transactions or use a default
-        amount = float(order.price_brutto) if order.price_brutto else 100.0
-    
-    # Отримати налаштування оплати
-    payment_settings = db.query(PaymentSettings).first()
-    if not payment_settings:
-        raise HTTPException(status_code=500, detail="Payment settings not configured")
-    
-    # Визначити активну систему оплати
-    active_provider = payment_settings.active_payment_provider
-    
-    # Якщо не встановлено, вибрати автоматично на основі enabled статусів
-    if not active_provider:
-        if payment_settings.stripe_enabled and payment_settings.stripe_secret_key:
-            active_provider = PaymentProvider.STRIPE
-        elif payment_settings.przelewy24_enabled and payment_settings.przelewy24_merchant_id:
-            active_provider = PaymentProvider.PRZELEWY24
-        else:
-            raise HTTPException(
-                status_code=500, 
-                detail="No active payment provider configured. Please configure Stripe or Przelewy24 in settings."
-            )
-    
-    # Створити посилання на оплату в залежності від вибраної системи
-    try:
-        if active_provider == PaymentProvider.STRIPE:
-            # Stripe payment link
-            if not payment_settings.stripe_enabled or not payment_settings.stripe_secret_key:
-                raise HTTPException(status_code=500, detail="Stripe is not configured or enabled")
-            
-            import stripe
-            stripe.api_key = payment_settings.stripe_secret_key
-            
-            # Create Price
-            price = stripe.Price.create(
-                unit_amount=int(amount * 100),  # Stripe works in cents
-                currency=currency.lower(),
-                product_data={
-                    "name": f"Замовлення {order.order_number}",
-                },
-            )
-
-            # Create Payment Link
-            payment_link_obj = stripe.PaymentLink.create(
-                line_items=[
-                    {
-                        "price": price.id,
-                        "quantity": 1,
-                    },
-                ],
-                metadata={
-                    "order_id": str(order.id),
-                },
-                after_completion={
-                    "type": "redirect",
-                    "redirect": {
-                        "url": f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/orders/{order.id}/success"
-                    }
-                }
-            )
-
-            payment_url = payment_link_obj.url
-            
-        elif active_provider == PaymentProvider.PRZELEWY24:
-            # Przelewy24 payment link
-            if not payment_settings.przelewy24_enabled or not payment_settings.przelewy24_merchant_id:
-                raise HTTPException(status_code=500, detail="Przelewy24 is not configured or enabled")
-            
-            p24_service = Przelewy24Service(payment_settings)
-            
-            # Отримати email клієнта
-            customer_email = order.client.email if order.client and order.client.email else "customer@example.com"
-            customer_name = order.client.full_name if order.client else "Клієнт"
-            
-            # Створити session_id
-            session_id = str(uuid4())
-            
-            # URLs
-            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-            backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
-            return_url = f"{frontend_url}/orders/{order.id}/success"
-            status_url = f"{backend_url}/api/v1/payment/webhooks/przelewy24"
-            
-            # Зареєструвати транзакцію в Przelewy24
-            p24_request = P24TransactionRegisterRequest(
-                order_id=order.id,
-                amount=Decimal(str(amount)),
-                currency=currency,
-                customer_email=customer_email,
-                customer_name=customer_name,
-                description=f"Замовлення {order.order_number}",
-            )
-            
-            result = await p24_service.register_transaction(
-                request=p24_request,
-                session_id=session_id,
-                return_url=return_url,
-                status_url=status_url,
-            )
-            
-            payment_url = result.payment_url
-        else:
-            raise HTTPException(status_code=500, detail=f"Unsupported payment provider: {active_provider}")
-
-        return {
-            "payment_link": payment_url,
-            "order_id": str(order.id),
-            "amount": amount,
-            "currency": currency,
-            "provider": active_provider.value,
-        }
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Payment library not installed: {str(e)}")
-    except Exception as e:
-        logger.error(f"Payment error ({active_provider}): {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create payment link: {str(e)}")
+    # Call finance endpoint
+    return await finance_create_payment_link(order_id, request, db, user)
 
 
 @router.get("/orders/{order_id}/tracking")
@@ -1401,41 +1275,55 @@ async def add_address_to_order(
     db: Session = Depends(get_db),
     user: Optional[models.User] = Depends(get_current_user_or_rag),
 ):
-    """Add address or paczkomat to order."""
+    """
+    Add address or paczkomat to order - wrapper for backward compatibility.
+    This endpoint creates a Shipment record in finance module instead of storing in description.
+    """
+    from modules.finance.models import Shipment, ShipmentMethod, ShipmentStatus
     from modules.crm.models import Order
-    from datetime import date
     from decimal import Decimal
-    
-    address = request.address
-    is_paczkomat = request.is_paczkomat
-    paczkomat_code = request.paczkomat_code
     
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    # Add address/paczkomat to description
-    if is_paczkomat and paczkomat_code:
-        address_text = f"Доставка: InPost пачкомат {paczkomat_code}\nАдреса: {address}\nВартість доставки: 13.99 zł"
+    # Визначаємо метод доставки
+    if request.is_paczkomat and request.paczkomat_code:
+        method = ShipmentMethod.INPOST_LOCKER
+        paczkomat_code = request.paczkomat_code
+        delivery_address = request.address
     else:
-        address_text = f"Доставка: Адреса\n{address}"
+        method = ShipmentMethod.INPOST_COURIER
+        paczkomat_code = None
+        delivery_address = request.address
     
-    if order.description:
-        order.description += f"\n\n{address_text}"
-    else:
-        order.description = address_text
+    # Отримуємо дані клієнта
+    recipient_name = order.client.full_name if order.client else None
+    recipient_email = order.client.email if order.client else None
+    recipient_phone = order.client.phone if order.client else None
     
-    # Note: Transaction creation requires payment_date, service_date, receipt_number, payment_method
-    # Delivery cost (13.99 zł) is added to description for now
-    # Transaction can be created manually later if needed
+    # Створюємо Shipment запис
+    shipment = Shipment(
+        order_id=order_id,
+        method=method,
+        status=ShipmentStatus.CREATED,
+        paczkomat_code=paczkomat_code,
+        delivery_address=delivery_address,
+        recipient_name=recipient_name,
+        recipient_email=recipient_email,
+        recipient_phone=recipient_phone,
+        shipping_cost=Decimal("13.99") if request.is_paczkomat else None,
+    )
     
+    db.add(shipment)
     db.commit()
-    db.refresh(order)
+    db.refresh(shipment)
     
     return {
         "order_id": str(order.id),
-        "message": "Address added to order",
-        "delivery_cost": 13.99 if is_paczkomat else None,
+        "message": "Address added to order as shipment",
+        "shipment_id": str(shipment.id),
+        "delivery_cost": float(shipment.shipping_cost) if shipment.shipping_cost else None,
     }
 
 
@@ -1473,7 +1361,8 @@ async def notify_new_message(message: Message, conversation: Conversation):
                     "filename": att_obj.original_name,
                     "mime_type": att_obj.mime_type,
                     "size": att_obj.file_size,
-                    "url": f"/media/{att_obj.file_path}",  # Використовуємо повний шлях: attachments/filename
+                    # Router is mounted under /api/v1/communications, so return full API URL
+                    "url": f"/api/v1/communications/media/{att_obj.file_path}",  # attachments/filename
                 })
         elif message.attachments:
             # Fallback на старий формат attachments (JSONB)

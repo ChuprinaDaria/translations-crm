@@ -67,6 +67,34 @@ class MessageRead(BaseModel):
         """Створити MessageRead з повідомлення, включаючи attachment_objects."""
         from modules.communications.utils.media import get_attachment_url
         
+        def _normalize_attachment(att: Dict[str, Any]) -> Dict[str, Any]:
+            """
+            Normalize legacy attachment formats to the current frontend-friendly shape:
+            { id, type, filename, mime_type, size, url, thumbnail_url? }
+            """
+            if not isinstance(att, dict):
+                return att
+            
+            normalized = dict(att)
+            
+            # If legacy uses file_path/path instead of url, build url to media endpoint
+            file_path = normalized.get("file_path") or normalized.get("path")
+            if file_path and not normalized.get("url"):
+                normalized["url"] = f"/api/v1/communications/media/{file_path}"
+            
+            url = normalized.get("url")
+            if isinstance(url, str):
+                # Some places historically used "/media/..." or "/files/..." without router prefix
+                if url.startswith("/media/") or url.startswith("/files/"):
+                    normalized["url"] = f"/api/v1/communications{url}"
+            
+            thumb = normalized.get("thumbnail_url")
+            if isinstance(thumb, str):
+                if thumb.startswith("/media/") or thumb.startswith("/files/"):
+                    normalized["thumbnail_url"] = f"/api/v1/communications{thumb}"
+            
+            return normalized
+        
         # Конвертувати message в dict
         data = {
             "id": message.id,
@@ -95,7 +123,11 @@ class MessageRead(BaseModel):
             data["attachments"] = attachments
         elif message.attachments:
             # Fallback на старий формат attachments (JSON)
-            data["attachments"] = message.attachments
+            try:
+                data["attachments"] = [_normalize_attachment(a) for a in (message.attachments or [])]
+            except Exception:
+                # Worst-case: return raw attachments
+                data["attachments"] = message.attachments
         
         return cls(**data)
     
