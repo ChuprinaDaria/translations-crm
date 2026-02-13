@@ -193,11 +193,17 @@ class InPostService:
         if not self.settings.is_enabled:
             raise ValueError("InPost integration is not enabled")
         
+        # Normalize parcel locker code if provided
+        normalized_parcel_locker_code = None
+        if request.parcel_locker_code:
+            normalized_parcel_locker_code = request.parcel_locker_code.strip().upper()
+            logger.info(f"InPost: Normalizing parcel locker code: '{request.parcel_locker_code}' -> '{normalized_parcel_locker_code}'")
+        
         # Create shipment record
         shipment = InPostShipment(
             order_id=request.order_id,
             delivery_type=request.delivery_type.value,
-            parcel_locker_code=request.parcel_locker_code,
+            parcel_locker_code=normalized_parcel_locker_code,
             receiver_email=request.receiver.email,
             receiver_phone=request.receiver.phone,
             receiver_name=request.receiver.name,
@@ -401,8 +407,66 @@ class InPostService:
         
         # Set delivery point based on type
         if shipment.delivery_type == DeliveryType.PARCEL_LOCKER.value:
+            # Validate and normalize parcel locker code
+            if not shipment.parcel_locker_code or not shipment.parcel_locker_code.strip():
+                error_msg = f"Parcel locker code is required for parcel_locker delivery type. Order ID: {shipment.order_id}, Shipment ID: {shipment.id}"
+                logger.error(error_msg)
+                print(f"[InPost] ERROR: {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Normalize parcel locker code: uppercase, trim whitespace
+            parcel_locker_code = shipment.parcel_locker_code.strip().upper()
+            
+            # Validate format: should match pattern like KRA010, WAW478M, etc.
+            # Format: 3 uppercase letters + 2-4 digits + optional letter
+            import re
+            if not re.match(r'^[A-Z]{3}[0-9]{2,4}[A-Z]?$', parcel_locker_code):
+                error_msg = f"Invalid parcel locker code format: '{parcel_locker_code}'. Expected format: 3 letters + 2-4 digits + optional letter (e.g., KRA010, WAW478M). Order ID: {shipment.order_id}"
+                logger.error(error_msg)
+                print(f"[InPost] ERROR: {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Try to verify parcel locker exists and get its name from InPost API
+            # According to InPost API docs, target_point should be the name of the parcel locker
+            # The code (e.g., KRA010) is typically the same as the name, but we can verify it exists
+            target_point = parcel_locker_code  # Use code as default (as shown in Postman examples)
+            
+            # Optional: Verify parcel locker exists by searching for it
+            # This helps catch invalid codes before sending to shipment API
+            try:
+                api_url = self.get_api_url()
+                async with httpx.AsyncClient(timeout=10.0) as verify_client:
+                    # Search for parcel locker by name/code
+                    verify_response = await verify_client.get(
+                        f"{api_url}/points",
+                        params={"name": parcel_locker_code},
+                        headers={"Accept": "application/json"},
+                    )
+                    if verify_response.status_code == 200:
+                        verify_data = verify_response.json()
+                        items = verify_data.get("items", [])
+                        if items:
+                            # Found the parcel locker, use its name
+                            locker_name = items[0].get("name")
+                            if locker_name:
+                                target_point = locker_name
+                                logger.info(f"InPost: Verified parcel locker exists, using name: {target_point}")
+                                print(f"[InPost] Verified parcel locker, name: {target_point}")
+                            else:
+                                logger.warning(f"InPost: Parcel locker found but no name field, using code: {parcel_locker_code}")
+                        else:
+                            logger.warning(f"InPost: Parcel locker '{parcel_locker_code}' not found in points API, but will try to use it anyway")
+                            print(f"[InPost] WARNING: Parcel locker '{parcel_locker_code}' not found in points API")
+            except Exception as verify_error:
+                # Don't fail if verification fails, just log and continue with code
+                logger.warning(f"InPost: Could not verify parcel locker existence: {verify_error}. Using code as target_point.")
+                print(f"[InPost] WARNING: Could not verify parcel locker: {verify_error}")
+            
+            logger.info(f"InPost: Using target_point: {target_point} (code: {parcel_locker_code})")
+            print(f"[InPost] target_point: {target_point} (code: {parcel_locker_code})")
+            
             payload["custom_attributes"] = {
-                "target_point": shipment.parcel_locker_code,
+                "target_point": target_point,
                 # Optional: sending_method can be "dispatch_order" or omitted
                 # "sending_method": "dispatch_order",  # Uncomment if needed
             }
@@ -464,6 +528,27 @@ class InPostService:
             if response.status_code not in [200, 201]:
                 error_data = response.json() if response.text else {}
                 error_message = error_data.get("message", error_data.get("detail", response.text))
+                error_details = error_data.get("details", {})
+                
+                # Log detailed error information
+                logger.error(f"InPost API error: {error_message}")
+                logger.error(f"Error details: {error_details}")
+                logger.error(f"Full response: {response.text}")
+                if shipment.delivery_type == DeliveryType.PARCEL_LOCKER.value:
+                    logger.error(f"Parcel locker code used: {shipment.parcel_locker_code}")
+                    print(f"[InPost] ERROR: Parcel locker code used: {shipment.parcel_locker_code}")
+                
+                # Check if error is related to target_point validation
+                if error_details.get("custom_attributes") and "target_point" in str(error_details.get("custom_attributes", {})):
+                    target_point_error = error_details.get("custom_attributes", {}).get("target_point", [])
+                    if "does_not_exist" in str(target_point_error):
+                        error_msg = (
+                            f"Parcel locker code '{shipment.parcel_locker_code}' does not exist in InPost system. "
+                            f"Please verify the code is correct. Order ID: {shipment.order_id}"
+                        )
+                        logger.error(error_msg)
+                        print(f"[InPost] ERROR: {error_msg}")
+                        raise ValueError(error_msg)
                 
                 # If 401/403 and organization_id might be wrong, try to fetch correct one
                 if response.status_code in [401, 403]:
@@ -499,8 +584,7 @@ class InPostService:
                     except Exception as fetch_error:
                         logger.error(f"Failed to fetch correct organization_id: {fetch_error}")
                 
-                logger.error(f"InPost API error: {error_message}")
-                logger.error(f"Full response: {response.text}")
+                # Error already logged above with details
                 raise Exception(f"InPost API error: {error_message}")
             
             data = response.json()

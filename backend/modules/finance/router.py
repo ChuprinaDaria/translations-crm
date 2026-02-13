@@ -949,12 +949,20 @@ async def create_shipment(
             recipient_name = shipment_data.recipient_name or (existing_shipment.recipient_name if existing_shipment and existing_shipment.recipient_name else None) or client_name
             
             # Використовуємо пачкомат та адресу з існуючого Shipment, якщо вони є
-            paczkomat_code = shipment_data.paczkomat_code or (existing_shipment.paczkomat_code if existing_shipment else None)
+            # Перевіряємо на None та порожні рядки
+            paczkomat_code = None
+            if shipment_data.paczkomat_code and shipment_data.paczkomat_code.strip():
+                paczkomat_code = shipment_data.paczkomat_code
+            elif existing_shipment and existing_shipment.paczkomat_code and existing_shipment.paczkomat_code.strip():
+                paczkomat_code = existing_shipment.paczkomat_code
+            
             delivery_address = shipment_data.delivery_address or (existing_shipment.delivery_address if existing_shipment else None)
             
             # Логування для діагностики
             logger.info(f"Creating shipment for order {order.id}: client_id={order.client_id}, client_email={client_email}, client_phone={client_phone}")
             logger.info(f"Final recipient data: email={recipient_email}, phone={recipient_phone}, name={recipient_name}")
+            logger.info(f"Paczkomat code: shipment_data.paczkomat_code='{shipment_data.paczkomat_code}', existing_shipment.paczkomat_code='{existing_shipment.paczkomat_code if existing_shipment else None}', final='{paczkomat_code}'")
+            print(f"[InPost] Paczkomat code: from shipment_data='{shipment_data.paczkomat_code}', from existing='{existing_shipment.paczkomat_code if existing_shipment else None}', final='{paczkomat_code}'")
             
             # Перевіряємо, чи є email та телефон (перевіряємо на None та порожні рядки)
             if not recipient_email or not recipient_email.strip():
@@ -1045,10 +1053,23 @@ async def create_shipment(
                         detail=f"Не вдалося розпарсити адресу доставки. Потрібен формат: 'XX-XXX Місто, Вулиця Номер/Квартира'. Отримано: {shipment_data.delivery_address}"
                     )
             
+            # Normalize parcel locker code if provided
+            normalized_paczkomat_code = None
+            if shipment_data.method == ShipmentMethod.INPOST_LOCKER:
+                if not paczkomat_code or not paczkomat_code.strip():
+                    error_msg = f"Parcel locker code is required for INPOST_LOCKER delivery method. Order ID: {order.id}"
+                    logger.error(error_msg)
+                    print(f"[InPost] ERROR: {error_msg}")
+                    raise HTTPException(status_code=400, detail=error_msg)
+                
+                normalized_paczkomat_code = paczkomat_code.strip().upper()
+                logger.info(f"InPost: Normalizing parcel locker code from finance router: '{paczkomat_code}' -> '{normalized_paczkomat_code}'")
+                print(f"[InPost] Normalized paczkomat code: '{paczkomat_code}' -> '{normalized_paczkomat_code}'")
+            
             create_request = CreateShipmentRequest(
                 order_id=order.id,
                 delivery_type=delivery_type,
-                parcel_locker_code=paczkomat_code if shipment_data.method == ShipmentMethod.INPOST_LOCKER else None,
+                parcel_locker_code=normalized_paczkomat_code,
                 receiver=receiver,
                 courier_address=courier_address_obj,
             )

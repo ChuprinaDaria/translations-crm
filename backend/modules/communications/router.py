@@ -1333,7 +1333,8 @@ async def add_address_to_order(
     # Визначаємо метод доставки
     if request.is_paczkomat and request.paczkomat_code:
         method = ShipmentMethod.INPOST_LOCKER
-        paczkomat_code = request.paczkomat_code
+        # Normalize parcel locker code: uppercase, trim whitespace
+        paczkomat_code = request.paczkomat_code.strip().upper()
         delivery_address = request.address
     else:
         method = ShipmentMethod.INPOST_COURIER
