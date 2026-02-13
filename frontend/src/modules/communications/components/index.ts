@@ -23,3 +23,4 @@ export { CommunicationsErrorBoundary } from './ErrorBoundary';
 export { EmptyState, EmptyStates } from './EmptyState';
 export { ChatTab } from './ChatTab';
 export { ChatTabsArea } from './ChatTabsArea';
+export { QuickActionsSidebar, type QuickAction } from './QuickActionsSidebar';

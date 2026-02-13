@@ -1,7 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { 
+  Menu,
+  CreditCard, 
+  Package, 
+  UserPlus,
+  FileText, 
+  FolderOpen,
+} from 'lucide-react';
 import { ChatTab, type Conversation } from './ChatTab';
 import { ChatArea, type Message } from './ChatArea';
-import { QuickActionsSidebar } from './QuickActionsSidebar';
+import { QuickActionsSidebar, type QuickAction } from './QuickActionsSidebar';
 import { EmptyStates } from './EmptyState';
 import { cn } from '../../../components/ui/utils';
 
@@ -66,6 +74,72 @@ export function ChatTabsArea({
   onDeleteMessage,
   onSendDraft,
 }: ChatTabsAreaProps) {
+  // Формуємо actions для QuickActionsSidebar
+  const quickActions = useMemo<QuickAction[]>(() => {
+    const clientId = activeTabId ? getClientId?.(activeTabId) : undefined;
+    const orderId = activeTabId ? getOrderId?.(activeTabId) : undefined;
+
+    return [
+      {
+        id: 'sidebar',
+        icon: Menu,
+        tooltip: 'Відкрити список діалогів',
+        onClick: () => onToggleSidebar?.(),
+        disabled: false,
+        isActive: isSidebarOpen,
+      },
+      {
+        id: 'payment',
+        icon: CreditCard,
+        tooltip: 'Оплата',
+        onClick: () => activeTabId && onPaymentClick?.(activeTabId),
+        disabled: !activeTabId || !orderId,
+        disabledMessage: 'Najpierw utwórz zlecenie',
+      },
+      {
+        id: 'tracking',
+        icon: Package,
+        tooltip: 'Трекінг',
+        onClick: () => activeTabId && onTrackingClick?.(activeTabId),
+        disabled: !activeTabId || !orderId,
+        disabledMessage: 'Najpierw utwórz zlecenie',
+      },
+      {
+        id: 'client',
+        icon: UserPlus,
+        tooltip: clientId ? 'Переглянути клієнта' : 'Створити клієнта',
+        onClick: () => activeTabId && onClientClick?.(activeTabId),
+        disabled: !activeTabId,
+      },
+      {
+        id: 'order',
+        icon: FileText,
+        tooltip: 'Utwórz zlecenie',
+        onClick: () => activeTabId && onOrderClick?.(activeTabId),
+        disabled: !activeTabId || !clientId,
+        disabledMessage: 'Спочатку створіть клієнта',
+      },
+      {
+        id: 'documents',
+        icon: FolderOpen,
+        tooltip: 'Завантажити документи',
+        onClick: () => activeTabId && onDocumentsClick?.(activeTabId),
+        disabled: !activeTabId,
+      },
+    ];
+  }, [
+    activeTabId,
+    isSidebarOpen,
+    getClientId,
+    getOrderId,
+    onToggleSidebar,
+    onPaymentClick,
+    onTrackingClick,
+    onClientClick,
+    onOrderClick,
+    onDocumentsClick,
+  ]);
+
   if (openChats.length === 0) {
     return (
       <div className="h-full w-full flex overflow-hidden">
@@ -73,15 +147,7 @@ export function ChatTabsArea({
           <EmptyStates.NoMessages />
         </div>
         <div className="flex-shrink-0 h-full">
-          <QuickActionsSidebar
-            isSidebarOpen={isSidebarOpen}
-            onPaymentClick={() => {}}
-            onTrackingClick={() => {}}
-            onClientClick={() => {}}
-            onOrderClick={() => {}}
-            onDocumentsClick={() => {}}
-            onToggleSidebar={onToggleSidebar}
-          />
+          <QuickActionsSidebar actions={quickActions} />
         </div>
       </div>
     );
@@ -143,17 +209,7 @@ export function ChatTabsArea({
 
       {/* QuickActionsSidebar - full height, right side */}
       <div className="flex-shrink-0 h-full">
-        <QuickActionsSidebar
-          isSidebarOpen={isSidebarOpen}
-          clientId={activeTabId ? getClientId?.(activeTabId) : undefined}
-          orderId={activeTabId ? getOrderId?.(activeTabId) : undefined}
-          onPaymentClick={() => activeTabId && onPaymentClick?.(activeTabId)}
-          onTrackingClick={() => activeTabId && onTrackingClick?.(activeTabId)}
-          onClientClick={() => activeTabId && onClientClick?.(activeTabId)}
-          onOrderClick={() => activeTabId && onOrderClick?.(activeTabId)}
-          onDocumentsClick={() => activeTabId && onDocumentsClick?.(activeTabId)}
-          onToggleSidebar={onToggleSidebar}
-        />
+        <QuickActionsSidebar actions={quickActions} />
       </div>
     </div>
   );

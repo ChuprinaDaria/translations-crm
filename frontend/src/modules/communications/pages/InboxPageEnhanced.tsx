@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CommunicationsLayout } from '../components/CommunicationsLayout';
-import { Menu, CreditCard, Package, UserPlus, User, StickyNote, FolderOpen, ClipboardList } from 'lucide-react';
-import { SideTabs, SidePanel, type SideTab } from '../../../components/ui';
 import { ConversationsSidebar, type FilterState, type Conversation } from '../components/ConversationsSidebar';
 import { ChatTabsArea } from '../components/ChatTabsArea';
 import { type Message } from '../components/ChatArea';
@@ -26,21 +24,7 @@ import { NotificationToast, type NotificationData } from '../components/Notifica
 import { useNotifications } from '../hooks/useNotifications';
 import { toast } from 'sonner';
 import '../styles/animations.css';
-import { InternalNotes } from '../../crm/components/InternalNotes';
-import { AttachmentPreview } from '../components/AttachmentPreview';
 import { useTabsState } from '../../../hooks/useTabsState';
-
-// Конфігурація табів для Inbox
-const INBOX_SIDE_TABS: SideTab[] = [
-  { id: 'sidebar', icon: Menu, label: 'Відкрити список діалогів', color: 'gray' },
-  { id: 'notes', icon: StickyNote, label: 'Нотатки', color: 'gray' },
-  { id: 'files', icon: FolderOpen, label: 'Файли', color: 'gray' },
-  { id: 'create-client', icon: UserPlus, label: 'Створити клієнта', color: 'gray' },
-  { id: 'view-client', icon: User, label: 'Переглянути клієнта', color: 'gray' },
-  { id: 'order', icon: ClipboardList, label: 'Utwórz zlecenie', color: 'gray' },
-  { id: 'tracking', icon: Package, label: 'Трекінг', color: 'gray' },
-  { id: 'payment', icon: CreditCard, label: 'Відправити посилання на оплату', color: 'gray' },
-];
 
 /**
  * Enhanced Inbox Page з новим UI
@@ -124,7 +108,6 @@ export function InboxPageEnhanced() {
     setOffset(prev => prev + 50);
   };
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidePanelTab, setSidePanelTab] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   
   // Smart Actions dialogs state
@@ -1304,130 +1287,6 @@ export function InboxPageEnhanced() {
     await handleQuickAction(conversationId, 'download_files');
   };
 
-  // Формуємо динамічні таби з disabled станом
-  const inboxTabs = useMemo(() => {
-    const conversationId = activeTabId || '';
-    const hasClient = !!client;
-    const hasOrders = orders.length > 0;
-
-    return INBOX_SIDE_TABS.filter(tab => {
-      // Приховуємо create-client або view-client залежно від наявності клієнта
-      if (tab.id === 'create-client' && hasClient) {
-        return false;
-      }
-      if (tab.id === 'view-client' && !hasClient) {
-        return false;
-      }
-      return true;
-    }).map(tab => {
-      let disabled = false;
-
-      switch (tab.id) {
-        case 'sidebar':
-          // Таб "sidebar" завжди активний, не disabled
-          disabled = false;
-          break;
-        case 'create-client':
-          disabled = !activeTabId;
-          break;
-        case 'view-client':
-          disabled = !client?.id;
-          break;
-        case 'order':
-          disabled = !activeTabId || !hasClient;
-          break;
-        case 'tracking':
-        case 'payment':
-          disabled = !activeTabId || !hasOrders;
-          break;
-        case 'notes':
-        case 'files':
-          disabled = !activeTabId;
-          break;
-      }
-
-      return { ...tab, disabled } as SideTab;
-    });
-  }, [activeTabId, client, orders]);
-
-  // Обробник кліку на таб
-  const handleTabChange = (tabId: string | null) => {
-    if (!tabId) {
-      setSidePanelTab(null);
-      return;
-    }
-
-    const conversationId = activeTabId || '';
-
-    // Обробка кліку на таб "sidebar"
-    if (tabId === 'sidebar') {
-      handleToggleSidebar();
-      // Якщо сайдбар вже відкритий - закриваємо, інакше відкриваємо
-      // activeTab буде автоматично оновлено через isSidebarOpen
-      if (isSidebarOpen) {
-        setSidePanelTab(null);
-      }
-      return;
-    }
-
-    // Quick actions - виконують дію і закриваються
-    if (tabId === 'create-client') {
-      // Якщо клієнт вже існує - показуємо повідомлення
-      if (client) {
-        toast.info('Клієнт вже існує');
-        setSidePanelTab(null);
-        return;
-      }
-      if (conversationId) {
-        handleClientClick(conversationId);
-      } else {
-        handleCreateClient();
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    if (tabId === 'view-client') {
-      if (client?.id) {
-        handleViewClientProfile(client.id);
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    if (tabId === 'order') {
-      if (conversationId) {
-        handleOrderClick(conversationId);
-      } else {
-        handleCreateOrder();
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    if (tabId === 'tracking') {
-      if (conversationId) {
-        handleTrackingClick(conversationId);
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    if (tabId === 'payment') {
-      if (conversationId) {
-        handlePaymentClick(conversationId);
-      }
-      setSidePanelTab(null);
-      return;
-    }
-
-    // Для звичайних табів (notes, files) - переключаємо
-    if (tabId === sidePanelTab) {
-      setSidePanelTab(null);
-    } else {
-      setSidePanelTab(tabId);
-    }
-  };
 
   // Helper functions to get client/order IDs for active conversation
   const getClientIdForConversation = (conversationId: string): string | undefined => {
@@ -1552,55 +1411,7 @@ export function InboxPageEnhanced() {
         </CommunicationsLayout>
       </CommunicationsErrorBoundary>
 
-      {/* Права частина: Бокова панель з табами - ПОЗА ErrorBoundary */}
-      {!isMobile && (
-        <aside className="fixed right-0 top-16 bottom-0 w-[64px] border-l-2 border-gray-300 bg-white flex flex-col items-center pt-2 pb-4 z-30">
-          <SideTabs
-            tabs={inboxTabs}
-            activeTab={isSidebarOpen ? 'sidebar' : sidePanelTab}
-            onTabChange={handleTabChange}
-            position="right"
-          />
-        </aside>
-      )}
-
-      {/* SidePanel - Бокова панель з контентом - ПОЗА ErrorBoundary */}
-      {!isMobile && activeTabId && sidePanelTab && (sidePanelTab === 'notes' || sidePanelTab === 'files') && (
-        <SidePanel
-          open={sidePanelTab !== null}
-          onClose={() => setSidePanelTab(null)}
-          title={INBOX_SIDE_TABS.find(t => t.id === sidePanelTab)?.label}
-          width="md"
-        >
-          {sidePanelTab === 'notes' && activeTabId && (
-            <InternalNotes
-              entityType="chat"
-              entityId={activeTabId}
-            />
-          )}
-          {sidePanelTab === 'files' && activeChat?.messages && (
-            <div className="grid grid-cols-2 gap-3">
-              {activeChat.messages
-                .flatMap((msg) => msg.attachments || [])
-                .filter((att) => att && att.url)
-                .map((attachment, idx) => (
-                  <AttachmentPreview
-                    key={attachment.id || idx}
-                    attachment={attachment}
-                  />
-                ))}
-              {activeChat.messages.flatMap((msg) => msg.attachments || []).filter((att) => att && att.url).length === 0 && (
-                <div className="col-span-2 text-center text-gray-500 py-8">
-                  <FolderOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">Немає файлів</p>
-                </div>
-              )}
-            </div>
-          )}
-        </SidePanel>
-      )}
-
-      {/* Smart Actions Dialogs - всередині ErrorBoundary для обробки помилок */}
+      {/* Smart Actions Dialogs */}
       {chatConversation && (
         <>
           <CreateClientDialog
