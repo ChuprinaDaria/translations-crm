@@ -2192,6 +2192,9 @@ def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_curren
         logging.getLogger(__name__).warning(f"Invalid phone_number_id format in DB: '{phone_number_id}'")
         phone_number_id = ''.join(filter(str.isdigit, phone_number_id)) if phone_number_id else ""
     
+    # Отримати WHATSAPP_MODE
+    whatsapp_mode = crud.get_whatsapp_mode(db)
+    
     return {
         "access_token": settings.get("whatsapp_access_token") or "",
         "phone_number_id": phone_number_id,
@@ -2199,6 +2202,7 @@ def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_curren
         "verify_token": settings.get("whatsapp_verify_token") or "",
         "template_name": settings.get("whatsapp_template_name") or "",
         "template_language": settings.get("whatsapp_template_language") or "en_US",
+        "whatsapp_mode": whatsapp_mode,  # "classical" або "matrix"
     }
 
 
@@ -2210,6 +2214,7 @@ def update_whatsapp_config(
     verify_token: str = Form(""),
     template_name: str = Form(""),
     template_language: str = Form("en_US"),
+    whatsapp_mode: str = Form("classical"),  # "classical" або "matrix"
     db: Session = Depends(get_db),
     user_payload = Depends(get_current_user),
 ):
@@ -2230,6 +2235,87 @@ def update_whatsapp_config(
     crud.set_setting(db, "whatsapp_verify_token", verify_token)
     crud.set_setting(db, "whatsapp_template_name", template_name)
     crud.set_setting(db, "whatsapp_template_language", template_language)
+    
+    # Валідація та збереження WHATSAPP_MODE
+    if whatsapp_mode not in ["classical", "matrix"]:
+        whatsapp_mode = "classical"  # Fallback
+    crud.set_setting(db, "whatsapp_mode", whatsapp_mode)
+    
+    return {"status": "success"}
+
+
+@router.get("/settings/matrix-config")
+def get_matrix_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає налаштування Matrix Bridge (legacy, для сумісності)."""
+    settings = crud.get_matrix_settings(db)
+    
+    return {
+        "homeserver": settings.get("matrix_homeserver") or "",
+        "access_token": settings.get("matrix_access_token") or "",
+        "user_id": settings.get("matrix_user_id") or "",
+        "device_id": settings.get("matrix_device_id") or "",
+    }
+
+
+@router.post("/settings/matrix-config")
+def update_matrix_config(
+    homeserver: str = Form(""),
+    access_token: str = Form(""),
+    user_id: str = Form(""),
+    device_id: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює налаштування Matrix Bridge. Зберігає в БД (legacy, для сумісності)."""
+    crud.set_setting(db, "matrix_homeserver", homeserver)
+    crud.set_setting(db, "matrix_access_token", access_token)
+    crud.set_setting(db, "matrix_user_id", user_id)
+    crud.set_setting(db, "matrix_device_id", device_id)
+    return {"status": "success"}
+
+
+@router.get("/settings/matrix-system-config")
+def get_matrix_system_config(db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """Повертає системні налаштування Matrix Bridge (тільки для адміна)."""
+    # Перевірка прав адміна
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    settings = crud.get_matrix_system_settings(db)
+    
+    return {
+        "homeserver_url": settings.get("matrix_homeserver_url") or "",
+        "server_name": settings.get("matrix_server_name") or "",
+        "admin_login": settings.get("matrix_admin_login") or "",
+        "has_admin_password": bool(settings.get("matrix_admin_password")),
+        "bridge_admin_secret": settings.get("matrix_bridge_admin_secret") or "",
+    }
+
+
+@router.post("/settings/matrix-system-config")
+def update_matrix_system_config(
+    homeserver_url: str = Form(""),
+    server_name: str = Form(""),
+    admin_login: str = Form(""),
+    admin_password: str = Form(""),
+    bridge_admin_secret: str = Form(""),
+    db: Session = Depends(get_db),
+    user_payload = Depends(get_current_user),
+):
+    """Оновлює системні налаштування Matrix Bridge (тільки для адміна)."""
+    # Перевірка прав адміна
+    if not user_payload.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    crud.set_setting(db, "matrix_homeserver_url", homeserver_url)
+    crud.set_setting(db, "matrix_server_name", server_name)
+    crud.set_setting(db, "matrix_admin_login", admin_login)
+    crud.set_setting(db, "matrix_admin_password", admin_password)  # TODO: зашифрувати
+    crud.set_setting(db, "matrix_bridge_admin_secret", bridge_admin_secret)
+    
+    # Автоматично логінимося адміном (async операція, виконується в фоні)
+    # TODO: Викликати async endpoint для логіну
+    
     return {"status": "success"}
 
 

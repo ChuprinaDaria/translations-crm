@@ -1064,6 +1064,52 @@ def get_inpost_settings(db: Session) -> dict[str, str | None]:
     return settings
 
 
+def get_matrix_settings(db: Session) -> dict[str, str | None]:
+    """Отримати налаштування Matrix Bridge."""
+    keys = [
+        "matrix_homeserver",
+        "matrix_access_token",
+        "matrix_user_id",
+        "matrix_device_id",
+    ]
+    return get_settings(db, keys)
+
+
+def get_matrix_system_settings(db: Session) -> dict[str, str | None]:
+    """Отримати системні налаштування Matrix (вводить адмін)."""
+    keys = [
+        "matrix_homeserver_url",  # https://matrix.your-server.com
+        "matrix_server_name",  # your-server.com
+        "matrix_admin_login",  # Логін адміна
+        "matrix_admin_password",  # Пароль адміна (зашифрований)
+        "matrix_bridge_admin_secret",  # Токен з registration.yaml
+    ]
+    return get_settings(db, keys)
+
+
+def get_matrix_user_settings(db: Session, user_id: str) -> dict[str, str | None]:
+    """Отримати налаштування Matrix для конкретного користувача."""
+    keys = [
+        f"matrix_user_{user_id}_access_token",
+        f"matrix_user_{user_id}_device_id",
+        f"matrix_user_{user_id}_matrix_id",
+    ]
+    return get_settings(db, keys)
+
+
+def get_whatsapp_mode(db: Session) -> str:
+    """
+    Отримати режим WhatsApp: 'classical' або 'matrix'.
+    
+    Returns:
+        'classical' або 'matrix' (за замовчуванням 'classical')
+    """
+    mode = get_setting(db, "whatsapp_mode")
+    if mode in ["classical", "matrix"]:
+        return mode
+    return "classical"  # За замовчуванням
+
+
 ############################################################
 # Menus CRUD
 ############################################################

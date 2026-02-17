@@ -1206,6 +1206,21 @@ export interface WhatsAppAccount {
   created_at?: string;
 }
 
+export interface MatrixConfig {
+  homeserver: string;
+  access_token: string;
+  user_id?: string;
+  device_id?: string;
+}
+
+export interface MatrixSystemConfig {
+  homeserver_url: string;  // https://matrix.your-server.com
+  server_name: string;  // your-server.com
+  admin_login: string;
+  admin_password: string;
+  bridge_admin_secret: string;  // Токен з registration.yaml
+}
+
 export interface InstagramConfig {
   app_id: string;
   access_token: string | boolean; // boolean коли отримуємо з API (для безпеки), string коли відправляємо
@@ -1619,7 +1634,42 @@ export const settingsApi = {
     formData.append("verify_token", data.verify_token);
     formData.append("template_name", data.template_name || "");
     formData.append("template_language", data.template_language || "en_US");
+    formData.append("whatsapp_mode", (data as any).whatsapp_mode || "classical");
     return apiFetchMultipart<{ status: string }>("/settings/whatsapp-config", formData, "POST");
+  },
+  
+  // Matrix Bridge API
+  async getMatrixConfig(): Promise<MatrixConfig> {
+    return apiFetch<MatrixConfig>("/settings/matrix-config");
+  },
+  async updateMatrixConfig(data: MatrixConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("homeserver", data.homeserver);
+    formData.append("access_token", data.access_token);
+    formData.append("user_id", data.user_id || "");
+    formData.append("device_id", data.device_id || "");
+    return apiFetchMultipart<{ status: string }>("/settings/matrix-config", formData, "POST");
+  },
+  
+  // Matrix System Config (тільки для адміна)
+  async getMatrixSystemConfig(): Promise<Omit<MatrixSystemConfig, "admin_password"> & { has_admin_password: boolean }> {
+    return apiFetch<Omit<MatrixSystemConfig, "admin_password"> & { has_admin_password: boolean }>("/settings/matrix-system-config");
+  },
+  async updateMatrixSystemConfig(data: MatrixSystemConfig): Promise<{ status: string }> {
+    const formData = new FormData();
+    formData.append("homeserver_url", data.homeserver_url);
+    formData.append("server_name", data.server_name);
+    formData.append("admin_login", data.admin_login);
+    formData.append("admin_password", data.admin_password);
+    formData.append("bridge_admin_secret", data.bridge_admin_secret);
+    return apiFetchMultipart<{ status: string }>("/settings/matrix-system-config", formData, "POST");
+  },
+  
+  // Connect user WhatsApp
+  async connectUserWhatsApp(userId: string): Promise<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }> {
+    return apiFetch<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }>(`/integrations/matrix/users/${userId}/connect-whatsapp`, {
+      method: "POST",
+    });
   },
   
   // WhatsApp OAuth - підключення через Facebook Login for Business
