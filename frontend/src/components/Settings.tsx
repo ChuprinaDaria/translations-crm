@@ -218,6 +218,20 @@ export function Settings() {
   });
   const [isSavingMatrix, setIsSavingMatrix] = useState(false);
 
+  // Matrix System Config state (для адміна)
+  const [matrixSystem, setMatrixSystem] = useState<MatrixSystemConfig>({
+    homeserver_url: "",
+    server_name: "",
+    admin_login: "",
+    admin_password: "",
+    bridge_admin_secret: "",
+  });
+  const [isSavingMatrixSystem, setIsSavingMatrixSystem] = useState(false);
+  
+  // WhatsApp Connect Dialog state
+  const [whatsappConnectOpen, setWhatsappConnectOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
   // Danger zone state
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -2083,7 +2097,7 @@ export function Settings() {
                 <Button
                   type="button"
                   className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                  disabled={isSavingWhatsApp || (whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id))}
+                  disabled={isSavingWhatsApp || !!(whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id))}
                   onClick={async () => {
                     // Валідація Phone Number ID перед збереженням
                     if (whatsapp.phone_number_id && !/^[0-9]+$/.test(whatsapp.phone_number_id)) {
