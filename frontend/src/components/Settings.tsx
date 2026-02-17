@@ -39,6 +39,10 @@ export function Settings() {
   // Перевірка чи користувач адмін
   const [isAdmin, setIsAdmin] = useState(false);
   
+  // WhatsApp Connect Dialog state (оголошуємо на початку для доступності)
+  const [whatsappConnectOpen, setWhatsappConnectOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  
   useEffect(() => {
     // Отримуємо інформацію про користувача з токену
     const token = localStorage.getItem('auth_token');
@@ -227,10 +231,6 @@ export function Settings() {
     bridge_admin_secret: "",
   });
   const [isSavingMatrixSystem, setIsSavingMatrixSystem] = useState(false);
-  
-  // WhatsApp Connect Dialog state
-  const [whatsappConnectOpen, setWhatsappConnectOpen] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   // Danger zone state
   const [isDeletingAll, setIsDeletingAll] = useState(false);
