@@ -2210,7 +2210,8 @@ export function Settings() {
                 >
                   {isSavingMatrix ? "Збереження..." : "Зберегти Matrix Bridge"}
                 </Button>
-              </CardContent>
+              </div>
+            </CardContent>
           </Card>
           
           {/* Matrix System Config (тільки для адміна) */}
