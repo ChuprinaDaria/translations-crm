@@ -13,6 +13,7 @@ listeners:
 
 database:
   name: psycopg2
+  allow_unsafe_locale: true
   args:
     user: ${POSTGRES_USER:-postgres}
     password: ${POSTGRES_PASSWORD:-postgres}
@@ -28,6 +29,7 @@ signing_key_path: "/data/crm.local.signing.key"
 registration_shared_secret: "${MATRIX_REGISTRATION_SECRET:-changeme}"
 enable_registration: false
 report_stats: false
+suppress_key_server_warning: true
 
 app_service_config_files:
   - /data/whatsapp-registration.yaml

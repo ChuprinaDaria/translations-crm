@@ -61,7 +61,10 @@ try:
     for db_name in ('synapse', 'mautrix_whatsapp'):
         cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
         if not cur.fetchone():
-            cur.execute("CREATE DATABASE %s OWNER %s" % (db_name, pg_user))
+            cur.execute(
+                "CREATE DATABASE %s OWNER %s ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0"
+                % (db_name, pg_user)
+            )
             print('Created database: %s' % db_name)
         else:
             print('Database exists: %s' % db_name)
