@@ -1,8 +1,10 @@
 """
 Matrix Provider - клієнт для Matrix через matrix-nio.
 """
+from __future__ import annotations
+
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from datetime import datetime, timezone
 
 try:

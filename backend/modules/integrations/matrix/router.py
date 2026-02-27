@@ -11,9 +11,14 @@ from core.database import get_db
 from modules.auth.dependencies import get_current_user_db
 from modules.auth.models import User
 from .schemas import MatrixConfig, MatrixRoomInfo, MatrixEventInfo
-from .service import MatrixWhatsAppService
-from .provider import MatrixProvider
 import crud
+
+try:
+    from .service import MatrixWhatsAppService
+    from .provider import MatrixProvider
+    MATRIX_AVAILABLE = True
+except Exception:
+    MATRIX_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
