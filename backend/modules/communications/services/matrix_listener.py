@@ -2,10 +2,14 @@
 Matrix listener service — receives WhatsApp messages via mautrix-whatsapp bridge.
 
 Runs as an asyncio background task inside the FastAPI process.
-Connects to Matrix homeserver as @crm_bot, listens via /sync long-polling,
-saves incoming WhatsApp messages to CRM Conversation/Message models.
+Connects to Matrix homeserver as @crm_bot via REST API (httpx),
+listens via /sync long-polling, saves incoming WhatsApp messages
+to CRM Conversation/Message models.
+
+No matrix-nio dependency — uses Matrix Client-Server REST API directly.
 """
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -13,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
+import httpx
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -24,27 +29,15 @@ MATRIX_BOT_USER = os.getenv("MATRIX_BOT_USER", "@crm_bot:matrix.adme-ai.com")
 MATRIX_BOT_PASSWORD = os.getenv("MATRIX_BOT_PASSWORD", "")
 WHATSAPP_BOT_USER = os.getenv("MATRIX_WHATSAPP_BOT", "@whatsappbot:matrix.adme-ai.com")
 
-# matrix-nio is an optional dependency
-try:
-    from nio import (
-        AsyncClient,
-        LoginResponse,
-        RoomCreateResponse,
-        RoomMessageText,
-        RoomMessageMedia,
-        RoomMessageImage,
-        RoomSendResponse,
-    )
-    NIO_AVAILABLE = True
-except ImportError:
-    NIO_AVAILABLE = False
+# Sync timeout for long-polling (ms)
+SYNC_TIMEOUT = 30000
 
 
 class MatrixListener:
     """
     Async background listener for Matrix/WhatsApp bridge messages.
 
-    - Logs in with password (no pre-existing access token needed)
+    - Logs in with password via REST API
     - Polls /sync for new events in rooms where @whatsappbot is present
     - Extracts phone number from sender (@whatsapp_PHONE:server)
     - Saves to communications_conversations / communications_messages
@@ -52,9 +45,12 @@ class MatrixListener:
     """
 
     def __init__(self):
-        self.client: Optional[AsyncClient] = None
+        self._http: Optional[httpx.AsyncClient] = None
+        self._access_token: Optional[str] = None
+        self._my_user_id: Optional[str] = None
+        self._next_batch: Optional[str] = None
+        self._joined_rooms: dict = {}  # room_id -> {members: set()}
         self.running = False
-        self.my_user_id: Optional[str] = None
         self._task: Optional[asyncio.Task] = None
 
     # ------------------------------------------------------------------
@@ -63,9 +59,6 @@ class MatrixListener:
 
     async def start(self):
         """Launch the listener as a background asyncio task."""
-        if not NIO_AVAILABLE:
-            logger.warning("matrix-nio not installed — Matrix listener disabled")
-            return
         if not MATRIX_BOT_PASSWORD:
             logger.warning("MATRIX_BOT_PASSWORD not set — Matrix listener disabled")
             return
@@ -82,10 +75,22 @@ class MatrixListener:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self.client:
-            await self.client.close()
-            self.client = None
+        if self._http:
+            await self._http.aclose()
+            self._http = None
+        self._access_token = None
         logger.info("Matrix listener stopped")
+
+    # ------------------------------------------------------------------
+    # REST API helpers
+    # ------------------------------------------------------------------
+
+    def _api_url(self, path: str) -> str:
+        return f"{MATRIX_HOMESERVER}{path}"
+
+    def _auth_headers(self, token: Optional[str] = None) -> dict:
+        t = token or self._access_token
+        return {"Authorization": f"Bearer {t}"} if t else {}
 
     # ------------------------------------------------------------------
     # Main loop with auto-reconnect
@@ -101,38 +106,66 @@ class MatrixListener:
                 break
             except Exception as e:
                 logger.error(f"Matrix listener error: {e}", exc_info=True)
-                if self.client:
-                    await self.client.close()
-                    self.client = None
-                # Exponential-ish backoff
+                if self._http:
+                    await self._http.aclose()
+                    self._http = None
+                self._access_token = None
                 await asyncio.sleep(10)
 
     async def _connect(self):
-        """Login to Matrix homeserver with password."""
-        self.client = AsyncClient(
-            homeserver=MATRIX_HOMESERVER,
-            user=MATRIX_BOT_USER,
+        """Login to Matrix homeserver with password via REST API."""
+        self._http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
+
+        resp = await self._http.post(
+            self._api_url("/_matrix/client/v3/login"),
+            json={
+                "type": "m.login.password",
+                "user": MATRIX_BOT_USER,
+                "password": MATRIX_BOT_PASSWORD,
+            },
         )
+        resp.raise_for_status()
+        data = resp.json()
+        self._access_token = data["access_token"]
+        self._my_user_id = data["user_id"]
+        logger.info(f"Matrix: logged in as {self._my_user_id}")
 
-        resp = await self.client.login(MATRIX_BOT_PASSWORD)
-        if isinstance(resp, LoginResponse):
-            self.my_user_id = resp.user_id
-            logger.info(f"Matrix: logged in as {resp.user_id}")
-        else:
-            raise ConnectionError(f"Matrix login failed: {resp}")
-
-        # Initial sync — skip old messages so we only process NEW ones
-        await self.client.sync(timeout=10000)
+        # Initial sync — skip old messages
+        sync_resp = await self._http.get(
+            self._api_url("/_matrix/client/v3/sync"),
+            params={"timeout": "10000"},
+            headers=self._auth_headers(),
+        )
+        sync_resp.raise_for_status()
+        sync_data = sync_resp.json()
+        self._next_batch = sync_data.get("next_batch")
+        self._update_room_members(sync_data)
         logger.info("Matrix: initial sync done, listening for new messages…")
 
     async def _sync_loop(self):
         """Continuous /sync long-polling loop."""
         while self.running:
             try:
-                resp = await self.client.sync(timeout=30000)
+                params = {"timeout": str(SYNC_TIMEOUT)}
+                if self._next_batch:
+                    params["since"] = self._next_batch
 
-                for room_id, room_data in resp.rooms.join.items():
-                    for event in room_data.timeline.events:
+                resp = await self._http.get(
+                    self._api_url("/_matrix/client/v3/sync"),
+                    params=params,
+                    headers=self._auth_headers(),
+                    timeout=httpx.Timeout(SYNC_TIMEOUT / 1000 + 30, connect=10.0),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                self._next_batch = data.get("next_batch", self._next_batch)
+                self._update_room_members(data)
+
+                # Process joined room events
+                join = data.get("rooms", {}).get("join", {})
+                for room_id, room_data in join.items():
+                    events = room_data.get("timeline", {}).get("events", [])
+                    for event in events:
                         try:
                             await self._process_event(room_id, event)
                         except Exception as e:
@@ -145,37 +178,60 @@ class MatrixListener:
                 await asyncio.sleep(5)
                 raise  # bubble up so _run() reconnects
 
+    def _update_room_members(self, sync_data: dict):
+        """Track room membership from sync responses."""
+        join = sync_data.get("rooms", {}).get("join", {})
+        for room_id, room_data in join.items():
+            if room_id not in self._joined_rooms:
+                self._joined_rooms[room_id] = {"members": set()}
+
+            # Check state events for membership
+            for event_list_key in ("state", "timeline"):
+                events_container = room_data.get(event_list_key, {})
+                events = events_container.get("events", [])
+                for ev in events:
+                    if ev.get("type") == "m.room.member":
+                        user_id = ev.get("state_key", "")
+                        membership = ev.get("content", {}).get("membership", "")
+                        if membership in ("join", "invite"):
+                            self._joined_rooms[room_id]["members"].add(user_id)
+                        elif membership in ("leave", "ban"):
+                            self._joined_rooms[room_id]["members"].discard(user_id)
+
+    def _is_whatsapp_room(self, room_id: str) -> bool:
+        """Check if room has the WhatsApp bridge bot as member."""
+        room = self._joined_rooms.get(room_id, {})
+        return WHATSAPP_BOT_USER in room.get("members", set())
+
     # ------------------------------------------------------------------
     # Event processing
     # ------------------------------------------------------------------
 
-    async def _process_event(self, room_id: str, event):
-        sender = getattr(event, "sender", "")
+    async def _process_event(self, room_id: str, event: dict):
+        sender = event.get("sender", "")
 
         # Skip own messages
-        if sender == self.my_user_id:
+        if sender == self._my_user_id:
             return
         # Skip bridge bot service messages
         if sender == WHATSAPP_BOT_USER:
             return
         # Only m.room.message events
-        if not isinstance(event, (RoomMessageText, RoomMessageMedia, RoomMessageImage)):
+        if event.get("type") != "m.room.message":
+            return
+        # Only WhatsApp rooms
+        if not self._is_whatsapp_room(room_id):
             return
 
-        # Only WhatsApp rooms (rooms where @whatsappbot is a member)
-        room = self.client.rooms.get(room_id)
-        if room and WHATSAPP_BOT_USER not in room.users:
-            return
-
-        event_id = event.event_id
-        content_dict = event.source.get("content", {}) if hasattr(event, "source") else {}
-        text_content, msg_type, attachments = self._parse_content(content_dict)
+        event_id = event.get("event_id", "")
+        content = event.get("content", {})
+        text_content, msg_type, attachments = self._parse_content(content)
 
         if not text_content and not attachments:
             return
 
         phone = self._extract_phone(sender)
-        sender_name = content_dict.get("displayname") or phone
+        sender_name = content.get("displayname") or phone
 
         # Persist to database
         from db import SessionLocal
@@ -343,41 +399,57 @@ class MatrixListener:
     async def send_login_command(self) -> dict:
         """
         Send "login" to @whatsappbot and wait for QR code response.
-        Uses a *separate* temporary Matrix client so it doesn't interfere
-        with the background sync loop.
+        Uses a *separate* temporary httpx client & access token so it
+        doesn't interfere with the background sync loop.
         """
-        if not NIO_AVAILABLE:
-            return {"status": "error", "detail": "matrix-nio not installed"}
         if not MATRIX_BOT_PASSWORD:
             return {"status": "error", "detail": "MATRIX_BOT_PASSWORD not configured"}
 
-        client = AsyncClient(homeserver=MATRIX_HOMESERVER, user=MATRIX_BOT_USER)
+        http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         try:
-            resp = await client.login(MATRIX_BOT_PASSWORD)
-            if not isinstance(resp, LoginResponse):
-                return {"status": "error", "detail": f"Login failed: {resp}"}
+            # Login
+            resp = await http.post(
+                self._api_url("/_matrix/client/v3/login"),
+                json={
+                    "type": "m.login.password",
+                    "user": MATRIX_BOT_USER,
+                    "password": MATRIX_BOT_PASSWORD,
+                },
+            )
+            if resp.status_code != 200:
+                return {"status": "error", "detail": f"Login failed: {resp.text}"}
+            token = resp.json()["access_token"]
 
-            # Sync to get room list
-            await client.sync(timeout=10000)
+            # Initial sync to get room list
+            sync_resp = await http.get(
+                self._api_url("/_matrix/client/v3/sync"),
+                params={"timeout": "10000"},
+                headers=self._auth_headers(token),
+            )
+            if sync_resp.status_code != 200:
+                return {"status": "error", "detail": "Sync failed"}
+            sync_data = sync_resp.json()
+            next_batch = sync_data.get("next_batch")
 
             # Find DM with bridge bot
-            room_id = self._find_bot_dm(client)
+            room_id = self._find_bot_dm(sync_data)
             if not room_id:
-                room_id = await self._create_bot_dm(client)
+                room_id = await self._create_bot_dm(http, token)
             if not room_id:
                 return {"status": "error", "detail": "Cannot reach WhatsApp bridge bot"}
 
             # Send "login" command
-            send_resp = await client.room_send(
-                room_id=room_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": "login"},
+            txn_id = str(uuid4())
+            send_resp = await http.put(
+                self._api_url(f"/_matrix/client/v3/rooms/{room_id}/send/m.room.message/{txn_id}"),
+                json={"msgtype": "m.text", "body": "login"},
+                headers=self._auth_headers(token),
             )
-            if not isinstance(send_resp, RoomSendResponse):
-                return {"status": "error", "detail": f"Send failed: {send_resp}"}
+            if send_resp.status_code != 200:
+                return {"status": "error", "detail": f"Send failed: {send_resp.text}"}
 
             # Wait for QR code response (up to 30s)
-            qr_b64 = await self._wait_for_qr(client, room_id, timeout=30)
+            qr_b64 = await self._wait_for_qr(http, token, room_id, next_batch, timeout=30)
             if qr_b64:
                 return {
                     "status": "qr_ready",
@@ -387,32 +459,49 @@ class MatrixListener:
 
             return {"status": "error", "detail": "Timeout waiting for QR code from bridge"}
         finally:
-            await client.close()
+            await http.aclose()
 
     async def get_bridge_status(self) -> dict:
         """Check WhatsApp bridge connection status by sending "status" to @whatsappbot."""
-        if not NIO_AVAILABLE or not MATRIX_BOT_PASSWORD:
+        if not MATRIX_BOT_PASSWORD:
             return {"connected": False, "detail": "Matrix not configured"}
 
-        client = AsyncClient(homeserver=MATRIX_HOMESERVER, user=MATRIX_BOT_USER)
+        http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         try:
-            resp = await client.login(MATRIX_BOT_PASSWORD)
-            if not isinstance(resp, LoginResponse):
+            resp = await http.post(
+                self._api_url("/_matrix/client/v3/login"),
+                json={
+                    "type": "m.login.password",
+                    "user": MATRIX_BOT_USER,
+                    "password": MATRIX_BOT_PASSWORD,
+                },
+            )
+            if resp.status_code != 200:
                 return {"connected": False, "detail": "Login failed"}
+            token = resp.json()["access_token"]
 
-            await client.sync(timeout=10000)
+            sync_resp = await http.get(
+                self._api_url("/_matrix/client/v3/sync"),
+                params={"timeout": "10000"},
+                headers=self._auth_headers(token),
+            )
+            if sync_resp.status_code != 200:
+                return {"connected": False, "detail": "Sync failed"}
+            sync_data = sync_resp.json()
+            next_batch = sync_data.get("next_batch")
 
-            room_id = self._find_bot_dm(client)
+            room_id = self._find_bot_dm(sync_data)
             if not room_id:
                 return {"connected": False, "detail": "No DM with bridge bot"}
 
-            await client.room_send(
-                room_id=room_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": "status"},
+            txn_id = str(uuid4())
+            await http.put(
+                self._api_url(f"/_matrix/client/v3/rooms/{room_id}/send/m.room.message/{txn_id}"),
+                json={"msgtype": "m.text", "body": "status"},
+                headers=self._auth_headers(token),
             )
 
-            status_text = await self._wait_for_text(client, room_id, timeout=10)
+            status_text = await self._wait_for_text(http, token, room_id, next_batch, timeout=10)
             if status_text:
                 connected = any(w in status_text.lower() for w in ("connected", "logged in"))
                 return {"connected": connected, "status_text": status_text}
@@ -421,87 +510,121 @@ class MatrixListener:
         except Exception as e:
             return {"connected": False, "detail": str(e)}
         finally:
-            await client.close()
+            await http.aclose()
 
     # ------------------------------------------------------------------
     # QR/Status helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _find_bot_dm(client) -> Optional[str]:
-        """Find existing DM room with the bridge bot."""
-        for room_id, room in client.rooms.items():
-            if WHATSAPP_BOT_USER in room.users and len(room.users) <= 3:
+    def _find_bot_dm(self, sync_data: dict) -> Optional[str]:
+        """Find existing DM room with the bridge bot from sync data."""
+        join = sync_data.get("rooms", {}).get("join", {})
+        for room_id, room_data in join.items():
+            members = set()
+            for ev in room_data.get("state", {}).get("events", []):
+                if ev.get("type") == "m.room.member":
+                    if ev.get("content", {}).get("membership") in ("join", "invite"):
+                        members.add(ev.get("state_key", ""))
+            if WHATSAPP_BOT_USER in members and len(members) <= 3:
                 return room_id
         return None
 
-    @staticmethod
-    async def _create_bot_dm(client) -> Optional[str]:
+    async def _create_bot_dm(self, http: httpx.AsyncClient, token: str) -> Optional[str]:
         try:
-            resp = await client.room_create(
-                invite=[WHATSAPP_BOT_USER],
-                is_direct=True,
+            resp = await http.post(
+                self._api_url("/_matrix/client/v3/createRoom"),
+                json={
+                    "invite": [WHATSAPP_BOT_USER],
+                    "is_direct": True,
+                    "preset": "trusted_private_chat",
+                },
+                headers=self._auth_headers(token),
             )
-            if isinstance(resp, RoomCreateResponse):
+            if resp.status_code == 200:
+                room_id = resp.json().get("room_id")
                 await asyncio.sleep(2)  # give bot time to join
-                return resp.room_id
+                return room_id
         except Exception as e:
             logger.error(f"Failed to create DM with bridge bot: {e}")
         return None
 
-    @staticmethod
-    async def _wait_for_qr(client, room_id: str, timeout: int = 30) -> Optional[str]:
+    async def _wait_for_qr(self, http: httpx.AsyncClient, token: str,
+                            room_id: str, since: str, timeout: int = 30) -> Optional[str]:
         """Poll /sync waiting for a QR image from the bridge bot."""
-        import base64
-        import httpx
-
         deadline = asyncio.get_event_loop().time() + timeout
+        batch = since
         while asyncio.get_event_loop().time() < deadline:
             try:
-                sync_resp = await client.sync(timeout=5000)
-                room_data = sync_resp.rooms.join.get(room_id)
-                if not room_data:
+                params = {"timeout": "5000"}
+                if batch:
+                    params["since"] = batch
+
+                resp = await http.get(
+                    self._api_url("/_matrix/client/v3/sync"),
+                    params=params,
+                    headers=self._auth_headers(token),
+                    timeout=httpx.Timeout(15.0, connect=10.0),
+                )
+                if resp.status_code != 200:
                     continue
+                data = resp.json()
+                batch = data.get("next_batch", batch)
 
-                for ev in room_data.timeline.events:
-                    if ev.sender != WHATSAPP_BOT_USER:
+                room_data = data.get("rooms", {}).get("join", {}).get(room_id, {})
+                events = room_data.get("timeline", {}).get("events", [])
+                for ev in events:
+                    if ev.get("sender") != WHATSAPP_BOT_USER:
                         continue
-                    c = ev.source.get("content", {}) if hasattr(ev, "source") else {}
-
+                    c = ev.get("content", {})
                     # Bridge sends QR as m.image
                     if c.get("msgtype") == "m.image":
                         mxc = c.get("url", "")
                         if mxc.startswith("mxc://"):
                             parts = mxc.replace("mxc://", "").split("/", 1)
                             if len(parts) == 2:
-                                dl_url = f"{MATRIX_HOMESERVER}/_matrix/media/v3/download/{parts[0]}/{parts[1]}"
-                                async with httpx.AsyncClient() as http:
-                                    r = await http.get(
-                                        dl_url,
-                                        headers={"Authorization": f"Bearer {client.access_token}"},
-                                        timeout=10,
-                                    )
-                                    if r.status_code == 200:
-                                        return base64.b64encode(r.content).decode()
+                                dl_url = self._api_url(
+                                    f"/_matrix/media/v3/download/{parts[0]}/{parts[1]}"
+                                )
+                                dl_resp = await http.get(
+                                    dl_url,
+                                    headers=self._auth_headers(token),
+                                    timeout=10,
+                                )
+                                if dl_resp.status_code == 200:
+                                    return base64.b64encode(dl_resp.content).decode()
             except Exception as e:
                 logger.warning(f"Error polling for QR: {e}")
                 await asyncio.sleep(1)
         return None
 
-    @staticmethod
-    async def _wait_for_text(client, room_id: str, timeout: int = 10) -> Optional[str]:
+    async def _wait_for_text(self, http: httpx.AsyncClient, token: str,
+                              room_id: str, since: str, timeout: int = 10) -> Optional[str]:
         """Poll /sync waiting for a text response from the bridge bot."""
         deadline = asyncio.get_event_loop().time() + timeout
+        batch = since
         while asyncio.get_event_loop().time() < deadline:
             try:
-                sync_resp = await client.sync(timeout=3000)
-                room_data = sync_resp.rooms.join.get(room_id)
-                if not room_data:
+                params = {"timeout": "3000"}
+                if batch:
+                    params["since"] = batch
+
+                resp = await http.get(
+                    self._api_url("/_matrix/client/v3/sync"),
+                    params=params,
+                    headers=self._auth_headers(token),
+                    timeout=httpx.Timeout(10.0, connect=10.0),
+                )
+                if resp.status_code != 200:
                     continue
-                for ev in room_data.timeline.events:
-                    if ev.sender != WHATSAPP_BOT_USER:
+                data = resp.json()
+                batch = data.get("next_batch", batch)
+
+                room_data = data.get("rooms", {}).get("join", {}).get(room_id, {})
+                events = room_data.get("timeline", {}).get("events", [])
+                for ev in events:
+                    if ev.get("sender") != WHATSAPP_BOT_USER:
                         continue
-                    c = ev.source.get("content", {}) if hasattr(ev, "source") else {}
+                    c = ev.get("content", {})
                     if c.get("msgtype") == "m.text":
                         return c.get("body", "")
             except Exception as e:

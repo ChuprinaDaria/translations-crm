@@ -73,4 +73,3 @@ stripe==10.8.0
 bleach==6.1.0
 alembic==1.13.1
 aiosmtplib==3.0.1
-matrix-nio==0.24.0
