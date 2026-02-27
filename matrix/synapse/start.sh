@@ -47,6 +47,30 @@ with open('/data/homeserver.yaml', 'w') as f:
 print('homeserver.yaml generated from template')
 PYEOF
 
+# Ensure synapse databases exist (init-databases.sh only runs on first PG init)
+python3 << 'DBEOF'
+import os
+try:
+    import psycopg2
+    from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+    pg_user = os.environ.get('POSTGRES_USER', 'postgres')
+    pg_pass = os.environ.get('POSTGRES_PASSWORD', 'postgres')
+    conn = psycopg2.connect(host='postgres', port=5432, user=pg_user, password=pg_pass, dbname='postgres')
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = conn.cursor()
+    for db_name in ('synapse', 'mautrix_whatsapp'):
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+        if not cur.fetchone():
+            cur.execute("CREATE DATABASE %s OWNER %s" % (db_name, pg_user))
+            print('Created database: %s' % db_name)
+        else:
+            print('Database exists: %s' % db_name)
+    cur.close()
+    conn.close()
+except Exception as e:
+    print('WARNING: Could not ensure databases: %s' % e)
+DBEOF
+
 # Copy log config if not in /data
 if [ ! -f /data/crm.local.log.config ]; then
     cp /config/crm.local.log.config /data/crm.local.log.config
@@ -58,6 +82,9 @@ if [ ! -f /data/crm.local.signing.key ]; then
     python3 -m synapse.app.homeserver --generate-keys -c /data/homeserver.yaml
     echo "Signing key generated"
 fi
+
+# Fix permissions — Synapse runs as UID 991
+chown -R 991:991 /data
 
 # Start via original entrypoint
 exec /start.py
