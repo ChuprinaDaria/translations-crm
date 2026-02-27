@@ -7,6 +7,7 @@ listens via /sync long-polling, saves incoming WhatsApp messages
 to CRM Conversation/Message models.
 
 No matrix-nio dependency — uses Matrix Client-Server REST API directly.
+Persists access_token to avoid rate-limited login on every reconnect.
 """
 import asyncio
 import base64
@@ -14,6 +15,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
@@ -31,13 +33,17 @@ WHATSAPP_BOT_USER = os.getenv("MATRIX_WHATSAPP_BOT", "@whatsappbot:matrix.adme-a
 
 # Sync timeout for long-polling (ms)
 SYNC_TIMEOUT = 30000
+# Minimum delay between reconnect attempts (seconds)
+RECONNECT_DELAY = 30
+# Token file — persisted via Docker volume (./backend/uploads:/app/uploads)
+TOKEN_FILE = Path(os.getenv("MEDIA_ROOT", "/app/media")) / ".matrix_token.json"
 
 
 class MatrixListener:
     """
     Async background listener for Matrix/WhatsApp bridge messages.
 
-    - Logs in with password via REST API
+    - Persists access_token to file to avoid login on every reconnect
     - Polls /sync for new events in rooms where @whatsappbot is present
     - Extracts phone number from sender (@whatsapp_PHONE:server)
     - Saves to communications_conversations / communications_messages
@@ -52,6 +58,51 @@ class MatrixListener:
         self._joined_rooms: dict = {}  # room_id -> {members: set()}
         self.running = False
         self._task: Optional[asyncio.Task] = None
+
+    # ------------------------------------------------------------------
+    # Token persistence
+    # ------------------------------------------------------------------
+
+    def _save_token(self):
+        """Save access_token + user_id + next_batch to file."""
+        if not self._access_token:
+            return
+        try:
+            TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            TOKEN_FILE.write_text(json.dumps({
+                "access_token": self._access_token,
+                "user_id": self._my_user_id,
+                "next_batch": self._next_batch,
+                "homeserver": MATRIX_HOMESERVER,
+            }))
+        except Exception as e:
+            logger.warning(f"Failed to save Matrix token: {e}")
+
+    def _load_token(self) -> bool:
+        """Load saved token. Returns True if token was loaded."""
+        try:
+            if not TOKEN_FILE.exists():
+                return False
+            data = json.loads(TOKEN_FILE.read_text())
+            # Only use token if homeserver matches
+            if data.get("homeserver") != MATRIX_HOMESERVER:
+                self._delete_token()
+                return False
+            self._access_token = data["access_token"]
+            self._my_user_id = data.get("user_id")
+            self._next_batch = data.get("next_batch")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to load Matrix token: {e}")
+            return False
+
+    def _delete_token(self):
+        """Delete saved token file."""
+        try:
+            TOKEN_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+        self._access_token = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -75,10 +126,11 @@ class MatrixListener:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        # Save state before shutdown
+        self._save_token()
         if self._http:
             await self._http.aclose()
             self._http = None
-        self._access_token = None
         logger.info("Matrix listener stopped")
 
     # ------------------------------------------------------------------
@@ -109,13 +161,34 @@ class MatrixListener:
                 if self._http:
                     await self._http.aclose()
                     self._http = None
-                self._access_token = None
-                await asyncio.sleep(10)
+                # Don't clear token on network errors — only on 401
+                logger.info(f"Reconnecting in {RECONNECT_DELAY}s…")
+                await asyncio.sleep(RECONNECT_DELAY)
 
     async def _connect(self):
-        """Login to Matrix homeserver with password via REST API."""
+        """Connect to Matrix homeserver — reuse saved token or login with password."""
         self._http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
 
+        # Try saved token first
+        if self._load_token():
+            logger.info(f"Matrix: trying saved token for {self._my_user_id}")
+            # Verify token with a lightweight whoami call
+            resp = await self._http.get(
+                self._api_url("/_matrix/client/v3/account/whoami"),
+                headers=self._auth_headers(),
+            )
+            if resp.status_code == 200:
+                self._my_user_id = resp.json().get("user_id", self._my_user_id)
+                logger.info(f"Matrix: reusing saved token for {self._my_user_id}")
+                # Do initial sync only if we don't have a next_batch
+                if not self._next_batch:
+                    await self._initial_sync()
+                return
+            # Token invalid (401) or other error — fall through to login
+            logger.info(f"Matrix: saved token invalid ({resp.status_code}), doing fresh login")
+            self._delete_token()
+
+        # Fresh login with password
         resp = await self._http.post(
             self._api_url("/_matrix/client/v3/login"),
             json={
@@ -130,7 +203,11 @@ class MatrixListener:
         self._my_user_id = data["user_id"]
         logger.info(f"Matrix: logged in as {self._my_user_id}")
 
-        # Initial sync — skip old messages
+        await self._initial_sync()
+        self._save_token()
+
+    async def _initial_sync(self):
+        """Initial sync — skip old messages so we only process new ones."""
         sync_resp = await self._http.get(
             self._api_url("/_matrix/client/v3/sync"),
             params={"timeout": "10000"},
@@ -140,6 +217,7 @@ class MatrixListener:
         sync_data = sync_resp.json()
         self._next_batch = sync_data.get("next_batch")
         self._update_room_members(sync_data)
+        self._save_token()
         logger.info("Matrix: initial sync done, listening for new messages…")
 
     async def _sync_loop(self):
@@ -156,10 +234,20 @@ class MatrixListener:
                     headers=self._auth_headers(),
                     timeout=httpx.Timeout(SYNC_TIMEOUT / 1000 + 30, connect=10.0),
                 )
+
+                # Token expired mid-session
+                if resp.status_code == 401:
+                    logger.warning("Matrix: token expired during sync, will re-login")
+                    self._delete_token()
+                    raise ConnectionError("Token expired")
+
                 resp.raise_for_status()
                 data = resp.json()
                 self._next_batch = data.get("next_batch", self._next_batch)
                 self._update_room_members(data)
+
+                # Save next_batch periodically so we don't reprocess on restart
+                self._save_token()
 
                 # Process joined room events
                 join = data.get("rooms", {}).get("join", {})
@@ -396,29 +484,48 @@ class MatrixListener:
     # QR Login / Status  (used by router endpoints)
     # ------------------------------------------------------------------
 
+    async def _get_or_login_token(self, http: httpx.AsyncClient) -> Optional[str]:
+        """Get a valid token for endpoint calls — reuse listener's token or login fresh."""
+        # Try the listener's active token
+        if self._access_token:
+            resp = await http.get(
+                self._api_url("/_matrix/client/v3/account/whoami"),
+                headers=self._auth_headers(),
+            )
+            if resp.status_code == 200:
+                return self._access_token
+
+        # Fresh login
+        resp = await http.post(
+            self._api_url("/_matrix/client/v3/login"),
+            json={
+                "type": "m.login.password",
+                "user": MATRIX_BOT_USER,
+                "password": MATRIX_BOT_PASSWORD,
+            },
+        )
+        if resp.status_code != 200:
+            return None
+        token = resp.json()["access_token"]
+        # Update listener's token too
+        self._access_token = token
+        self._my_user_id = resp.json().get("user_id")
+        self._save_token()
+        return token
+
     async def send_login_command(self) -> dict:
         """
         Send "login" to @whatsappbot and wait for QR code response.
-        Uses a *separate* temporary httpx client & access token so it
-        doesn't interfere with the background sync loop.
+        Reuses saved token when possible to avoid rate limits.
         """
         if not MATRIX_BOT_PASSWORD:
             return {"status": "error", "detail": "MATRIX_BOT_PASSWORD not configured"}
 
         http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         try:
-            # Login
-            resp = await http.post(
-                self._api_url("/_matrix/client/v3/login"),
-                json={
-                    "type": "m.login.password",
-                    "user": MATRIX_BOT_USER,
-                    "password": MATRIX_BOT_PASSWORD,
-                },
-            )
-            if resp.status_code != 200:
-                return {"status": "error", "detail": f"Login failed: {resp.text}"}
-            token = resp.json()["access_token"]
+            token = await self._get_or_login_token(http)
+            if not token:
+                return {"status": "error", "detail": "Login failed"}
 
             # Initial sync to get room list
             sync_resp = await http.get(
@@ -468,17 +575,9 @@ class MatrixListener:
 
         http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         try:
-            resp = await http.post(
-                self._api_url("/_matrix/client/v3/login"),
-                json={
-                    "type": "m.login.password",
-                    "user": MATRIX_BOT_USER,
-                    "password": MATRIX_BOT_PASSWORD,
-                },
-            )
-            if resp.status_code != 200:
+            token = await self._get_or_login_token(http)
+            if not token:
                 return {"connected": False, "detail": "Login failed"}
-            token = resp.json()["access_token"]
 
             sync_resp = await http.get(
                 self._api_url("/_matrix/client/v3/sync"),
