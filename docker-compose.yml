@@ -10,7 +10,6 @@ services:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./matrix/init-databases.sh:/docker-entrypoint-initdb.d/10-create-matrix-dbs.sh:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -215,79 +214,12 @@ services:
     networks:
       - default
 
-  synapse:
-    image: matrixdotorg/synapse:latest
-    container_name: crm_synapse
-    entrypoint: ["/bin/sh", "/config/start.sh"]
-    volumes:
-      - synapse_data:/data
-      - ./matrix/synapse/homeserver.yaml:/config/homeserver.yaml:ro
-      - ./matrix/synapse/crm.local.log.config:/config/crm.local.log.config:ro
-      - ./matrix/synapse/start.sh:/config/start.sh:ro
-      - ./matrix/mautrix-whatsapp:/mautrix-data:ro
-    environment:
-      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - MATRIX_REGISTRATION_SECRET=${MATRIX_REGISTRATION_SECRET:-changeme}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - default
-
-  mautrix-whatsapp:
-    image: dock.mau.dev/mautrix/whatsapp:latest
-    container_name: crm_mautrix_whatsapp
-    volumes:
-      - ./matrix/mautrix-whatsapp:/data
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    depends_on:
-      synapse:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - default
-
-  matrix_listener:
-    build: ./backend
-    container_name: crm_matrix_listener
-    command: python modules/integrations/matrix/matrix_listener.py
-    working_dir: /app
-    depends_on:
-      synapse:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - WHATSAPP_MODE=matrix
-      - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
-      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
-      - MEDIA_URL=${MEDIA_URL:-/media/}
-    volumes:
-      - ./media:/app/media
-    restart: unless-stopped
-    networks:
-      - default
+  # Synapse + mautrix-whatsapp працюють як systemd на окремому сервері (matrix.adme-ai.com)
+  # Backend підключається до зовнішнього Synapse через MATRIX_HOMESERVER env var
 
 volumes:
   postgres_data:
   redis_data:
-  synapse_data:
 
 networks:
   default:
