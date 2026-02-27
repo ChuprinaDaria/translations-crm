@@ -599,7 +599,7 @@ class MatrixListener:
             txn_id = str(uuid4())
             send_resp = await http.put(
                 self._api_url(f"/_matrix/client/v3/rooms/{room_id}/send/m.room.message/{txn_id}"),
-                json={"msgtype": "m.text", "body": "login"},
+                json={"msgtype": "m.text", "body": "!wa login qr"},
                 headers=self._auth_headers(token),
             )
             if send_resp.status_code != 200:
@@ -652,7 +652,7 @@ class MatrixListener:
             txn_id = str(uuid4())
             await http.put(
                 self._api_url(f"/_matrix/client/v3/rooms/{room_id}/send/m.room.message/{txn_id}"),
-                json={"msgtype": "m.text", "body": "status"},
+                json={"msgtype": "m.text", "body": "!wa status"},
                 headers=self._auth_headers(token),
             )
 
