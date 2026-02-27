@@ -3187,17 +3187,30 @@ async def whatsapp_matrix_login(
     user: models.User = Depends(get_current_user_db),
 ):
     """
-    Send 'login' command to @whatsappbot via Matrix Bridge.
-    Returns a QR code (base64 image) that the user scans in WhatsApp.
+    Start WhatsApp login via Matrix Bridge.
+    Returns immediately, frontend polls GET /matrix-login/qr for the QR code.
     """
     from modules.communications.services.matrix_listener import matrix_listener
 
-    result = await matrix_listener.send_login_command()
+    result = matrix_listener.start_login()
 
     if result.get("status") == "error":
         raise HTTPException(status_code=502, detail=result.get("detail", "Bridge error"))
 
     return result
+
+
+@router.get("/whatsapp/matrix-login/qr")
+async def whatsapp_matrix_login_qr(
+    user: models.User = Depends(get_current_user_db),
+):
+    """
+    Poll for QR code after POST /matrix-login started the process.
+    Returns {status: "pending"} while waiting, {status: "qr_ready", qr_code_data, qr_code_type} when ready.
+    """
+    from modules.communications.services.matrix_listener import matrix_listener
+
+    return matrix_listener.get_login_qr()
 
 
 @router.get("/whatsapp/matrix-status")

@@ -484,9 +484,11 @@ class MatrixListener:
     # QR Login / Status  (used by router endpoints)
     # ------------------------------------------------------------------
 
+    # Shared state for async QR login polling
+    _login_state: dict = {}  # {status, qr_code_data, detail, started_at}
+
     async def _get_or_login_token(self, http: httpx.AsyncClient) -> Optional[str]:
         """Get a valid token for endpoint calls — reuse listener's token or login fresh."""
-        # Try the listener's active token
         if self._access_token:
             resp = await http.get(
                 self._api_url("/_matrix/client/v3/account/whoami"),
@@ -495,7 +497,6 @@ class MatrixListener:
             if resp.status_code == 200:
                 return self._access_token
 
-        # Fresh login
         resp = await http.post(
             self._api_url("/_matrix/client/v3/login"),
             json={
@@ -507,25 +508,49 @@ class MatrixListener:
         if resp.status_code != 200:
             return None
         token = resp.json()["access_token"]
-        # Update listener's token too
         self._access_token = token
         self._my_user_id = resp.json().get("user_id")
         self._save_token()
         return token
 
-    async def send_login_command(self) -> dict:
-        """
-        Send "login" to @whatsappbot and wait for QR code response.
-        Reuses saved token when possible to avoid rate limits.
-        """
+    def start_login(self) -> dict:
+        """Start login process in background, return immediately."""
         if not MATRIX_BOT_PASSWORD:
             return {"status": "error", "detail": "MATRIX_BOT_PASSWORD not configured"}
 
+        # Already running?
+        if self._login_state.get("status") == "pending":
+            return {"status": "started"}
+
+        self._login_state = {"status": "pending", "qr_code_data": None, "detail": None}
+        asyncio.ensure_future(self._login_background())
+        return {"status": "started"}
+
+    def get_login_qr(self) -> dict:
+        """Return current login state (polled by frontend)."""
+        state = self._login_state
+        if not state:
+            return {"status": "idle"}
+        if state.get("status") == "pending":
+            return {"status": "pending"}
+        if state.get("status") == "qr_ready":
+            return {
+                "status": "qr_ready",
+                "qr_code_data": state["qr_code_data"],
+                "qr_code_type": "base64",
+            }
+        if state.get("status") == "error":
+            return {"status": "error", "detail": state.get("detail", "Unknown error")}
+        return {"status": "idle"}
+
+    async def _login_background(self):
+        """Background task: create DM if needed, send 'login', wait for QR."""
         http = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         try:
             token = await self._get_or_login_token(http)
             if not token:
-                return {"status": "error", "detail": "Login failed"}
+                self._login_state = {"status": "error", "detail": "Login to Matrix failed"}
+                return
 
             # Initial sync to get room list
             sync_resp = await http.get(
@@ -534,16 +559,19 @@ class MatrixListener:
                 headers=self._auth_headers(token),
             )
             if sync_resp.status_code != 200:
-                return {"status": "error", "detail": "Sync failed"}
+                self._login_state = {"status": "error", "detail": "Sync failed"}
+                return
             sync_data = sync_resp.json()
             next_batch = sync_data.get("next_batch")
 
-            # Find DM with bridge bot
+            # Find or create DM with bridge bot
             room_id = self._find_bot_dm(sync_data)
             if not room_id:
+                logger.info("No DM with bridge bot found, creating...")
                 room_id = await self._create_bot_dm(http, token)
             if not room_id:
-                return {"status": "error", "detail": "Cannot reach WhatsApp bridge bot"}
+                self._login_state = {"status": "error", "detail": "Cannot reach WhatsApp bridge bot"}
+                return
 
             # Send "login" command
             txn_id = str(uuid4())
@@ -553,18 +581,18 @@ class MatrixListener:
                 headers=self._auth_headers(token),
             )
             if send_resp.status_code != 200:
-                return {"status": "error", "detail": f"Send failed: {send_resp.text}"}
+                self._login_state = {"status": "error", "detail": f"Send failed: {send_resp.text}"}
+                return
 
             # Wait for QR code response (up to 30s)
             qr_b64 = await self._wait_for_qr(http, token, room_id, next_batch, timeout=30)
             if qr_b64:
-                return {
-                    "status": "qr_ready",
-                    "qr_code_data": qr_b64,
-                    "qr_code_type": "base64",
-                }
-
-            return {"status": "error", "detail": "Timeout waiting for QR code from bridge"}
+                self._login_state = {"status": "qr_ready", "qr_code_data": qr_b64}
+            else:
+                self._login_state = {"status": "error", "detail": "Timeout waiting for QR code from bridge"}
+        except Exception as e:
+            logger.error(f"Login background error: {e}", exc_info=True)
+            self._login_state = {"status": "error", "detail": str(e)}
         finally:
             await http.aclose()
 
@@ -641,7 +669,8 @@ class MatrixListener:
             )
             if resp.status_code == 200:
                 room_id = resp.json().get("room_id")
-                await asyncio.sleep(2)  # give bot time to join
+                logger.info(f"Created DM room {room_id}, waiting for bot to join...")
+                await asyncio.sleep(3)  # give bot time to join
                 return room_id
         except Exception as e:
             logger.error(f"Failed to create DM with bridge bot: {e}")

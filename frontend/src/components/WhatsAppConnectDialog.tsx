@@ -1,10 +1,11 @@
 /**
- * WhatsApp Connect Dialog - діалог для підключення WhatsApp через Matrix Bridge
+ * WhatsApp Connect Dialog - діалог для підключення WhatsApp через Matrix Bridge.
+ * POST /matrix-login starts the process, then polls GET /matrix-login/qr every 2s.
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Loader2, QrCode, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { settingsApi } from "../lib/api";
 
@@ -14,18 +15,25 @@ interface WhatsAppConnectDialogProps {
   userId: string;
 }
 
-export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppConnectDialogProps) {
+export function WhatsAppConnectDialog({ open, onOpenChange }: WhatsAppConnectDialogProps) {
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (open && !isConnected && !qrCode) {
-      // Автоматично генеруємо QR-код при відкритті діалогу
       handleConnect();
     }
+    return () => stopPolling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -33,45 +41,60 @@ export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppCo
     setIsLoading(true);
     setError(null);
     setQrCode(null);
-    setQrUrl(null);
+    stopPolling();
 
     try {
-      const response = await settingsApi.connectUserWhatsApp(userId);
-      
-      if (response.qr_code_data) {
-        // Якщо це base64, додаємо префікс data:image
-        if (response.qr_code_type === "base64") {
-          setQrCode(`data:image/png;base64,${response.qr_code_data}`);
-        } else {
-          setQrCode(response.qr_code_data);
-        }
-        setQrUrl(null);
-      } else if (response.qr_code) {
-        // Fallback для старого формату
-        setQrCode(response.qr_code);
-        setQrUrl(response.qr_url || null);
-      } else {
-        setError("QR-код не отримано від сервера");
+      // Start login process (returns immediately)
+      const response = await settingsApi.startWhatsAppLogin();
+
+      if (response.status === "error") {
+        setError(response.detail || "Не вдалося запустити процес підключення");
+        setIsLoading(false);
+        return;
       }
-    } catch (error: any) {
-      console.error("Failed to connect WhatsApp:", error);
-      const errorMessage = error.response?.data?.detail || error.message || "Не вдалося підключити WhatsApp";
+
+      // Poll for QR code every 2s, up to 30s
+      let attempts = 0;
+      const maxAttempts = 15; // 15 * 2s = 30s
+
+      pollingRef.current = setInterval(async () => {
+        attempts++;
+        try {
+          const qr = await settingsApi.pollWhatsAppLoginQr();
+
+          if (qr.status === "qr_ready" && qr.qr_code_data) {
+            stopPolling();
+            setQrCode(`data:image/png;base64,${qr.qr_code_data}`);
+            setIsLoading(false);
+          } else if (qr.status === "error") {
+            stopPolling();
+            setError(qr.detail || "Помилка отримання QR-коду");
+            setIsLoading(false);
+          } else if (attempts >= maxAttempts) {
+            stopPolling();
+            setError("Таймаут очікування QR-коду від bridge");
+            setIsLoading(false);
+          }
+        } catch {
+          stopPolling();
+          setError("Помилка зв'язку з сервером");
+          setIsLoading(false);
+        }
+      }, 2000);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || err.message || "Не вдалося підключити WhatsApp";
       setError(errorMessage);
       toast.error(errorMessage);
-    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRefresh = () => {
-    handleConnect();
-  };
-
   const handleClose = () => {
+    stopPolling();
     setQrCode(null);
-    setQrUrl(null);
     setError(null);
     setIsConnected(false);
+    setIsLoading(false);
     onOpenChange(false);
   };
 
@@ -90,14 +113,15 @@ export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppCo
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-[#FF5A00] mb-4" />
               <p className="text-sm text-gray-500">Генерація QR-коду...</p>
+              <p className="text-xs text-gray-400 mt-1">Це може зайняти до 30 секунд</p>
             </div>
           )}
 
-          {error && (
+          {error && !isLoading && (
             <div className="flex flex-col items-center justify-center py-8">
               <XCircle className="w-12 h-12 text-red-500 mb-4" />
               <p className="text-sm text-red-600 mb-4">{error}</p>
-              <Button onClick={handleRefresh} variant="outline" size="sm">
+              <Button onClick={handleConnect} variant="outline" size="sm">
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Спробувати ще раз
               </Button>
@@ -107,38 +131,25 @@ export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppCo
           {qrCode && !isLoading && !error && (
             <div className="flex flex-col items-center justify-center py-4">
               <div className="bg-white p-4 rounded-lg border-2 border-gray-200 mb-4">
-                {qrUrl ? (
-                  <img 
-                    src={qrUrl} 
-                    alt="WhatsApp QR Code" 
-                    className="w-64 h-64"
-                  />
-                ) : qrCode.startsWith("data:image") ? (
-                  <img 
-                    src={qrCode} 
-                    alt="WhatsApp QR Code" 
-                    className="w-64 h-64"
-                  />
-                ) : (
-                  <div className="w-64 h-64 flex items-center justify-center bg-gray-100 rounded">
-                    <QrCode className="w-32 h-32 text-gray-400" />
-                    <p className="text-xs text-gray-500 mt-2">QR-код: {qrCode.substring(0, 50)}...</p>
-                  </div>
-                )}
+                <img
+                  src={qrCode}
+                  alt="WhatsApp QR Code"
+                  className="w-64 h-64"
+                />
               </div>
-              
+
               <div className="text-center space-y-2">
                 <p className="text-sm font-medium">Інструкції:</p>
                 <ol className="text-xs text-gray-600 space-y-1 text-left list-decimal list-inside">
                   <li>Відкрийте WhatsApp на телефоні</li>
-                  <li>Перейдіть в Menu → Settings → Linked devices</li>
-                  <li>Натисніть "Link a device"</li>
+                  <li>Перейдіть в Settings → Linked Devices</li>
+                  <li>Натисніть "Link a Device"</li>
                   <li>Відскануйте QR-код на екрані</li>
                 </ol>
               </div>
 
               <div className="flex gap-2 mt-4">
-                <Button onClick={handleRefresh} variant="outline" size="sm">
+                <Button onClick={handleConnect} variant="outline" size="sm">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Оновити QR-код
                 </Button>
@@ -154,7 +165,7 @@ export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppCo
               <CheckCircle2 className="w-12 h-12 text-green-500 mb-4" />
               <p className="text-sm font-medium text-green-600 mb-2">WhatsApp успішно підключено!</p>
               <p className="text-xs text-gray-500 text-center">
-                Bridge автоматично створить portal rooms для всіх ваших WhatsApp чатів
+                Повідомлення з WhatsApp автоматично з'являться в Inbox
               </p>
               <Button onClick={handleClose} className="mt-4" size="sm">
                 Готово
@@ -166,4 +177,3 @@ export function WhatsAppConnectDialog({ open, onOpenChange, userId }: WhatsAppCo
     </Dialog>
   );
 }
-

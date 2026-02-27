@@ -1665,11 +1665,16 @@ export const settingsApi = {
     return apiFetchMultipart<{ status: string }>("/settings/matrix-system-config", formData, "POST");
   },
   
-  // Connect user WhatsApp via Matrix Bridge (sends "login" to @whatsappbot, returns QR)
-  async connectUserWhatsApp(_userId: string): Promise<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }> {
-    return apiFetch<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }>("/communications/whatsapp/matrix-login", {
+  // Start WhatsApp login via Matrix Bridge (returns immediately, then poll for QR)
+  async startWhatsAppLogin(): Promise<{ status: string; detail?: string }> {
+    return apiFetch<{ status: string; detail?: string }>("/communications/whatsapp/matrix-login", {
       method: "POST",
     });
+  },
+
+  // Poll for QR code after starting login
+  async pollWhatsAppLoginQr(): Promise<{ status: string; qr_code_data?: string; qr_code_type?: string; detail?: string }> {
+    return apiFetch<{ status: string; qr_code_data?: string; qr_code_type?: string; detail?: string }>("/communications/whatsapp/matrix-login/qr");
   },
 
   // WhatsApp Matrix Bridge connection status
