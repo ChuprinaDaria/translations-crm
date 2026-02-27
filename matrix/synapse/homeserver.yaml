@@ -1,0 +1,33 @@
+server_name: "crm.local"
+pid_file: /data/homeserver.pid
+public_baseurl: "http://synapse:8008"
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: ${POSTGRES_USER:-postgres}
+    password: ${POSTGRES_PASSWORD:-postgres}
+    database: synapse
+    host: postgres
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+
+log_config: "/data/crm.local.log.config"
+media_store_path: /data/media_store
+signing_key_path: "/data/crm.local.signing.key"
+registration_shared_secret: "${MATRIX_REGISTRATION_SECRET:-changeme}"
+enable_registration: false
+report_stats: false
+
+app_service_config_files:
+  - /data/whatsapp-registration.yaml

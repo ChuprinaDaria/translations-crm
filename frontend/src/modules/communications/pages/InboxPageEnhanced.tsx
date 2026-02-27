@@ -70,7 +70,14 @@ export function InboxPageEnhanced() {
   const [loadingConversationIds, setLoadingConversationIds] = useState<Set<string>>(new Set());
   const paymentLoadingRef = useRef(false);
   const trackingLoadingRef = useRef(false);
-  
+
+  // Stable refs for values used inside useCallback without triggering re-creation
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
   // State for pagination
   const [offset, setOffset] = useState(0);
 
@@ -102,6 +109,10 @@ export function InboxPageEnhanced() {
   const hasMore = conversationsData?.has_more || false;
   const total = conversationsData?.total || 0;
 
+  // Stable ref for conversations (used inside useCallback without triggering re-creation)
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+
   // Reset offset when filters change
   useEffect(() => {
     setOffset(0);
@@ -132,16 +143,22 @@ export function InboxPageEnhanced() {
   const loadConversationData = async (conversationId: string): Promise<{ conversation: ConversationWithMessages, client?: Client, orders: any[] }> => {
     try {
       const conversation = await inboxApi.getConversation(conversationId);
-      
-      // Load client data if client_id exists
+
+      // Load client data and orders in parallel if client_id exists
       let client: Client | undefined;
       let orders: any[] = [];
-      
+
       if (conversation.client_id) {
         try {
-          // Завантажуємо реальні дані клієнта через API
           const { clientsApi } = await import('../../crm/api/clients');
-          const clientData = await clientsApi.getClient(conversation.client_id);
+          const [clientData, clientOrders] = await Promise.all([
+            clientsApi.getClient(conversation.client_id),
+            ordersApi.getOrders({ client_id: conversation.client_id }).catch((orderError) => {
+              console.error('Error loading client orders:', orderError);
+              return [];
+            }),
+          ]);
+
           client = {
             id: clientData.id,
             full_name: clientData.full_name,
@@ -149,29 +166,23 @@ export function InboxPageEnhanced() {
             phone: clientData.phone,
             company_name: clientData.company_name,
           };
-          
-          // Завантажуємо замовлення клієнта
-          try {
-            const clientOrders = await ordersApi.getOrders({ client_id: conversation.client_id });
-            orders = clientOrders.map((order: any) => ({
-              id: order.id,
-              title: order.order_number,
-              status: order.status,
-              created_at: order.created_at,
-              total_amount: order.transactions?.reduce((sum: number, t: any) => 
-                t.type === 'income' ? sum + t.amount : sum, 0) || 0,
-              file_url: order.file_url,
-              description: order.description,
-            }));
-          } catch (orderError) {
-            console.error('Error loading client orders:', orderError);
-          }
+
+          orders = (clientOrders as any[]).map((order: any) => ({
+            id: order.id,
+            title: order.order_number,
+            status: order.status,
+            created_at: order.created_at,
+            total_amount: order.transactions?.reduce((sum: number, t: any) =>
+              t.type === 'income' ? sum + t.amount : sum, 0) || 0,
+            file_url: order.file_url,
+            description: order.description,
+          }));
         } catch (error) {
           console.error('Error loading client data:', error);
           // Якщо не вдалося завантажити, залишаємо client undefined
         }
       }
-      
+
       return { conversation, client, orders };
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -214,7 +225,7 @@ export function InboxPageEnhanced() {
       if (cachedData?.client && cachedData?.orders) {
         setClient(cachedData.client);
         setOrders(cachedData.orders);
-      } else if (existingChat.conversation.client_id && (!client || client.id !== existingChat.conversation.client_id)) {
+      } else if (existingChat.conversation.client_id && (!clientRef.current || clientRef.current.id !== existingChat.conversation.client_id)) {
         const { client: clientData, orders: ordersData } = await loadConversationData(conversationId);
         setClient(clientData);
         setOrders(ordersData);
@@ -273,7 +284,7 @@ export function InboxPageEnhanced() {
       // Завантажити розмову та додати новий таб
       try {
         // 1) Open tab immediately with skeleton (no waiting for network)
-        const convListItem = conversations.find(c => c.id === conversationId);
+        const convListItem = conversationsRef.current.find(c => c.id === conversationId);
         const quickConversation: Conversation = {
           id: conversationId,
           platform: (convListItem?.platform || 'telegram') as any,
@@ -398,33 +409,42 @@ export function InboxPageEnhanced() {
     addTab,
     updateChatMessages,
     markChatAsRead,
-    conversations,
-    client,
-    setClient,
-    setOrders,
     queryClient,
-    filters,
     getConversationQueryKey,
   ]);
 
   // Handle new message from WebSocket
   const handleWebSocketNewMessage = useCallback((message: InboxMessage, conversationId: string) => {
     console.log('[WebSocket] New message received:', message, 'for conversation:', conversationId);
-    
-    // Add message to open chat if it's open
+
+    // Helper: check if message is duplicate (by ID or by content+direction+time proximity)
+    const isDuplicateIn = (messages: InboxMessage[]) =>
+      messages.some(
+        (m: InboxMessage) =>
+          m.id === message.id ||
+          (m.content === message.content &&
+           m.direction === message.direction &&
+           Math.abs(new Date(m.created_at).getTime() - new Date(message.created_at).getTime()) < 3000)
+      );
+
+    // Add message to open chat if it's open (with dedup)
     const chat = openChats.find(c => c.conversationId === conversationId);
-    if (chat) {
+    if (chat && !isDuplicateIn(chat.messages as InboxMessage[])) {
       updateChatMessages(conversationId, [...chat.messages, message]);
     }
-    
+
     // Оновлюємо кеш повідомлень для цього діалогу (real-time оновлення через WebSocket)
     queryClient.setQueryData(getConversationQueryKey(conversationId), (old: any) => {
       if (!old?.conversation) return old;
       // Перевіряємо чи повідомлення вже є (щоб уникнути дублікатів)
-      const existingMessage = old.conversation.messages?.find((m: InboxMessage) => m.id === message.id);
-      if (existingMessage) {
-        return old; // Повідомлення вже є, не додаємо дублікат
-      }
+      const isDuplicate = old.conversation.messages?.some(
+        (m: InboxMessage) =>
+          m.id === message.id ||
+          (m.content === message.content &&
+           m.direction === message.direction &&
+           Math.abs(new Date(m.created_at).getTime() - new Date(message.created_at).getTime()) < 3000)
+      );
+      if (isDuplicate) return old;
       return {
         ...old,
         conversation: {
@@ -458,7 +478,7 @@ export function InboxPageEnhanced() {
 
     // Show notification for inbound messages
     if (message.direction === 'inbound') {
-      const conv = conversations.find(c => c.id === conversationId);
+      const conv = conversationsRef.current.find(c => c.id === conversationId);
       // Визначити platform з WebSocket даних (якщо є) або з conversation
       const wsData = (message as any).wsData || {};
       const platform = wsData.platform || conv?.platform || (message as any).conversation?.platform || 'telegram';
@@ -489,11 +509,9 @@ export function InboxPageEnhanced() {
   }, [
     openChats,
     updateChatMessages,
-    conversations,
     addNotification,
     handleOpenChat,
     queryClient,
-    filters,
     getConversationQueryKey,
   ]);
 
@@ -524,7 +542,7 @@ export function InboxPageEnhanced() {
         });
       }
     }
-  }, [openChats, updateChatMessages, queryClient, filters]);
+  }, [openChats, updateChatMessages, queryClient]);
 
   // WebSocket for real-time updates
   const userId = getUserIdFromToken();
@@ -724,10 +742,23 @@ export function InboxPageEnhanced() {
           },
         };
       });
-      
-      // Refresh conversations list to update last message
-      refreshConversations();
-      
+
+      // Оновлюємо last_message в conversations list optimistically (без повного invalidate)
+      queryClient.setQueriesData({ queryKey: ['conversations'] }, (old: any) => {
+        if (!old?.conversations) return old;
+        const updated = [...old.conversations];
+        const convIndex = updated.findIndex((c: any) => c.id === conversationId);
+        if (convIndex >= 0) {
+          updated[convIndex] = {
+            ...updated[convIndex],
+            last_message: content,
+            last_message_at: newMessage.created_at,
+            updated_at: newMessage.created_at,
+          };
+        }
+        return { ...old, conversations: updated };
+      });
+
       toast.success('Повідомлення відправлено');
     } catch (error) {
       console.error('Error sending message:', error);

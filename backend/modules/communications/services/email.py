@@ -2,7 +2,7 @@
 EmailService - обробка Email повідомлень через IMAP/SMTP.
 """
 import imaplib
-import smtplib
+import aiosmtplib
 import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -310,16 +310,17 @@ class EmailService(MessengerService):
                     else:
                         logger.error(f"❌ Could not load attachment data. att={att}, file_path={file_path}, exists={file_path.exists() if file_path else False}")
             
-            # Відправити через SMTP
-            if smtp_port == 465:
-                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-                server.starttls()
-            
-            server.login(smtp_user, smtp_password)
-            server.send_message(msg)
-            server.quit()
+            # Відправити через SMTP (async)
+            await aiosmtplib.send(
+                msg,
+                hostname=smtp_host,
+                port=smtp_port,
+                username=smtp_user,
+                password=smtp_password,
+                use_tls=(smtp_port == 465),
+                start_tls=(smtp_port != 465),
+                timeout=30,
+            )
             
             # Оновити статус
             message.status = MessageStatus.SENT
@@ -429,19 +430,28 @@ class EmailService(MessengerService):
             self.db.refresh(conversation)
             return conversation
         
-        # Створюємо нову розмову
-        conversation = Conversation(
-            platform=PlatformEnum.EMAIL,
-            external_id=external_id,
-            client_id=client_id,
-            subject=subject,
-            manager_smtp_account_id=manager_smtp_account_id,
-        )
-        self.db.add(conversation)
-        self.db.commit()
-        self.db.refresh(conversation)
-        
-        return conversation
+        # Створюємо нову розмову з race-condition protection
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            conversation = Conversation(
+                platform=PlatformEnum.EMAIL,
+                external_id=external_id,
+                client_id=client_id,
+                subject=subject,
+                manager_smtp_account_id=manager_smtp_account_id,
+            )
+            self.db.add(conversation)
+            self.db.flush()
+            self.db.commit()
+            return conversation
+        except IntegrityError:
+            self.db.rollback()
+            conversation = self.db.query(Conversation).filter(
+                Conversation.platform == PlatformEnum.EMAIL,
+                Conversation.external_id == external_id,
+            ).first()
+            return conversation
     
     async def fetch_new_emails(self) -> List["MessageModel"]:
         """

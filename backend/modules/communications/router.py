@@ -570,8 +570,19 @@ async def send_message(
             )
             
         elif conversation.platform == PlatformEnum.WHATSAPP:
-            from modules.communications.services.whatsapp import WhatsAppService
-            service = WhatsAppService(db)
+            # Перевірити WHATSAPP_MODE: "classical" або "matrix"
+            import os
+            whatsapp_mode = os.getenv("WHATSAPP_MODE", "matrix")
+            
+            if whatsapp_mode == "matrix":
+                # Використовуємо Matrix Bridge
+                from modules.integrations.matrix.service import MatrixWhatsAppService
+                service = MatrixWhatsAppService(db)
+            else:
+                # Використовуємо Classical Meta API
+                from modules.communications.services.whatsapp import WhatsAppService
+                service = WhatsAppService(db)
+            
             message = await service.send_message(
                 conversation_id=conversation_id,
                 content=request.content,
@@ -939,7 +950,10 @@ def quick_action(
         from modules.communications.models import Attachment
         
         # Get all messages in this conversation
-        messages = db.query(Message).filter(Message.conversation_id == conversation_id).all()
+        from sqlalchemy.orm import selectinload as _selectinload
+        messages = db.query(Message).options(
+            _selectinload(Message.attachment_objects)
+        ).filter(Message.conversation_id == conversation_id).all()
         message_count = len(messages)
         
         # Count and delete attachments

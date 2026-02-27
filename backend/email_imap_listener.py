@@ -155,23 +155,37 @@ def get_or_create_conversation(db, external_id: str, subject: str = None, manage
             db.commit()
         return conv_id
     
-    # Create new conversation
+    # Create new conversation with race-condition protection
     from uuid import uuid4
+    from sqlalchemy.exc import IntegrityError
+
     conv_id = str(uuid4())
     now = datetime.now(timezone.utc)
-    db.execute(text("""
-        INSERT INTO communications_conversations 
-        (id, platform, external_id, subject, manager_smtp_account_id, created_at, updated_at)
-        VALUES (:id, 'email', :external_id, :subject, :manager_smtp_account_id, :now, :now)
-    """), {
-        "id": conv_id,
-        "external_id": external_id,
-        "subject": subject or None,
-        "manager_smtp_account_id": manager_smtp_account_id,
-        "now": now
-    })
-    db.commit()
-    
+    try:
+        db.execute(text("""
+            INSERT INTO communications_conversations
+            (id, platform, external_id, subject, manager_smtp_account_id, created_at, updated_at)
+            VALUES (:id, 'email', :external_id, :subject, :manager_smtp_account_id, :now, :now)
+        """), {
+            "id": conv_id,
+            "external_id": external_id,
+            "subject": subject or None,
+            "manager_smtp_account_id": manager_smtp_account_id,
+            "now": now
+        })
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        result = db.execute(text("""
+            SELECT id FROM communications_conversations
+            WHERE platform = 'email' AND external_id = :external_id
+            ORDER BY created_at ASC LIMIT 1
+        """), {"external_id": external_id})
+        row = result.fetchone()
+        if row:
+            return str(row[0])
+        raise
+
     logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject}, manager_account: {manager_smtp_account_id})")
     return conv_id
 

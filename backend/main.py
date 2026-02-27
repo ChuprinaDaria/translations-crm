@@ -31,6 +31,7 @@ from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog
 from modules.ai_integration.router import router as ai_router
 from modules.ai_integration.models import AISettings
 from modules.integrations.router import router as integrations_router
+from modules.integrations.matrix.router import router as matrix_router
 from modules.postal_services.router import router as postal_services_router
 from modules.postal_services.models import InPostShipment, InPostSettings
 from routes import router as legacy_router
@@ -132,6 +133,7 @@ app.include_router(audio_notes_router, prefix="/api/v1")
 app.include_router(autobot_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
+app.include_router(matrix_router, prefix="/api/v1")
 app.include_router(postal_services_router, prefix="/api/v1")
 app.include_router(legacy_router, prefix="/api/v1")
 
@@ -200,11 +202,13 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
     
     logger.info(f"WebSocket connection attempt from user: {user_id}, origin: {origin}")
     
+    import asyncio
+
     try:
         await websocket.accept()
         logger.info(f"WebSocket accepted for user: {user_id}")
         messages_manager.active_connections[user_id] = websocket
-        
+
         # Send welcome message
         welcome_msg = {
             "type": "connection_established",
@@ -212,14 +216,11 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
         }
         await websocket.send_json(welcome_msg)
         logger.info(f"WebSocket sent welcome message to user {user_id}: {welcome_msg}")
-        
-        # Import asyncio for keep-alive
-        import asyncio
-        
+
         # Keep-alive task: send ping every 20 seconds
         async def keep_alive():
             while True:
-                await asyncio.sleep(20)  # Wait 20 seconds
+                await asyncio.sleep(20)
                 try:
                     if user_id in messages_manager.active_connections:
                         await websocket.send_json({"type": "ping"})
@@ -227,31 +228,24 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
                 except Exception as e:
                     logger.warning(f"WebSocket keep-alive ping failed for user {user_id}: {e}")
                     break
-        
-        # Start keep-alive task
+
         keep_alive_task = asyncio.create_task(keep_alive())
-        
+
         try:
             while True:
-                # Use asyncio.wait_for with timeout to allow keep-alive to work
                 try:
                     data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                     logger.info(f"WebSocket received from user {user_id}: {data}")
                     if data == "ping":
-                        response = "pong"
-                        await websocket.send_text(response)
+                        await websocket.send_text("pong")
                         logger.debug(f"WebSocket sent pong to user {user_id}")
                     elif data == "pong":
-                        # Client responded to our ping
                         logger.debug(f"WebSocket received pong from user {user_id}")
                     else:
-                        # Log any other data received
                         logger.debug(f"WebSocket received non-ping data from user {user_id}: {data}")
                 except asyncio.TimeoutError:
-                    # Timeout is normal - keep-alive will send ping
                     continue
         finally:
-            # Cancel keep-alive task when connection closes
             keep_alive_task.cancel()
             try:
                 await keep_alive_task
@@ -259,10 +253,12 @@ async def websocket_messages_endpoint(websocket: WebSocket, user_id: str):
                 pass
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for user: {user_id}")
-        messages_manager.disconnect(user_id)
     except Exception as e:
         logger.error(f"WebSocket error for user {user_id}: {e}")
+    finally:
+        # Always cleanup connection regardless of how we exited
         messages_manager.disconnect(user_id)
+        logger.info(f"WebSocket cleanup completed for user: {user_id}")
 
 
 # Endpoint to broadcast a new message notification (used by telegram_listener.py and email_imap_listener.py)

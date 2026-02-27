@@ -351,26 +351,21 @@ class TelegramService(MessengerService):
         
         return message
     
-    async def get_or_create_conversation(
-        self,
-        external_id: str,
-        client_id: Optional[UUID] = None,
-        subject: Optional[str] = None,
-    ) -> Conversation:
-        """Отримати або створити розмову."""
-        # Шукаємо існуючу розмову
+    async def get_or_create_conversation(self, external_id: str, client_id=None, subject=None):
+        """Get or create conversation with race-condition protection."""
+        from sqlalchemy.exc import IntegrityError
+
         conversation = self.db.query(Conversation).filter(
             Conversation.platform == PlatformEnum.TELEGRAM,
             Conversation.external_id == external_id,
         ).first()
-        
+
         if conversation:
             # Оновлюємо subject якщо він переданий і відрізняється від поточного
             # (особливо корисно для груп, де назва може бути отримана пізніше)
             if subject and subject != conversation.subject:
-                # Не оновлюємо якщо поточний subject не є fallback (не містить "Група -100")
                 is_fallback = conversation.subject and (
-                    conversation.subject.startswith("Група ") or 
+                    conversation.subject.startswith("Група ") or
                     conversation.subject.startswith("Group ")
                 )
                 if is_fallback or not conversation.subject:
@@ -378,19 +373,25 @@ class TelegramService(MessengerService):
                     self.db.commit()
                     self.db.refresh(conversation)
             return conversation
-        
-        # Створюємо нову розмову
-        conversation = Conversation(
-            platform=PlatformEnum.TELEGRAM,
-            external_id=external_id,
-            client_id=client_id,
-            subject=subject,
-        )
-        self.db.add(conversation)
-        self.db.commit()
-        self.db.refresh(conversation)
-        
-        return conversation
+
+        try:
+            conversation = Conversation(
+                platform=PlatformEnum.TELEGRAM,
+                external_id=external_id,
+                client_id=client_id,
+                subject=subject,
+            )
+            self.db.add(conversation)
+            self.db.flush()
+            self.db.commit()
+            return conversation
+        except IntegrityError:
+            self.db.rollback()
+            conversation = self.db.query(Conversation).filter(
+                Conversation.platform == PlatformEnum.TELEGRAM,
+                Conversation.external_id == external_id,
+            ).first()
+            return conversation
     
     async def close(self):
         """Закрити з'єднання з Telegram."""

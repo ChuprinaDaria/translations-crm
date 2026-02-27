@@ -34,15 +34,22 @@ export function AttachmentPreview({
   onRemove,
 }: AttachmentPreviewProps) {
   const [imageError, setImageError] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   
-  const normalizeUrl = (url?: string) => {
+  const normalizeUrl = (url?: string): string | undefined => {
     if (!url) return url;
-    // Already full API path
+    // Already a full external URL
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    // Already a full API path
     if (url.startsWith('/api/')) return url;
-    // Legacy backend sometimes returned "/media/..." or "/files/..." without router prefix
+    // Legacy backend paths: /media/... or /files/...
     if (url.startsWith('/media/') || url.startsWith('/files/')) {
       return `/api/v1/communications${url}`;
+    }
+    // Bare filename — assume media directory
+    if (!url.startsWith('/')) {
+      return `/api/v1/communications/media/${url}`;
     }
     return url;
   };
@@ -133,7 +140,12 @@ export function AttachmentPreview({
             alt={displayName}
             style={!isPreview ? { maxWidth: '200px', maxHeight: '200px', width: 'auto', height: 'auto', objectFit: 'cover' } : undefined}
             className="w-full h-full object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
-            onError={() => setImageError(true)}
+            crossOrigin="anonymous"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              setImageError(true);
+            }}
           />
           
           {/* Overlay on hover */}
@@ -188,6 +200,11 @@ export function AttachmentPreview({
               src={fullImageUrl}
               alt={displayName}
               className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+              crossOrigin="anonymous"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
               onClick={(e) => e.stopPropagation()}
             />
             
@@ -215,20 +232,35 @@ export function AttachmentPreview({
         'relative rounded-lg overflow-hidden border border-gray-200 shadow-sm',
         isPreview ? 'w-[140px]' : 'max-w-[250px]'
       )}>
-        <video
-          src={normalizeUrl(attachment.url)}
-          className="w-full h-auto max-h-[200px] rounded-lg"
-          controls
-          preload="metadata"
-        />
+        {videoError ? (
+          <a
+            href={normalizeUrl(attachment.url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+          >
+            <span>Video unavailable — download</span>
+          </a>
+        ) : (
+          <video
+            src={normalizeUrl(attachment.url)}
+            className="w-full h-auto max-h-[200px] rounded-lg"
+            controls
+            preload="metadata"
+            crossOrigin="anonymous"
+            onError={() => setVideoError(true)}
+          />
+        )}
         {/* Download button overlay */}
-        <button
-          onClick={handleDownload}
-          className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
-          title="Завантажити"
-        >
-          <Download className="w-4 h-4" />
-        </button>
+        {!videoError && (
+          <button
+            onClick={handleDownload}
+            className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+            title="Завантажити"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        )}
         {isPreview && onRemove && (
           <Button
             variant="ghost"

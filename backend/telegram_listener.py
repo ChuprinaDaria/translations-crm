@@ -27,8 +27,9 @@ from modules.crm.models import Client, Office, Order  # noqa: F401 - Office по
 from modules.communications.models import Conversation, Message  # noqa: F401
 from modules.notifications.models import Notification, NotificationSettings  # noqa: F401
 from modules.autobot.models import AutobotSettings, AutobotHoliday, AutobotLog  # noqa: F401 - для Office relationship
-from modules.finance.models import Transaction  # noqa: F401 - для Order relationship
+from modules.finance.models import Transaction, Shipment  # noqa: F401 - для Order relationship
 from modules.payment.models import PaymentTransaction  # noqa: F401 - для Order.payment_transactions relationship
+from modules.postal_services.models import InPostShipment  # noqa: F401 - для Order.inpost_shipments relationship
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://translator:traslatorini2025@localhost:5434/crm_db")
@@ -77,26 +78,39 @@ def get_telegram_accounts():
 
 
 def get_or_create_conversation(db, external_id: str, sender_name: str = None, subject: str = None):
-    """Get or create conversation for external_id."""
+    """Get or create conversation for external_id with race-condition protection."""
+    from sqlalchemy.exc import IntegrityError
+
     # Check if conversation exists
     result = db.execute(text("""
         SELECT id FROM communications_conversations
         WHERE platform = 'telegram' AND external_id = :external_id
     """), {"external_id": external_id})
     row = result.fetchone()
-    
+
     if row:
         return str(row[0])
-    
+
     # Create new conversation
     conv_id = str(uuid4())
     now = datetime.utcnow()
-    db.execute(text("""
-        INSERT INTO communications_conversations (id, platform, external_id, subject, created_at, updated_at)
-        VALUES (:id, 'telegram', :external_id, :subject, :now, :now)
-    """), {"id": conv_id, "external_id": external_id, "subject": subject, "now": now})
-    db.commit()
-    
+    try:
+        db.execute(text("""
+            INSERT INTO communications_conversations (id, platform, external_id, subject, created_at, updated_at)
+            VALUES (:id, 'telegram', :external_id, :subject, :now, :now)
+        """), {"id": conv_id, "external_id": external_id, "subject": subject, "now": now})
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        result = db.execute(text("""
+            SELECT id FROM communications_conversations
+            WHERE platform = 'telegram' AND external_id = :external_id
+        """), {"external_id": external_id})
+        row = result.fetchone()
+        if row:
+            return str(row[0])
+        raise
+
     logger.info(f"Created new conversation: {conv_id} for {external_id} (subject: {subject})")
     return conv_id
 

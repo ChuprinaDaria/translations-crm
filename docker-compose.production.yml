@@ -210,9 +210,70 @@ services:
     networks:
       - crm_translations_network
 
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: crm_synapse
+    volumes:
+      - crm_translations_synapse_data:/data
+      - ./matrix/synapse/homeserver.yaml:/data/homeserver.yaml:ro
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - crm_translations_network
+
+  mautrix-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:latest
+    container_name: crm_mautrix_whatsapp
+    volumes:
+      - ./matrix/mautrix-whatsapp:/data
+    depends_on:
+      synapse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - crm_translations_network
+
+  matrix_listener:
+    build: ./backend
+    container_name: crm_matrix_listener
+    command: python modules/integrations/matrix/matrix_listener.py
+    working_dir: /app
+    depends_on:
+      synapse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - WHATSAPP_MODE=matrix
+      - WEBSOCKET_NOTIFY_URL=http://backend:8000/api/v1/communications/test-notification
+      - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
+      - MEDIA_URL=${MEDIA_URL:-/media/}
+    volumes:
+      - ./media:/app/media
+    restart: unless-stopped
+    networks:
+      - crm_translations_network
+
 volumes:
   # crm_translations_postgres_data:  # Використовуємо bind mount замість named volume
   crm_translations_redis_data:
+  crm_translations_synapse_data:
 
 networks:
   crm_translations_network:

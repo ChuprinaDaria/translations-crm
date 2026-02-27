@@ -93,17 +93,27 @@ class MatrixWhatsAppService(MessengerService, BaseWhatsAppProvider):
             logger.error(f"Failed to initialize Matrix provider: {e}")
             self.matrix_provider = None
     
-    async def ensure_connected(self) -> None:
-        """Переконатися, що підключення до Matrix встановлено."""
+    async def ensure_connected(self, max_retries: int = 3) -> None:
+        """Ensure connection to Matrix with exponential backoff retry."""
         if not self.matrix_provider:
             self._initialize_provider()
-        
-        if self.matrix_provider:
+        if not self.matrix_provider:
+            raise RuntimeError("Matrix provider not initialized — check MATRIX_HOMESERVER and MATRIX_ACCESS_TOKEN config")
+
+        last_error = None
+        for attempt in range(max_retries):
             try:
                 await self.matrix_provider.connect()
+                return
             except Exception as e:
-                logger.error(f"Failed to connect to Matrix: {e}")
-                raise
+                last_error = e
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                logger.warning(f"Matrix connect attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {wait_time}s...")
+                import asyncio
+                await asyncio.sleep(wait_time)
+
+        logger.error(f"Failed to connect to Matrix after {max_retries} attempts: {last_error}")
+        raise last_error
     
     async def send_message(
         self,
@@ -303,34 +313,36 @@ class MatrixWhatsAppService(MessengerService, BaseWhatsAppProvider):
         
         return message
     
-    async def get_or_create_conversation(
-        self,
-        external_id: str,
-        client_id: Optional[UUID] = None,
-        subject: Optional[str] = None,
-    ) -> Conversation:
-        """Отримати або створити розмову."""
-        # Шукаємо існуючу розмову
+    async def get_or_create_conversation(self, external_id: str, client_id=None, subject=None):
+        """Get or create conversation with race-condition protection."""
+        from sqlalchemy.exc import IntegrityError
+
         conversation = self.db.query(Conversation).filter(
             Conversation.platform == PlatformEnum.WHATSAPP,
             Conversation.external_id == external_id,
         ).first()
-        
+
         if conversation:
             return conversation
-        
-        # Створюємо нову розмову
-        conversation = Conversation(
-            platform=PlatformEnum.WHATSAPP,
-            external_id=external_id,
-            client_id=client_id,
-            subject=subject,
-        )
-        self.db.add(conversation)
-        self.db.commit()
-        self.db.refresh(conversation)
-        
-        return conversation
+
+        try:
+            conversation = Conversation(
+                platform=PlatformEnum.WHATSAPP,
+                external_id=external_id,
+                client_id=client_id,
+                subject=subject,
+            )
+            self.db.add(conversation)
+            self.db.flush()
+            self.db.commit()
+            return conversation
+        except IntegrityError:
+            self.db.rollback()
+            conversation = self.db.query(Conversation).filter(
+                Conversation.platform == PlatformEnum.WHATSAPP,
+                Conversation.external_id == external_id,
+            ).first()
+            return conversation
     
     async def process_matrix_event(self, event: Dict[str, Any], room_info: Optional[Dict[str, Any]] = None) -> MessageModel:
         """

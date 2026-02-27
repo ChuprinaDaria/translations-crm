@@ -243,7 +243,8 @@ async def matrix_webhook(
     """
     try:
         # Перевірити, чи Matrix Bridge активний
-        whatsapp_mode = crud.get_whatsapp_mode(db)
+        import os
+        whatsapp_mode = os.getenv("WHATSAPP_MODE", "matrix")
         if whatsapp_mode != "matrix":
             logger.warning(f"Matrix webhook received but WhatsApp mode is '{whatsapp_mode}'")
             return {"status": "ignored", "reason": f"WhatsApp mode is '{whatsapp_mode}'"}

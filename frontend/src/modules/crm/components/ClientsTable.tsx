@@ -200,3 +200,9 @@ export function ClientsTable({ clients, loading, onClientClick }: ClientsTablePr
   );
 }
 
+
+
+
+
+
+

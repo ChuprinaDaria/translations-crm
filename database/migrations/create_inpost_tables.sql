@@ -154,7 +154,7 @@ COMMENT ON TABLE inpost_shipments IS 'InPost shipments tracking and management';
 COMMENT ON COLUMN inpost_shipments.order_id IS 'Reference to CRM order';
 COMMENT ON COLUMN inpost_shipments.shipment_id IS 'InPost shipment ID from API';
 COMMENT ON COLUMN inpost_shipments.tracking_number IS 'Public tracking number';
-COMMENT ON COLUMN inpost_shipments.parcel_locker_code IS 'Parcel locker code (e.g., KRA010)';
+COMMENT ON COLUMN inpost_shipments.parcel_locker_code IS 'Parcel locker code (e.g., WAW01A)';
 COMMENT ON COLUMN inpost_shipments.package_size IS 'Package size: small, medium, large';
 COMMENT ON COLUMN inpost_shipments.package_weight IS 'Package weight in kg';
 COMMENT ON COLUMN inpost_shipments.insurance_amount IS 'Insurance amount in PLN';

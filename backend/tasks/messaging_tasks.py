@@ -93,15 +93,23 @@ def send_message_task(
             )
             
         elif platform_enum == PlatformEnum.WHATSAPP:
-            from modules.communications.services.whatsapp import WhatsAppService
-            service = WhatsAppService(db)
+            import os
+            whatsapp_mode = os.getenv("WHATSAPP_MODE", "meta")
+
+            if whatsapp_mode == "matrix":
+                from modules.integrations.matrix.service import MatrixWhatsAppService
+                service = MatrixWhatsAppService(db)
+            else:
+                from modules.communications.services.whatsapp import WhatsAppService
+                service = WhatsAppService(db)
+
             import asyncio
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
+
             message = loop.run_until_complete(
                 service.send_message(
                     conversation_id=UUID(conversation_id),

@@ -71,3 +71,5 @@ pandas==2.2.0
 openai==1.12.0
 stripe==10.8.0
 bleach==6.1.0
+alembic==1.13.1
+aiosmtplib==3.0.1

@@ -88,7 +88,7 @@ class InPostShipment(Base):
     parcel_locker_code: Mapped[Optional[str]] = mapped_column(
         String(20),
         nullable=True,
-        comment="Parcel locker code (e.g., KRA010)"
+        comment="Parcel locker code (e.g., WAW01A)"
     )
     
     # Courier address

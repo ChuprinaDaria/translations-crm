@@ -2193,8 +2193,9 @@ def get_whatsapp_config(db: Session = Depends(get_db), user = Depends(get_curren
         phone_number_id = ''.join(filter(str.isdigit, phone_number_id)) if phone_number_id else ""
     
     # Отримати WHATSAPP_MODE
-    whatsapp_mode = crud.get_whatsapp_mode(db)
-    
+    import os
+    whatsapp_mode = os.getenv("WHATSAPP_MODE", "matrix")
+
     return {
         "access_token": settings.get("whatsapp_access_token") or "",
         "phone_number_id": phone_number_id,
@@ -2240,7 +2241,9 @@ def update_whatsapp_config(
     if whatsapp_mode not in ["classical", "matrix"]:
         whatsapp_mode = "classical"  # Fallback
     crud.set_setting(db, "whatsapp_mode", whatsapp_mode)
-    
+    import os
+    os.environ["WHATSAPP_MODE"] = whatsapp_mode
+
     return {"status": "success"}
 
 

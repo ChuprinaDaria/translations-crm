@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 from enum import Enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-from sqlalchemy import String, Text, ForeignKey, DateTime, Integer, Boolean
+from sqlalchemy import String, Text, ForeignKey, DateTime, Integer, Boolean, Index
 from sqlalchemy.types import JSON
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID, JSONB
@@ -64,7 +64,12 @@ class Conversation(Base):
     
     client: Mapped["Client | None"] = relationship("Client", back_populates="conversations", lazy="joined")
     assigned_manager: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_manager_id], lazy="joined")
-    messages: Mapped[list["Message"]] = relationship("Message", back_populates="conversation", lazy="selectin", cascade="all, delete-orphan")
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="conversation", lazy="noload", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_conv_platform_archived', 'platform', 'is_archived'),
+        Index('uq_conv_platform_external', 'platform', 'external_id', unique=True),
+    )
 
 
 class Message(Base):
@@ -90,8 +95,13 @@ class Message(Base):
     external_id: Mapped[str | None] = mapped_column(String(500), nullable=True, index=True)  # Message-ID для email, message_id для Telegram/WhatsApp
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
-    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages", lazy="joined")
-    attachment_objects: Mapped[list["Attachment"]] = relationship("Attachment", back_populates="message", lazy="selectin", cascade="all, delete-orphan")
+    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages", lazy="select")
+    attachment_objects: Mapped[list["Attachment"]] = relationship("Attachment", back_populates="message", lazy="select", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_msg_conv_created', 'conversation_id', 'created_at'),
+        Index('idx_msg_conv_dir_status', 'conversation_id', 'direction', 'status'),
+    )
 
 
 class Attachment(Base):
@@ -107,7 +117,7 @@ class Attachment(Base):
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Розмір файлу в байтах
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
-    message: Mapped["Message"] = relationship("Message", back_populates="attachment_objects", lazy="joined")
+    message: Mapped["Message"] = relationship("Message", back_populates="attachment_objects", lazy="select")
 
 
 class WhatsAppAccount(Base):

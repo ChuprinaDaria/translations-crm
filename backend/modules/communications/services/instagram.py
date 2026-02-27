@@ -646,16 +646,25 @@ class InstagramService(MessengerService):
                 self.db.commit()
             return conversation
         
-        # Створюємо нову розмову
-        conversation = Conversation(
-            platform=PlatformEnum.INSTAGRAM,
-            external_id=external_id,
-            client_id=client_id,
-            subject=subject,
-        )
-        self.db.add(conversation)
-        self.db.commit()
-        self.db.refresh(conversation)
-        
-        return conversation
+        # Створюємо нову розмову з race-condition protection
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            conversation = Conversation(
+                platform=PlatformEnum.INSTAGRAM,
+                external_id=external_id,
+                client_id=client_id,
+                subject=subject,
+            )
+            self.db.add(conversation)
+            self.db.flush()
+            self.db.commit()
+            return conversation
+        except IntegrityError:
+            self.db.rollback()
+            conversation = self.db.query(Conversation).filter(
+                Conversation.platform == PlatformEnum.INSTAGRAM,
+                Conversation.external_id == external_id,
+            ).first()
+            return conversation
 
