@@ -29,40 +29,21 @@ import {
   type InPostConfig,
   type AISettings,
   type AISettingsUpdate,
-  type MatrixConfig,
-  type MatrixSystemConfig,
 } from "../lib/api";
 import { officesApi, type Office, type OfficeCreate } from "../modules/crm/api/offices";
 import { WhatsAppConnectDialog } from "./WhatsAppConnectDialog";
 
 export function Settings() {
-  // Перевірка чи користувач адмін
-  const [isAdmin, setIsAdmin] = useState(false);
-  
   // WhatsApp Connect Dialog state (оголошуємо на початку для доступності)
   const [whatsappConnectOpen, setWhatsappConnectOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
-  
+
   useEffect(() => {
-    // Отримуємо інформацію про користувача з токену
+    // Отримуємо user ID з токену для підключення WhatsApp
     const token = localStorage.getItem('auth_token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        const isAdminFromPayload =
-          payload.is_admin === true ||
-          payload.is_admin === "true" ||
-          payload.is_admin === 1 ||
-          payload.isAdmin === true ||
-          payload.isAdmin === "true" ||
-          payload.isAdmin === 1 ||
-          payload.admin === true ||
-          payload.admin === "true" ||
-          payload.admin === 1 ||
-          (typeof payload.role === "string" && payload.role.toLowerCase().includes("admin"));
-        setIsAdmin(isAdminFromPayload);
-        
-        // Зберігаємо user ID для підключення WhatsApp
         const userId = payload.sub || payload.user_id || payload.id || null;
         if (userId) {
           setCurrentUserId(String(userId));
@@ -213,24 +194,6 @@ export function Settings() {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isSavingAI, setIsSavingAI] = useState(false);
 
-  // Matrix Bridge state
-  const [matrix, setMatrix] = useState<MatrixConfig>({
-    homeserver: "",
-    access_token: "",
-    user_id: "",
-    device_id: "",
-  });
-  const [isSavingMatrix, setIsSavingMatrix] = useState(false);
-
-  // Matrix System Config state (для адміна)
-  const [matrixSystem, setMatrixSystem] = useState<MatrixSystemConfig>({
-    homeserver_url: "",
-    server_name: "",
-    admin_login: "",
-    admin_password: "",
-    bridge_admin_secret: "",
-  });
-  const [isSavingMatrixSystem, setIsSavingMatrixSystem] = useState(false);
 
   // Danger zone state
   const [isDeletingAll, setIsDeletingAll] = useState(false);
@@ -331,7 +294,6 @@ export function Settings() {
           stripeConfig,
           inpostConfig,
           aiSettingsData,
-          matrixConfig,
         ] = await Promise.all([
           settingsApi.getBranding(),
           settingsApi.getTelegramAccounts(),
@@ -354,20 +316,6 @@ export function Settings() {
             is_enabled: false,
           })),
           settingsApi.getAISettings().catch(() => null),
-          settingsApi.getMatrixConfig().catch(() => ({
-            homeserver: "",
-            access_token: "",
-            user_id: "",
-            device_id: "",
-          })),
-          // Завантажуємо системні налаштування Matrix (тільки для адміна)
-          settingsApi.getMatrixSystemConfig().catch(() => ({
-            homeserver_url: "",
-            server_name: "",
-            admin_login: "",
-            has_admin_password: false,
-            bridge_admin_secret: "",
-          })),
         ]);
         setBranding(brandingData);
         setTelegramAccounts(tgAccounts);
@@ -413,48 +361,6 @@ export function Settings() {
           ...inpostConfig,
           webhook_url: inpostConfig.webhook_url || `${API_BASE_URL}/postal-services/inpost/webhook`,
         });
-        setMatrix(matrixConfig);
-        // Завантажуємо системні налаштування Matrix (тільки для адміна)
-        const currentToken = localStorage.getItem('auth_token');
-        let currentIsAdmin = false;
-        if (currentToken) {
-          try {
-            const payload = JSON.parse(atob(currentToken.split('.')[1]));
-            currentIsAdmin =
-              payload.is_admin === true ||
-              payload.is_admin === "true" ||
-              payload.is_admin === 1 ||
-              payload.isAdmin === true ||
-              payload.isAdmin === "true" ||
-              payload.isAdmin === 1 ||
-              payload.admin === true ||
-              payload.admin === "true" ||
-              payload.admin === 1 ||
-              (typeof payload.role === "string" && payload.role.toLowerCase().includes("admin"));
-          } catch (e) {
-            console.error("Помилка декодування токену:", e);
-          }
-        }
-        if (currentIsAdmin) {
-          try {
-            const matrixSystemConfig = await settingsApi.getMatrixSystemConfig().catch(() => ({
-              homeserver_url: "",
-              server_name: "",
-              admin_login: "",
-              has_admin_password: false,
-              bridge_admin_secret: "",
-            }));
-            setMatrixSystem({
-              homeserver_url: matrixSystemConfig.homeserver_url || "",
-              server_name: matrixSystemConfig.server_name || "",
-              admin_login: matrixSystemConfig.admin_login || "",
-              admin_password: "", // Не завантажуємо пароль з безпеки
-              bridge_admin_secret: matrixSystemConfig.bridge_admin_secret || "",
-            });
-          } catch (error) {
-            console.error("Failed to load Matrix system config:", error);
-          }
-        }
         if (aiSettingsData) {
           setAiSettings(aiSettingsData);
         } else {
@@ -715,7 +621,7 @@ export function Settings() {
           </TabsTrigger>
           <TabsTrigger value="matrix" className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4" />
-            Matrix Bridge
+            WhatsApp Bridge
           </TabsTrigger>
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <UserCog className="w-4 h-4" />
@@ -2136,206 +2042,66 @@ export function Settings() {
         <TabsContent value="matrix" className="mt-0">
           <Card>
             <CardHeader>
-              <CardTitle>Matrix Bridge налаштування</CardTitle>
+              <CardTitle>WhatsApp через Matrix Bridge</CardTitle>
               <p className="text-sm text-gray-500 mt-2">
-                Налаштування для підключення WhatsApp через Matrix Bridge (mautrix-whatsapp)
+                Підключіть WhatsApp для отримання повідомлень в Inbox
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="matrix-homeserver">Matrix Homeserver URL</Label>
-                  <Input
-                    id="matrix-homeserver"
-                    type="url"
-                    value={matrix.homeserver}
-                    onChange={(e) => setMatrix({ ...matrix, homeserver: e.target.value })}
-                    placeholder="https://matrix.example.com"
-                  />
-                  <p className="text-xs text-gray-500">
-                    URL вашого Matrix homeserver (наприклад: https://matrix.example.com)
+              <div className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      WhatsApp підключення
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Відскануйте QR-код для підключення WhatsApp
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const status = await settingsApi.getWhatsAppMatrixStatus();
+                          if (status.connected) {
+                            toast.success("WhatsApp Bridge підключено");
+                          } else {
+                            toast.info(status.status_text || status.detail || "WhatsApp не підключено");
+                          }
+                        } catch {
+                          toast.error("Не вдалося перевірити статус");
+                        }
+                      }}
+                    >
+                      Перевірити статус
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!currentUserId) {
+                          toast.error("Не вдалося визначити ID користувача");
+                          return;
+                        }
+                        setWhatsappConnectOpen(true);
+                      }}
+                      className="bg-[#25D366] hover:bg-[#25D366]/90 text-white"
+                    >
+                      <QrCode className="w-4 h-4 mr-2" />
+                      Підключити через QR
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs text-blue-800 dark:text-blue-200">
+                    Натисніть "Підключити через QR" → відскануйте QR-код у WhatsApp на телефоні (Settings → Linked Devices → Link a Device). Повідомлення з WhatsApp автоматично з'являться в Inbox.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="matrix-access-token">Access Token</Label>
-                  <Input
-                    id="matrix-access-token"
-                    type="password"
-                    value={matrix.access_token}
-                    onChange={(e) => setMatrix({ ...matrix, access_token: e.target.value })}
-                    placeholder="syt_..."
-                  />
-                  <p className="text-xs text-gray-500">
-                    Matrix Access Token (отримайте через mautrix-whatsapp або Matrix клієнт)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="matrix-user-id">User ID (опціонально)</Label>
-                  <Input
-                    id="matrix-user-id"
-                    value={matrix.user_id || ""}
-                    onChange={(e) => setMatrix({ ...matrix, user_id: e.target.value })}
-                    placeholder="@user:matrix.example.com"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Matrix User ID (автоматично визначається при підключенні)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="matrix-device-id">Device ID (опціонально)</Label>
-                  <Input
-                    id="matrix-device-id"
-                    value={matrix.device_id || ""}
-                    onChange={(e) => setMatrix({ ...matrix, device_id: e.target.value })}
-                    placeholder="Device ID"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Matrix Device ID (автоматично визначається при підключенні)
-                  </p>
-                </div>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  <strong>Примітка:</strong> Для використання Matrix Bridge необхідно:
-                </p>
-                <ul className="text-sm text-blue-700 dark:text-blue-300 mt-2 list-disc list-inside space-y-1">
-                  <li>Встановити та налаштувати mautrix-whatsapp bridge</li>
-                  <li>Отримати Access Token з Matrix homeserver</li>
-                  <li>Встановити WHATSAPP_MODE в "matrix" в розділі WhatsApp налаштувань</li>
-                </ul>
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                  disabled={isSavingMatrix || !matrix.homeserver || !matrix.access_token}
-                  onClick={async () => {
-                    setIsSavingMatrix(true);
-                    try {
-                      await settingsApi.updateMatrixConfig(matrix);
-                      toast.success("Matrix Bridge налаштування збережено");
-                    } catch (error) {
-                      console.error(error);
-                      toast.error("Не вдалося зберегти Matrix Bridge налаштування");
-                    } finally {
-                      setIsSavingMatrix(false);
-                    }
-                  }}
-                >
-                  {isSavingMatrix ? "Збереження..." : "Зберегти Matrix Bridge"}
-                </Button>
               </div>
             </CardContent>
           </Card>
-          
-          {/* Matrix System Config (тільки для адміна) */}
-          {isAdmin && (
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle>Matrix Bridge Системні налаштування</CardTitle>
-                <p className="text-sm text-gray-500 mt-2">
-                  Налаштування для автоматичного створення користувачів Matrix (тільки для адмінів)
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="matrix-homeserver-url">Homeserver URL</Label>
-                    <Input
-                      id="matrix-homeserver-url"
-                      type="url"
-                      value={matrixSystem.homeserver_url}
-                      onChange={(e) => setMatrixSystem({ ...matrixSystem, homeserver_url: e.target.value })}
-                      placeholder="https://matrix.your-server.com"
-                    />
-                    <p className="text-xs text-gray-500">
-                      URL вашого Matrix homeserver (куди FastAPI слатиме запити)
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="matrix-server-name">Server Name</Label>
-                    <Input
-                      id="matrix-server-name"
-                      value={matrixSystem.server_name}
-                      onChange={(e) => setMatrixSystem({ ...matrixSystem, server_name: e.target.value })}
-                      placeholder="your-server.com"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Server name для формування user ID (наприклад: @admin:your-server.com)
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="matrix-admin-login">Admin Login</Label>
-                    <Input
-                      id="matrix-admin-login"
-                      value={matrixSystem.admin_login}
-                      onChange={(e) => setMatrixSystem({ ...matrixSystem, admin_login: e.target.value })}
-                      placeholder="admin"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Логін головного адміна Matrix (для створення користувачів)
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="matrix-admin-password">Admin Password</Label>
-                    <Input
-                      id="matrix-admin-password"
-                      type="password"
-                      value={matrixSystem.admin_password}
-                      onChange={(e) => setMatrixSystem({ ...matrixSystem, admin_password: e.target.value })}
-                      placeholder="••••••••"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Пароль головного адміна (для автоматичного створення користувачів)
-                    </p>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="matrix-bridge-admin-secret">Bridge Admin Secret</Label>
-                    <Input
-                      id="matrix-bridge-admin-secret"
-                      type="password"
-                      value={matrixSystem.bridge_admin_secret}
-                      onChange={(e) => setMatrixSystem({ ...matrixSystem, bridge_admin_secret: e.target.value })}
-                      placeholder="Токен з registration.yaml"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Токен з registration.yaml (для команд мосту, наприклад: "згенеруй QR")
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    <strong>Важливо:</strong> При збереженні система автоматично:
-                  </p>
-                  <ul className="text-sm text-yellow-700 dark:text-yellow-300 mt-2 list-disc list-inside space-y-1">
-                    <li>Залогінить адміна та збереже access token</li>
-                    <li>Більше пароль не потрібен - використовується збережений токен</li>
-                  </ul>
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    className="bg-[#FF5A00] hover:bg-[#FF5A00]/90"
-                    disabled={isSavingMatrixSystem || !matrixSystem.homeserver_url || !matrixSystem.server_name || !matrixSystem.admin_login || !matrixSystem.admin_password || !matrixSystem.bridge_admin_secret}
-                    onClick={async () => {
-                      setIsSavingMatrixSystem(true);
-                      try {
-                        await settingsApi.updateMatrixSystemConfig(matrixSystem);
-                        toast.success("Matrix Bridge системні налаштування збережено");
-                      } catch (error) {
-                        console.error(error);
-                        toast.error("Не вдалося зберегти Matrix Bridge системні налаштування");
-                      } finally {
-                        setIsSavingMatrixSystem(false);
-                      }
-                    }}
-                  >
-                    {isSavingMatrixSystem ? "Збереження..." : "Зберегти Системні налаштування"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         {/* Profile Tab */}
