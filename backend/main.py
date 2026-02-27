@@ -58,8 +58,21 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database migration failed: {e}", exc_info=True)
         # Не блокуємо старт додатку, якщо міграція не вдалася
         # Можна запустити міграцію вручну через скрипт
-    
+
+    # Start Matrix/WhatsApp listener as background task
+    from modules.communications.services.matrix_listener import matrix_listener
+    try:
+        await matrix_listener.start()
+    except Exception as e:
+        logger.warning(f"Matrix listener failed to start: {e}")
+
     yield
+
+    # Cleanup on shutdown
+    try:
+        await matrix_listener.stop()
+    except Exception as e:
+        logger.warning(f"Matrix listener stop error: {e}")
 
 
 app = FastAPI(

@@ -3176,3 +3176,37 @@ async def delete_all_conversations(
         db.rollback()
         logger.error(f"Failed to delete all conversations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Помилка при видаленні: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp via Matrix Bridge endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/whatsapp/matrix-login")
+async def whatsapp_matrix_login(
+    user: models.User = Depends(get_current_user_db),
+):
+    """
+    Send 'login' command to @whatsappbot via Matrix Bridge.
+    Returns a QR code (base64 image) that the user scans in WhatsApp.
+    """
+    from modules.communications.services.matrix_listener import matrix_listener
+
+    result = await matrix_listener.send_login_command()
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=502, detail=result.get("detail", "Bridge error"))
+
+    return result
+
+
+@router.get("/whatsapp/matrix-status")
+async def whatsapp_matrix_status(
+    user: models.User = Depends(get_current_user_db),
+):
+    """
+    Check current WhatsApp bridge connection status.
+    """
+    from modules.communications.services.matrix_listener import matrix_listener
+
+    return await matrix_listener.get_bridge_status()

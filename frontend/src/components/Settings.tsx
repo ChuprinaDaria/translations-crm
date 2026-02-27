@@ -2348,7 +2348,7 @@ export function Settings() {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* WhatsApp Connection */}
+              {/* WhatsApp Connection via Matrix Bridge */}
               <div className="border rounded-lg p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -2357,27 +2357,47 @@ export function Settings() {
                       WhatsApp через Matrix Bridge
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      Підключіть ваш WhatsApp для роботи з клієнтами через Matrix Bridge
+                      Підключіть WhatsApp для роботи з клієнтами
                     </p>
                   </div>
-                  <Button
-                    onClick={() => {
-                      if (!currentUserId) {
-                        toast.error("Не вдалося визначити ID користувача");
-                        return;
-                      }
-                      setWhatsappConnectOpen(true);
-                    }}
-                    className="bg-[#25D366] hover:bg-[#25D366]/90 text-white"
-                  >
-                    <QrCode className="w-4 h-4 mr-2" />
-                    Підключити WhatsApp
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const status = await settingsApi.getWhatsAppMatrixStatus();
+                          if (status.connected) {
+                            toast.success("WhatsApp Bridge підключено");
+                          } else {
+                            toast.info(status.status_text || status.detail || "WhatsApp не підключено");
+                          }
+                        } catch {
+                          toast.error("Не вдалося перевірити статус");
+                        }
+                      }}
+                    >
+                      Перевірити статус
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (!currentUserId) {
+                          toast.error("Не вдалося визначити ID користувача");
+                          return;
+                        }
+                        setWhatsappConnectOpen(true);
+                      }}
+                      className="bg-[#25D366] hover:bg-[#25D366]/90 text-white"
+                    >
+                      <QrCode className="w-4 h-4 mr-2" />
+                      Підключити через QR
+                    </Button>
+                  </div>
                 </div>
-                
+
                 <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-xs text-blue-800 dark:text-blue-200">
-                    <strong>Примітка:</strong> Для підключення WhatsApp необхідно, щоб адміністратор налаштував Matrix Bridge в розділі Settings → Matrix Bridge.
+                    Натисніть "Підключити через QR" → відскануйте QR-код у WhatsApp на телефоні (Settings → Linked Devices → Link a Device). Повідомлення з WhatsApp автоматично з'являться в Inbox.
                   </p>
                 </div>
               </div>

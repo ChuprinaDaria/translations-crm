@@ -60,6 +60,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MEDIA_ROOT=${MEDIA_ROOT:-/app/media}
       - MEDIA_URL=${MEDIA_URL:-/media/}
+      - MATRIX_HOMESERVER=${MATRIX_HOMESERVER:-https://matrix.adme-ai.com}
+      - MATRIX_BOT_USER=${MATRIX_BOT_USER:-@crm_bot:matrix.adme-ai.com}
+      - MATRIX_BOT_PASSWORD=${MATRIX_BOT_PASSWORD}
+      - MATRIX_WHATSAPP_BOT=${MATRIX_WHATSAPP_BOT:-@whatsappbot:matrix.adme-ai.com}
     volumes:
       - ./backend/uploads:/app/uploads
       - ./media:/app/media

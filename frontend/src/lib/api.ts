@@ -1665,11 +1665,16 @@ export const settingsApi = {
     return apiFetchMultipart<{ status: string }>("/settings/matrix-system-config", formData, "POST");
   },
   
-  // Connect user WhatsApp
-  async connectUserWhatsApp(userId: string): Promise<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }> {
-    return apiFetch<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }>(`/integrations/matrix/users/${userId}/connect-whatsapp`, {
+  // Connect user WhatsApp via Matrix Bridge (sends "login" to @whatsappbot, returns QR)
+  async connectUserWhatsApp(_userId: string): Promise<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }> {
+    return apiFetch<{ qr_code: string; qr_url?: string; expires_at?: string; qr_code_data?: string; qr_code_type?: string }>("/communications/whatsapp/matrix-login", {
       method: "POST",
     });
+  },
+
+  // WhatsApp Matrix Bridge connection status
+  async getWhatsAppMatrixStatus(): Promise<{ connected: boolean; status_text?: string; detail?: string }> {
+    return apiFetch<{ connected: boolean; status_text?: string; detail?: string }>("/communications/whatsapp/matrix-status");
   },
   
   // WhatsApp OAuth - підключення через Facebook Login for Business
