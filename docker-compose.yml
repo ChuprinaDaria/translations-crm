@@ -10,6 +10,7 @@ services:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./matrix/init-databases.sh:/docker-entrypoint-initdb.d/10-create-matrix-dbs.sh:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -213,13 +214,18 @@ services:
   synapse:
     image: matrixdotorg/synapse:latest
     container_name: crm_synapse
+    entrypoint: ["/bin/sh", "/config/start.sh"]
     volumes:
       - synapse_data:/data
-      - ./matrix/synapse/homeserver.yaml:/data/homeserver.yaml:ro
+      - ./matrix/synapse/homeserver.yaml:/config/homeserver.yaml:ro
+      - ./matrix/synapse/crm.local.log.config:/config/crm.local.log.config:ro
+      - ./matrix/synapse/start.sh:/config/start.sh:ro
+      - ./matrix/mautrix-whatsapp:/mautrix-data:ro
     environment:
       - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
-    env_file:
-      - .env
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - MATRIX_REGISTRATION_SECRET=${MATRIX_REGISTRATION_SECRET:-changeme}
     depends_on:
       postgres:
         condition: service_healthy
@@ -227,7 +233,8 @@ services:
       test: ["CMD-SHELL", "curl -fSs http://localhost:8008/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     networks:
       - default
@@ -237,6 +244,9 @@ services:
     container_name: crm_mautrix_whatsapp
     volumes:
       - ./matrix/mautrix-whatsapp:/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       synapse:
         condition: service_healthy

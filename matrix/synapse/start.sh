@@ -1,0 +1,63 @@
+#!/bin/sh
+set -e
+
+# Substitute environment variables in homeserver template
+python3 << 'PYEOF'
+import os, re
+
+with open('/config/homeserver.yaml') as f:
+    content = f.read()
+
+def replace_var(m):
+    var = m.group(1)
+    default = m.group(3) if m.group(3) is not None else ''
+    return os.environ.get(var, default)
+
+# Match ${VAR:-default} and ${VAR} patterns
+content = re.sub(r'\$\{(\w+)(?::-(.*?))?\}', replace_var, content)
+
+# Check if whatsapp-registration.yaml exists
+# If not, remove app_service_config_files to allow Synapse to start without it
+reg_path = '/data/whatsapp-registration.yaml'
+if not os.path.exists(reg_path):
+    # Check if mautrix-whatsapp generated it in its data dir
+    mautrix_reg = '/mautrix-data/registration.yaml'
+    if os.path.exists(mautrix_reg):
+        import shutil
+        shutil.copy2(mautrix_reg, reg_path)
+        print(f'Copied registration from {mautrix_reg} to {reg_path}')
+    else:
+        # Remove appservice config so Synapse can start without it
+        lines = content.split('\n')
+        filtered = []
+        skip_next = False
+        for line in lines:
+            if 'app_service_config_files' in line:
+                skip_next = True
+                continue
+            if skip_next and line.strip().startswith('- '):
+                continue
+            skip_next = False
+            filtered.append(line)
+        content = '\n'.join(filtered)
+        print('WARNING: No whatsapp registration found, starting without appservice')
+
+with open('/data/homeserver.yaml', 'w') as f:
+    f.write(content)
+print('homeserver.yaml generated from template')
+PYEOF
+
+# Copy log config if not in /data
+if [ ! -f /data/crm.local.log.config ]; then
+    cp /config/crm.local.log.config /data/crm.local.log.config
+    echo "Log config copied to /data"
+fi
+
+# Generate signing key if not exists
+if [ ! -f /data/crm.local.signing.key ]; then
+    python3 -m synapse.app.homeserver --generate-keys -c /data/homeserver.yaml
+    echo "Signing key generated"
+fi
+
+# Start via original entrypoint
+exec /start.py

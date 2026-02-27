@@ -12,7 +12,7 @@ appservice:
     displayname: WhatsApp Bridge Bot
   database:
     type: postgres
-    uri: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/mautrix_whatsapp?sslmode=disable
+    uri: postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres:5432/mautrix_whatsapp?sslmode=disable
 
 bridge:
   username_template: "whatsapp_{{.}}"
