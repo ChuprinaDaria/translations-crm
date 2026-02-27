@@ -10,7 +10,7 @@ with open('/config/homeserver.yaml') as f:
 
 def replace_var(m):
     var = m.group(1)
-    default = m.group(3) if m.group(3) is not None else ''
+    default = m.group(2) if m.group(2) is not None else ''
     return os.environ.get(var, default)
 
 # Match ${VAR:-default} and ${VAR} patterns
